@@ -8,7 +8,13 @@ using NuGet.Versioning;
 
 namespace NuGet.Packaging
 {
-    public interface IPackageMetadata
+    /*
+     * Chocolatey changes start here
+     */
+    public partial interface IPackageMetadata
+    /*
+     * Chocolatey changes end here
+     */
     {
         string Id { get; }
         NuGetVersion Version { get; }

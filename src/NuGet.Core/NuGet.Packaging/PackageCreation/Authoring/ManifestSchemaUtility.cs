@@ -49,14 +49,26 @@ namespace NuGet.Packaging
         /// </summary>
         internal const string SchemaVersionV6 = "http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd";
 
+        /*
+         * Chocolatey changes start here
+         */
+        /// <summary>
+        /// Allows Choco Schemas
+        /// </summary>
+        internal const string SchemaVersionV7 = "http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd";
+
         private static readonly string[] VersionToSchemaMappings = new[] {
             SchemaVersionV1,
             SchemaVersionV2,
             SchemaVersionV3,
             SchemaVersionV4,
             SchemaVersionV5,
-            SchemaVersionV6
+            SchemaVersionV6,
+            SchemaVersionV7
         };
+        /*
+         * Chocolatey changes end here
+         */
 
 #if !IS_CORECLR
         private static ConcurrentDictionary<string, XmlSchemaSet> _manifestSchemaSetCache = new ConcurrentDictionary<string, XmlSchemaSet>(StringComparer.OrdinalIgnoreCase);

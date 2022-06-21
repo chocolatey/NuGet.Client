@@ -130,6 +130,47 @@ namespace NuGet.Packaging
                     case "tags":
                         manifestMetadata.Tags = value;
                         break;
+
+                    /*
+                     * Chocolatey changes start here
+                     */
+                    case "projectSourceUrl":
+                        manifestMetadata.SetProjectSourceUrl(value);
+                        break;
+                    case "packageSourceUrl":
+                        manifestMetadata.SetPackageSourceUrl(value);
+                        break;
+                    case "docsUrl":
+                        manifestMetadata.SetDocsUrl(value);
+                        break;
+                    case "wikiUrl":
+                        manifestMetadata.SetWikiUrl(value);
+                        break;
+                    case "mailingListUrl":
+                        manifestMetadata.SetMailingListUrl(value);
+                        break;
+                    case "bugTrackerUrl":
+                        manifestMetadata.SetBugTrackerUrl(value);
+                        break;
+                    case "replaces":
+                        manifestMetadata.Replaces = value?.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                        break;
+                    case "provides":
+                        manifestMetadata.Provides = value?.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                        break;
+                    case "conflicts":
+                        manifestMetadata.Conflicts = value?.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                        break;
+                    case "softwareDisplayName":
+                        manifestMetadata.SoftwareDisplayName = value;
+                        break;
+                    case "softwareDisplayVersion":
+                        manifestMetadata.SoftwareDisplayVersion = value;
+                        break;
+                    /*
+                     * Chocolatey changes end here
+                     */
+
                     case "readme":
                         manifestMetadata.Readme = value;
                         break;
