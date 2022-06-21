@@ -80,6 +80,27 @@ namespace NuGet.Packaging.Xml
             AddElementIfNotNull(elem, ns, "copyright", metadata.Copyright);
             AddElementIfNotNull(elem, ns, "language", metadata.Language);
             AddElementIfNotNull(elem, ns, "tags", metadata.Tags);
+
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+
+            AddElementIfNotNull(elem, ns, "projectSourceUrl", metadata.ProjectSourceUrl);
+            AddElementIfNotNull(elem, ns, "packageSourceUrl", metadata.PackageSourceUrl);
+            AddElementIfNotNull(elem, ns, "docsUrl", metadata.DocsUrl);
+            AddElementIfNotNull(elem, ns, "wikiUrl", metadata.WikiUrl);
+            AddElementIfNotNull(elem, ns, "mailingListUrl", metadata.MailingListUrl);
+            AddElementIfNotNull(elem, ns, "bugTrackerUrl", metadata.BugTrackerUrl);
+            AddElementIfNotEmpty(elem, ns, "replaces", metadata.Replaces, replaces => string.Join(",", replaces));
+            AddElementIfNotEmpty(elem, ns, "provides", metadata.Provides, provides => string.Join(",", provides));
+            AddElementIfNotEmpty(elem, ns, "conflicts", metadata.Conflicts, conflicts => string.Join(",", conflicts));
+            AddElementIfNotNull(elem, ns, "softwareDisplayName", metadata.SoftwareDisplayName);
+            AddElementIfNotNull(elem, ns, "softwareDisplayVersion", metadata.SoftwareDisplayVersion);
+
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+
             if (metadata.Serviceable)
             {
                 elem.Add(new XElement(ns + "serviceable", metadata.Serviceable));

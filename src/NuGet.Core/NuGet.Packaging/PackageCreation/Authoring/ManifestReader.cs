@@ -130,6 +130,48 @@ namespace NuGet.Packaging
                     case "tags":
                         manifestMetadata.Tags = value;
                         break;
+
+                    //////////////////////////////////////////////////////////
+                    // Start - Chocolatey Specific Modification
+                    //////////////////////////////////////////////////////////
+
+                    case "projectSourceUrl":
+                        manifestMetadata.SetProjectSourceUrl(value);
+                        break;
+                    case "packageSourceUrl":
+                        manifestMetadata.SetPackageSourceUrl(value);
+                        break;
+                    case "docsUrl":
+                        manifestMetadata.SetDocsUrl(value);
+                        break;
+                    case "wikiUrl":
+                        manifestMetadata.SetWikiUrl(value);
+                        break;
+                    case "mailingListUrl":
+                        manifestMetadata.SetMailingListUrl(value);
+                        break;
+                    case "bugTrackerUrl":
+                        manifestMetadata.SetBugTrackerUrl(value);
+                        break;
+                    case "replaces":
+                        manifestMetadata.Replaces = value?.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                        break;
+                    case "provides":
+                        manifestMetadata.Provides = value?.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                        break;
+                    case "conflicts":
+                        manifestMetadata.Conflicts = value?.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                        break;
+                    case "softwareDisplayName":
+                        manifestMetadata.SoftwareDisplayName = value;
+                        break;
+                    case "softwareDisplayVersion":
+                        manifestMetadata.SoftwareDisplayVersion = value;
+                        break;
+                    //////////////////////////////////////////////////////////
+                    // End - Chocolatey Specific Modification
+                    //////////////////////////////////////////////////////////
+
                     case "readme":
                         manifestMetadata.Readme = value;
                         break;
@@ -332,7 +374,7 @@ namespace NuGet.Packaging
                 return new List<PackageDependencyGroup>();
             }
 
-            // Disallow the <dependencies> element to contain both <dependency> and 
+            // Disallow the <dependencies> element to contain both <dependency> and
             // <group> child elements. Unfortunately, this cannot be enforced by XSD.
             if (dependenciesElement.ElementsNoNamespace("dependency").Any() &&
                 dependenciesElement.ElementsNoNamespace("group").Any())
@@ -414,7 +456,7 @@ namespace NuGet.Packaging
                 var target = file.GetOptionalAttributeValue("target").SafeTrim()?.TrimStart(slashes);
                 var exclude = file.GetOptionalAttributeValue("exclude").SafeTrim();
 
-                // Multiple sources can be specified by using semi-colon separated values. 
+                // Multiple sources can be specified by using semi-colon separated values.
                 files.AddRange(srcElement.Value.Trim(';').Split(';').Select(s =>
                     new ManifestFile
                     {

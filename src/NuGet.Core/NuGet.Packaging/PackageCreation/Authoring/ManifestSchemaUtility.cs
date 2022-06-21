@@ -18,7 +18,7 @@ namespace NuGet.Packaging
     public static class ManifestSchemaUtility
     {
         /// <summary>
-        /// Baseline schema 
+        /// Baseline schema
         /// </summary>
         internal const string SchemaVersionV1 = "http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd";
 
@@ -34,7 +34,7 @@ namespace NuGet.Packaging
 
         /// <summary>
         /// Added 'targetFramework' attribute for 'dependency' elements.
-        /// Allow framework folders under 'content' and 'tools' folders. 
+        /// Allow framework folders under 'content' and 'tools' folders.
         /// </summary>
         internal const string SchemaVersionV4 = "http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd";
 
@@ -49,13 +49,36 @@ namespace NuGet.Packaging
         /// </summary>
         internal const string SchemaVersionV6 = "http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd";
 
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
+        /// <summary>
+        /// Allows Choco Schemas
+        /// </summary>
+        internal const string SchemaVersionV7 = "http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd";
+
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
         private static readonly string[] VersionToSchemaMappings = new[] {
             SchemaVersionV1,
             SchemaVersionV2,
             SchemaVersionV3,
             SchemaVersionV4,
             SchemaVersionV5,
-            SchemaVersionV6
+
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+
+            SchemaVersionV6,
+            SchemaVersionV7
+
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
         };
 
 #if !IS_CORECLR

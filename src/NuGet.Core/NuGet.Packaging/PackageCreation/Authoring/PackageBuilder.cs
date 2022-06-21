@@ -24,7 +24,16 @@ using NuGet.Versioning;
 
 namespace NuGet.Packaging
 {
-    public class PackageBuilder : IPackageMetadata
+    //////////////////////////////////////////////////////////
+    // Start - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
+    public partial class PackageBuilder : IPackageMetadata
+
+    //////////////////////////////////////////////////////////
+    // End - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
     {
         private static readonly Uri DefaultUri = new Uri("http://defaultcontainer/");
         private static readonly DateTime ZipFormatMinDate = new DateTime(1980, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -131,6 +140,16 @@ namespace NuGet.Packaging
             TargetFrameworks = new List<NuGetFramework>();
             // Just like parameter replacements, these are also case insensitive, for consistency.
             Properties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+
+            FinishContruction();
+
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
         }
 
         public string Id
@@ -988,6 +1007,16 @@ namespace NuGet.Packaging
             {
                 PackageTypes = new Collection<PackageType>(metadata.PackageTypes.ToList());
             }
+
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+
+            FinishPopulate(metadata);
+
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
         }
 
         public void PopulateFiles(string basePath, IEnumerable<ManifestFile> files)

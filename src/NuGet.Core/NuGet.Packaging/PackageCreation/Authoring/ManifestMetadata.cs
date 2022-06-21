@@ -12,10 +12,19 @@ using NuGet.Versioning;
 
 namespace NuGet.Packaging
 {
+    //////////////////////////////////////////////////////////
+    // Start - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
     /// <summary>
     /// Manifest (user created .nuspec) file metadata model
     /// </summary>
-    public class ManifestMetadata : IPackageMetadata
+    public partial class ManifestMetadata : IPackageMetadata
+
+    //////////////////////////////////////////////////////////
+    // Start - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
     {
         private string _minClientVersionString;
 
@@ -64,6 +73,16 @@ namespace NuGet.Packaging
             LicenseMetadata = copy.LicenseMetadata;
             Icon = copy.Icon;
             Readme = copy.Readme;
+
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+
+            FinishContruction(copy);
+
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
         }
 
         [ManifestVersion(5)]
