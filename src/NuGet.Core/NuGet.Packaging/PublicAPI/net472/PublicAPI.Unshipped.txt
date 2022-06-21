@@ -1,0 +1,66 @@
+NuGet.Packaging.NuspecReader.GetBugTrackerUrl() -> string
+NuGet.Packaging.NuspecReader.GetConflicts() -> string
+NuGet.Packaging.NuspecReader.GetDocsUrl() -> string
+NuGet.Packaging.NuspecReader.GetMailingListUrl() -> string
+NuGet.Packaging.NuspecReader.GetPackageSourceUrl() -> string
+NuGet.Packaging.NuspecReader.GetProjectSourceUrl() -> string
+NuGet.Packaging.NuspecReader.GetProvides() -> string
+NuGet.Packaging.NuspecReader.GetReplaces() -> string
+NuGet.Packaging.NuspecReader.GetSoftwareDisplayName() -> string
+NuGet.Packaging.NuspecReader.GetSoftwareDisplayVersion() -> string
+NuGet.Packaging.NuspecReader.GetWikiUrl() -> string
+NuGet.Packaging.IPackageMetadata.BugTrackerUrl.get -> System.Uri
+NuGet.Packaging.IPackageMetadata.Conflicts.get -> System.Collections.Generic.IEnumerable<string>
+NuGet.Packaging.IPackageMetadata.DocsUrl.get -> System.Uri
+NuGet.Packaging.IPackageMetadata.MailingListUrl.get -> System.Uri
+NuGet.Packaging.IPackageMetadata.PackageSourceUrl.get -> System.Uri
+NuGet.Packaging.IPackageMetadata.ProjectSourceUrl.get -> System.Uri
+NuGet.Packaging.IPackageMetadata.Provides.get -> System.Collections.Generic.IEnumerable<string>
+NuGet.Packaging.IPackageMetadata.Replaces.get -> System.Collections.Generic.IEnumerable<string>
+NuGet.Packaging.IPackageMetadata.SoftwareDisplayName.get -> string
+NuGet.Packaging.IPackageMetadata.SoftwareDisplayVersion.get -> string
+NuGet.Packaging.IPackageMetadata.WikiUrl.get -> System.Uri
+NuGet.Packaging.ManifestMetadata.BugTrackerUrl.get -> System.Uri
+NuGet.Packaging.ManifestMetadata.Conflicts.get -> System.Collections.Generic.IEnumerable<string>
+NuGet.Packaging.ManifestMetadata.Conflicts.set -> void
+NuGet.Packaging.ManifestMetadata.DocsUrl.get -> System.Uri
+NuGet.Packaging.ManifestMetadata.MailingListUrl.get -> System.Uri
+NuGet.Packaging.ManifestMetadata.PackageSourceUrl.get -> System.Uri
+NuGet.Packaging.ManifestMetadata.ProjectSourceUrl.get -> System.Uri
+NuGet.Packaging.ManifestMetadata.Provides.get -> System.Collections.Generic.IEnumerable<string>
+NuGet.Packaging.ManifestMetadata.Provides.set -> void
+NuGet.Packaging.ManifestMetadata.Replaces.get -> System.Collections.Generic.IEnumerable<string>
+NuGet.Packaging.ManifestMetadata.Replaces.set -> void
+NuGet.Packaging.ManifestMetadata.SetBugTrackerUrl(string bugTrackerUrl) -> void
+NuGet.Packaging.ManifestMetadata.SetDocsUrl(string docsUrl) -> void
+NuGet.Packaging.ManifestMetadata.SetMailingListUrl(string mailingListUrl) -> void
+NuGet.Packaging.ManifestMetadata.SetPackageSourceUrl(string packageSourceUrl) -> void
+NuGet.Packaging.ManifestMetadata.SetProjectSourceUrl(string projectSourceUrl) -> void
+NuGet.Packaging.ManifestMetadata.SetWikiUrl(string wikiUrl) -> void
+NuGet.Packaging.ManifestMetadata.SoftwareDisplayName.get -> string
+NuGet.Packaging.ManifestMetadata.SoftwareDisplayName.set -> void
+NuGet.Packaging.ManifestMetadata.SoftwareDisplayVersion.get -> string
+NuGet.Packaging.ManifestMetadata.SoftwareDisplayVersion.set -> void
+NuGet.Packaging.ManifestMetadata.WikiUrl.get -> System.Uri
+NuGet.Packaging.PackageBuilder.PackageSourceUrl.get -> System.Uri
+NuGet.Packaging.PackageBuilder.PackageSourceUrl.set -> void
+NuGet.Packaging.PackageBuilder.ProjectSourceUrl.get -> System.Uri
+NuGet.Packaging.PackageBuilder.ProjectSourceUrl.set -> void
+NuGet.Packaging.PackageBuilder.DocsUrl.get -> System.Uri
+NuGet.Packaging.PackageBuilder.DocsUrl.set -> void
+NuGet.Packaging.PackageBuilder.Replaces.get -> System.Collections.Generic.ISet<string>
+NuGet.Packaging.PackageBuilder.Replaces.set -> void
+NuGet.Packaging.PackageBuilder.Provides.get -> System.Collections.Generic.ISet<string>
+NuGet.Packaging.PackageBuilder.Provides.set -> void
+NuGet.Packaging.PackageBuilder.Conflicts.get -> System.Collections.Generic.ISet<string>
+NuGet.Packaging.PackageBuilder.Conflicts.set -> void
+NuGet.Packaging.PackageBuilder.SoftwareDisplayName.get -> string
+NuGet.Packaging.PackageBuilder.SoftwareDisplayName.set -> void
+NuGet.Packaging.PackageBuilder.SoftwareDisplayVersion.get -> string
+NuGet.Packaging.PackageBuilder.SoftwareDisplayVersion.set -> void
+NuGet.Packaging.PackageBuilder.WikiUrl.get -> System.Uri
+NuGet.Packaging.PackageBuilder.WikiUrl.set -> void
+NuGet.Packaging.PackageBuilder.MailingListUrl.get -> System.Uri
+NuGet.Packaging.PackageBuilder.MailingListUrl.set -> void
+NuGet.Packaging.PackageBuilder.BugTrackerUrl.get -> System.Uri
+NuGet.Packaging.PackageBuilder.BugTrackerUrl.set -> void

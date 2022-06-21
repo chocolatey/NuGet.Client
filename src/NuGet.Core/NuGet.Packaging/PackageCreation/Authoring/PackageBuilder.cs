@@ -24,7 +24,13 @@ using NuGet.Versioning;
 
 namespace NuGet.Packaging
 {
-    public class PackageBuilder : IPackageMetadata
+    /*
+     * Chocolatey changes start here
+     */
+    public partial class PackageBuilder : IPackageMetadata
+    /*
+     * Chocolatey changes end here
+     */
     {
         private static readonly Uri DefaultUri = new Uri("http://defaultcontainer/");
         private static readonly DateTime ZipFormatMinDate = new DateTime(1980, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -131,6 +137,15 @@ namespace NuGet.Packaging
             TargetFrameworks = new List<NuGetFramework>();
             // Just like parameter replacements, these are also case insensitive, for consistency.
             Properties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            /*
+             * Chocolatey changes start here
+             */
+            FinishContruction();
+            /*
+             * Chocolatey changes end here
+             */
+
         }
 
         public string Id
@@ -988,6 +1003,15 @@ namespace NuGet.Packaging
             {
                 PackageTypes = new Collection<PackageType>(metadata.PackageTypes.ToList());
             }
+
+            /*
+             * Chocolatey changes start here
+             */
+            FinishPopulate(metadata);
+            /*
+             * Chocolatey changes end here
+             */
+
         }
 
         public void PopulateFiles(string basePath, IEnumerable<ManifestFile> files)
