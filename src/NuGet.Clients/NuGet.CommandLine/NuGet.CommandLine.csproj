@@ -15,6 +15,7 @@
     <PackageId>NuGet.CommandLine</PackageId>
     <TargetFramework>$(NETFXTargetFramework)</TargetFramework>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <PackageId>Chocolatey.NuGet.Commandline</PackageId>
     <Description>NuGet Command Line Interface.</Description>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Shipping>true</Shipping>

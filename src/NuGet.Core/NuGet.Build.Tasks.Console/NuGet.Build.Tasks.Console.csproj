@@ -3,6 +3,7 @@
   <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
 
   <PropertyGroup>
+    <PackageId>Chocolatey.NuGet.Build.Tasks.Console</PackageId>
     <TargetFrameworks>$(TargetFrameworksExeForSigning)</TargetFrameworks>
     <OutputType>Exe</OutputType>
     <Shipping>true</Shipping>
