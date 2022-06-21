@@ -1,0 +1,16 @@
+name: .NET Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Configure .Net and other dependencies
+      run: .\configure.ps1
+    - name: Build
+      run: .\build.ps1 -CI -SkipUnitTest
