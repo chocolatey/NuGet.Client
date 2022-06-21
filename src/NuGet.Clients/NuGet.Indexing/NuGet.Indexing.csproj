@@ -4,6 +4,13 @@
   <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
 
   <PropertyGroup>
+    <!-- //////////////////////////////////////////////////////////
+         // Start - Chocolatey Specific Modification
+         ////////////////////////////////////////////////////////// -->
+    <PackageId>Chocolatey.NuGet.Indexing</PackageId>
+    <!-- //////////////////////////////////////////////////////////
+         // End - Chocolatey Specific Modification
+         ////////////////////////////////////////////////////////// -->
     <Description>NuGet's indexing library for the Visual Studio client search functionality.</Description>
     <TargetFramework>$(NETFXTargetFramework)</TargetFramework>
     <NoWarn>$(NoWarn);CS1591</NoWarn>

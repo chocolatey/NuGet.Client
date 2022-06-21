@@ -15,7 +15,13 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <PackageId>NuGet.VisualStudio</PackageId>
+    <!-- //////////////////////////////////////////////////////////
+         // Start - Chocolatey Specific Modification
+         ////////////////////////////////////////////////////////// -->
+    <PackageId>Chocolatey.NuGet.VisualStudio</PackageId>
+    <!-- //////////////////////////////////////////////////////////
+         // End - Chocolatey Specific Modification
+         ////////////////////////////////////////////////////////// -->
     <AssemblyDescription>APIs for invoking NuGet services in Visual Studio.</AssemblyDescription>
     <Description>APIs for invoking NuGet services in Visual Studio.</Description>
     <Guid>228F7591-2777-47D7-B81D-FEADFC71CEB5</Guid>
