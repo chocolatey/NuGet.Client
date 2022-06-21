@@ -3,6 +3,7 @@
   <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
 
   <PropertyGroup>
+    <PackageId>Chocolatey.NuGet.Packaging.Core</PackageId>
     <Description>The (former home to) core data structures for NuGet.Packaging. Contains only the type forwarders to the new assembly.</Description>
     <TargetFrameworks>$(TargetFrameworksLibraryForSigning)</TargetFrameworks>
     <TargetFramework />

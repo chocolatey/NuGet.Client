@@ -3,6 +3,7 @@
   <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
 
   <PropertyGroup>
+    <PackageId>Chocolatey.NuGet.PackageManagement</PackageId>
     <Description>NuGet Package Management functionality for Visual Studio installation flow.</Description>
     <TargetFrameworks>$(TargetFrameworksLibrary)</TargetFrameworks>
     <TargetFramework />

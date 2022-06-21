@@ -3,6 +3,7 @@
   <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
 
   <PropertyGroup>
+    <PackageId>Chocolatey.NuGet.Resolver</PackageId>
     <Description>NuGet's dependency resolver for packages.config based projects.</Description>
     <TargetFrameworks>$(TargetFrameworksLibraryForSigning)</TargetFrameworks>
     <TargetFramework />

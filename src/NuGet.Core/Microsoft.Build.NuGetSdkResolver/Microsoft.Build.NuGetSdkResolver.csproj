@@ -4,6 +4,7 @@
 
 
   <PropertyGroup>
+    <PackageId>Chocolatey.Microsoft.Build.NuGetSdkResolver</PackageId>
     <TargetFrameworks>$(TargetFrameworksLibraryForSigning)</TargetFrameworks>
     <TargetFramework />
     <Shipping>true</Shipping>
