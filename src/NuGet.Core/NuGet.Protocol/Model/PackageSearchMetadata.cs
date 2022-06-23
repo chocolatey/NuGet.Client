@@ -16,7 +16,13 @@ using NuGet.Versioning;
 
 namespace NuGet.Protocol
 {
-    public class PackageSearchMetadata : IPackageSearchMetadata
+    /* 
+     * Chocolatey changes start here
+     */
+    public partial class PackageSearchMetadata : IPackageSearchMetadata
+    /* 
+     * Chocolatey changes end here
+     */
     {
         [JsonProperty(PropertyName = JsonProperties.Authors)]
         [JsonConverter(typeof(MetadataFieldConverter))]

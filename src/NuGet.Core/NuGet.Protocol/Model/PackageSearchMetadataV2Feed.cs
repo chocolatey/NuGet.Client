@@ -12,7 +12,8 @@ using NuGet.Versioning;
 
 namespace NuGet.Protocol
 {
-    public class PackageSearchMetadataV2Feed : IPackageSearchMetadata
+    public partial class PackageSearchMetadataV2Feed : IPackageSearchMetadata
+    // Chocolatey added partial
     {
         public PackageSearchMetadataV2Feed(V2FeedPackageInfo package)
         {
@@ -41,6 +42,15 @@ namespace NuGet.Protocol
             {
                 DownloadCount = count;
             }
+
+            /* 
+             * Chocolatey changes start here
+             */
+            FinishInitialization(package);
+            /* 
+             * Chocolatey changes end here
+             */
+
         }
         public PackageSearchMetadataV2Feed(V2FeedPackageInfo package, MetadataReferenceCache metadataCache)
         {
@@ -69,6 +79,14 @@ namespace NuGet.Protocol
             {
                 DownloadCount = count;
             }
+
+            /* 
+             * Chocolatey changes start here
+             */
+            FinishInitialization(package);
+            /* 
+             * Chocolatey changes end here
+             */
         }
 
         public string Authors { get; private set; }

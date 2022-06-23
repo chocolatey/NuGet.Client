@@ -14,13 +14,15 @@ namespace NuGet.Protocol.Core.Types
     /// <summary>
     /// Helper class allowing creation/alteration of immutable package metadata objects.
     /// </summary>
-    public class PackageSearchMetadataBuilder
+    public partial class PackageSearchMetadataBuilder
+    // Chocolatey added partial 
     {
         private readonly IPackageSearchMetadata _metadata;
         private AsyncLazy<IEnumerable<VersionInfo>> _lazyVersionsFactory;
         private AsyncLazy<PackageDeprecationMetadata> _lazyDeprecationFactory;
 
-        public class ClonedPackageSearchMetadata : IPackageSearchMetadata
+        public partial class ClonedPackageSearchMetadata : IPackageSearchMetadata
+        // Chocolatey added partial 
         {
             private static readonly AsyncLazy<IEnumerable<VersionInfo>> LazyEmptyVersionInfo =
                 AsyncLazy.New(Enumerable.Empty<VersionInfo>());
@@ -116,6 +118,31 @@ namespace NuGet.Protocol.Core.Types
                 PackagePath =
                     (_metadata as LocalPackageSearchMetadata)?.PackagePath ??
                     (_metadata as ClonedPackageSearchMetadata)?.PackagePath,
+
+                /* 
+                 * Chocolatey changes start here
+                 */
+                PackageHash = _metadata.PackageHash,
+                PackageHashAlgorithm = _metadata.PackageHashAlgorithm,
+                PackageSize = _metadata.PackageSize,
+                VersionDownloadCount = _metadata.VersionDownloadCount,
+                IsApproved = _metadata.IsApproved,
+                PackageStatus = _metadata.PackageStatus,
+                PackageSubmittedStatus = _metadata.PackageSubmittedStatus,
+                PackageTestResultStatus = _metadata.PackageTestResultStatus,
+                PackageTestResultStatusDate = _metadata.PackageTestResultStatusDate,
+                PackageValidationResultStatus = _metadata.PackageValidationResultStatus,
+                PackageValidationResultDate = _metadata.PackageValidationResultDate,
+                PackageCleanupResultDate = _metadata.PackageCleanupResultDate,
+                PackageReviewedDate = _metadata.PackageReviewedDate,
+                PackageApprovedDate = _metadata.PackageApprovedDate,
+                PackageReviewer = _metadata.PackageReviewer,
+                IsDownloadCacheAvailable = _metadata.IsDownloadCacheAvailable,
+                DownloadCacheDate = _metadata.DownloadCacheDate,
+                /* 
+                 * Chocolatey changes end here
+                 */
+
             };
 
             return clonedMetadata;

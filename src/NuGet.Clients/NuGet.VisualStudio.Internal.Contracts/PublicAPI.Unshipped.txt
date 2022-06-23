@@ -1,2 +1,20 @@
 #nullable enable
 NuGet.VisualStudio.Internal.Contracts.INuGetProjectManagerService.GetInstalledAndTransitivePackagesAsync(System.Collections.Generic.IReadOnlyCollection<string!>! projectIds, bool includeTransitiveOrigins, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NuGet.VisualStudio.Internal.Contracts.IInstalledAndTransitivePackages!>
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.DownloadCache.get -> System.Collections.Generic.IEnumerable<NuGet.Protocol.Core.Types.DownloadCache!>!
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.DownloadCacheDate.get -> System.DateTime?
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.IsApproved.get -> bool
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.IsDownloadCacheAvailable.get -> bool
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageApprovedDate.get -> System.DateTime?
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageCleanupResultDate.get -> System.DateTime?
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageHash.get -> string!
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageHashAlgorithm.get -> string!
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageReviewedDate.get -> System.DateTime?
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageReviewer.get -> string!
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageSize.get -> long?
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageStatus.get -> string!
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageSubmittedStatus.get -> string!
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageTestResultStatus.get -> string!
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageTestResultStatusDate.get -> System.DateTime?
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageValidationResultDate.get -> System.DateTime?
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageValidationResultStatus.get -> string!
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.VersionDownloadCount.get -> int?
