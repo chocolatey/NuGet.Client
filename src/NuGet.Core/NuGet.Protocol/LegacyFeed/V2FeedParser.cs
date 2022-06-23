@@ -20,10 +20,19 @@ using NuGet.Versioning;
 
 namespace NuGet.Protocol
 {
+    //////////////////////////////////////////////////////////
+    // Start - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
     /// <summary>
     /// A light weight XML parser for NuGet V2 Feeds
     /// </summary>
-    public sealed class V2FeedParser : IV2FeedParser
+    public sealed partial class V2FeedParser : IV2FeedParser
+
+    //////////////////////////////////////////////////////////
+    // End - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
     {
         private const string W3Atom = "http://www.w3.org/2005/Atom";
         private const string MetadataNS = "http://schemas.microsoft.com/ado/2007/08/dataservices/metadata";
@@ -381,10 +390,38 @@ namespace NuGet.Protocol
                 authors = authorNode.Elements(_xnameName).Select(e => metadataCache.GetString(e.Value));
             }
 
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+
+            var packageSize = GetLong(properties, _xnamePackageSize);
+            var versionDownloadCount = GetInt(properties, _xnameVersionDownloadCount);
+            var isApproved = StringComparer.OrdinalIgnoreCase.Equals(bool.TrueString, GetString(properties, _xnameIsApproved));
+            var packageStatus = metadataCache.GetString(GetString(properties, _xnamePackageStatus));
+            var packageSubmittedStatus = metadataCache.GetString(GetString(properties, _xnamePackageSubmittedStatus));
+            var packageTestResultStatus = metadataCache.GetString(GetString(properties, _xnamePackageTestResultStatus));
+            var packageTestResultStatusDate = GetNoOffsetDate(properties, _xnamePackageTestResultStatusDate);
+            var packageValidationResultStatus = metadataCache.GetString(GetString(properties, _xnamePackageValidationResultStatus));
+            var packageValidationResultDate = GetNoOffsetDate(properties, _xnamePackageValidationResultDate);
+            var packageCleanupResultDate = GetNoOffsetDate(properties, _xnamePackageCleanupResultDate);
+            var packageReviewedDate = GetNoOffsetDate(properties, _xnamePackageReviewedDate);
+            var packageApprovedDate = GetNoOffsetDate(properties, _xnamePackageApprovedDate);
+            var packageReviewer = metadataCache.GetString(GetString(properties, _xnamePackageReviewer));
+            var isDownloadCacheAvailable = StringComparer.OrdinalIgnoreCase.Equals(bool.TrueString, GetString(properties, _xnameIsDownloadCacheAvailable));
+            var downloadCacheDate = GetNoOffsetDate(properties, _xnameDownloadCacheDate);
+            var downloadCacheString = metadataCache.GetString(GetString(properties, _xnameDownloadCache));
+
             return new V2FeedPackageInfo(new PackageIdentity(identityId, version), title, summary, description, authors,
                 owners, iconUrl, licenseUrl, projectUrl, reportAbuseUrl, galleryDetailsUrl, tags, created, lastEdited,
                 published, dependencies, requireLicenseAcceptance, downloadUrl, downloadCount, packageHash,
-                packageHashAlgorithm, minClientVersion);
+                packageHashAlgorithm, minClientVersion, packageSize, versionDownloadCount, isApproved, packageStatus,
+                packageSubmittedStatus, packageTestResultStatus, packageTestResultStatusDate, packageValidationResultStatus,
+                packageValidationResultDate, packageCleanupResultDate, packageReviewedDate, packageApprovedDate,
+                packageReviewer, isDownloadCacheAvailable, downloadCacheDate, downloadCacheString);
+
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
         }
 
         /// <summary>

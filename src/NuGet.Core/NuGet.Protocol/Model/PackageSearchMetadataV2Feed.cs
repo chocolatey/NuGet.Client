@@ -12,7 +12,16 @@ using NuGet.Versioning;
 
 namespace NuGet.Protocol
 {
-    public class PackageSearchMetadataV2Feed : IPackageSearchMetadata
+
+    //////////////////////////////////////////////////////////
+    // Start - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+    public partial class PackageSearchMetadataV2Feed : IPackageSearchMetadata
+
+    //////////////////////////////////////////////////////////
+    // End - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
     {
         public PackageSearchMetadataV2Feed(V2FeedPackageInfo package)
         {
@@ -41,6 +50,16 @@ namespace NuGet.Protocol
             {
                 DownloadCount = count;
             }
+
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+
+            FinishInitialization(package);
+
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
         }
         public PackageSearchMetadataV2Feed(V2FeedPackageInfo package, MetadataReferenceCache metadataCache)
         {
@@ -69,6 +88,16 @@ namespace NuGet.Protocol
             {
                 DownloadCount = count;
             }
+
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+
+            FinishInitialization(package);
+
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
         }
 
         public string Authors { get; private set; }

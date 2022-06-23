@@ -31,6 +31,13 @@
     <Compile Include="Actions\AccessiblePackageIdentityTests.cs" />
     <Compile Include="Actions\UIActionEngineTests.cs" />
     <Compile Include="Actions\UpdatePreviewResultTests.cs" />
+    <!-- //////////////////////////////////////////////////////////
+         // Start - Chocolatey Specific Modification
+         ////////////////////////////////////////////////////////// -->
+    <Compile Include="ChocolateyTestPackageSearchMetadata.cs" />
+    <!-- //////////////////////////////////////////////////////////
+         // End - Chocolatey Specific Modification
+         ////////////////////////////////////////////////////////// -->
     <Compile Include="Converters\DateTimeConverterTests.cs" />
     <Compile Include="Converters\DownloadCountToVisibilityConverterTests.cs" />
     <Compile Include="Converters\FormattedStringPartConverterTests.cs" />

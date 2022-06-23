@@ -11,10 +11,19 @@ using NuGet.Protocol.Core.Types;
 
 namespace NuGet.PackageManagement.UI.Test
 {
+    //////////////////////////////////////////////////////////
+    // Start - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
     /// <summary>
     /// Test implementation of <see cref="IPackageSearchMetadata"/>. Not for production use
     /// </summary>
-    class TestPackageSearchMetadata : IPackageSearchMetadata
+    partial class TestPackageSearchMetadata : IPackageSearchMetadata
+
+    //////////////////////////////////////////////////////////
+    // End - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
     {
         public string Authors { get; set; }
 

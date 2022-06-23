@@ -9,11 +9,20 @@ using NuGet.Packaging.Core;
 
 namespace NuGet.Protocol.Core.Types
 {
+    //////////////////////////////////////////////////////////
+    // Start - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
     /// <summary>
     /// Package metadata only containing select fields relevant to search results processing and presenting.
     /// Immutable.
     /// </summary>
-    public interface IPackageSearchMetadata
+    public partial interface IPackageSearchMetadata
+
+    //////////////////////////////////////////////////////////
+    // End Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
     {
         string Authors { get; }
         IEnumerable<PackageDependencyGroup> DependencySets { get; }

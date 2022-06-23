@@ -11,7 +11,16 @@ using NuGet.Protocol.Core.Types;
 
 namespace NuGet.VisualStudio.Internal.Contracts
 {
-    public class TransitivePackageSearchMetadata : IPackageSearchMetadata
+    //////////////////////////////////////////////////////////
+    // Start - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
+    public partial class TransitivePackageSearchMetadata : IPackageSearchMetadata
+
+    //////////////////////////////////////////////////////////
+    // End - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
     {
         public IReadOnlyCollection<PackageIdentity> TransitiveOrigins { get; private set; }
 

@@ -14,7 +14,16 @@ using NuGet.Protocol.Core.Types;
 
 namespace NuGet.Protocol
 {
-    public class LocalPackageSearchMetadata : IPackageSearchMetadata
+    //////////////////////////////////////////////////////////
+    // Start - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
+    public partial class LocalPackageSearchMetadata : IPackageSearchMetadata
+
+    //////////////////////////////////////////////////////////
+    // End - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
     {
         private readonly NuspecReader _nuspec;
         private readonly LocalPackageInfo _package;
