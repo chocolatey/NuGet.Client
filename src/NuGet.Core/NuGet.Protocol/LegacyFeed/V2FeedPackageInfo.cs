@@ -12,11 +12,17 @@ using NuGet.Versioning;
 
 namespace NuGet.Protocol
 {
+    /* 
+     * Chocolatey changes start here
+     */
     /// <summary>
     /// Represents a V2 package entry from the OData feed. This object primarily just holds the strings parsed from XML, all parsing 
     /// and converting should be done after based on the scenario.
     /// </summary>
-    public class V2FeedPackageInfo : PackageIdentity
+    public partial class V2FeedPackageInfo : PackageIdentity
+    /* 
+     * Chocolatey changes end here
+     */
     {
         private readonly string _title;
         private readonly string _summary;
