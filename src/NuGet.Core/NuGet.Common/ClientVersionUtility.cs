@@ -10,7 +10,7 @@ namespace NuGet.Common
     public static class ClientVersionUtility
     {
         // Cache the value since it cannot change
-        private static string _clientVersion;
+        private static string _clientVersion = "6.4.1-zlocal.1";
 
         /// <summary>
         /// Find the current NuGet client version from the assembly info as a string.
