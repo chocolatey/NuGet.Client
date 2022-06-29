@@ -8,7 +8,16 @@ using NuGet.Common;
 
 namespace NuGet.Configuration
 {
-    public class ProxyCache : IProxyCache, IProxyCredentialCache
+    //////////////////////////////////////////////////////////
+    // Start - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
+    public partial class ProxyCache : IProxyCache, IProxyCredentialCache
+
+    //////////////////////////////////////////////////////////
+    // End - Chocolatey Specific Modification
+    //////////////////////////////////////////////////////////
+
     {
 #if !IS_CORECLR
         /// <summary>
@@ -48,6 +57,19 @@ namespace NuGet.Configuration
 
         public IWebProxy GetProxy(Uri sourceUri)
         {
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+
+            if (_isProxyOverridden)
+            {
+                return _overrideProxy;
+            }
+
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+
             // Check if the user has configured proxy details in settings or in the environment.
             var configuredProxy = GetUserConfiguredProxy();
             if (configuredProxy != null)
