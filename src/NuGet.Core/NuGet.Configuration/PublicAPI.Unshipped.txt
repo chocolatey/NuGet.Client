@@ -3,3 +3,5 @@ NuGet.Configuration.NuGetConfigurationException.NuGetConfigurationException(Syst
 NuGet.Configuration.PackageSourceMappingProvider
 NuGet.Configuration.PackageSourceMappingProvider.PackageSourceMappingProvider(NuGet.Configuration.ISettings settings) -> void
 NuGet.Configuration.PackageSourceMappingProvider.SavePackageSourceMappings(System.Collections.Generic.IReadOnlyList<NuGet.Configuration.PackageSourceMappingSourceItem> packageSourceMappingsSourceItems) -> void
+NuGet.Configuration.ProxyCache.ClearOverriding() -> void
+NuGet.Configuration.ProxyCache.Override(System.Net.IWebProxy proxy) -> void
