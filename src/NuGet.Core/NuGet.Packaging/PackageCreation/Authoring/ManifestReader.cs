@@ -456,10 +456,11 @@ namespace NuGet.Packaging
                 var exclude = file.GetOptionalAttributeValue("exclude").SafeTrim();
 
                 // Multiple sources can be specified by using semi-colon separated values. 
+                char separator = Path.DirectorySeparatorChar;
                 files.AddRange(srcElement.Value.Trim(';').Split(';').Select(s =>
                     new ManifestFile
                     {
-                        Source = s.SafeTrim(),
+                        Source = s.SafeTrim().Replace('/', separator).Replace('\u005c', separator),
                         Target = target,
                         Exclude = exclude
                     }));
