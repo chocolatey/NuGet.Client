@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using NuGet.Packaging;
 using NuGet.Protocol.Core.Types;
 
 namespace NuGet.Protocol
@@ -112,5 +113,7 @@ namespace NuGet.Protocol
                 return Enumerable.Empty<DownloadCache>();
             }
         }
+
+        public NuspecReader GetNuspecReader => _nuspec;
     }
 }

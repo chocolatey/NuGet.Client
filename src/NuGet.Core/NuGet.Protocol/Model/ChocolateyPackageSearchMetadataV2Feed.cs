@@ -36,6 +36,8 @@ namespace NuGet.Protocol
 
         private string _downloadCacheString;
 
+        public string PackagePath => null;
+
         public IEnumerable<DownloadCache> DownloadCache
         {
             get
