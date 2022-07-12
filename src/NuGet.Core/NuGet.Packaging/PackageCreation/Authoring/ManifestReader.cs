@@ -456,14 +456,23 @@ namespace NuGet.Packaging
                 var target = file.GetOptionalAttributeValue("target").SafeTrim()?.TrimStart(slashes);
                 var exclude = file.GetOptionalAttributeValue("exclude").SafeTrim();
 
+                //////////////////////////////////////////////////////////
+                // Start - Chocolatey Specific Modification
+                //////////////////////////////////////////////////////////
+
                 // Multiple sources can be specified by using semi-colon separated values.
+                char separator = Path.DirectorySeparatorChar;
                 files.AddRange(srcElement.Value.Trim(';').Split(';').Select(s =>
                     new ManifestFile
                     {
-                        Source = s.SafeTrim(),
+                        Source = s.SafeTrim().Replace('/', separator).Replace('\u005c', separator),
                         Target = target,
                         Exclude = exclude
                     }));
+
+                //////////////////////////////////////////////////////////
+                // End - Chocolatey Specific Modification
+                //////////////////////////////////////////////////////////
             }
             return files;
         }
