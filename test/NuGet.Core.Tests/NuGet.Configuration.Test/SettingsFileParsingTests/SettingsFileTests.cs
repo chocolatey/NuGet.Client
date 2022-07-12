@@ -152,7 +152,7 @@ namespace NuGet.Configuration.Test
             }
         }
 
-        [Fact]
+        [Fact(Skip = "Chocolatey SKIP: Fails when NuGet.config is not created by default")]
         public void SettingsFile_Constructor_CreateDefaultConfigFileIfNoConfig()
         {
             using (var mockBaseDirectory = TestDirectory.Create())
