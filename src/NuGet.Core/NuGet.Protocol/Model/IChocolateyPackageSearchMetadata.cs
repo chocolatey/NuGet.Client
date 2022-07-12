@@ -35,5 +35,7 @@ namespace NuGet.Protocol.Core.Types
         bool IsDownloadCacheAvailable { get; }
         DateTime? DownloadCacheDate { get; }
         IEnumerable<DownloadCache> DownloadCache { get; }
+
+        public string PackagePath { get; }
     }
 }

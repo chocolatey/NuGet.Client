@@ -10,6 +10,7 @@ NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageApp
 NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageCleanupResultDate.get -> System.DateTime?
 NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageHash.get -> string!
 NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageHashAlgorithm.get -> string!
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackagePath.get -> string!
 NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageReviewedDate.get -> System.DateTime?
 NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageReviewer.get -> string!
 NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.PackageSize.get -> long?

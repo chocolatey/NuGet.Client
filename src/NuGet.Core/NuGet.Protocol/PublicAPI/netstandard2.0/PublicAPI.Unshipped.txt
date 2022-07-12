@@ -10,6 +10,7 @@ NuGet.Protocol.Core.Types.IPackageSearchMetadata.PackageApprovedDate.get -> Syst
 NuGet.Protocol.Core.Types.IPackageSearchMetadata.PackageCleanupResultDate.get -> System.DateTime?
 NuGet.Protocol.Core.Types.IPackageSearchMetadata.PackageHash.get -> string
 NuGet.Protocol.Core.Types.IPackageSearchMetadata.PackageHashAlgorithm.get -> string
+NuGet.Protocol.Core.Types.IPackageSearchMetadata.PackagePath.get -> string
 NuGet.Protocol.Core.Types.IPackageSearchMetadata.PackageReviewedDate.get -> System.DateTime?
 NuGet.Protocol.Core.Types.IPackageSearchMetadata.PackageReviewer.get -> string
 NuGet.Protocol.Core.Types.IPackageSearchMetadata.PackageSize.get -> long?
@@ -81,6 +82,7 @@ NuGet.Protocol.Core.Types.DownloadCache.OriginalUrl.get -> string
 NuGet.Protocol.Core.Types.DownloadCache.OriginalUrl.set -> void
 NuGet.Protocol.LocalPackageSearchMetadata.DownloadCache.get -> System.Collections.Generic.IEnumerable<NuGet.Protocol.Core.Types.DownloadCache>
 NuGet.Protocol.LocalPackageSearchMetadata.DownloadCacheDate.get -> System.DateTime?
+NuGet.Protocol.LocalPackageSearchMetadata.GetNuspecReader.get -> NuGet.Packaging.NuspecReader
 NuGet.Protocol.LocalPackageSearchMetadata.IsApproved.get -> bool
 NuGet.Protocol.LocalPackageSearchMetadata.IsDownloadCacheAvailable.get -> bool
 NuGet.Protocol.LocalPackageSearchMetadata.PackageApprovedDate.get -> System.DateTime?
@@ -113,6 +115,7 @@ NuGet.Protocol.PackageSearchMetadata.PackageHash.get -> string
 NuGet.Protocol.PackageSearchMetadata.PackageHash.set -> void
 NuGet.Protocol.PackageSearchMetadata.PackageHashAlgorithm.get -> string
 NuGet.Protocol.PackageSearchMetadata.PackageHashAlgorithm.set -> void
+NuGet.Protocol.PackageSearchMetadata.PackagePath.get -> string
 NuGet.Protocol.PackageSearchMetadata.PackageReviewedDate.get -> System.DateTime?
 NuGet.Protocol.PackageSearchMetadata.PackageReviewedDate.set -> void
 NuGet.Protocol.PackageSearchMetadata.PackageReviewer.get -> string
@@ -141,6 +144,7 @@ NuGet.Protocol.PackageSearchMetadataV2Feed.PackageApprovedDate.get -> System.Dat
 NuGet.Protocol.PackageSearchMetadataV2Feed.PackageCleanupResultDate.get -> System.DateTime?
 NuGet.Protocol.PackageSearchMetadataV2Feed.PackageHash.get -> string
 NuGet.Protocol.PackageSearchMetadataV2Feed.PackageHashAlgorithm.get -> string
+NuGet.Protocol.PackageSearchMetadataV2Feed.PackagePath.get -> string
 NuGet.Protocol.PackageSearchMetadataV2Feed.PackageReviewedDate.get -> System.DateTime?
 NuGet.Protocol.PackageSearchMetadataV2Feed.PackageReviewer.get -> string
 NuGet.Protocol.PackageSearchMetadataV2Feed.PackageSize.get -> long?

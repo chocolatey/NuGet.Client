@@ -28,5 +28,7 @@ namespace NuGet.VisualStudio.Internal.Contracts
         public bool IsDownloadCacheAvailable => _packageSearchMetadata.IsDownloadCacheAvailable;
         public DateTime? DownloadCacheDate => _packageSearchMetadata.DownloadCacheDate;
         public IEnumerable<DownloadCache> DownloadCache => _packageSearchMetadata.DownloadCache;
+
+        public string PackagePath => _packageSearchMetadata.PackagePath;
     }
 }
