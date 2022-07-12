@@ -18,8 +18,8 @@
 
   <PropertyGroup Condition = " Exists($(StrongNameKey)) ">
     <SignAssembly>true</SignAssembly>
-    <DelaySign Condition="'$(IsXplat)' != 'true'">true</DelaySign>
-    <PublicSign Condition="'$(IsXplat)' == 'true'">true</PublicSign>
+    <DelaySign>false</DelaySign>
+    <PublicSign>false</PublicSign>
     <AssemblyOriginatorKeyFile Condition = " '$(AssemblyOriginatorKeyFile)' == '' ">$(StrongNameKey)</AssemblyOriginatorKeyFile>
     <StrongNameCert Condition="'$(StrongNameCert)' == ''">$(DefaultStrongNameCert)</StrongNameCert>
   </PropertyGroup>
