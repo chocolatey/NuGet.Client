@@ -67,8 +67,14 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <NUGET_PFX_PATH>$(MSBuildThisFileDirectory)..\keys\NuGetKey.snk</NUGET_PFX_PATH>
-    <MS_PFX_PATH>$(MSBuildThisFileDirectory)..\keys\35MSSharedLib1024.snk</MS_PFX_PATH>
+    <!-- //////////////////////////////////////////////////////////
+         // Start - Chocolatey Specific Modification
+         ////////////////////////////////////////////////////////// -->
+    <NUGET_PFX_PATH>$(MSBuildThisFileDirectory)..\keys\chocolatey.snk</NUGET_PFX_PATH>
+    <MS_PFX_PATH>$(MSBuildThisFileDirectory)..\keys\chocolatey.snk</MS_PFX_PATH>
+    <!-- //////////////////////////////////////////////////////////
+         // End - Chocolatey Specific Modification
+         ////////////////////////////////////////////////////////// -->
   </PropertyGroup>
 
   <Target Name="GetSemanticVersion">
