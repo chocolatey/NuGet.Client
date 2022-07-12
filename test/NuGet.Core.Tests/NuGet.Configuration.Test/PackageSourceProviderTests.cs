@@ -1883,8 +1883,13 @@ namespace NuGet.Configuration.Test
             }
         }
 
-        [Fact]
-
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+        [Fact(Skip = "Chocolatey SKIP: Fails when NuGet.config is not created by default")]
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
         public void SavePackageSources_IgnoreSettingBeforeClear()
         {
             using (var directory = TestDirectory.Create())

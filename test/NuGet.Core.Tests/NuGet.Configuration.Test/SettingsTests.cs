@@ -2067,7 +2067,37 @@ namespace NuGet.Configuration.Test
             }
         }
 
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
         [Fact]
+        public void LoadSettings_NonExistingUserWideConfigFile_DoesNotCreateUserWideConfigFile()
+        {
+            using (var mockBaseDirectory = TestDirectory.Create())
+            {
+                // Arrange
+                var nugetConfigPath = Path.Combine(mockBaseDirectory, "TestingGlobalPath", "NuGet.Config");
+                File.Exists(nugetConfigPath).Should().BeFalse();
+
+                // Act
+                var settings = Settings.LoadSettings(
+                    root: mockBaseDirectory,
+                    configFileName: null,
+                    machineWideSettings: null,
+                    loadUserWideSettings: true,
+                    useTestingGlobalPath: true);
+
+                // Assert
+                settings.Should().NotBeNull();
+                File.Exists(nugetConfigPath).Should().BeFalse();
+            }
+        }
+
+        [Fact(Skip = "Chocolatey SKIP: Fails when NuGet.config is not created by default")]
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
         public void LoadSettings_NonExistingUserWideConfigFile_CreateUserWideConfigFileWithNuGetOrg()
         {
             using (var mockBaseDirectory = TestDirectory.Create())
@@ -2618,7 +2648,13 @@ namespace NuGet.Configuration.Test
         /// One of those is the default one and 1 is the additional config dropped in the directory.
         /// The default config takes priority over the additional ones, so it's expected that values from the additional config are overwritten by the default ones.
         /// </summary>
-        [Fact]
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+        [Fact(Skip = "Chocolatey SKIP: Fails when NuGet.config is not created by default")]
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
         public void LoadSettings_WithAdditonalConfig_And_WithoutDefaultUserConfig_CreatesDefaultNuGetConfig()
         {
             // Arrange
