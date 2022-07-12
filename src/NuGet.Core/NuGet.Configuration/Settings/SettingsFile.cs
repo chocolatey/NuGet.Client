@@ -109,10 +109,18 @@ namespace NuGet.Configuration
             IsReadOnly = IsMachineWide || isReadOnly;
 
             XDocument config = null;
-            ExecuteSynchronized(() =>
+
+            // As Chocolatey, we never want to create the NuGet.Config file, as this is not used by Chocolatey at all.
+            // As such, rather than GetOrCreateDocument, if the filepath doesn't exist, simply return the default empty
+            // XDocument, which is exactly what would have been returned after creating the file.
+            if (File.Exists(ConfigFilePath))
             {
-                config = FileSystemUtility.GetOrCreateDocument(CreateDefaultConfig(), ConfigFilePath);
-            });
+                ExecuteSynchronized(() => config = FileSystemUtility.GetOrCreateDocument(CreateDefaultConfig(), ConfigFilePath));
+            }
+            else
+            {
+                config = CreateDefaultConfig();
+            }
 
             _xDocument = config;
 

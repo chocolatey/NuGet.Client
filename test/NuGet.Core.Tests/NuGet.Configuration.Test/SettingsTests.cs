@@ -2049,7 +2049,7 @@ namespace NuGet.Configuration.Test
             }
         }
 
-        [Fact]
+        [Fact(Skip = "Chocolatey SKIP: Fails when NuGet.config is not created by default")]
         public void LoadSettings_NonExistingUserWideConfigFile_CreateUserWideConfigFileWithNuGetOrg()
         {
             using (var mockBaseDirectory = TestDirectory.Create())
@@ -2600,7 +2600,7 @@ namespace NuGet.Configuration.Test
         /// One of those is the default one and 1 is the additional config dropped in the directory.
         /// The default config takes priority over the additional ones, so it's expected that values from the additional config are overwritten by the default ones.
         /// </summary>
-        [Fact]
+        [Fact(Skip = "Chocolatey SKIP: Fails when NuGet.config is not created by default")]
         public void LoadSettings_WithAdditonalConfig_And_WithoutDefaultUserConfig_CreatesDefaultNuGetConfig()
         {
             // Arrange
