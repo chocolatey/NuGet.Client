@@ -53,5 +53,7 @@ namespace NuGet.Protocol
         public DateTime? DownloadCacheDate { get; set; }
         [JsonIgnore]
         public IEnumerable<DownloadCache> DownloadCache { get; set; }
+
+        [JsonIgnore] public string PackagePath => null;
     }
 }
