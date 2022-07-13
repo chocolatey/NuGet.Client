@@ -52,7 +52,7 @@ namespace NuGet.CommandLine
             }
 
             var builder = new StringBuilder();
-            foreach (var resource in resourceNames.Split(';'))
+            foreach (var resource in resourceNames.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
             {
                 string value = LocalizedResourceManager.GetString(resource, resourceManager);
                 if (String.IsNullOrEmpty(value))

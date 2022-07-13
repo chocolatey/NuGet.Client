@@ -65,7 +65,7 @@ namespace NuGet.CommandLine
                 // The PackageSaveMode flag only determines if nuspec and nupkg are saved at the target location.
                 // For install \ restore, we always extract files.
                 EffectivePackageSaveMode = Packaging.PackageSaveMode.Files;
-                foreach (var v in packageSaveModeValue.Split(';'))
+                foreach (var v in packageSaveModeValue.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
                 {
                     if (v.Equals(Packaging.PackageSaveMode.Nupkg.ToString(), StringComparison.OrdinalIgnoreCase))
                     {
