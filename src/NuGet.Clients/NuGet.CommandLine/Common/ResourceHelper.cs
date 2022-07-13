@@ -45,7 +45,15 @@ namespace NuGet.CommandLine
             }
 
             var builder = new StringBuilder();
-            foreach (var resource in resourceNames.Split(';'))
+
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+
+            foreach (var resource in resourceNames.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
             {
                 var culture = LocalizedResourceManager.GetLanguageName();
                 string value = resourceManager.GetString(resource + '_' + culture, CultureInfo.InvariantCulture) ??
