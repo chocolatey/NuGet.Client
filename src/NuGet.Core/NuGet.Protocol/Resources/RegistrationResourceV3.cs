@@ -20,9 +20,16 @@ namespace NuGet.Protocol
     /// </summary>
     public class RegistrationResourceV3 : INuGetResource
     {
-        private readonly HttpSource _client;
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
 
-        public RegistrationResourceV3(HttpSource client, Uri baseUrl)
+        private readonly IHttpSource _client;
+
+        public RegistrationResourceV3(IHttpSource client, Uri baseUrl)
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
         {
             if (client == null)
             {

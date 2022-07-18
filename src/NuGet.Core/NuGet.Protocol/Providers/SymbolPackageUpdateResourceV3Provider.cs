@@ -29,7 +29,13 @@ namespace NuGet.Protocol
             {
                 var baseUrl = serviceIndex.GetServiceEntryUri(ServiceTypes.SymbolPackagePublish);
 
-                HttpSource httpSource = null;
+                //////////////////////////////////////////////////////////
+                // Start - Chocolatey Specific Modification
+                //////////////////////////////////////////////////////////
+                IHttpSource httpSource = null;
+                //////////////////////////////////////////////////////////
+                // End - Chocolatey Specific Modification
+                //////////////////////////////////////////////////////////
                 var sourceUri = baseUrl?.AbsoluteUri;
                 if (!string.IsNullOrEmpty(sourceUri))
                 {

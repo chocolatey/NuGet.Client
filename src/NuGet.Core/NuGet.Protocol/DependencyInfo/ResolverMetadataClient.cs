@@ -27,7 +27,13 @@ namespace NuGet.Protocol
         /// </summary>
         /// <returns>Returns an empty sequence if the package does not exist.</returns>
         public static async Task<IEnumerable<RemoteSourceDependencyInfo>> GetDependencies(
-            HttpSource httpClient,
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+            IHttpSource httpClient,
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
             Uri registrationUri,
             string packageId,
             VersionRange range,
@@ -115,7 +121,13 @@ namespace NuGet.Protocol
         /// </summary>
         /// <returns>Returns Null if the package does not exist</returns>
         public static async Task<RegistrationInfo> GetRegistrationInfo(
-            HttpSource httpClient,
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+            IHttpSource httpClient,
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
             Uri registrationUri,
             string packageId,
             VersionRange range,

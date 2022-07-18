@@ -6,16 +6,29 @@ using NuGet.Protocol.Core.Types;
 namespace NuGet.Protocol
 {
     /// <summary>
-    /// Holds a shared <see cref="HttpSource"/>. 
+    /// Holds a shared <see cref="HttpSource"/>.
     /// This is expected to be shared across the app and should not be disposed of.
     /// </summary>
     public class HttpSourceResource : INuGetResource
     {
-        public HttpSourceResource(HttpSource httpSource)
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
+        public HttpSourceResource(IHttpSource httpSource)
         {
             HttpSource = httpSource;
         }
 
-        public HttpSource HttpSource { get; }
+        public void OverrideHttpSource(IHttpSource source)
+        {
+            HttpSource = source;
+        }
+
+        public IHttpSource HttpSource { get; private set; }
+
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
     }
 }

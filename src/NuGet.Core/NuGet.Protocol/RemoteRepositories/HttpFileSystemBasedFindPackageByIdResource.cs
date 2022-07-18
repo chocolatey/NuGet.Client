@@ -33,7 +33,16 @@ namespace NuGet.Protocol
     {
         private const int DefaultMaxRetries = 3;
         private int _maxRetries;
-        private readonly HttpSource _httpSource;
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
+        private readonly IHttpSource _httpSource;
+
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
         private readonly ConcurrentDictionary<string, AsyncLazy<SortedDictionary<NuGetVersion, PackageInfo>>> _packageInfoCache =
             new ConcurrentDictionary<string, AsyncLazy<SortedDictionary<NuGetVersion, PackageInfo>>>(StringComparer.OrdinalIgnoreCase);
         private readonly IReadOnlyList<Uri> _baseUris;
@@ -42,6 +51,10 @@ namespace NuGet.Protocol
 
         private const string ResourceTypeName = nameof(FindPackageByIdResource);
         private const string ThisTypeName = nameof(HttpFileSystemBasedFindPackageByIdResource);
+
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
 
         /// <summary>
         /// Initializes a new <see cref="HttpFileSystemBasedFindPackageByIdResource" /> class.
@@ -53,11 +66,14 @@ namespace NuGet.Protocol
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="httpSource" /> is <c>null</c>.</exception>
         public HttpFileSystemBasedFindPackageByIdResource(
             IReadOnlyList<Uri> baseUris,
-            HttpSource httpSource) : this(baseUris, httpSource, EnvironmentVariableWrapper.Instance) { }
+            IHttpSource httpSource) : this(baseUris, httpSource, EnvironmentVariableWrapper.Instance) { }
 
         internal HttpFileSystemBasedFindPackageByIdResource(
             IReadOnlyList<Uri> baseUris,
-            HttpSource httpSource, IEnvironmentVariableReader environmentVariableReader)
+            IHttpSource httpSource, IEnvironmentVariableReader environmentVariableReader)
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
         {
             if (baseUris == null)
             {

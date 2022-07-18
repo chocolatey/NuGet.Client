@@ -17,10 +17,26 @@ namespace NuGet.Protocol
     [Obsolete("Use PackageSearchResource instead (via SourceRepository.GetResourceAsync<PackageSearchResource>")]
     public class RawSearchResourceV3 : INuGetResource
     {
-        private readonly HttpSource _client;
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
+        private readonly IHttpSource _client;
+
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
         private readonly Uri[] _searchEndpoints;
 
-        public RawSearchResourceV3(HttpSource client, IEnumerable<Uri> searchEndpoints)
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
+        public RawSearchResourceV3(IHttpSource client, IEnumerable<Uri> searchEndpoints)
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
             : base()
         {
             if (client == null)

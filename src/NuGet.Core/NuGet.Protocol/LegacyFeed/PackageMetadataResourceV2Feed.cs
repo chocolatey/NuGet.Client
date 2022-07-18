@@ -13,7 +13,16 @@ namespace NuGet.Protocol
 {
     public class PackageMetadataResourceV2Feed : PackageMetadataResource
     {
-        private readonly HttpSource _httpSource;
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
+        private readonly IHttpSource _httpSource;
+
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
         private readonly Configuration.PackageSource _packageSource;
         private readonly V2FeedParser _feedParser;
 

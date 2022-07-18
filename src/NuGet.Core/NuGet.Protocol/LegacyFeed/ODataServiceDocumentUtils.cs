@@ -15,7 +15,13 @@ static internal class ODataServiceDocumentUtils
 {
     public static async Task<ODataServiceDocumentResourceV2> CreateODataServiceDocumentResourceV2(
         string url,
-        HttpSource client,
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+        IHttpSource client,
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
         DateTime utcNow,
         ILogger log,
         CancellationToken token)

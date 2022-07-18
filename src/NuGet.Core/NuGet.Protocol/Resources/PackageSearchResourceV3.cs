@@ -17,7 +17,16 @@ namespace NuGet.Protocol
 {
     public class PackageSearchResourceV3 : PackageSearchResource
     {
-        private readonly HttpSource _client;
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
+        private readonly IHttpSource _client;
+
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
         private readonly Uri[] _searchEndpoints;
 
 #pragma warning disable CS0618 // Type or member is obsolete
@@ -31,16 +40,23 @@ namespace NuGet.Protocol
             _rawSearchResource = searchResource;
         }
 
-        internal PackageSearchResourceV3(HttpSource client, IEnumerable<Uri> searchEndpoints)
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
+        internal PackageSearchResourceV3(IHttpSource client, IEnumerable<Uri> searchEndpoints)
             : base()
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
         {
             _client = client ?? throw new ArgumentNullException(nameof(client));
             _searchEndpoints = searchEndpoints?.ToArray() ?? throw new ArgumentNullException(nameof(searchEndpoints));
         }
 
         /// <summary>
-        /// Query nuget package list from nuget server. This implementation optimized for performance so doesn't iterate whole result 
-        /// returned nuget server, so as soon as find "take" number of result packages then stop processing and return the result. 
+        /// Query nuget package list from nuget server. This implementation optimized for performance so doesn't iterate whole result
+        /// returned nuget server, so as soon as find "take" number of result packages then stop processing and return the result.
         /// </summary>
         /// <param name="searchTerm">The term we're searching for.</param>
         /// <param name="filter">Filter for whether to include prerelease, delisted, supportedframework flags in query.</param>
@@ -185,7 +201,13 @@ namespace NuGet.Protocol
         }
 
         private async Task<T> Search<T>(
-            Func<HttpSource, Uri, Task<T>> getResultAsync,
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+            Func<IHttpSource, Uri, Task<T>> getResultAsync,
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
             string searchTerm,
             SearchFilter filters,
             int skip,
@@ -204,8 +226,8 @@ namespace NuGet.Protocol
         }
 
         /// <summary>
-        /// Query nuget package list from nuget server. This implementation optimized for performance so doesn't iterate whole result 
-        /// returned nuget server, so as soon as find "take" number of result packages then stop processing and return the result. 
+        /// Query nuget package list from nuget server. This implementation optimized for performance so doesn't iterate whole result
+        /// returned nuget server, so as soon as find "take" number of result packages then stop processing and return the result.
         /// </summary>
         /// <param name="searchTerm">The term we're searching for.</param>
         /// <param name="filters">Filter for whether to include prerelease, delisted, supportedframework flags in query.</param>

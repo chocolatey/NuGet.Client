@@ -11,12 +11,26 @@ namespace NuGet.Protocol.Core.Types
     /// </summary>
     public class SymbolPackageUpdateResourceV3 : INuGetResource
     {
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
 
-        private HttpSource _httpSource;
+        private IHttpSource _httpSource;
+
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
         private string _source;
 
         public SymbolPackageUpdateResourceV3(string source,
-            HttpSource httpSource)
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+            IHttpSource httpSource)
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
         {
             _source = source;
             _httpSource = httpSource;

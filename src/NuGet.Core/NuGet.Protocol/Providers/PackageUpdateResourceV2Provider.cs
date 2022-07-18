@@ -22,7 +22,13 @@ namespace NuGet.Protocol
             SourceRepository source,
             CancellationToken token)
         {
-            HttpSource httpSource = null;
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+            IHttpSource httpSource = null;
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
             PackageUpdateResource packageUpdateResource = null;
             var sourceUri = source.PackageSource?.Source;
             if (!string.IsNullOrEmpty(sourceUri))

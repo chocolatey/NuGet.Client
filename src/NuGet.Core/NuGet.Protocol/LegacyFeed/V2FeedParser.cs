@@ -66,16 +66,29 @@ namespace NuGet.Protocol
         private static readonly XName _xnamePackageHashAlgorithm = XName.Get("PackageHashAlgorithm", DataServicesNS);
         private static readonly XName _xnameMinClientVersion = XName.Get("MinClientVersion", DataServicesNS);
 
-        private readonly HttpSource _httpSource;
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
+        private readonly IHttpSource _httpSource;
+
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
         private readonly string _baseAddress;
         private readonly V2FeedQueryBuilder _queryBuilder;
+
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
 
         /// <summary>
         /// Creates a V2 parser
         /// </summary>
         /// <param name="httpSource">HttpSource and message handler containing auth/proxy support</param>
         /// <param name="baseAddress">base address for all services from this OData service</param>
-        public V2FeedParser(HttpSource httpSource, string baseAddress)
+        public V2FeedParser(IHttpSource httpSource, string baseAddress)
             : this(httpSource, baseAddress, baseAddress)
         {
         }
@@ -86,7 +99,10 @@ namespace NuGet.Protocol
         /// <param name="httpSource">HttpSource and message handler containing auth/proxy support</param>
         /// <param name="baseAddress">base address for all services from this OData service</param>
         /// <param name="source">PackageSource useful for reporting meaningful errors that relate back to the configuration</param>
-        public V2FeedParser(HttpSource httpSource, string baseAddress, string source)
+        public V2FeedParser(IHttpSource httpSource, string baseAddress, string source)
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
         {
             if (httpSource == null)
             {

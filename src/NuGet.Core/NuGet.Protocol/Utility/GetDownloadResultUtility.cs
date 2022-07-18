@@ -20,7 +20,13 @@ namespace NuGet.Protocol
         private const string DirectDownloadPattern = "*" + DirectDownloadExtension;
 
         public static async Task<DownloadResourceResult> GetDownloadResultAsync(
-           HttpSource client,
+           //////////////////////////////////////////////////////////
+           // Start - Chocolatey Specific Modification
+           //////////////////////////////////////////////////////////
+           IHttpSource client,
+           //////////////////////////////////////////////////////////
+           // End - Chocolatey Specific Modification
+           //////////////////////////////////////////////////////////
            PackageIdentity identity,
            Uri uri,
            PackageDownloadContext downloadContext,

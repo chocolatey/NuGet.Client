@@ -35,13 +35,29 @@ namespace NuGet.Protocol.Core.Types
         /// </summary>
         private const string TempApiKeyServiceEndpoint = "create-verification-key/{0}/{1}";
 
-        private HttpSource _httpSource;
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
+        private IHttpSource _httpSource;
+
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
         private string _source;
         private bool _disableBuffering;
         public ISettings Settings { get; set; }
 
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
         public PackageUpdateResource(string source,
-            HttpSource httpSource)
+            IHttpSource httpSource)
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
         {
             _source = source;
             _httpSource = httpSource;
