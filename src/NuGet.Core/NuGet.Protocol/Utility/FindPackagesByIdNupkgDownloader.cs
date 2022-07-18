@@ -27,12 +27,12 @@ namespace NuGet.Protocol
         private readonly ConcurrentDictionary<string, NuspecReader> _nuspecReaders =
             new ConcurrentDictionary<string, NuspecReader>();
 
-        private readonly HttpSource _httpSource;
+        private readonly IHttpSource _httpSource;
         private readonly EnhancedHttpRetryHelper _enhancedHttpRetryHelper;
 
-        public FindPackagesByIdNupkgDownloader(HttpSource httpSource) : this(httpSource, EnvironmentVariableWrapper.Instance) { }
+        public FindPackagesByIdNupkgDownloader(IHttpSource httpSource) : this(httpSource, EnvironmentVariableWrapper.Instance) { }
 
-        internal FindPackagesByIdNupkgDownloader(HttpSource httpSource, IEnvironmentVariableReader environmentVariableReader)
+        internal FindPackagesByIdNupkgDownloader(IHttpSource httpSource, IEnvironmentVariableReader environmentVariableReader)
         {
             if (httpSource == null)
             {

@@ -18,9 +18,9 @@ namespace NuGet.Protocol
     {
         private readonly RegistrationResourceV3 _regResource;
         private readonly ServiceIndexResourceV3 _serviceIndex;
-        private readonly HttpSource _client;
+        private readonly IHttpSource _client;
 
-        public AutoCompleteResourceV3(HttpSource client, ServiceIndexResourceV3 serviceIndex, RegistrationResourceV3 regResource)
+        public AutoCompleteResourceV3(IHttpSource client, ServiceIndexResourceV3 serviceIndex, RegistrationResourceV3 regResource)
             : base()
         {
             _regResource = regResource;

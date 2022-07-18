@@ -20,7 +20,7 @@ namespace NuGet.Protocol
         private const string DirectDownloadPattern = "*" + DirectDownloadExtension;
 
         public static async Task<DownloadResourceResult> GetDownloadResultAsync(
-           HttpSource client,
+           IHttpSource client,
            PackageIdentity identity,
            Uri uri,
            PackageDownloadContext downloadContext,

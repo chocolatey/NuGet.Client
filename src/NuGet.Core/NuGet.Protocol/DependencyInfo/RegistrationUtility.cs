@@ -29,7 +29,7 @@ namespace NuGet.Protocol
         }
 
         public async static Task<IEnumerable<JObject>> LoadRanges(
-            HttpSource httpSource,
+            IHttpSource httpSource,
             Uri registrationUri,
             string packageId,
             VersionRange range,

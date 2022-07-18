@@ -12,7 +12,7 @@ namespace NuGet.Protocol
 {
     public class PackageSearchResourceV2Feed : PackageSearchResource
     {
-        private readonly HttpSource _httpSource;
+        private readonly IHttpSource _httpSource;
         private readonly Configuration.PackageSource _packageSource;
         private readonly V2FeedParser _feedParser;
 

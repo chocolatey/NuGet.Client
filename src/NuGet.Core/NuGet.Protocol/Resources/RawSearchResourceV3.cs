@@ -17,10 +17,10 @@ namespace NuGet.Protocol
     [Obsolete("Use PackageSearchResource instead (via SourceRepository.GetResourceAsync<PackageSearchResource>")]
     public class RawSearchResourceV3 : INuGetResource
     {
-        private readonly HttpSource _client;
+        private readonly IHttpSource _client;
         private readonly Uri[] _searchEndpoints;
 
-        public RawSearchResourceV3(HttpSource client, IEnumerable<Uri> searchEndpoints)
+        public RawSearchResourceV3(IHttpSource client, IEnumerable<Uri> searchEndpoints)
             : base()
         {
             if (client == null)

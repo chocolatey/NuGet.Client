@@ -27,7 +27,7 @@ namespace NuGet.Protocol
         private readonly Dictionary<string, Task<IEnumerable<RemoteSourceDependencyInfo>>> _packageVersionsCache =
             new Dictionary<string, Task<IEnumerable<RemoteSourceDependencyInfo>>>(StringComparer.OrdinalIgnoreCase);
 
-        private readonly HttpSource _httpSource;
+        private readonly IHttpSource _httpSource;
         private readonly FindPackagesByIdNupkgDownloader _nupkgDownloader;
 
         private DependencyInfoResource _dependencyInfoResource;
@@ -44,7 +44,7 @@ namespace NuGet.Protocol
         /// is <c>null</c>.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="httpSource" />
         /// is <c>null</c>.</exception>
-        public RemoteV3FindPackageByIdResource(SourceRepository sourceRepository, HttpSource httpSource)
+        public RemoteV3FindPackageByIdResource(SourceRepository sourceRepository, IHttpSource httpSource)
         {
             if (sourceRepository == null)
             {

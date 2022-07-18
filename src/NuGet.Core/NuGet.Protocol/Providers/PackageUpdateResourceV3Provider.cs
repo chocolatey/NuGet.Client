@@ -31,7 +31,7 @@ namespace NuGet.Protocol
             {
                 var baseUrl = serviceIndex.GetServiceEntryUri(ServiceTypes.PackagePublish);
 
-                HttpSource httpSource = null;
+                IHttpSource httpSource = null;
                 var sourceUri = baseUrl?.AbsoluteUri;
                 if (!string.IsNullOrEmpty(sourceUri))
                 {
