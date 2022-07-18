@@ -19,7 +19,7 @@ namespace NuGet.Protocol
     /// </summary>
     public sealed class DependencyInfoResourceV3 : DependencyInfoResource
     {
-        private readonly HttpSource _client;
+        private readonly IHttpSource _client;
         private readonly RegistrationResourceV3 _regResource;
         private readonly SourceRepository _source;
 
@@ -28,7 +28,7 @@ namespace NuGet.Protocol
         /// </summary>
         /// <param name="client">Http client</param>
         /// <param name="regResource">Registration blob resource</param>
-        public DependencyInfoResourceV3(HttpSource client, RegistrationResourceV3 regResource, SourceRepository source)
+        public DependencyInfoResourceV3(IHttpSource client, RegistrationResourceV3 regResource, SourceRepository source)
         {
             if (client == null)
             {

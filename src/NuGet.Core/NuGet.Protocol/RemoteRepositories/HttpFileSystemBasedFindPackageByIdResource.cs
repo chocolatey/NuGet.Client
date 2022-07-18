@@ -33,7 +33,7 @@ namespace NuGet.Protocol
     {
         private const int DefaultMaxRetries = 3;
         private int _maxRetries;
-        private readonly HttpSource _httpSource;
+        private readonly IHttpSource _httpSource;
         private readonly ConcurrentDictionary<string, AsyncLazy<SortedDictionary<NuGetVersion, PackageInfo>>> _packageInfoCache =
             new ConcurrentDictionary<string, AsyncLazy<SortedDictionary<NuGetVersion, PackageInfo>>>(StringComparer.OrdinalIgnoreCase);
         private readonly IReadOnlyList<Uri> _baseUris;
@@ -53,11 +53,11 @@ namespace NuGet.Protocol
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="httpSource" /> is <c>null</c>.</exception>
         public HttpFileSystemBasedFindPackageByIdResource(
             IReadOnlyList<Uri> baseUris,
-            HttpSource httpSource) : this(baseUris, httpSource, EnvironmentVariableWrapper.Instance) { }
+            IHttpSource httpSource) : this(baseUris, httpSource, EnvironmentVariableWrapper.Instance) { }
 
         internal HttpFileSystemBasedFindPackageByIdResource(
             IReadOnlyList<Uri> baseUris,
-            HttpSource httpSource, IEnvironmentVariableReader environmentVariableReader)
+            IHttpSource httpSource, IEnvironmentVariableReader environmentVariableReader)
         {
             if (baseUris == null)
             {

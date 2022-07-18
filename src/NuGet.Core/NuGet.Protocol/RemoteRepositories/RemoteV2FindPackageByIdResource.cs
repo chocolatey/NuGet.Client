@@ -33,7 +33,7 @@ namespace NuGet.Protocol
         private static readonly XName _xnameVersion = XName.Get("Version", "http://schemas.microsoft.com/ado/2007/08/dataservices");
 
         private readonly string _baseUri;
-        private readonly HttpSource _httpSource;
+        private readonly IHttpSource _httpSource;
         private readonly Dictionary<string, Task<IEnumerable<PackageInfo>>> _packageVersionsCache = new Dictionary<string, Task<IEnumerable<PackageInfo>>>(StringComparer.OrdinalIgnoreCase);
         private readonly FindPackagesByIdNupkgDownloader _nupkgDownloader;
         private readonly V2FeedQueryBuilder _queryBuilder;
@@ -50,7 +50,7 @@ namespace NuGet.Protocol
         /// is <c>null</c>.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="httpSource" />
         /// is <c>null</c>.</exception>
-        public RemoteV2FindPackageByIdResource(PackageSource packageSource, HttpSource httpSource)
+        public RemoteV2FindPackageByIdResource(PackageSource packageSource, IHttpSource httpSource)
         {
             if (packageSource == null)
             {

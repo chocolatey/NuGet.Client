@@ -16,7 +16,7 @@ using NuGet.Protocol.Core.Types;
 
 namespace NuGet.Protocol
 {
-    public class HttpSource : IDisposable
+    public class HttpSource : IHttpSource
     {
         private readonly Func<Task<HttpHandlerResource>> _messageHandlerFactory;
         private readonly Uri _sourceUri;
@@ -199,7 +199,7 @@ namespace NuGet.Protocol
             return ProcessStreamAsync<T>(request, processAsync, cacheContext: null, log: log, token: token);
         }
 
-        internal async Task<T> ProcessHttpStreamAsync<T>(
+        public async Task<T> ProcessHttpStreamAsync<T>(
             HttpSourceRequest request,
             Func<HttpResponseMessage, Task<T>> processAsync,
             ILogger log,

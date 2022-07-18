@@ -15,7 +15,7 @@ static internal class ODataServiceDocumentUtils
 {
     public static async Task<ODataServiceDocumentResourceV2> CreateODataServiceDocumentResourceV2(
         string url,
-        HttpSource client,
+        IHttpSource client,
         DateTime utcNow,
         ILogger log,
         CancellationToken token)

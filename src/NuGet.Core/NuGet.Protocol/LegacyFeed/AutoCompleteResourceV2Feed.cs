@@ -16,7 +16,7 @@ namespace NuGet.Protocol
 {
     public class AutoCompleteResourceV2Feed : AutoCompleteResource
     {
-        private readonly HttpSource _httpSource;
+        private readonly IHttpSource _httpSource;
         private readonly Uri _baseUri;
 
         public AutoCompleteResourceV2Feed(HttpSourceResource httpSourceResource, string baseAddress, Configuration.PackageSource packageSource)

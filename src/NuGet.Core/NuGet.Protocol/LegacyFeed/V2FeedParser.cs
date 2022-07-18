@@ -20,14 +20,14 @@ using NuGet.Versioning;
 
 namespace NuGet.Protocol
 {
-    /* 
+    /*
      * Chocolatey changes start here
      */
     /// <summary>
     /// A light weight XML parser for NuGet V2 Feeds
     /// </summary>
     public sealed partial class V2FeedParser : IV2FeedParser
-    /* 
+    /*
      * Chocolatey changes end here
      */
     {
@@ -63,7 +63,7 @@ namespace NuGet.Protocol
         private static readonly XName _xnamePackageHashAlgorithm = XName.Get("PackageHashAlgorithm", DataServicesNS);
         private static readonly XName _xnameMinClientVersion = XName.Get("MinClientVersion", DataServicesNS);
 
-        private readonly HttpSource _httpSource;
+        private readonly IHttpSource _httpSource;
         private readonly string _baseAddress;
         private readonly V2FeedQueryBuilder _queryBuilder;
 
@@ -72,7 +72,7 @@ namespace NuGet.Protocol
         /// </summary>
         /// <param name="httpSource">HttpSource and message handler containing auth/proxy support</param>
         /// <param name="baseAddress">base address for all services from this OData service</param>
-        public V2FeedParser(HttpSource httpSource, string baseAddress)
+        public V2FeedParser(IHttpSource httpSource, string baseAddress)
             : this(httpSource, baseAddress, baseAddress)
         {
         }
@@ -83,7 +83,7 @@ namespace NuGet.Protocol
         /// <param name="httpSource">HttpSource and message handler containing auth/proxy support</param>
         /// <param name="baseAddress">base address for all services from this OData service</param>
         /// <param name="source">PackageSource useful for reporting meaningful errors that relate back to the configuration</param>
-        public V2FeedParser(HttpSource httpSource, string baseAddress, string source)
+        public V2FeedParser(IHttpSource httpSource, string baseAddress, string source)
         {
             if (httpSource == null)
             {
@@ -387,7 +387,7 @@ namespace NuGet.Protocol
                 authors = authorNode.Elements(_xnameName).Select(e => metadataCache.GetString(e.Value));
             }
 
-            /* 
+            /*
              * Chocolatey changes start here
              */
             var packageSize = GetLong(properties, _xnamePackageSize);
@@ -414,7 +414,7 @@ namespace NuGet.Protocol
                 packageSubmittedStatus, packageTestResultStatus, packageTestResultStatusDate, packageValidationResultStatus,
                 packageValidationResultDate, packageCleanupResultDate, packageReviewedDate, packageApprovedDate,
                 packageReviewer, isDownloadCacheAvailable, downloadCacheDate, downloadCacheString);
-            /* 
+            /*
              * Chocolatey changes end here
              */
         }

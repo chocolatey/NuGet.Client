@@ -22,10 +22,10 @@ namespace NuGet.Protocol
         private readonly RegistrationResourceV3 _regResource;
         private readonly ReportAbuseResourceV3 _reportAbuseResource;
         private readonly PackageDetailsUriResourceV3 _packageDetailsUriResource;
-        private readonly HttpSource _client;
+        private readonly IHttpSource _client;
 
         public PackageMetadataResourceV3(
-            HttpSource client,
+            IHttpSource client,
             RegistrationResourceV3 regResource,
             ReportAbuseResourceV3 reportAbuseResource,
             PackageDetailsUriResourceV3 packageDetailsUriResource)
@@ -176,7 +176,7 @@ namespace NuGet.Protocol
         /// <param name="token">Cancellation token.</param>
         /// <returns></returns>
         private async Task<ValueTuple<RegistrationIndex, HttpSourceCacheContext>> LoadRegistrationIndexAsync(
-            HttpSource httpSource,
+            IHttpSource httpSource,
             Uri registrationUri,
             string packageId,
             SourceCacheContext cacheContext,
@@ -205,7 +205,7 @@ namespace NuGet.Protocol
         }
 
         /// <summary>
-        /// Process RegistrationIndex 
+        /// Process RegistrationIndex
         /// </summary>
         /// <param name="httpSource">Httpsource instance.</param>
         /// <param name="rangeUri">Paged registration index url address.</param>
@@ -217,7 +217,7 @@ namespace NuGet.Protocol
         /// <param name="token">Cancellation token.</param>
         /// <returns></returns>
         private Task<RegistrationPage> GetRegistratioIndexPageAsync(
-            HttpSource httpSource,
+            IHttpSource httpSource,
             string rangeUri,
             string packageId,
             NuGetVersion lower,
