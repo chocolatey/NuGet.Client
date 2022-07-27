@@ -1,0 +1,1 @@
+NuGet.ProjectManagement.FolderNuGetProject.DeletePackage(NuGet.Packaging.Core.PackageIdentity packageIdentity, NuGet.ProjectManagement.INuGetProjectContext nuGetProjectContext, System.Threading.CancellationToken token, bool shouldDeleteDirectory) -> System.Threading.Tasks.Task<bool>
