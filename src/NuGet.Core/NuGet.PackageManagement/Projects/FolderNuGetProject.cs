@@ -550,6 +550,10 @@ namespace NuGet.ProjectManagement
             return string.Empty;
         }
 
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
         /// <summary>
         /// Asynchronously deletes a package.
         /// </summary>
@@ -567,6 +571,32 @@ namespace NuGet.ProjectManagement
             INuGetProjectContext nuGetProjectContext,
             CancellationToken token)
         {
+            return await DeletePackage(packageIdentity, nuGetProjectContext, token, true);
+        }
+
+        /// <summary>
+        /// Asynchronously deletes a package.
+        /// </summary>
+        /// <param name="packageIdentity">A package identity.</param>
+        /// <param name="nuGetProjectContext">A NuGet project context.</param>
+        /// <param name="token">A cancellation token.</param>
+        /// <param name="shouldDeleteDirectory">If the installation directory should be deleted</param>
+        /// <returns>A task that represents the asynchronous operation.
+        /// The task result (<see cref="Task{TResult}.Result" />) returns a <see cref="bool" />
+        /// indication successfulness of the operation.</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="packageIdentity" />
+        /// is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="nuGetProjectContext" />
+        /// is <c>null</c>.</exception>
+        public async Task<bool> DeletePackage(PackageIdentity packageIdentity,
+            INuGetProjectContext nuGetProjectContext,
+            CancellationToken token,
+            bool shouldDeleteDirectory)
+        {
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+
             if (packageIdentity == null)
             {
                 throw new ArgumentNullException(nameof(packageIdentity));
@@ -627,16 +657,29 @@ namespace NuGet.ProjectManagement
                 // Delete the package file
                 FileSystemUtility.DeleteFile(packageFilePath, nuGetProjectContext);
 
-                // Delete the package directory if any
-                FileSystemUtility.DeleteDirectorySafe(packageDirectoryPath, recursive: true, nuGetProjectContext: nuGetProjectContext);
+                //////////////////////////////////////////////////////////
+                // Start - Chocolatey Specific Modification
+                //////////////////////////////////////////////////////////
 
-                // If this is the last package delete the package directory
-                // If this is the last package delete the package directory
-                if (!FileSystemUtility.GetFiles(Root, string.Empty, "*.*").Any()
-                    && !FileSystemUtility.GetDirectories(Root, string.Empty).Any())
+                if (shouldDeleteDirectory)
                 {
-                    FileSystemUtility.DeleteDirectorySafe(Root, recursive: false, nuGetProjectContext: nuGetProjectContext);
+                    // Delete the package directory if any
+                    FileSystemUtility.DeleteDirectorySafe(packageDirectoryPath, recursive: true,
+                        nuGetProjectContext: nuGetProjectContext);
+
+                    // If this is the last package delete the package directory
+                    // If this is the last package delete the package directory
+                    if (!FileSystemUtility.GetFiles(Root, string.Empty, "*.*").Any()
+                        && !FileSystemUtility.GetDirectories(Root, string.Empty).Any())
+                    {
+                        FileSystemUtility.DeleteDirectorySafe(Root, recursive: false,
+                            nuGetProjectContext: nuGetProjectContext);
+                    }
                 }
+
+                //////////////////////////////////////////////////////////
+                // End - Chocolatey Specific Modification
+                //////////////////////////////////////////////////////////
             }
 
             return true;

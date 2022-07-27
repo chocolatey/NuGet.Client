@@ -6,3 +6,4 @@ NuGet.PackageManagement.NuGetProjectAction.VersionRange.get -> NuGet.Versioning.
 NuGet.PackageManagement.PackageProjectEventArgs.PackageProjectEventArgs(string id, string name, string projectPath) -> void
 NuGet.PackageManagement.PackageProjectEventArgs.ProjectPath.get -> string
 static NuGet.PackageManagement.NuGetProjectAction.CreateInstallProjectAction(NuGet.Packaging.Core.PackageIdentity packageIdentity, NuGet.Protocol.Core.Types.SourceRepository sourceRepository, NuGet.ProjectManagement.NuGetProject project, NuGet.Versioning.VersionRange versionRange) -> NuGet.PackageManagement.NuGetProjectAction
+NuGet.ProjectManagement.FolderNuGetProject.DeletePackage(NuGet.Packaging.Core.PackageIdentity packageIdentity, NuGet.ProjectManagement.INuGetProjectContext nuGetProjectContext, System.Threading.CancellationToken token, bool shouldDeleteDirectory) -> System.Threading.Tasks.Task<bool>
