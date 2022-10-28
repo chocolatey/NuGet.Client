@@ -285,7 +285,13 @@ Function Get-MSBuildExe {
     # Otherwise, use VSWhere.exe to find the latest MSBuild.exe.
     $MSBuildExe = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -prerelease -requires Microsoft.Component.MSBuild -find MSBuild\**\bin\MSBuild.exe
 
-    if (Test-Path $MSBuildExe) {
+    # This is an additional fallback to cover the case that only the Visual Studio Build Tools are installed, and not full Visual Studio
+    # VSWhere does not include BuildTools by default, as per this issue: https://github.com/microsoft/vswhere/issues/22
+    if (-not $MSBuildExe) {
+        $MSBuildExe = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -prerelease -products 'Microsoft.VisualStudio.Product.BuildTools' -find MSBuild\**\bin\MSBuild.exe
+    }
+
+    if (Test-Path $MSBuildExe -ErrorAction SilentlyContinue) {
         Verbose-Log "Found MSBuild.exe at `"$MSBuildExe`""
         return $MSBuildExe
     }
