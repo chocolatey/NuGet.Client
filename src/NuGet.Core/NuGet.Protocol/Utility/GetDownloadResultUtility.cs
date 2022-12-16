@@ -76,7 +76,10 @@ namespace NuGet.Protocol
                             IgnoreNotFounds = true,
                             MaxTries = 1
                         },
-                        async packageStream =>
+                        //////////////////////////////////////////////////////////
+                        // Start - Chocolatey Specific Modification
+                        //////////////////////////////////////////////////////////
+                        async (packageStream, progressInfo) =>
                         {
                             if (packageStream == null)
                             {
@@ -90,7 +93,8 @@ namespace NuGet.Protocol
                                     identity,
                                     packageStream,
                                     downloadContext,
-                                    token);
+                                    token,
+                                    progressInfo);
                             }
                             else
                             {
@@ -102,11 +106,16 @@ namespace NuGet.Protocol
                                     downloadContext.ParentId,
                                     downloadContext.ClientPolicyContext,
                                     logger,
-                                    token);
+                                    token,
+                                    progressInfo);
                             }
                         },
+                        //////////////////////////////////////////////////////////
+                        // End - Chocolatey Specific Modification
+                        //////////////////////////////////////////////////////////
                         downloadContext.SourceCacheContext,
                         logger,
+                        new ChocolateyProgressInfo(identity),
                         token);
                 }
                 catch (OperationCanceledException)
@@ -161,12 +170,16 @@ namespace NuGet.Protocol
             }
         }
 
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
         private static async Task<DownloadResourceResult> DirectDownloadAsync(
             string source,
             PackageIdentity packageIdentity,
             Stream packageStream,
             PackageDownloadContext downloadContext,
-            CancellationToken token)
+            CancellationToken token,
+            ChocolateyProgressInfo progressInfo)
         {
             if (packageIdentity == null)
             {
@@ -211,7 +224,27 @@ namespace NuGet.Protocol
                    BufferSize,
                    FileOptions.DeleteOnClose);
 
-                await packageStream.CopyToAsync(fileStream, BufferSize, token);
+                using (var progressPackageStream = new ChocolateyProgressStream(packageStream))
+                {
+                    progressPackageStream.ReadProgress += (sender, progress, totalProgress) =>
+                    {
+                        if (progressInfo.Length != null && ChocolateyProgressInfo.ShouldDisplayDownloadProgress && !progressInfo.Completed)
+                        {
+                            var percentComplete = ((double)totalProgress / (double)progressInfo.Length * 100);
+                            var progressString =
+                                $"Progress: {progressInfo.Operation} {progressInfo.Identity.Id} {progressInfo.Identity.Version}... {(percentComplete.ToString("##"))}";
+                            // http://stackoverflow.com/a/888569/18475
+                            Console.Write("\r{0}%", progressString);
+                            if (totalProgress == progressInfo.Length)
+                            {
+                                Console.WriteLine("");
+                                progressInfo.Completed = true;
+                            }
+                        }
+                    };
+
+                    await progressPackageStream.CopyToAsync(fileStream, BufferSize, token);
+                }
 
                 fileStream.Seek(0, SeekOrigin.Begin);
 
@@ -224,5 +257,8 @@ namespace NuGet.Protocol
                 throw;
             }
         }
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
     }
 }

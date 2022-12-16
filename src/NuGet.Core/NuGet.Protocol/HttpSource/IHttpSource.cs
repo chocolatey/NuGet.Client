@@ -47,6 +47,14 @@ namespace NuGet.Protocol
             ILogger log,
             CancellationToken token);
 
+        Task<T> ProcessStreamAsync<T>(
+            HttpSourceRequest request,
+            Func<Stream, ChocolateyProgressInfo, Task<T>> processAsync,
+            SourceCacheContext cacheContext,
+            ILogger log,
+            ChocolateyProgressInfo progressInfo,
+            CancellationToken token);
+
         Task<T> ProcessResponseAsync<T>(
             HttpSourceRequest request,
             Func<HttpResponseMessage, Task<T>> processAsync,

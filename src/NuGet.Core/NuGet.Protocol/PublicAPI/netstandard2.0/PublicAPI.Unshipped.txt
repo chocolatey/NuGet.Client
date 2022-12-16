@@ -16,6 +16,20 @@ NuGet.Protocol.Core.Types.DownloadCache.FileName.get -> string
 NuGet.Protocol.Core.Types.DownloadCache.FileName.set -> void
 NuGet.Protocol.Core.Types.DownloadCache.OriginalUrl.get -> string
 NuGet.Protocol.Core.Types.DownloadCache.OriginalUrl.set -> void
+NuGet.Protocol.ChocolateyProgressInfo
+NuGet.Protocol.ChocolateyProgressInfo.ChocolateyProgressInfo(NuGet.Packaging.Core.PackageIdentity identity, long? length = null, string operation = "") -> void
+NuGet.Protocol.ChocolateyProgressInfo.Completed.get -> bool
+NuGet.Protocol.ChocolateyProgressInfo.Completed.set -> void
+NuGet.Protocol.ChocolateyProgressInfo.Identity.get -> NuGet.Packaging.Core.PackageIdentity
+NuGet.Protocol.ChocolateyProgressInfo.Identity.set -> void
+NuGet.Protocol.ChocolateyProgressInfo.Length.get -> long?
+NuGet.Protocol.ChocolateyProgressInfo.Length.set -> void
+NuGet.Protocol.ChocolateyProgressInfo.Operation.get -> string
+NuGet.Protocol.ChocolateyProgressInfo.Operation.set -> void
+NuGet.Protocol.ChocolateyProgressStream
+NuGet.Protocol.ChocolateyProgressStream.ChocolateyProgressStream(System.IO.Stream s) -> void
+NuGet.Protocol.ChocolateyProgressStream.ReadProgress -> NuGet.Protocol.StreamUpdate
+NuGet.Protocol.ChocolateyProgressStream.WriteProgress -> NuGet.Protocol.StreamUpdate
 NuGet.Protocol.Core.Types.IPackageSearchMetadata.DownloadCache.get -> System.Collections.Generic.IEnumerable<NuGet.Protocol.Core.Types.DownloadCache>
 NuGet.Protocol.Core.Types.IPackageSearchMetadata.DownloadCacheDate.get -> System.DateTime?
 NuGet.Protocol.Core.Types.IPackageSearchMetadata.IsApproved.get -> bool
@@ -72,6 +86,7 @@ NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetada
 NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetadata.VersionDownloadCount.get -> int?
 NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetadata.VersionDownloadCount.set -> void
 NuGet.Protocol.HttpSource.ProcessHttpStreamAsync<T>(NuGet.Protocol.HttpSourceRequest request, System.Func<System.Net.Http.HttpResponseMessage, System.Threading.Tasks.Task<T>> processAsync, NuGet.Common.ILogger log, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<T>
+NuGet.Protocol.HttpSource.ProcessStreamAsync<T>(NuGet.Protocol.HttpSourceRequest request, System.Func<System.IO.Stream, NuGet.Protocol.ChocolateyProgressInfo, System.Threading.Tasks.Task<T>> processAsync, NuGet.Protocol.Core.Types.SourceCacheContext cacheContext, NuGet.Common.ILogger log, NuGet.Protocol.ChocolateyProgressInfo progressInfo, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<T>
 NuGet.Protocol.HttpSourceResource.OverrideHttpSource(NuGet.Protocol.IHttpSource source) -> void
 NuGet.Protocol.IHttpSource
 NuGet.Protocol.IHttpSource.GetAsync<T>(NuGet.Protocol.HttpSourceCachedRequest request, System.Func<NuGet.Protocol.HttpSourceResult, System.Threading.Tasks.Task<T>> processAsync, NuGet.Common.ILogger log, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<T>
@@ -82,6 +97,7 @@ NuGet.Protocol.IHttpSource.PackageSource.get -> string
 NuGet.Protocol.IHttpSource.ProcessHttpStreamAsync<T>(NuGet.Protocol.HttpSourceRequest request, System.Func<System.Net.Http.HttpResponseMessage, System.Threading.Tasks.Task<T>> processAsync, NuGet.Common.ILogger log, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<T>
 NuGet.Protocol.IHttpSource.ProcessResponseAsync<T>(NuGet.Protocol.HttpSourceRequest request, System.Func<System.Net.Http.HttpResponseMessage, System.Threading.Tasks.Task<T>> processAsync, NuGet.Common.ILogger log, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<T>
 NuGet.Protocol.IHttpSource.ProcessResponseAsync<T>(NuGet.Protocol.HttpSourceRequest request, System.Func<System.Net.Http.HttpResponseMessage, System.Threading.Tasks.Task<T>> processAsync, NuGet.Protocol.Core.Types.SourceCacheContext cacheContext, NuGet.Common.ILogger log, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<T>
+NuGet.Protocol.IHttpSource.ProcessStreamAsync<T>(NuGet.Protocol.HttpSourceRequest request, System.Func<System.IO.Stream, NuGet.Protocol.ChocolateyProgressInfo, System.Threading.Tasks.Task<T>> processAsync, NuGet.Protocol.Core.Types.SourceCacheContext cacheContext, NuGet.Common.ILogger log, NuGet.Protocol.ChocolateyProgressInfo progressInfo, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<T>
 NuGet.Protocol.IHttpSource.ProcessStreamAsync<T>(NuGet.Protocol.HttpSourceRequest request, System.Func<System.IO.Stream, System.Threading.Tasks.Task<T>> processAsync, NuGet.Common.ILogger log, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<T>
 NuGet.Protocol.IHttpSource.ProcessStreamAsync<T>(NuGet.Protocol.HttpSourceRequest request, System.Func<System.IO.Stream, System.Threading.Tasks.Task<T>> processAsync, NuGet.Protocol.Core.Types.SourceCacheContext cacheContext, NuGet.Common.ILogger log, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<T>
 NuGet.Protocol.IHttpSource.RetryHandler.get -> NuGet.Protocol.IHttpRetryHandler
@@ -161,6 +177,7 @@ NuGet.Protocol.PackageSearchMetadataV2Feed.PackageTestResultStatusDate.get -> Sy
 NuGet.Protocol.PackageSearchMetadataV2Feed.PackageValidationResultDate.get -> System.DateTime?
 NuGet.Protocol.PackageSearchMetadataV2Feed.PackageValidationResultStatus.get -> string
 NuGet.Protocol.PackageSearchMetadataV2Feed.VersionDownloadCount.get -> int?
+NuGet.Protocol.StreamUpdate
 NuGet.Protocol.V2FeedPackageInfo.DownloadCacheDate.get -> System.DateTime?
 NuGet.Protocol.V2FeedPackageInfo.DownloadCacheString.get -> string
 NuGet.Protocol.V2FeedPackageInfo.IsApproved.get -> bool
@@ -188,3 +205,17 @@ override NuGet.Protocol.LocalDependencyInfoResource.ResolvePackage(NuGet.Packagi
 override NuGet.Protocol.LocalDependencyInfoResource.ResolvePackages(string packageId, Chocolatey.NuGet.Frameworks.NuGetFramework projectFramework, NuGet.Protocol.Core.Types.SourceCacheContext sourceCacheContext, NuGet.Common.ILogger log, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<System.Collections.Generic.IEnumerable<NuGet.Protocol.Core.Types.SourcePackageDependencyInfo>>
 override NuGet.Protocol.Plugins.PluginPackageReader.GetSupportedFrameworks() -> System.Collections.Generic.IEnumerable<Chocolatey.NuGet.Frameworks.NuGetFramework>
 override NuGet.Protocol.Plugins.PluginPackageReader.GetSupportedFrameworksAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Generic.IEnumerable<Chocolatey.NuGet.Frameworks.NuGetFramework>>
+override NuGet.Protocol.ChocolateyProgressStream.CanRead.get -> bool
+override NuGet.Protocol.ChocolateyProgressStream.CanSeek.get -> bool
+override NuGet.Protocol.ChocolateyProgressStream.CanWrite.get -> bool
+override NuGet.Protocol.ChocolateyProgressStream.Flush() -> void
+override NuGet.Protocol.ChocolateyProgressStream.Length.get -> long
+override NuGet.Protocol.ChocolateyProgressStream.Position.get -> long
+override NuGet.Protocol.ChocolateyProgressStream.Position.set -> void
+override NuGet.Protocol.ChocolateyProgressStream.Read(byte[] buffer, int offset, int count) -> int
+override NuGet.Protocol.ChocolateyProgressStream.Seek(long offset, System.IO.SeekOrigin origin) -> long
+override NuGet.Protocol.ChocolateyProgressStream.SetLength(long value) -> void
+override NuGet.Protocol.ChocolateyProgressStream.Write(byte[] buffer, int offset, int count) -> void
+static NuGet.Protocol.ChocolateyProgressInfo.ShouldDisplayDownloadProgress.get -> bool
+static NuGet.Protocol.ChocolateyProgressInfo.ShouldDisplayDownloadProgress.set -> void
+static NuGet.Protocol.GlobalPackagesFolderUtility.AddPackageAsync(string source, NuGet.Packaging.Core.PackageIdentity packageIdentity, System.IO.Stream packageStream, string globalPackagesFolder, System.Guid parentId, NuGet.Packaging.Signing.ClientPolicyContext clientPolicyContext, NuGet.Common.ILogger logger, System.Threading.CancellationToken token, NuGet.Protocol.ChocolateyProgressInfo progressInfo) -> System.Threading.Tasks.Task<NuGet.Protocol.Core.Types.DownloadResourceResult>

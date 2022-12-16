@@ -264,6 +264,43 @@ namespace NuGet.Protocol
                 token);
         }
 
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+        public async Task<T> ProcessStreamAsync<T>(
+            HttpSourceRequest request,
+            Func<Stream, ChocolateyProgressInfo, Task<T>> processAsync,
+            SourceCacheContext cacheContext,
+            ILogger log,
+            ChocolateyProgressInfo progressInfo,
+            CancellationToken token)
+        {
+            return await ProcessResponseAsync(
+                request,
+                async response =>
+                {
+                    if ((request.IgnoreNotFounds && response.StatusCode == HttpStatusCode.NotFound) ||
+                         response.StatusCode == HttpStatusCode.NoContent)
+                    {
+                        return await processAsync(null, null);
+                    }
+
+                    response.EnsureSuccessStatusCode();
+
+                    progressInfo.Length = response.Content.Headers.ContentLength;
+                    progressInfo.Operation = "Downloading";
+
+                    var networkStream = await response.Content.ReadAsStreamAsync();
+                    return await processAsync(networkStream, progressInfo);
+                },
+                cacheContext,
+                log,
+                token);
+        }
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
         public Task<T> ProcessResponseAsync<T>(
             HttpSourceRequest request,
             Func<HttpResponseMessage, Task<T>> processAsync,

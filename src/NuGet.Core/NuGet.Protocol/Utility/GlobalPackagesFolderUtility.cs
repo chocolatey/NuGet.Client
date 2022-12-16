@@ -1,3 +1,4 @@
+// Copyright (c) 2022-Present Chocolatey Software, Inc.
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
@@ -81,6 +82,9 @@ namespace NuGet.Protocol
             }
         }
 
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
         public static async Task<DownloadResourceResult> AddPackageAsync(
             string source,
             PackageIdentity packageIdentity,
@@ -90,6 +94,21 @@ namespace NuGet.Protocol
             ClientPolicyContext clientPolicyContext,
             ILogger logger,
             CancellationToken token)
+        {
+            return await AddPackageAsync(source, packageIdentity, packageStream, globalPackagesFolder, parentId,
+                clientPolicyContext, logger, token, null);
+        }
+
+        public static async Task<DownloadResourceResult> AddPackageAsync(
+            string source,
+            PackageIdentity packageIdentity,
+            Stream packageStream,
+            string globalPackagesFolder,
+            Guid parentId,
+            ClientPolicyContext clientPolicyContext,
+            ILogger logger,
+            CancellationToken token,
+            ChocolateyProgressInfo progressInfo)
         {
             if (packageIdentity == null)
             {
@@ -118,14 +137,34 @@ namespace NuGet.Protocol
 
             var versionFolderPathResolver = new VersionFolderPathResolver(globalPackagesFolder);
 
-            await PackageExtractor.InstallFromSourceAsync(
-                source,
-                packageIdentity,
-                stream => packageStream.CopyToAsync(stream, BufferSize, token),
-                versionFolderPathResolver,
-                extractionContext,
-                token,
-                parentId);
+            using (var progressPackageStream = new ChocolateyProgressStream(packageStream))
+            {
+                progressPackageStream.ReadProgress += (sender, progress, totalProgress) =>
+                {
+                    if (progressInfo.Length != null && ChocolateyProgressInfo.ShouldDisplayDownloadProgress && !progressInfo.Completed)
+                    {
+                        var percentComplete = ((double)totalProgress / (double)progressInfo.Length * 100);
+                        var progressString =
+                            $"Progress: {progressInfo.Operation} {progressInfo.Identity.Id} {progressInfo.Identity.Version}... {(percentComplete.ToString("##"))}";
+                        // http://stackoverflow.com/a/888569/18475
+                        Console.Write("\r{0}%", progressString);
+                        if (totalProgress == progressInfo.Length)
+                        {
+                            Console.WriteLine("");
+                            progressInfo.Completed = true;
+                        }
+                    }
+                };
+                await PackageExtractor.InstallFromSourceAsync(
+                    source,
+                    packageIdentity,
+                    stream => progressPackageStream.CopyToAsync(stream, BufferSize, token),
+                    versionFolderPathResolver,
+                    extractionContext,
+                    token,
+                    parentId);
+
+            }
 
             var package = GetPackage(packageIdentity, globalPackagesFolder);
 
@@ -134,5 +173,8 @@ namespace NuGet.Protocol
 
             return package;
         }
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
     }
 }
