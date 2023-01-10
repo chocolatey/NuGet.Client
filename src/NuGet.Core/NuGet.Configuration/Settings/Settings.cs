@@ -45,6 +45,17 @@ namespace NuGet.Configuration
 
         public SettingSection GetSection(string sectionName)
         {
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CHOCOLATEY_VERSION")))
+            {
+                return null;
+            }
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+
             if (_computedSections.TryGetValue(sectionName, out var section))
             {
                 return section.Clone() as SettingSection;

@@ -143,6 +143,17 @@ namespace NuGet.Configuration
         /// <returns>null if no section with the given name was found</returns>
         public SettingSection GetSection(string sectionName)
         {
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CHOCOLATEY_VERSION")))
+            {
+                return null;
+            }
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+
             return _rootElement.GetSection(sectionName);
         }
 
@@ -194,6 +205,18 @@ namespace NuGet.Configuration
         /// </remarks>
         internal bool TryGetSection(string sectionName, out SettingSection section)
         {
+            //////////////////////////////////////////////////////////
+            // Start - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CHOCOLATEY_VERSION")))
+            {
+                section = null;
+                return false;
+            }
+            //////////////////////////////////////////////////////////
+            // End - Chocolatey Specific Modification
+            //////////////////////////////////////////////////////////
+
             return _rootElement.Sections.TryGetValue(sectionName, out section);
         }
 
