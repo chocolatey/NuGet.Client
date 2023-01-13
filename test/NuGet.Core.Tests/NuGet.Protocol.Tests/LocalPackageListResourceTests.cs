@@ -187,6 +187,11 @@ namespace NuGet.Protocol.Tests
                 _actualTake = take;
                 return Task.FromResult(new List<IPackageSearchMetadata>().AsEnumerable());
             }
+
+            public override Task<int> SearchCountAsync(string searchTerm, SearchFilter filters, ILogger log, CancellationToken cancellationToken)
+            {
+                throw new NotImplementedException();
+            }
         }
     }
 

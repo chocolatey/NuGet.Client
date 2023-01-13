@@ -36,8 +36,9 @@ namespace NuGet.Protocol
         private const string GetSpecificPackageFormat = "/Packages(Id='{0}',Version='{1}')";
 
         // constants for /Search() endpoint
-        private const string SearchEndpointFormat = "/Search()?{0}{1}searchTerm='{2}'&targetFramework='{3}'&includePrerelease={4}&$skip={5}&$top={6}&" + SemVerLevel;
+        private const string SearchEndpointFormat = "/Search(){0}?{1}{2}searchTerm='{3}'&targetFramework='{4}'&includePrerelease={5}&$skip={6}&$top={7}&" + SemVerLevel;
         private const string QueryDelimiter = "&";
+        private const string CountQueryString = "/$count";
 
         // constants for /FindPackagesById() endpoint
         private const string FindPackagesByIdFormat = "/FindPackagesById()?id='{0}'&" + SemVerLevel;
@@ -69,6 +70,16 @@ namespace NuGet.Protocol
             int skip,
             int take)
         {
+            return BuildSearchUri(searchTerm, filters, skip, take, false);
+        }
+
+        public string BuildSearchUri(
+            string searchTerm,
+            SearchFilter filters,
+            int skip,
+            int take,
+            bool isCount)
+        {
             var shortFormTargetFramework = string.Join(
                 "|",
                 filters
@@ -89,6 +100,7 @@ namespace NuGet.Protocol
             var uri = string.Format(
                 CultureInfo.InvariantCulture,
                 SearchEndpointFormat,
+                isCount ? CountQueryString : string.Empty,
                 filter != null ? filter + QueryDelimiter : string.Empty,
                 orderBy != null ? orderBy + QueryDelimiter : string.Empty,
                 UriUtility.UrlEncodeOdataParameter(searchTerm),

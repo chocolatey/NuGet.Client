@@ -170,7 +170,7 @@ namespace NuGet.Protocol
         /// <summary>
         /// Returns a distinct set of elements using the comparer specified. This implementation will pick the last occurrence
         /// of each element instead of picking the first. This method assumes that similar items occur in order.
-        /// </summary>        
+        /// </summary>
         private static IEnumerable<LocalPackageInfo> CollapseToHighestVersion(IEnumerable<LocalPackageInfo> source)
         {
             bool first = true;
@@ -208,6 +208,11 @@ namespace NuGet.Protocol
             }
 
             yield break;
+        }
+
+        public override async Task<int> SearchCountAsync(string searchTerm, SearchFilter filters, ILogger log, CancellationToken cancellationToken)
+        {
+            return (await SearchAsync(searchTerm, filters, 0, int.MaxValue, log, cancellationToken)).Count();
         }
     }
 }

@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using NuGet.Protocol.Core.Types;
 using NuGet.Protocol.Model;
+using static System.Net.WebRequestMethods;
 
 namespace NuGet.Protocol
 {
@@ -259,6 +260,28 @@ namespace NuGet.Protocol
                 cancellationToken);
         }
 
+        internal async Task<long> Count(
+            string searchTerm,
+            SearchFilter filters,
+            int skip,
+            int take,
+            Common.ILogger log,
+            CancellationToken cancellationToken)
+        {
+            return await Search(
+                (httpSource, uri) => httpSource.ProcessHttpStreamAsync(
+                    new HttpSourceRequest(uri, Common.NullLogger.Instance),
+                    s => ProcessHttpStreamGetCountAsync(s, take, cancellationToken),
+                    Common.NullLogger.Instance,
+                    cancellationToken),
+                searchTerm,
+                filters,
+                skip,
+                take,
+                log,
+                cancellationToken);
+        }
+
         internal async Task<IEnumerable<PackageSearchMetadata>> ProcessHttpStreamTakeCountedItemAsync(HttpResponseMessage httpInitialResponse, int take, CancellationToken token)
         {
             if (take <= 0)
@@ -267,6 +290,16 @@ namespace NuGet.Protocol
             }
 
             return (await ProcessHttpStreamWithoutBufferingAsync(httpInitialResponse, (uint)take, token)).Data;
+        }
+
+        internal async Task<long> ProcessHttpStreamGetCountAsync(HttpResponseMessage httpInitialResponse, int take, CancellationToken token)
+        {
+            if (take <= 0)
+            {
+                return 0;
+            }
+
+            return (await ProcessHttpStreamWithoutBufferingAsync(httpInitialResponse, (uint)take, token)).TotalHits;
         }
 
         private async Task<V3SearchResults> ProcessHttpStreamWithoutBufferingAsync(HttpResponseMessage httpInitialResponse, uint take, CancellationToken token)
@@ -285,6 +318,44 @@ namespace NuGet.Protocol
             {
                 return _newtonsoftConvertersSerializer.Deserialize<V3SearchResults>(jsonReader);
             }
+        }
+
+        public override async Task<int> SearchCountAsync(string searchTerm, SearchFilter filters, Common.ILogger log, CancellationToken cancellationToken)
+        {
+            var skip = 0;
+            var take = 1;
+
+            long count = 0;
+            var metadataCache = new MetadataReferenceCache();
+
+            if (_client != null && _searchEndpoints != null)
+            {
+                count = await Search(
+                    (httpSource, uri) => httpSource.ProcessHttpStreamAsync(
+                        new HttpSourceRequest(uri, Common.NullLogger.Instance),
+                        s => ProcessHttpStreamGetCountAsync(s, take, cancellationToken),
+                        Common.NullLogger.Instance,
+                        cancellationToken),
+                    searchTerm,
+                    filters,
+                    skip,
+                    take,
+                    log,
+                    cancellationToken);
+            }
+            else
+            {
+                // TODO, fix this for raw search resource
+#pragma warning disable CS0618
+                //var searchResultJsonObjects = await _rawSearchResource.Search(searchTerm, filters, skip, take, Common.NullLogger.Instance, cancellationToken);
+#pragma warning restore CS0618
+                //count = searchResultJsonObjects.Select(s => s.FromJToken<long>())
+                //
+                // searchResultMetadata = searchResultJsonObjects
+                //    .Select(s => s.FromJToken<PackageSearchMetadata>());
+            }
+
+            return (int)count;
         }
     }
 }

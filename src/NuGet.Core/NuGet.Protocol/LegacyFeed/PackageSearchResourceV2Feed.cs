@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using NuGet.Common;
 using NuGet.Protocol.Core.Types;
 
 namespace NuGet.Protocol
@@ -66,6 +67,15 @@ namespace NuGet.Protocol
                 .Select(package => V2FeedUtilities.CreatePackageSearchResult(package, metadataCache, filters, _feedParser, log, cancellationToken));
 
             return results.ToList();
+        }
+
+        public override async Task<int> SearchCountAsync(string searchTerm, SearchFilter filters, ILogger log, CancellationToken cancellationToken)
+        {
+            return await _feedParser.SearchCount(
+                searchTerm,
+                filters,
+                log,
+                cancellationToken);
         }
     }
 }

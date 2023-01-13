@@ -19,5 +19,14 @@ namespace NuGet.Protocol.Core.Types
             int take,
             Common.ILogger log,
             CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Retrieves the total number of search results
+        /// </summary>
+        public abstract Task<int> SearchCountAsync(
+            string searchTerm,
+            SearchFilter filters,
+            Common.ILogger log,
+            CancellationToken cancellationToken);
     }
 }

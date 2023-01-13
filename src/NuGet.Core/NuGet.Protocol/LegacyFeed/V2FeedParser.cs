@@ -290,6 +290,63 @@ namespace NuGet.Protocol
             return page.Items;
         }
 
+        public async Task<int> SearchCount(
+            string searchTerm,
+            SearchFilter filters,
+            ILogger log,
+            CancellationToken token)
+        {
+            var skip = 0;
+            var take = 1;
+            var relativeUri = _queryBuilder.BuildSearchUri(searchTerm, filters, skip, take, isCount:true);
+
+            var uri = string.Format(CultureInfo.InvariantCulture, "{0}{1}", _baseAddress, relativeUri);
+
+            int count = await _httpSource.ProcessResponseAsync(
+                new HttpSourceRequest(
+                    () =>
+                    {
+                        var request = HttpRequestMessageFactory.Create(HttpMethod.Get, uri, log);
+                        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/plain"));
+                        return request;
+                    })
+                {
+                    IsRetry = false
+                },
+                async response =>
+                {
+                    if (response.StatusCode == HttpStatusCode.OK)
+                    {
+                        var networkStream = await response.Content.ReadAsStreamAsync();
+                        return Convert.ToInt32(networkStream);
+                    }
+                    else if (response.StatusCode == HttpStatusCode.NotFound)
+                    {
+                        // Treat "404 Not Found" as an empty response.
+                        return 0;
+                    }
+                    else if (response.StatusCode == HttpStatusCode.NoContent)
+                    {
+                        // Always treat "204 No Content" as exactly that.
+                        return 0;
+                    }
+                    else
+                    {
+                        throw new FatalProtocolException(string.Format(
+                            CultureInfo.CurrentCulture,
+                            Strings.Log_FailedToFetchV2Feed,
+                            uri,
+                            (int)response.StatusCode,
+                            response.ReasonPhrase));
+                    }
+                },
+                null,
+                log,
+                token);
+
+            return count;
+        }
+
         public async Task<DownloadResourceResult> DownloadFromUrl(
             PackageIdentity package,
             Uri downloadUri,
