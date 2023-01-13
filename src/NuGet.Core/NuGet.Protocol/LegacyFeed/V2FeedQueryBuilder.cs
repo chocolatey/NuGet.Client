@@ -260,6 +260,9 @@ namespace NuGet.Protocol
                 case SearchOrderBy.Id:
                     orderBy = IdProperty;
                     break;
+                case SearchOrderBy.Downloads:
+                    orderBy = "DownloadCount";
+                    break;
                 case null:
                     orderBy = null;
                     break;

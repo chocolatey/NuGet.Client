@@ -85,6 +85,7 @@ NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetada
 NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetadata.PackageValidationResultStatus.set -> void
 NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetadata.VersionDownloadCount.get -> int?
 NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetadata.VersionDownloadCount.set -> void
+NuGet.Protocol.Core.Types.SearchOrderBy.Downloads = 1 -> NuGet.Protocol.Core.Types.SearchOrderBy
 NuGet.Protocol.HttpSource.ProcessHttpStreamAsync<T>(NuGet.Protocol.HttpSourceRequest request, System.Func<System.Net.Http.HttpResponseMessage, System.Threading.Tasks.Task<T>> processAsync, NuGet.Common.ILogger log, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<T>
 NuGet.Protocol.HttpSource.ProcessStreamAsync<T>(NuGet.Protocol.HttpSourceRequest request, System.Func<System.IO.Stream, NuGet.Protocol.ChocolateyProgressInfo, System.Threading.Tasks.Task<T>> processAsync, NuGet.Protocol.Core.Types.SourceCacheContext cacheContext, NuGet.Common.ILogger log, NuGet.Protocol.ChocolateyProgressInfo progressInfo, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<T>
 NuGet.Protocol.HttpSourceResource.OverrideHttpSource(NuGet.Protocol.IHttpSource source) -> void

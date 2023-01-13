@@ -8,6 +8,11 @@ namespace NuGet.Protocol.Core.Types
         /// <summary>
         /// Order the resulting packages by package ID.
         /// </summary>
-        Id
+        Id,
+
+        /// <summary>
+        /// Order the resulting packages by number of donwnloads.
+        /// </summary>
+        Downloads
     }
 }

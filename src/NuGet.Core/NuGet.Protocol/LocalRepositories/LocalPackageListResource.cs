@@ -112,7 +112,7 @@ namespace NuGet.Protocol
             public async Task<bool> MoveNextAsync()
             {
                 if (_currentEnumerator == null)
-                { // NOTE: We need to sort the values so this is very innefficient by design. 
+                { // NOTE: We need to sort the values so this is very innefficient by design.
                   // The FS search resource would return the results ordered in FS nat ordering.
                     var results = await _packageSearchResource.SearchAsync(
                         _searchTerm, _filter, 0, int.MaxValue, _logger, _token);
@@ -121,6 +121,9 @@ namespace NuGet.Protocol
                         case SearchOrderBy.Id:
                             _currentEnumerator = results.OrderBy(p => p.Identity).GetEnumerator();
                             break;
+                        case SearchOrderBy.Downloads:
+                            // Local packages do not have downloads available
+                            goto default;
                         default:
                             _currentEnumerator = results.GetEnumerator();
                             break;
