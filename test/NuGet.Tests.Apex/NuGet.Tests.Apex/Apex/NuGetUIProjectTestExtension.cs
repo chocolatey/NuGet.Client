@@ -4,11 +4,14 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using FluentAssertions;
 using Microsoft.Test.Apex.Services;
 using NuGet.PackageManagement.UI;
 using NuGet.PackageManagement.UI.TestContract;
 using NuGet.Packaging.Core;
 using NuGet.Versioning;
+using NuGet.VisualStudio;
 
 namespace NuGet.Tests.Apex
 {
@@ -29,6 +32,53 @@ namespace NuGet.Tests.Apex
         public bool SearchPackageFromUI(string searchText)
         {
             return _uiproject.WaitForSearchComplete(() => _uiproject.Search(searchText), _timeout);
+        }
+
+        public void AssertSearchedPackageItem(string tabName, string packageId, string packageVersion = null)
+        {
+            var searchPackageResult = _uiproject.VerifyFirstPackageOnTab(tabName, packageId, packageVersion);
+            searchPackageResult.Should().BeTrue($"searching for the package {packageId} in the {tabName} tab failed");
+        }
+
+        public void AssertInstalledPackageVulnerable()
+        {
+            var vulnerablePackageResult = _uiproject.VerifyVulnerablePackageOnTopOfInstalledTab();
+            vulnerablePackageResult.Should().BeTrue();
+        }
+
+        public void AssertInstalledPackageNotVulnerable()
+        {
+            var vulnerablePackageResult = _uiproject.VerifyVulnerablePackageOnTopOfInstalledTab();
+            vulnerablePackageResult.Should().BeFalse();
+        }
+
+        public void AssertInstalledPackageDeprecated()
+        {
+            var DeprecatedPackageResult = _uiproject.VerifyDeprecatedPackageOnTopOfInstalledTab();
+            DeprecatedPackageResult.Should().BeTrue();
+        }
+
+        public void AssertInstalledPackageNotDeprecated()
+        {
+            var DeprecatedPackageResult = _uiproject.VerifyDeprecatedPackageOnTopOfInstalledTab();
+            DeprecatedPackageResult.Should().BeFalse();
+        }
+
+        public void AssertPackageNameAndType(string packageId, PackageLevel packageLevel)
+        {
+            var packageItemsList = _uiproject.GetPackageItemsOnInstalledTab();
+            packageItemsList.Should().NotBeNull("Package items list is empty on installed tab.");
+
+            var package = packageItemsList.FirstOrDefault(x => x.Id == packageId);
+            package.Should().NotBeNull($"Package items list doesn't contain this package {packageId} on installed tab.");
+
+            package.PackageLevel.Should().Be(packageLevel);
+            package.Id.Should().Be(packageId);
+        }
+
+        public void AssertPackageListIsNullOrEmpty()
+        {
+            _uiproject.GetPackageItemsOnInstalledTab().Should().BeNullOrEmpty("Package items list isn't null or empty on installed tab."); ;
         }
 
         public bool InstallPackageFromUI(string packageId, string version)
@@ -81,6 +131,11 @@ namespace NuGet.Tests.Apex
         public void SetPackageSourceOptionToAll()
         {
             _uiproject.SetPackageSourceOptionToAll();
+        }
+
+        public void SetPackageSourceOptionToSource(string sourceName)
+        {
+            _uiproject.SetPackageSourceOptionToSource(sourceName);
         }
     }
 }

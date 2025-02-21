@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using NuGet.Common;
 using NuGet.Protocol.Core.Types;
 using NuGet.Protocol.VisualStudio;
 using NuGet.Test.Utility;
@@ -51,7 +50,7 @@ namespace NuGet.Protocol.Tests
         {
             // Arrange
             var source = StaticHttpHandler.CreateSource(sourceUrl, Repository.Provider.GetVisualStudio(), ResponsesDict);
-            var resource = await source.GetResourceAsync<AutoCompleteResource>();
+            var resource = await source.GetResourceAsync<AutoCompleteResource>(CancellationToken.None);
             Assert.NotNull(resource);
 
             var logger = new TestLogger();
@@ -83,7 +82,7 @@ namespace NuGet.Protocol.Tests
         {
             // Arrange
             var source = StaticHttpHandler.CreateSource(sourceUrl, Repository.Provider.GetVisualStudio(), ResponsesDict);
-            var resource = await source.GetResourceAsync<AutoCompleteResource>();
+            var resource = await source.GetResourceAsync<AutoCompleteResource>(CancellationToken.None);
             Assert.NotNull(resource);
 
             var logger = new TestLogger();
@@ -105,7 +104,7 @@ namespace NuGet.Protocol.Tests
         {
             // Arrange
             var source = StaticHttpHandler.CreateSource(sourceUrl, Repository.Provider.GetVisualStudio(), ResponsesDict);
-            var resource = await source.GetResourceAsync<AutoCompleteResource>();
+            var resource = await source.GetResourceAsync<AutoCompleteResource>(CancellationToken.None);
             Assert.NotNull(resource);
 
             var logger = new TestLogger();
@@ -118,12 +117,12 @@ namespace NuGet.Protocol.Tests
             // Assert
             try
             {
-                packagesTask.Wait();
+                await packagesTask;
             }
             catch (AggregateException e)
             {
                 Assert.Equal(e.InnerExceptions.Count(), 1);
-                Assert.True(e.InnerExceptions.Any(item => item.GetType().Equals(typeof(TaskCanceledException))));
+                Assert.Contains(e.InnerExceptions, item => item.GetType().Equals(typeof(TaskCanceledException)));
             }
             Assert.NotEqual(0, logger.Messages.Count);
         }

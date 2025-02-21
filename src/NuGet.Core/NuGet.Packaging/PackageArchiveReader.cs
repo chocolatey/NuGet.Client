@@ -185,7 +185,7 @@ namespace NuGet.Packaging
         /// <returns>A task that represents the asynchronous operation.
         /// The task result (<see cref="Task{TResult}.Result" />) returns a <see cref="string" />.</returns>
         /// <exception cref="ArgumentException">Thrown if <paramref name="nupkgFilePath" />
-        /// is either <c>null</c> or an empty string.</exception>
+        /// is either <see langword="null" /> or an empty string.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="cancellationToken" />
         /// is cancelled.</exception>
         public override async Task<string> CopyNupkgAsync(
@@ -437,7 +437,7 @@ namespace NuGet.Packaging
 
             return Task.FromResult(_isSigned.Value);
 #else
-            return Task.FromResult(false);
+            return TaskResult.False;
 #endif
         }
 
@@ -527,7 +527,8 @@ namespace NuGet.Packaging
             else if (RuntimeEnvironmentHelper.IsLinux || RuntimeEnvironmentHelper.IsMacOSX)
             {
                 // Please note: Linux/MAC case sensitive for env var name.
-                string signVerifyEnvVariable = _environmentVariableReader.GetEnvironmentVariable("DOTNET_NUGET_SIGNATURE_VERIFICATION");
+                string signVerifyEnvVariable = _environmentVariableReader.GetEnvironmentVariable(
+                    EnvironmentVariableConstants.DotNetNuGetSignatureVerification);
 
                 bool canVerify = false;
 

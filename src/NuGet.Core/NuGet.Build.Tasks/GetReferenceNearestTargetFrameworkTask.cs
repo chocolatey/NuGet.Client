@@ -4,11 +4,14 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using NuGet.Common;
 using NuGet.Frameworks;
+
+#if NETFRAMEWORK || NETSTANDARD
+using System.Linq;
+#endif
 
 namespace NuGet.Build.Tasks
 {
@@ -54,22 +57,7 @@ namespace NuGet.Build.Tasks
 
         public override bool Execute()
         {
-
             var logger = new MSBuildLogger(Log);
-
-            BuildTasksUtility.LogInputParam(logger, nameof(CurrentProjectTargetFramework), CurrentProjectTargetFramework);
-
-            BuildTasksUtility.LogInputParam(logger, nameof(CurrentProjectTargetPlatform), CurrentProjectTargetPlatform);
-
-            BuildTasksUtility.LogInputParam(logger, nameof(FallbackTargetFrameworks),
-                FallbackTargetFrameworks == null
-                    ? ""
-                    : string.Join(";", FallbackTargetFrameworks.Select(p => p)));
-
-            BuildTasksUtility.LogInputParam(logger, nameof(AnnotatedProjectReferences),
-                AnnotatedProjectReferences == null
-                    ? ""
-                    : string.Join(";", AnnotatedProjectReferences.Select(p => p.ItemSpec)));
 
             if (AnnotatedProjectReferences == null)
             {
@@ -108,8 +96,6 @@ namespace NuGet.Build.Tasks
             {
                 AssignedProjects[index] = AssignNearestFrameworkForSingleReference(AnnotatedProjectReferences[index], projectNuGetFramework, fallbackNuGetFrameworks, logger);
             }
-
-            BuildTasksUtility.LogOutputParam(logger, nameof(AssignedProjects), string.Join(";", AssignedProjects.Select(p => p.ItemSpec)));
 
             return !Log.HasLoggedErrors;
         }
@@ -249,7 +235,7 @@ namespace NuGet.Build.Tasks
                     targetFrameworkInformation._targetPlatformMoniker);
         }
 
-        internal class TargetFrameworkInformation
+        private class TargetFrameworkInformation
         {
             internal readonly string _targetFrameworkAlias;
             internal readonly string _targetFrameworkMoniker;
@@ -263,4 +249,5 @@ namespace NuGet.Build.Tasks
             }
         }
     }
+
 }

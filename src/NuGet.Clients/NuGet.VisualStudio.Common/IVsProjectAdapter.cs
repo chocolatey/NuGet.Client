@@ -6,8 +6,6 @@ using System.Runtime.Versioning;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.Shell.Interop;
 using NuGet.Frameworks;
-using NuGet.ProjectManagement;
-using NuGet.RuntimeModel;
 
 namespace NuGet.VisualStudio
 {
@@ -19,9 +17,9 @@ namespace NuGet.VisualStudio
         /// <summary>
         /// MSBuildProjectExtensionsPath project property (e.g. c:\projFoo\obj)
         /// </summary>
-        Task<string> GetMSBuildProjectExtensionsPathAsync();
+        string GetMSBuildProjectExtensionsPath();
 
-        IProjectBuildProperties BuildProperties { get; }
+        IVsProjectBuildProperties BuildProperties { get; }
 
         string CustomUniqueName { get; }
 
@@ -56,7 +54,7 @@ namespace NuGet.VisualStudio
 
         IVsHierarchy VsHierarchy { get; }
 
-        Task<string[]> GetProjectTypeGuidsAsync();
+        string[] GetProjectTypeGuids();
 
         Task<FrameworkName> GetDotNetFrameworkNameAsync();
 
@@ -65,19 +63,19 @@ namespace NuGet.VisualStudio
         /// <summary>
         /// Project's target framework
         /// </summary>
-        Task<NuGetFramework> GetTargetFrameworkAsync();
+        NuGetFramework GetTargetFramework();
 
         /// <summary>
         /// Reads a project build items and the requested metadata.
         /// </summary>
         /// <param name="itemName">The item name.</param>
         /// <param name="metadataNames">The metadata names to read.</param>
-        /// <returns>An <see cref="IEnumerable{(string ItemId, string[] ItemMetadata)}"/> containing the itemId and the metadata values.</returns>
-        Task<IEnumerable<(string ItemId, string[] ItemMetadata)>> GetBuildItemInformationAsync(string itemName, params string[] metadataNames);
+        /// <returns>An <see cref="IEnumerable{T}"/> containing the itemId and the metadata values.</returns>
+        IEnumerable<(string ItemId, string[] ItemMetadata)> GetBuildItemInformation(string itemName, params string[] metadataNames);
 
         /// <summary>
         /// See <see cref="Microsoft.VisualStudio.Shell.PackageUtilities.IsCapabilityMatch(IVsHierarchy, string)"/>
         /// </summary>
-        Task<bool> IsCapabilityMatchAsync(string capabilityExpression);
+        bool IsCapabilityMatch(string capabilityExpression);
     }
 }

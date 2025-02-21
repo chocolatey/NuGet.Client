@@ -13,7 +13,7 @@ using Xunit.Abstractions;
 
 namespace Dotnet.Integration.Test
 {
-    using X509StorePurpose = global::Test.Utility.Signing.X509StorePurpose;
+    using X509StorePurpose = Microsoft.Internal.NuGet.Testing.SignedPackages.X509StorePurpose;
 
     [Collection(DotnetIntegrationCollection.Name)]
     public class X509TrustStoreTests
@@ -21,19 +21,20 @@ namespace Dotnet.Integration.Test
         private readonly FileInfo _codeSigningCertificateBundle;
         private readonly FileInfo _timestampingCertificateBundle;
         private readonly TestLogger _logger;
+        private readonly ITestOutputHelper _testOutputHelper;
 
-        public X509TrustStoreTests(MsbuildIntegrationTestFixture msbuildFixture, ITestOutputHelper helper)
+        public X509TrustStoreTests(DotnetIntegrationTestFixture dotnetFixture, ITestOutputHelper testOutputHelper)
         {
-            _logger = new TestLogger(helper);
+            _logger = new TestLogger(testOutputHelper);
 
             _codeSigningCertificateBundle = new FileInfo(
                 Path.Combine(
-                    msbuildFixture.SdkDirectory.FullName,
+                    dotnetFixture.SdkDirectory.FullName,
                     FallbackCertificateBundleX509ChainFactory.SubdirectoryName,
                     FallbackCertificateBundleX509ChainFactory.CodeSigningFileName));
             _timestampingCertificateBundle = new FileInfo(
                 Path.Combine(
-                    msbuildFixture.SdkDirectory.FullName,
+                    dotnetFixture.SdkDirectory.FullName,
                     FallbackCertificateBundleX509ChainFactory.SubdirectoryName,
                     FallbackCertificateBundleX509ChainFactory.TimestampingFileName));
 
@@ -41,6 +42,7 @@ namespace Dotnet.Integration.Test
             _logger.LogVerbose($"Code signing fallback certificate bundle file exists:  {_codeSigningCertificateBundle.Exists}");
             _logger.LogVerbose($"Expected timestamping fallback certificate bundle file path:  {_timestampingCertificateBundle.FullName}");
             _logger.LogVerbose($"Timestamping fallback certificate bundle file exists:  {_timestampingCertificateBundle.Exists}");
+            _testOutputHelper = testOutputHelper;
         }
 
         [PlatformTheory(Platform.Windows)]
@@ -60,7 +62,17 @@ namespace Dotnet.Integration.Test
             Assert.Equal(5, _logger.Messages.Count);
             Assert.Equal(1, _logger.InformationMessages.Count);
             Assert.True(_logger.InformationMessages.TryPeek(out string actualMessage));
-            Assert.Equal(Strings.ChainBuilding_UsingDefaultTrustStore, actualMessage);
+
+            switch (storePurpose)
+            {
+                case X509StorePurpose.CodeSigning:
+                    Assert.Equal(Strings.ChainBuilding_UsingDefaultTrustStoreForCodeSigning, actualMessage);
+                    break;
+
+                case X509StorePurpose.Timestamping:
+                    Assert.Equal(Strings.ChainBuilding_UsingDefaultTrustStoreForTimestamping, actualMessage);
+                    break;
+            }
         }
 
         [PlatformTheory(Platform.Linux)]

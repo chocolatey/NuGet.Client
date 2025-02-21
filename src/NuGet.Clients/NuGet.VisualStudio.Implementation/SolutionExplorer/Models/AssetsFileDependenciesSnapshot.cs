@@ -4,12 +4,14 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using Microsoft;
+using NuGet.Common;
 using NuGet.Packaging;
 using NuGet.ProjectModel;
 
@@ -23,12 +25,12 @@ namespace NuGet.VisualStudio.SolutionExplorer.Models
         /// <summary>
         /// Gets the singleton empty instance.
         /// </summary>
-        public static AssetsFileDependenciesSnapshot Empty { get; } = new AssetsFileDependenciesSnapshot(null, null);
+        public static AssetsFileDependenciesSnapshot Empty { get; } = new(null, null);
 
         /// <summary>
         /// Shared object for parsing the lock file. May be used in parallel.
         /// </summary>
-        private static readonly LockFileFormat LockFileFormat = new LockFileFormat();
+        private static readonly LockFileFormat LockFileFormat = new();
 
         public ImmutableDictionary<string, AssetsFileTarget> DataByTarget { get; }
 
@@ -66,6 +68,12 @@ namespace NuGet.VisualStudio.SolutionExplorer.Models
             }
         }
 
+        // For testing only
+        internal static AssetsFileDependenciesSnapshot FromLockFile(LockFile lockFile)
+        {
+            return new(lockFile, Empty);
+        }
+
         private AssetsFileDependenciesSnapshot(LockFile? lockFile, AssetsFileDependenciesSnapshot? previous)
         {
             if (lockFile == null)
@@ -88,19 +96,51 @@ namespace NuGet.VisualStudio.SolutionExplorer.Models
                     continue;
                 }
 
-                previous.DataByTarget.TryGetValue(lockFileTarget.Name, out AssetsFileTarget? previousTarget);
+                string targetAlias = GetTargetAlias(lockFileTarget.Name);
+
+                previous.DataByTarget.TryGetValue(targetAlias, out AssetsFileTarget? previousTarget);
+
+                ImmutableArray<AssetsFileLogMessage> logMessages = ParseLogMessages(lockFile, previousTarget, lockFileTarget.Name);
 
                 dataByTarget.Add(
-                    lockFileTarget.Name,
+                    targetAlias,
                     new AssetsFileTarget(
                         this,
-                        lockFileTarget.Name,
-                        ParseLogMessages(lockFile, previousTarget, lockFileTarget.Name),
-                        ParseLibraries(lockFile, lockFileTarget)));
+                        targetAlias,
+                        logMessages,
+                        ParseLibraries(lockFile, lockFileTarget, logMessages)));
             }
 
             DataByTarget = dataByTarget.ToImmutable();
             return;
+
+            string GetTargetAlias(string lockFileTargetName)
+            {
+                // In some places, the target alias specified in the project file (e.g. "net472") will not
+                // match the target name used throughout the lock file (e.g. ".NETFramework,Version=v4.7.2").
+                // The dependencies tree only uses the target alias (what's in the project file) so we need
+                // to map back to that. See https://github.com/dotnet/project-system/issues/6832.
+
+                if (lockFile.PackageSpec.TargetFrameworks.Any(t => t.TargetAlias == lockFileTargetName))
+                {
+                    // The target name used in the assets file matches the target alias in the project file.
+                    return lockFileTargetName;
+                }
+
+                // The target name used in the assets file does NOT match any target alias in the project.
+                // Attempt to find the name used in the project.
+                foreach (TargetFrameworkInformation targetInfo in lockFile.PackageSpec.TargetFrameworks)
+                {
+                    if (targetInfo.FrameworkName.DotNetFrameworkName == lockFileTargetName)
+                    {
+                        // We found a match, so return the alias.
+                        return targetInfo.TargetAlias;
+                    }
+                }
+
+                // No match was found. Not ideal. Nothing to do but return the original value.
+                return lockFileTargetName;
+            }
 
             static ImmutableArray<AssetsFileLogMessage> ParseLogMessages(LockFile lockFile, AssetsFileTarget? previousTarget, string target)
             {
@@ -123,14 +163,14 @@ namespace NuGet.VisualStudio.SolutionExplorer.Models
 
                     j++;
 
-                    if (j < previousLogs.Length && previousLogs[j].Equals(logMessage))
+                    if (j < previousLogs.Length && previousLogs[j].Equals(logMessage, lockFile.PackageSpec.FilePath))
                     {
                         // Unchanged, so use previous value
                         builder.Add(previousLogs[j]);
                     }
                     else
                     {
-                        builder.Add(new AssetsFileLogMessage(logMessage));
+                        builder.Add(new AssetsFileLogMessage(lockFile.PackageSpec.FilePath, logMessage));
                     }
                 }
 
@@ -138,19 +178,113 @@ namespace NuGet.VisualStudio.SolutionExplorer.Models
             }
         }
 
-        internal static ImmutableDictionary<string, AssetsFileTargetLibrary> ParseLibraries(LockFile lockFile, LockFileTarget lockFileTarget)
+        internal static ImmutableDictionary<string, AssetsFileTargetLibrary> ParseLibraries(LockFile lockFile, LockFileTarget lockFileTarget, ImmutableArray<AssetsFileLogMessage> logMessages)
         {
+            var levelByLibrary = BuildLevelByLibrary();
+
             ImmutableDictionary<string, AssetsFileTargetLibrary>.Builder builder = ImmutableDictionary.CreateBuilder<string, AssetsFileTargetLibrary>(StringComparer.OrdinalIgnoreCase);
 
             foreach (LockFileTargetLibrary lockFileLibrary in lockFileTarget.Libraries)
             {
-                if (AssetsFileTargetLibrary.TryCreate(lockFile, lockFileLibrary, out AssetsFileTargetLibrary? library))
+                LogLevel? logLevel = null;
+
+                if (lockFileLibrary.Name is not null && levelByLibrary.TryGetValue(lockFileLibrary.Name, out var level))
+                {
+                    logLevel = level;
+                }
+
+                if (AssetsFileTargetLibrary.TryCreate(lockFile, lockFileLibrary, logLevel, out AssetsFileTargetLibrary? library))
                 {
                     builder.Add(library.Name, library);
                 }
             }
 
+            // If a non-existent library is referenced, it will have an error log message, but no entry in "libraries".
+            // We want to show a diagnostic node beneath such nodes in the tree, so need to create a dummy library entry,
+            // otherwise there's nothing to attach that diagnostic to.
+            foreach (AssetsFileLogMessage message in logMessages)
+            {
+                string libraryName = message.LibraryName;
+
+                if (!builder.ContainsKey(libraryName))
+                {
+                    builder.Add(libraryName, AssetsFileTargetLibrary.CreatePlaceholder(libraryName));
+                }
+            }
+
             return builder.ToImmutable();
+
+            Dictionary<string, LogLevel> BuildLevelByLibrary()
+            {
+                Dictionary<string, HashSet<string>> ancestorsByLibrary = new(StringComparer.OrdinalIgnoreCase);
+
+                // Build a map from child-to-ancestors
+                foreach (LockFileTargetLibrary lockFileLibrary in lockFileTarget.Libraries)
+                {
+                    string? parentId = lockFileLibrary.Name;
+
+                    if (parentId is null)
+                    {
+                        continue;
+                    }
+
+                    foreach (var dep in lockFileLibrary.Dependencies)
+                    {
+                        string childId = dep.Id;
+
+                        if (!ancestorsByLibrary.TryGetValue(childId, out HashSet<string>? ancestors))
+                        {
+                            ancestors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                            ancestorsByLibrary.Add(childId, ancestors);
+                        }
+
+                        ancestors.Add(parentId);
+                    }
+                }
+
+                // Walk up the tree from each log message's library, propagating the highest level found.
+                Dictionary<string, LogLevel> levelByLibrary = new(StringComparer.OrdinalIgnoreCase);
+
+                foreach (AssetsFileLogMessage message in logMessages)
+                {
+                    Integrate(message.LibraryName, message.Level, visited: []);
+                }
+
+                return levelByLibrary;
+
+                void Integrate(string id, LogLevel level, HashSet<string> visited)
+                {
+                    if (!visited.Add(id))
+                    {
+                        // Avoid infinite recursion.
+                        return;
+                    }
+
+                    if (!levelByLibrary.TryGetValue(id, out LogLevel currentLevel))
+                    {
+                        // No level yet, so set it.
+                        levelByLibrary[id] = level;
+                    }
+                    else
+                    {
+                        // Higher level is more severe.
+                        // - If we already have a higher level, don't change it.
+                        // - If the level matches, we will have already propagated it to ancestors, so can return.
+                        if (currentLevel >= level)
+                        {
+                            return;
+                        }
+                    }
+
+                    if (ancestorsByLibrary.TryGetValue(id, out HashSet<string>? ancestors))
+                    {
+                        foreach (string ancestor in ancestors)
+                        {
+                            Integrate(ancestor, level, visited);
+                        }
+                    }
+                }
+            }
         }
 
         public bool TryGetTarget(string? target, [NotNullWhen(returnValue: true)] out AssetsFileTarget? targetData)

@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Threading;
 
 namespace NuGet.Protocol.Plugins
 {
@@ -22,12 +21,12 @@ namespace NuGet.Protocol.Plugins
         event EventHandler<IPluginProcess> Exited;
 
         /// <summary>
-        /// Gets the exit code if the process has exited; otherwise, <c>null</c>.
+        /// Gets the exit code if the process has exited; otherwise, <see langword="null" />.
         /// </summary>
         int? ExitCode { get; }
 
         /// <summary>
-        /// Gets the process ID if the process was started; otherwise, <c>null</c>.
+        /// Gets the process ID if the process was started; otherwise, <see langword="null" />.
         /// </summary>
         int? Id { get; }
 

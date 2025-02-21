@@ -3,10 +3,13 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+
+#if IS_SIGNING_SUPPORTED
+using System.Linq;
 using NuGet.Common;
+#endif
 
 namespace NuGet.Packaging.Signing
 {
@@ -111,7 +114,7 @@ namespace NuGet.Packaging.Signing
                             if (IsSignatureTargeted(certificateHashEntry.Target, repositoryCountersignature.Value) &&
                                 StringComparer.OrdinalIgnoreCase.Equals(certificateHashEntry.Fingerprint, countersignatureCertificateFingerprint))
                             {
-                                if (ShouldVerifyOwners(certificateHashEntry as TrustedSignerAllowListEntry, repositoryCountersignature.Value as IRepositorySignature, out var allowedOwners, out var actualOwners))
+                                if (ShouldVerifyOwners(certificateHashEntry as TrustedSignerAllowListEntry, repositoryCountersignature.Value, out var allowedOwners, out var actualOwners))
                                 {
                                     if (allowedOwners.Intersect(actualOwners).Any())
                                     {

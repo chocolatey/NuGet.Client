@@ -10,16 +10,19 @@ using NuGet.Packaging;
 using NuGet.ProjectModel;
 using NuGet.Test.Utility;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Msbuild.Integration.Test
 {
     public class MsbuildRestoreTaskPackageSourceMappingTests : IClassFixture<MsbuildIntegrationTestFixture>
     {
         private readonly MsbuildIntegrationTestFixture _msbuildFixture;
+        private readonly ITestOutputHelper _testOutputHelper;
 
-        public MsbuildRestoreTaskPackageSourceMappingTests(MsbuildIntegrationTestFixture fixture)
+        public MsbuildRestoreTaskPackageSourceMappingTests(MsbuildIntegrationTestFixture fixture, ITestOutputHelper testOutputHelper)
         {
             _msbuildFixture = fixture;
+            _testOutputHelper = testOutputHelper;
         }
 
         [PlatformFact(Platform.Windows)]
@@ -122,7 +125,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 }
 
                 // Act
-                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true);
+                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 Assert.True(result.ExitCode == 0);
@@ -222,14 +225,14 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 }
 
                 // Act
-                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true);
+                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 Assert.True(result.ExitCode == 1);
                 var packageContosoBuffersPath = Path.Combine(projectAPackages, packageContosoBuffersOpenSource.ToString(), packageContosoBuffersOpenSource.ToString() + ".nupkg");
                 Assert.True(File.Exists(packageContosoBuffersPath));
                 // Assert Contoso.MVC.ASP is not restored.
-                Assert.True(result.Output.Contains("Unable to find version '1.0.0' of package 'Contoso.MVC.ASP'."));
+                Assert.Contains("Unable to find version '1.0.0' of package 'Contoso.MVC.ASP'.", result.Output);
                 var packageContosoMvcPath = Path.Combine(projectAPackages, packageOpenSourceContosoMvc.ToString(), packageOpenSourceContosoMvc.ToString() + ".nupkg");
                 Assert.False(File.Exists(packageContosoMvcPath));
             }
@@ -332,7 +335,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 }
 
                 // Act
-                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true);
+                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 Assert.True(result.ExitCode == 0);
@@ -432,14 +435,14 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 }
 
                 // Act
-                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true);
+                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 Assert.True(result.ExitCode == 1);
                 var packageContosoBuffersPath = Path.Combine(projectAPackages, packageContosoBuffersOpenSource.ToString(), packageContosoBuffersOpenSource.ToString() + ".nupkg");
                 Assert.True(File.Exists(packageContosoBuffersPath));
                 // Assert Contoso.MVC.ASP is not restored.
-                Assert.True(result.Output.Contains("Unable to find version '1.0.0' of package 'Contoso.MVC.ASP'."));
+                Assert.Contains("Unable to find version '1.0.0' of package 'Contoso.MVC.ASP'.", result.Output);
                 var packageContosoMvcPath = Path.Combine(projectAPackages, packageOpenSourceContosoMvc.ToString(), packageOpenSourceContosoMvc.ToString() + ".nupkg");
                 Assert.False(File.Exists(packageContosoMvcPath));
             }
@@ -544,7 +547,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 }
 
                 // Act
-                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore -v:d {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true);
+                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore -v:d {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 Assert.True(result.ExitCode == 0);
@@ -640,7 +643,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 }
 
                 // Act
-                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore -v:d {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true);
+                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore -v:d {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 Assert.Equal(1, result.ExitCode);
@@ -734,7 +737,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 }
 
                 // Act
-                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true);
+                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 Assert.True(result.ExitCode == 0);
@@ -789,7 +792,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                     packageContosoMvcReal);
 
                 // Act
-                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true);
+                var result = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore {pathContext.SolutionRoot} /p:RestorePackagesConfig=true", ignoreExitCode: true, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 result.Success.Should().BeTrue(because: result.AllOutput);
@@ -871,7 +874,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 packageContosoMvcReal);
 
             // Act
-            var r = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore -v:d {pathContext.SolutionRoot}", ignoreExitCode: true);
+            var r = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore -v:d {pathContext.SolutionRoot}", ignoreExitCode: true, testOutputHelper: _testOutputHelper);
 
             // Assert
             Assert.True(r.ExitCode == 0);
@@ -957,7 +960,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 packageContosoMvcReal);
 
             // Act
-            var r = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore -v:d {pathContext.SolutionRoot}", ignoreExitCode: true);
+            var r = _msbuildFixture.RunMsBuild(pathContext.WorkingDirectory, $"/t:restore -v:d {pathContext.SolutionRoot}", ignoreExitCode: true, testOutputHelper: _testOutputHelper);
 
             // Assert
             Assert.True(r.ExitCode == 1);

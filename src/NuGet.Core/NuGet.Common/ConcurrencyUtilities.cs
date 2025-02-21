@@ -19,13 +19,16 @@ namespace NuGet.Common
         private const int HashLength = 20;
         private static readonly TimeSpan SleepDuration = TimeSpan.FromMilliseconds(10);
         private static readonly KeyedLock PerFileLock = new KeyedLock();
+        private static bool? _useDeleteOnClose = null;
 
         // FileOptions.DeleteOnClose causes concurrency issues on Mac OS X and Linux.
         // These are fixed in .NET 7 (https://github.com/dotnet/runtime/pull/55327).
         // To continue working in parallel with older versions of .NET,
         // we cannot use DeleteOnClose by default until .NET 6 goes EOL (Nov 2024).
-        private static bool UseDeleteOnClose = RuntimeEnvironmentHelper.IsWindows ||
-                                               Environment.GetEnvironmentVariable("NUGET_ConcurrencyUtils_DeleteOnClose") == "1"; // opt-in.
+        private static bool UseDeleteOnClose => _useDeleteOnClose ??= RuntimeEnvironmentHelper.IsWindows ||
+                                               EnvironmentVariableReader.GetEnvironmentVariable("NUGET_ConcurrencyUtils_DeleteOnClose") == "1"; // opt-in.
+
+        internal static IEnvironmentVariableReader EnvironmentVariableReader { get; set; } = EnvironmentVariableWrapper.Instance;
 
         public async static Task<T> ExecuteWithFileLockedAsync<T>(string filePath,
             Func<CancellationToken, Task<T>> action,
@@ -44,7 +47,7 @@ namespace NuGet.Common
 
                 while (true)
                 {
-                    FileStream fs = null;
+                    FileStream? fs = null;
                     var lockPath = string.Empty;
 
                     try
@@ -117,8 +120,12 @@ namespace NuGet.Common
             }
         }
 
-        public static void ExecuteWithFileLocked(string filePath,
-            Action action)
+        public static void ExecuteWithFileLocked(string filePath, Action action)
+        {
+            ExecuteWithFileLocked(filePath, action, AcquireFileStream, NumberOfRetries);
+        }
+
+        internal static void ExecuteWithFileLocked(string filePath, Action action, Func<string, FileStream> acquireFileStream, int numberOfRetries)
         {
             if (string.IsNullOrEmpty(filePath))
             {
@@ -129,11 +136,11 @@ namespace NuGet.Common
             try
             {
                 // limit the number of unauthorized, this should be around 30 seconds.
-                var unauthorizedAttemptsLeft = NumberOfRetries;
+                var unauthorizedAttemptsLeft = numberOfRetries;
 
                 while (true)
                 {
-                    FileStream fs = null;
+                    FileStream? fs = null;
                     var lockPath = string.Empty;
                     try
                     {
@@ -141,7 +148,7 @@ namespace NuGet.Common
                         {
                             lockPath = FileLockPath(filePath);
 
-                            fs = AcquireFileStream(lockPath);
+                            fs = acquireFileStream(lockPath);
                         }
                         catch (DirectoryNotFoundException)
                         {
@@ -215,7 +222,7 @@ namespace NuGet.Common
                 options: UseDeleteOnClose ? FileOptions.DeleteOnClose : FileOptions.None);
         }
 
-        private static string _basePath;
+        private static string? _basePath;
         private static string BasePath
         {
             get

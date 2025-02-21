@@ -1,17 +1,11 @@
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Xml.Linq;
-using Newtonsoft.Json.Linq;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using NuGet.Frameworks;
 using NuGet.Packaging;
-using NuGet.Packaging.Core;
 using NuGet.ProjectModel;
 using NuGet.Test.Utility;
-using NuGet.Versioning;
 using Xunit;
 
 namespace NuGet.CommandLine.Test
@@ -284,8 +278,7 @@ namespace NuGet.CommandLine.Test
             var r = CommandRunner.Run(
                 nugetexe,
                 pathContext.WorkingDirectory.Path,
-                string.Join(" ", args),
-                waitForExit: true);
+                string.Join(" ", args));
 
             // Assert
             Assert.True(exitCode == r.ExitCode, r.Errors + "\n\n" + r.Output);

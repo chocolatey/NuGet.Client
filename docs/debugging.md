@@ -22,6 +22,10 @@ Alternatively, if you build the the repository under a `Debug` configuration, wh
 Testing the NuGet Visual Studio functionality is equally as easy as testing NuGet.exe.
 The start-up project is [NuGet.VisualStudio.Client](../src/NuGet.Clients/NuGet.VisualStudio.Client/NuGet.VisualStudio.Client.csproj). Starting this project will build the VSIX, then install that VSIX onto and launch your [experimental instance](https://docs.microsoft.com/en-us/visualstudio/extensibility/the-experimental-instance) of Visual Studio.
 
+> Note: NuGet's integration into Visual Studio depends on Visual Studio components. When testing this integration it is important that the version of NuGet being tested and the Visual Studio instance are compatible. The [release notes](https://learn.microsoft.com/nuget/release-notes/) contain the exact mapping, where the minor version of NuGet matches the minor version of Visual Studio, example 17.12 of Visual Studio matches 6.12 of NuGet.
+Testing NuGet 6.12 on top of 17.8 for example is not guaranteed to work. 
+Only testing 6.12 on top of 17.12 is expected to consistently work.
+
 ### Testing the build of NuGet in Visual Studio
 
 NuGet functions as an extension on top of Visual Studio.
@@ -123,15 +127,15 @@ The easiest way to test the pack functionality with dotnet.exe is to install the
 
 If you want to test dotnet.exe explicitly, so you don't have to worry about whether you installed the correct package in the project, refer to [Patching dotnet.exe to test the NuGet functionality](#patching-dotnetexe-to-test-the-nuget-functionality).
 
-### Debugging NuGet Command Xplat Functionality (add-package/remove-package/list package)
+### Debugging NuGet's integrated `dotnet` CLI commands
 
-Functionality such as `dotnet.exe add package` or `dotnet list package`, is implemented in [NuGet.CommandLine.XPlat](../src/NuGet.Core/NuGet.CommandLine.XPlat/NuGet.CommandLine.XPlat.csproj).
-
-To debug with `MSBuildLocator`, you need to un-comment the `PackageReference` for `Microsoft.Build.Locator` in `NuGet.CommandLine.XPlat.csproj`. Additionally, un-comment the code utilizing `MSBuildLocator` in that project's `Program.cs`.
+All of the `dotnet nuget` commands, in addition to some others, such as `dotnet add package`, `dotnet list package`, and `dotnet search`, are implemented in [NuGet.CommandLine.XPlat](../src/NuGet.Core/NuGet.CommandLine.XPlat/NuGet.CommandLine.XPlat.csproj).
 
 There are 2 ways to debug this project:
 
-* Given that [NuGet.CommandLine.XPlat](../src/NuGet.Core/NuGet.CommandLine.XPlat/NuGet.CommandLine.XPlat.csproj) is an exe, you can set it as the startup project and run it as you would any other command line project in Visual Studio. Note that some commands list arguments in a different order to the dotnet cli.
+* Given that [NuGet.CommandLine.XPlat](../src/NuGet.Core/NuGet.CommandLine.XPlat/NuGet.CommandLine.XPlat.csproj) is an exe, you can set it as the startup project and run it as you would any other command line project in Visual Studio.
+   However, if that is not working, please make sure `UseMSBuildLocator` is set to true.
+   **Note**: some commands list arguments in a different order to the dotnet cli.
 
 * Patch the SDK by referring to [Patching dotnet.exe to test the NuGet functionality](#patching-dotnetexe-to-test-the-nuget-functionality).
 

@@ -9,6 +9,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using Newtonsoft.Json.Linq;
 using NuGet.Common;
 using NuGet.Packaging;
@@ -100,7 +101,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -116,7 +117,6 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     pathContext.SolutionRoot,
                     string.Join(" ", args),
-                    waitForExit: true,
                     timeOutInMilliseconds: (int)TimeSpan.FromMinutes(3).TotalMilliseconds);
 
                 var allPackages = LocalFolderUtility.GetPackagesV2(packagesFolderPath, NullLogger.Instance);
@@ -237,7 +237,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -253,7 +253,6 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     pathContext.SolutionRoot,
                     string.Join(" ", args),
-                    waitForExit: true,
                     timeOutInMilliseconds: (int)TimeSpan.FromMinutes(3).TotalMilliseconds);
 
                 var allPackages = LocalFolderUtility.GetPackagesV2(packagesFolderPath, NullLogger.Instance);
@@ -267,8 +266,8 @@ namespace NuGet.CommandLine.Test
 
                 foreach (var package in expectedPackages)
                 {
-                    Assert.True(allPackages.Any(p => p.Identity.Id == package.Id
-                        && p.Identity.Version.ToNormalizedString() == package.Version.ToNormalizedString()));
+                    Assert.Contains(allPackages, p => p.Identity.Id == package.Id
+                        && p.Identity.Version.ToNormalizedString() == package.Version.ToNormalizedString());
                 }
             }
         }
@@ -370,7 +369,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -386,7 +385,6 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     pathContext.SolutionRoot,
                     string.Join(" ", args),
-                    waitForExit: true,
                     timeOutInMilliseconds: (int)TimeSpan.FromMinutes(3).TotalMilliseconds);
 
                 var allPackages = LocalFolderUtility.GetPackagesV2(packagesFolderPath, NullLogger.Instance);
@@ -398,8 +396,8 @@ namespace NuGet.CommandLine.Test
 
                 foreach (var package in expectedPackages)
                 {
-                    Assert.True(allPackages.Any(p => p.Identity.Id == package.Id
-                        && p.Identity.Version.ToNormalizedString() == package.Version.ToNormalizedString()));
+                    Assert.Contains(allPackages, p => p.Identity.Id == package.Id
+                        && p.Identity.Version.ToNormalizedString() == package.Version.ToNormalizedString());
                 }
             }
         }
@@ -500,7 +498,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -516,7 +514,6 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     pathContext.SolutionRoot,
                     string.Join(" ", args),
-                    waitForExit: true,
                     timeOutInMilliseconds: (int)TimeSpan.FromMinutes(3).TotalMilliseconds);
 
                 var allPackages = LocalFolderUtility.GetPackagesV2(packagesFolderPath, NullLogger.Instance);
@@ -528,8 +525,8 @@ namespace NuGet.CommandLine.Test
 
                 foreach (var package in expectedPackages)
                 {
-                    Assert.True(allPackages.Any(p => p.Identity.Id == package.Id
-                        && p.Identity.Version.ToNormalizedString() == package.Version.ToNormalizedString()));
+                    Assert.Contains(allPackages, p => p.Identity.Id == package.Id
+                        && p.Identity.Version.ToNormalizedString() == package.Version.ToNormalizedString());
                 }
             }
         }
@@ -588,7 +585,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -615,8 +612,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 task.Wait();
 
@@ -685,7 +681,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -713,7 +709,6 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     pathContext.SolutionRoot,
                     string.Join(" ", args),
-                    waitForExit: true,
                     timeOutInMilliseconds: int.MaxValue);
 
                 task.Wait();
@@ -781,7 +776,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -798,21 +793,20 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Network calls can happen multiple times here with cancelation
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(2 >= hitsByUrl[url], url + " " + hitsByUrl[url]);
+                    Assert.True(2 >= hits, url + " " + hits);
                 }
 
-                foreach (var url in hitsByUrl2.Keys)
+                foreach ((var url, var hits) in hitsByUrl2)
                 {
-                    Assert.True(2 >= hitsByUrl2[url], url + " " + hitsByUrl2[url]);
+                    Assert.True(2 >= hits, url + " " + hits);
                 }
             }
         }
@@ -856,7 +850,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -877,15 +871,14 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
@@ -929,7 +922,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -950,17 +943,16 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
                 Assert.Equal(1, hitsByUrl["/index.json"]);
                 Assert.Equal(1, hitsByUrl["/reg/packagea/index.json"]);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
@@ -1004,7 +996,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -1023,15 +1015,14 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
@@ -1075,7 +1066,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -1094,17 +1085,16 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
                 Assert.Equal(1, hitsByUrl["/index.json"]);
                 Assert.Equal(1, hitsByUrl["/reg/packagea/index.json"]);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
@@ -1150,7 +1140,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -1167,8 +1157,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -1219,7 +1208,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -1236,20 +1225,19 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url + " hits: " + hitsByUrl[url]);
+                    Assert.True(1 == hits, url + " hits: " + hits);
                 }
 
-                foreach (var url in hitsByUrl2.Keys)
+                foreach ((var url, var hits) in hitsByUrl2)
                 {
-                    Assert.True(1 == hitsByUrl2[url], url + " hits: " + hitsByUrl2[url]);
+                    Assert.True(1 == hits, url + " hits: " + hits);
                 }
             }
         }
@@ -1301,7 +1289,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -1318,20 +1306,19 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
 
-                foreach (var url in hitsByUrl2.Keys)
+                foreach ((var url, var hits) in hitsByUrl2)
                 {
-                    Assert.True(1 == hitsByUrl2[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
@@ -1369,7 +1356,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -1386,8 +1373,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -1395,10 +1381,9 @@ namespace NuGet.CommandLine.Test
 
                 // PackageE is hit twice, once from packages.config and the other from project.json.
                 // The rest should only be hit once.
-                foreach (var url in hitsByUrl.Keys.Where(s => s != "/reg/packagee/index.json"))
+                foreach ((var url, var hits) in hitsByUrl.Where(s => s.Key != "/reg/packagee/index.json"))
                 {
-                    var hits = hitsByUrl[url];
-                    Assert.True(1 == hits, url + $" was hit {hitsByUrl[url]} times instead of 1");
+                    Assert.True(1 == hits, url + $" was hit {hits} times instead of 1");
                 }
             }
         }
@@ -1437,7 +1422,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -1454,16 +1439,15 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
                 Assert.Equal(1, hitsByUrl["/index.json"]);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
@@ -1503,7 +1487,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -1520,15 +1504,14 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
@@ -1571,23 +1554,23 @@ namespace NuGet.CommandLine.Test
 
             Util.CreateFile(proj3Dir, "project.json",
                                             @"{
-                                            'dependencies': {
-                                                'packageD': '1.0.0',
-                                                'packageE': '1.0.*'
+                                            ""dependencies"": {
+                                                ""packageD"": ""1.0.0"",
+                                                ""packageE"": ""1.0.*""
                                             },
-                                            'frameworks': {
-                                                        'uap10.0': { }
+                                            ""frameworks"": {
+                                                        ""uap10.0"": { }
                                                     }
                                             }");
 
             Util.CreateFile(proj4Dir, "project.json",
                                             @"{
-                                            'dependencies': {
-                                                'packageE': '1.0.0',
-                                                'packageF': '*'
+                                            ""dependencies"": {
+                                                ""packageE"": ""1.0.0"",
+                                                ""packageF"": ""*""
                                             },
-                                            'frameworks': {
-                                                        'uap10.0': { }
+                                            ""frameworks"": {
+                                                        ""uap10.0"": { }
                                                     }
                                             }");
 

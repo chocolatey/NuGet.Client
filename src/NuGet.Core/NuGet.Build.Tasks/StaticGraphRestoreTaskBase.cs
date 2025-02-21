@@ -6,15 +6,13 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-
+using System.Text;
 #if !IS_CORECLR
-
 using System.Reflection;
-
 #endif
-
 using System.Threading;
 using Microsoft.Build.Framework;
+using Microsoft.Build.Utilities;
 using NuGet.Common;
 
 namespace NuGet.Build.Tasks
@@ -24,12 +22,21 @@ namespace NuGet.Build.Tasks
     /// </summary>
     public abstract class StaticGraphRestoreTaskBase : Microsoft.Build.Utilities.Task, ICancelableTask, IDisposable
     {
+        internal readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+        private readonly IEnvironmentVariableReader _environmentVariableReader;
+        protected StaticGraphRestoreTaskBase(IEnvironmentVariableReader environmentVariableReader)
+            : base(Strings.ResourceManager)
+        {
+            _environmentVariableReader = environmentVariableReader ?? throw new ArgumentNullException(nameof(environmentVariableReader));
+        }
+
         /// <summary>
         /// Gets the full path to this assembly.
         /// </summary>
         protected static readonly Lazy<FileInfo> ThisAssemblyLazy = new Lazy<FileInfo>(() => new FileInfo(typeof(RestoreTaskEx).Assembly.Location));
 
-        internal readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+        [Output]
+        public ITaskItem[] EmbedInBinlog { get; set; }
 
         /// <summary>
         /// Gets a value indicating whether or not <see cref="SolutionPath" /> contains a value.
@@ -64,6 +71,11 @@ namespace NuGet.Build.Tasks
         public bool Recursive { get; set; }
 
         /// <summary>
+        /// Gets or sets a value indicating whether or not the global properties should be sent to NuGet.Build.Tasks.Console.exe over the standard input stream.
+        /// </summary>
+        public bool SerializeGlobalProperties { get; set; }
+
+        /// <summary>
         /// Gets or sets the full path to the solution file (if any) that is being built.
         /// </summary>
         public string SolutionPath { get; set; }
@@ -85,26 +97,37 @@ namespace NuGet.Build.Tasks
         {
             try
             {
-#if DEBUG
-                if (string.Equals(Environment.GetEnvironmentVariable(DebugEnvironmentVariableName), bool.TrueString, StringComparison.OrdinalIgnoreCase))
+                string debugEnvironmentVariable = _environmentVariableReader.GetEnvironmentVariable(DebugEnvironmentVariableName);
+                if (string.Equals(debugEnvironmentVariable, bool.TrueString, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(debugEnvironmentVariable, "1", StringComparison.OrdinalIgnoreCase))
                 {
                     Debugger.Launch();
                 }
-#endif
+
                 MSBuildLogger logger = new MSBuildLogger(Log);
+
+                Dictionary<string, string> globalProperties = GetGlobalProperties();
+
+                Encoding utf8Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
                 using (var semaphore = new SemaphoreSlim(initialCount: 0, maxCount: 1))
                 using (var loggingQueue = new TaskLoggingQueue(Log))
                 using (var process = new Process())
                 {
+                    bool errorLogged = false;
+
                     process.EnableRaisingEvents = true;
                     process.StartInfo = new ProcessStartInfo
                     {
-                        Arguments = GetCommandLineArguments(MSBuildBinPath),
+                        Arguments = GetCommandLineArguments(globalProperties),
                         CreateNoWindow = true,
                         FileName = GetProcessFileName(ProcessFileName),
+                        RedirectStandardError = true,
                         RedirectStandardInput = true,
                         RedirectStandardOutput = true,
+#if !NETFRAMEWORK
+                        StandardInputEncoding = utf8Encoding,
+#endif
                         UseShellExecute = false,
                         WorkingDirectory = Environment.CurrentDirectory,
                     };
@@ -112,37 +135,90 @@ namespace NuGet.Build.Tasks
                     // Place the output in the queue which handles logging messages coming through on StdOut
                     process.OutputDataReceived += (sender, args) => loggingQueue.Enqueue(args?.Data);
 
+                    process.ErrorDataReceived += (_, args) =>
+                    {
+                        if (args.Data != null)
+                        {
+                            // Any message on the standard error stream should be logged as an error
+                            Log.LogError(args.Data);
+
+                            errorLogged = true;
+                        }
+                    };
+
                     process.Exited += (sender, args) => semaphore.Release();
+
+                    Log.LogMessageFromResources(MessageImportance.Low, nameof(Strings.Log_RunningStaticGraphRestoreCommand), process.StartInfo.FileName, process.StartInfo.Arguments);
+
+                    Encoding previousConsoleInputEncoding = Console.InputEncoding;
+
+                    // Set the input encoding to UTF8 without a byte order mark, the spawned process will use this encoding on .NET Framework
+                    Console.InputEncoding = utf8Encoding;
 
                     try
                     {
-                        Log.LogMessage(MessageImportance.Low, "Running command: \"{0}\" {1}", process.StartInfo.FileName, process.StartInfo.Arguments);
-
                         process.Start();
+                    }
+                    catch (Exception e)
+                    {
+                        Log.LogErrorFromResources(nameof(Strings.Error_StaticGraphRestoreFailedToStart), e.Message);
 
-                        WriteArguments(process.StandardInput.BaseStream);
+                        return false;
+                    }
+                    finally
+                    {
+                        Console.InputEncoding = previousConsoleInputEncoding;
+                    }
 
-                        process.BeginOutputReadLine();
+                    process.BeginOutputReadLine();
+                    process.BeginErrorReadLine();
 
+                    if (SerializeGlobalProperties)
+                    {
+                        using var writer = new BinaryWriter(process.StandardInput.BaseStream, utf8Encoding, leaveOpen: true);
+
+                        WriteGlobalProperties(writer, globalProperties);
+                    }
+
+                    process.StandardInput.Close();
+
+                    try
+                    {
                         semaphore.Wait(_cancellationTokenSource.Token);
-
-                        if (!process.HasExited)
-                        {
-                            try
-                            {
-                                process.Kill();
-                            }
-                            catch (InvalidOperationException)
-                            {
-                                // The process may have exited, in this case ignore the exception
-                            }
-                        }
                     }
                     catch (Exception e) when (
                         e is OperationCanceledException
                         || (e is AggregateException aggregateException && aggregateException.InnerException is OperationCanceledException))
                     {
+                        // Wait() throws when the cancellation token is triggered, this is expected so ignore the exception
                     }
+
+                    if (!process.HasExited)
+                    {
+                        try
+                        {
+                            // Kill the process in the case of cancellation
+                            process.Kill();
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            // The process may have exited, in this case ignore the exception
+                        }
+                    }
+
+                    if (_cancellationTokenSource.IsCancellationRequested)
+                    {
+                        // Return true so the task "succeeds" in the case of cancellation so the build doesn't appear to fail
+                        return true;
+                    }
+
+                    if (process.ExitCode > 0 && !Log.HasLoggedErrors && !errorLogged)
+                    {
+                        // All non-zero exit codes should have logged an error, if not its unexpected so log an error asking the user to file an issue
+                        Log.LogErrorFromResources(nameof(Strings.Error_StaticGraphNonZeroExitCode), process.ExitCode);
+                    }
+
+                    EmbedInBinlog = loggingQueue.FilesToEmbedInBinlog.Select(i => new TaskItem(i)).ToArray();
                 }
             }
             catch (Exception e)
@@ -156,16 +232,53 @@ namespace NuGet.Build.Tasks
         /// <summary>
         /// Gets the command-line arguments to use when launching the process that executes the restore.
         /// </summary>
-        internal string GetCommandLineArguments(string msbuildBinPath)
+        /// <param name="globalProperties">Receives a <see cref="Dictionary{TKey, TValue}" /> containing the global properties.</param>
+        internal string GetCommandLineArguments(Dictionary<string, string> globalProperties)
         {
-            return string.Concat(
+            // First get the command-line arguments including the global properties
+            return CreateArgumentString(EnumerateCommandLineArguments(SerializeGlobalProperties ? null : globalProperties));
+
+            IEnumerable<string> EnumerateCommandLineArguments(Dictionary<string, string> globalProperties)
+            {
 #if IS_CORECLR
-                "\"", Path.Combine(ThisAssemblyLazy.Value.DirectoryName, Path.ChangeExtension(ThisAssemblyLazy.Value.Name, ".Console.dll")), "\"",
-                " \"", Path.Combine(msbuildBinPath, "MSBuild.dll"), "\"",
-#else
-                "\"", Path.Combine(msbuildBinPath, "MSBuild.exe"), "\"",
+                // The full path to the executable for dotnet core
+                yield return Path.Combine(ThisAssemblyLazy.Value.DirectoryName, Path.ChangeExtension(ThisAssemblyLazy.Value.Name, ".Console.dll"));
 #endif
-                " \"", IsSolutionPathDefined ? SolutionPath : ProjectFullPath, "\"");
+                var options = GetOptions();
+
+                // Semicolon delimited list of options
+                yield return string.Join(";", options.Select(i => $"{i.Key}={i.Value}"));
+
+                // Full path to MSBuild.exe or MSBuild.dll
+#if IS_CORECLR
+                yield return Path.Combine(MSBuildBinPath, "MSBuild.dll");
+#else
+                yield return Path.Combine(MSBuildBinPath, "MSBuild.exe");
+
+#endif
+                // Full path to the entry project.  If its a solution file, it will be the full path to solution, otherwise SolutionPath is either empty
+                // or is the value "*Undefined*" and ProjectFullPath is set instead.
+                yield return IsSolutionPathDefined
+                        ? SolutionPath
+                        : ProjectFullPath;
+
+                // globalProperties is null when they will be serialized over the standard input stream instead
+                if (globalProperties != null)
+                {
+                    // Semicolon delimited list of MSBuild global properties
+                    yield return string.Join(";", globalProperties.Select(i => $"{i.Key}={i.Value}"));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Creates an argument string of space delimited quoted arguments.
+        /// </summary>
+        /// <param name="arguments">An <see cref="IEnumerable{T}" /> containing individual argument values.</param>
+        /// <returns>A <see cref="string" /> with space delimited quoted arguments.</returns>
+        internal static string CreateArgumentString(IEnumerable<string> arguments)
+        {
+            return "\"" + string.Join("\" \"", arguments) + "\"";
         }
 
         /// <summary>
@@ -258,15 +371,20 @@ namespace NuGet.Build.Tasks
             };
         }
 
-        internal void WriteArguments(Stream stream)
+        /// <summary>
+        /// Writes global properties to the specified stream.
+        /// </summary>
+        /// <param name="writer">The <see cref="BinaryWriter" /> to write the global properties to.</param>
+        /// <param name="globalProperties">A <see cref="Dictionary{TKey, TValue}" /> containing the global properties.</param>
+        internal static void WriteGlobalProperties(BinaryWriter writer, Dictionary<string, string> globalProperties)
         {
-            var arguments = new StaticGraphRestoreArguments
-            {
-                GlobalProperties = GetGlobalProperties(),
-                Options = GetOptions(),
-            };
+            writer.Write(globalProperties.Count);
 
-            arguments.Write(stream);
+            foreach (KeyValuePair<string, string> option in globalProperties)
+            {
+                writer.Write(option.Key);
+                writer.Write(option.Value);
+            }
         }
     }
 }

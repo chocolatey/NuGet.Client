@@ -34,10 +34,10 @@ using NuGet.Resolver;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
 using NuGet.VisualStudio;
-using NuGet.VisualStudio.Common.Test;
 using NuGet.VisualStudio.Internal.Contracts;
 using StreamJsonRpc;
 using Test.Utility;
+using Test.Utility.VisualStudio;
 using Xunit;
 using Xunit.Abstractions;
 using static NuGet.PackageManagement.VisualStudio.Test.ProjectFactories;
@@ -46,6 +46,7 @@ using Task = System.Threading.Tasks.Task;
 
 namespace NuGet.PackageManagement.VisualStudio.Test
 {
+    [UseCulture("en-US")] // We are asserting exception messages in English
     [Collection(MockedVS.Collection)]
     public sealed class NuGetProjectManagerServiceTests : MockedVSCollectionTests, IDisposable
     {
@@ -58,6 +59,8 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         private TestDirectory _testDirectory;
         private readonly IVsProjectThreadingService _threadingService;
         private readonly TestLogger _logger;
+        private readonly Mock<IOutputConsoleProvider> _outputConsoleProviderMock;
+        private readonly Lazy<IOutputConsoleProvider> _outputConsoleProvider;
 
         public NuGetProjectManagerServiceTests(GlobalServiceProvider globalServiceProvider, ITestOutputHelper output)
             : base(globalServiceProvider)
@@ -69,16 +72,9 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             componentModel.Setup(x => x.GetService<INuGetProjectContext>()).Returns(_projectContext);
             AddService<SComponentModel>(Task.FromResult((object)componentModel.Object));
 
-            // Force Enable Transitive Origin experiment tests
-            ExperimentationConstants constant = ExperimentationConstants.TransitiveDependenciesInPMUI;
-            var flightsEnabled = new Dictionary<string, bool>()
-            {
-                { constant.FlightFlag, true },
-            };
-            var service = new NuGetExperimentationService(new TestEnvironmentVariableReader(new Dictionary<string, string>()), new TestVisualStudioExperimentalService(flightsEnabled), new Lazy<IOutputConsoleProvider>(() => new TestOutputConsoleProvider()));
-
-            service.IsExperimentEnabled(constant).Should().Be(true);
-            componentModel.Setup(x => x.GetService<INuGetExperimentationService>()).Returns(service);
+            var mockOutputConsoleUtility = OutputConsoleUtility.GetMock();
+            _outputConsoleProviderMock = mockOutputConsoleUtility.mockIOutputConsoleProvider;
+            _outputConsoleProvider = new Lazy<IOutputConsoleProvider>(() => _outputConsoleProviderMock.Object);
 
             _logger = new TestLogger(output);
         }
@@ -192,7 +188,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     nuGetProjectServices.Object,
                     projectId);
 
-                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectRestoreInfo.AddProject(packageSpec);
                 var projectNames = new ProjectNames(
                     fullName: projectFullPath,
@@ -474,7 +470,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     projectId);
 
 
-                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectRestoreInfo.AddProject(packageSpec);
                 var projectNames = new ProjectNames(
                     fullName: projectFullPath,
@@ -621,11 +617,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             installedAndTransitive.TransitivePackages.Should().HaveCount(2);
 
             var transitiveOrigin = new PackageIdentity("packageA", new NuGetVersion("2.15.3"));
-            ITransitivePackageReferenceContextInfo transitivePackageB = installedAndTransitive.TransitivePackages.Where(pkg => pkg.Identity.Id == "packageB").Single();
+            ITransitivePackageReferenceContextInfo transitivePackageB = installedAndTransitive.TransitivePackages.Single(pkg => pkg.Identity.Id == "packageB");
             IPackageReferenceContextInfo transitiveOriginB = transitivePackageB.TransitiveOrigins.Single();
             Assert.Equal(transitiveOrigin, transitiveOriginB.Identity);
 
-            ITransitivePackageReferenceContextInfo transitivePackageC = installedAndTransitive.TransitivePackages.Where(pkg => pkg.Identity.Id == "packageC").Single();
+            ITransitivePackageReferenceContextInfo transitivePackageC = installedAndTransitive.TransitivePackages.Single(pkg => pkg.Identity.Id == "packageC");
             IPackageReferenceContextInfo transitiveOriginC = transitivePackageC.TransitiveOrigins.Single();
             Assert.Equal(transitiveOrigin, transitiveOriginC.Identity);
         }
@@ -647,7 +643,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             var prProject = CreateCpsPackageReferenceProject(projectName, projectFullPath, projectSystemCache);
 
             ProjectNames projectNames = GetTestProjectNames(projectFullPath, projectName);
-            // This test PackageSpec makes the project look NuGet-restored 
+            // This test PackageSpec makes the project look NuGet-restored
             PackageSpec packageSpec = GetPackageSpec(projectName, projectFullPath, "[1.0.0, )");
 
             // Packages
@@ -659,7 +655,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             await SimpleTestPackageUtility.CreateFullPackageAsync(pathContext.PackageSource, "packageB", "2.0.0");
 
             // Restore info
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
             projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
 
@@ -667,7 +663,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             // Act I: We will not have transitive packages data
 
-            var installedProject1 = await prProject.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
+            var installedProject1 = await prProject.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
             Assert.NotEmpty(installedProject1.InstalledPackages);
             Assert.Empty(installedProject1.TransitivePackages);
 
@@ -677,7 +673,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             // Now, make a NuGet-Restore
             var pajFilepath = Path.Combine(Path.GetDirectoryName(projectFullPath), "project.assets.json");
-            TestRestoreRequest restoreRequest = ProjectTestHelpers.CreateRestoreRequest(packageSpec, pathContext, _logger);
+            TestRestoreRequest restoreRequest = ProjectTestHelpers.CreateRestoreRequest(pathContext, _logger, packageSpec);
             restoreRequest.LockFilePath = pajFilepath;
             restoreRequest.ProjectStyle = ProjectStyle.PackageReference;
             var command = new RestoreCommand(restoreRequest);
@@ -688,7 +684,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             // Act II: From this point, we will have transitive packages
 
-            var installedProject2 = await prProject.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
+            var installedProject2 = await prProject.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
             Assert.NotEmpty(installedProject2.InstalledPackages);
             Assert.NotEmpty(installedProject2.TransitivePackages);
 
@@ -768,7 +764,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             var installedAndTransitive = await _projectManager.GetInstalledAndTransitivePackagesAsync(new[] { projectId }, includeTransitiveOrigins: true, CancellationToken.None);
 
             // Verify transitive package B
-            var transitivePackageB = installedAndTransitive.TransitivePackages.Where(pkg => pkg.Identity.Id == "packageB").First();
+            var transitivePackageB = installedAndTransitive.TransitivePackages.First(pkg => pkg.Identity.Id == "packageB");
             Assert.NotNull(transitivePackageB);
             Assert.Equal(1, transitivePackageB.TransitiveOrigins.Count());
             var transitiveOriginB = transitivePackageB.TransitiveOrigins.First();
@@ -776,7 +772,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.Equal(new NuGetVersion("2.0.0"), transitiveOriginB.Identity.Version);
 
             // Verify transitive package C
-            var transitivePackageC = installedAndTransitive.TransitivePackages.Where(pkg => pkg.Identity.Id == "packageC").First();
+            var transitivePackageC = installedAndTransitive.TransitivePackages.First(pkg => pkg.Identity.Id == "packageC");
             Assert.NotNull(transitivePackageC);
             Assert.Equal(1, transitivePackageC.TransitiveOrigins.Count());
             var transitiveOriginC = transitivePackageC.TransitiveOrigins.First();
@@ -784,7 +780,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.Equal(new NuGetVersion("2.0.0"), transitiveOriginC.Identity.Version);
 
             // Verify transitive package D
-            var transitivePackageD = installedAndTransitive.TransitivePackages.Where(pkg => pkg.Identity.Id == "packageD").First();
+            var transitivePackageD = installedAndTransitive.TransitivePackages.First(pkg => pkg.Identity.Id == "packageD");
             Assert.NotNull(transitivePackageD);
             Assert.Equal(2, transitivePackageD.TransitiveOrigins.Count()); // Two top dependencies
             Assert.Collection(transitivePackageD.TransitiveOrigins,
@@ -793,7 +789,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         }
 
         [Fact]
-        private async Task GetInstalledAndTransitivePackagesAsync_WithCpsPackageReferenceProject_OneTransitiveReferenceAndEmitsCounterfactualTelemetryAsync()
+        private async Task GetInstalledAndTransitivePackagesAsync_WithCpsPackageReferenceProject_OneTransitiveReferenceAsync()
         {
             // packageA_2.0.0 -> packageB_1.0.0
 
@@ -815,7 +811,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             PackageSpec packageSpec = GetPackageSpec(projectName, projectFullPath, "[2.0.0, )");
 
             // Restore info
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
             projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
 
@@ -865,9 +861,6 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.True(result.Success);
             Assert.True(File.Exists(pajFilepath));
 
-            // Reset sending counterfactual telemetry, for testing purposes
-            CounterfactualLoggers.TransitiveDependencies.Reset();
-
             // Act
             var installedAndTransitive = await _projectManager.GetInstalledAndTransitivePackagesAsync(new[] { projectId }, includeTransitiveOrigins: true, CancellationToken.None);
 
@@ -880,7 +873,6 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.Equal(1, packagesB.Count());
             Assert.Collection(packagesB,
                 pkg => AssertElement(pkg, "packageA", "2.0.0"));
-            Assert.Contains(telemetryEvents, te => te.Name == CounterfactualLoggers.TransitiveDependencies.EventName);
         }
 
         [Fact]
@@ -930,7 +922,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             PackageSpec packageSpec = JsonPackageSpecReader.GetPackageSpec(referenceSpec, projectName, projectFullPath).WithTestRestoreMetadata();
 
             // Restore info
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
             projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
 
@@ -1086,7 +1078,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             PackageSpec packageSpec = JsonPackageSpecReader.GetPackageSpec(referenceSpec, projectName, projectFullPath).WithTestRestoreMetadata();
 
             // Restore info
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
             projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
 
@@ -1271,7 +1263,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             PackageSpec packageSpec = JsonPackageSpecReader.GetPackageSpec(referenceSpec, projectName, projectFullPath).WithTestRestoreMetadata();
 
             // Restore info
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
             projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
 
@@ -1404,7 +1396,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             PackageSpec packageSpec = JsonPackageSpecReader.GetPackageSpec(referenceSpec, projectName, projectFullPath).WithTestRestoreMetadata();
 
             // Restore info
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
             projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
 
@@ -1412,7 +1404,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             // Perform NuGet restore
             var pajFilepath = Path.Combine(Path.GetDirectoryName(projectFullPath), "project.assets.json");
-            TestRestoreRequest restoreRequest = ProjectTestHelpers.CreateRestoreRequest(packageSpec, pathContext, _logger); // Adds 1 source
+            TestRestoreRequest restoreRequest = ProjectTestHelpers.CreateRestoreRequest(pathContext, _logger, packageSpec); // Adds 1 source
             restoreRequest.LockFilePath = pajFilepath;
             restoreRequest.ProjectStyle = ProjectStyle.PackageReference;
             var command = new RestoreCommand(restoreRequest);
@@ -1520,6 +1512,54 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.Equal(2, folders.Count);
         }
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        private async Task GetCentralPackageVersionsManagmentEnabled_SucceedsAsync(bool isCentralPackageVersionsEnabled)
+        {
+            string projectName = Guid.NewGuid().ToString();
+            string projectId = projectName;
+            var projectSystemCache = new ProjectSystemCache();
+            IVsProjectAdapter projectAdapter = Mock.Of<IVsProjectAdapter>();
+
+            using var pathContext = new SimpleTestPathContext();
+            Initialize();
+
+            // Prepare: Create project
+            string projectFullPath = Path.Combine(pathContext.SolutionRoot, projectName, $"{projectName}.csproj");
+
+            CpsPackageReferenceProject prProject = CreateCpsPackageReferenceProject(projectName, projectFullPath, projectSystemCache);
+
+            ProjectNames projectNames = GetTestProjectNames(projectFullPath, projectName);
+            string referenceSpec = $@"
+                {{
+                    ""frameworks"":
+                    {{
+                        ""net6.0"":
+                        {{
+                            ""dependencies"":
+                            {{
+                            }}
+                        }}
+                    }}
+                }}";
+            PackageSpec packageSpec = JsonPackageSpecReader.GetPackageSpec(referenceSpec, projectName, projectFullPath).WithTestRestoreMetadata();
+            packageSpec.RestoreMetadata.CentralPackageVersionsEnabled = isCentralPackageVersionsEnabled;
+
+            // Restore info
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
+            projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
+            projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
+
+            _solutionManager.NuGetProjects.Add(prProject);
+
+            // Act
+            bool isCentralPackageManagmentEnabled = await _projectManager.IsCentralPackageManagementEnabledAsync(projectId, CancellationToken.None);
+
+            // Assert
+            Assert.Equal(isCentralPackageVersionsEnabled, isCentralPackageManagmentEnabled);
+        }
+
         [Fact]
         private async Task GetPackageFoldersAsync_CpsProjectWithFallbackFolder_ReturnsPackageFoldersAsync()
         {
@@ -1552,7 +1592,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             PackageSpec packageSpec = JsonPackageSpecReader.GetPackageSpec(referenceSpec, projectName, projectFullPath).WithTestRestoreMetadata();
 
             // Restore info
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
             projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
 
@@ -1601,8 +1641,10 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     typeConstraint: LibraryDependencyTarget.Package)
             };
 
-            packageSpec.TargetFrameworks.First().Dependencies.Add(dependency);
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(dependency);
+            packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, Array.Empty<IAssetsLogMessage>());
         }
 

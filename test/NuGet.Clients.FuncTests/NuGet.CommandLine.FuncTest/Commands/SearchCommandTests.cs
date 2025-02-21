@@ -1,15 +1,29 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using NuGet.CommandLine.Test;
+using NuGet.Configuration;
 using NuGet.Test.Utility;
 using Test.Utility;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace NuGet.CommandLine.FuncTest.Commands
 {
     public class SearchCommandTest
     {
+        private readonly ITestOutputHelper _testOutputHelper;
+
+        public SearchCommandTest(ITestOutputHelper testOutputHelper)
+        {
+            _testOutputHelper = testOutputHelper;
+        }
+
         [Fact]
         public void SearchCommand_TargetEndpointTest()
         {
@@ -19,11 +33,8 @@ namespace NuGet.CommandLine.FuncTest.Commands
             using (MockServer server = new MockServer())
             using (SimpleTestPathContext config = new SimpleTestPathContext())
             {
-                CommandRunner.Run(
-                    nugetexe,
-                    config.WorkingDirectory,
-                    $"source add -name mockSource -source {server.Uri}v3/index.json -configfile {config.NuGetConfig}",
-                    waitForExit: true);
+                // Arrange the NuGet.Config file
+                config.Settings.AddSource("mockSource", $"{server.Uri}v3/index.json", allowInsecureConnectionsValue: "true");
 
                 string index = $@"
                 {{
@@ -111,7 +122,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     nugetexe,
                     config.WorkingDirectory,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 server.Stop();
 
@@ -130,11 +141,8 @@ namespace NuGet.CommandLine.FuncTest.Commands
             using (MockServer server = new MockServer())
             using (SimpleTestPathContext config = new SimpleTestPathContext())
             {
-                CommandRunner.Run(
-                    nugetexe,
-                    config.WorkingDirectory,
-                    $"source add -name mockSource -source {server.Uri}v3/index.json -configfile {config.NuGetConfig}",
-                    waitForExit: true);
+                // Arrange the NuGet.Config file
+                config.Settings.AddSource("mockSource", $"{server.Uri}v3/index.json", allowInsecureConnectionsValue: "true");
 
                 string index = $@"
                 {{
@@ -224,7 +232,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     nugetexe,
                     config.WorkingDirectory,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 server.Stop();
 
@@ -247,11 +255,8 @@ namespace NuGet.CommandLine.FuncTest.Commands
             using (MockServer server = new MockServer())
             using (SimpleTestPathContext config = new SimpleTestPathContext())
             {
-                CommandRunner.Run(
-                    nugetexe,
-                    config.WorkingDirectory,
-                    $"source add -name mockSource -source {server.Uri}v3/index.json -configfile {config.NuGetConfig}",
-                    waitForExit: true);
+                // Arrange the NuGet.Config file
+                config.Settings.AddSource("mockSource", $"{server.Uri}v3/index.json", allowInsecureConnectionsValue: "true");
 
                 string index = $@"
                 {{
@@ -341,7 +346,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     nugetexe,
                     config.WorkingDirectory,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 server.Stop();
 
@@ -364,11 +369,8 @@ namespace NuGet.CommandLine.FuncTest.Commands
             using (MockServer server = new MockServer())
             using (SimpleTestPathContext config = new SimpleTestPathContext())
             {
-                CommandRunner.Run(
-                    nugetexe,
-                    config.WorkingDirectory,
-                    $"source add -name mockSource -source {server.Uri}v3/index.json -configfile {config.NuGetConfig}",
-                    waitForExit: true);
+                // Arrange the NuGet.Config file
+                config.Settings.AddSource("mockSource", $"{server.Uri}v3/index.json", allowInsecureConnectionsValue: "true");
 
                 string index = $@"
                 {{
@@ -458,7 +460,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     nugetexe,
                     config.WorkingDirectory,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 server.Stop();
 
@@ -481,11 +483,8 @@ namespace NuGet.CommandLine.FuncTest.Commands
             using (MockServer server = new MockServer())
             using (SimpleTestPathContext config = new SimpleTestPathContext())
             {
-                CommandRunner.Run(
-                    nugetexe,
-                    config.WorkingDirectory,
-                    $"source add -name mockSource -source {server.Uri}v3/index.json -configfile {config.NuGetConfig}",
-                    waitForExit: true);
+                // Arrange the NuGet.Config file
+                config.Settings.AddSource("mockSource", $"{server.Uri}v3/index.json", allowInsecureConnectionsValue: "true");
 
                 string index = $@"
                 {{
@@ -627,7 +626,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     nugetexe,
                     config.WorkingDirectory,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 server.Stop();
 
@@ -646,11 +645,8 @@ namespace NuGet.CommandLine.FuncTest.Commands
             using (MockServer server = new MockServer())
             using (SimpleTestPathContext config = new SimpleTestPathContext())
             {
-                CommandRunner.Run(
-                    nugetexe,
-                    config.WorkingDirectory,
-                    $"source add -name mockSource -source {server.Uri}v3/index.json -configfile {config.NuGetConfig}",
-                    waitForExit: true);
+                // Arrange the NuGet.Config file
+                config.Settings.AddSource("mockSource", $"{server.Uri}v3/index.json", allowInsecureConnectionsValue: "true");
 
                 string index = $@"
                 {{
@@ -740,7 +736,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     nugetexe,
                     config.WorkingDirectory,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 server.Stop();
 
@@ -759,11 +755,8 @@ namespace NuGet.CommandLine.FuncTest.Commands
             using (MockServer server = new MockServer())
             using (SimpleTestPathContext config = new SimpleTestPathContext())
             {
-                CommandRunner.Run(
-                    nugetexe,
-                    config.WorkingDirectory,
-                    $"source add -name mockSource -source {server.Uri}v3/index.json -configfile {config.NuGetConfig}",
-                    waitForExit: true);
+                // Arrange the NuGet.Config file
+                config.Settings.AddSource("mockSource", $"{server.Uri}v3/index.json", allowInsecureConnectionsValue: "true");
 
                 string index = $@"
                 {{
@@ -853,7 +846,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     nugetexe,
                     config.WorkingDirectory,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 server.Stop();
 
@@ -872,11 +865,8 @@ namespace NuGet.CommandLine.FuncTest.Commands
             using (MockServer server = new MockServer())
             using (SimpleTestPathContext config = new SimpleTestPathContext())
             {
-                CommandRunner.Run(
-                    nugetexe,
-                    config.WorkingDirectory,
-                    $"source add -name mockSource -source {server.Uri}v3/index.json -configfile {config.NuGetConfig}",
-                    waitForExit: true);
+                // Arrange the NuGet.Config file
+                config.Settings.AddSource("mockSource", $"{server.Uri}v3/index.json", allowInsecureConnectionsValue: "true");
 
                 string index = $@"
                 {{
@@ -925,7 +915,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
                     nugetexe,
                     config.WorkingDirectory,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 server.Stop();
 
@@ -937,19 +927,15 @@ namespace NuGet.CommandLine.FuncTest.Commands
         }
 
         [Fact]
-        public void SearchCommand_WhenSearchWithHttpSource_Warns()
+        public void SearchCommand_WhenSearchWithHttpSource_DisplaysAnErrorMessage()
         {
             // Arrange
             string nugetexe = Util.GetNuGetExePath();
 
             using MockServer server = new MockServer();
+            PackageSource source = new PackageSource(server.Uri + "v3/index.json", "mockSource");
             using SimpleTestPathContext config = new SimpleTestPathContext();
-            CommandRunner.Run(
-                nugetexe,
-                config.WorkingDirectory,
-                $"source add -name mockSource -source {server.Uri}v3/index.json -configfile {config.NuGetConfig}",
-                waitForExit: true);
-
+            config.Settings.AddSource("mockSource", $"{server.Uri}v3/index.json");
             string index = $@"
                 {{
                     ""version"": ""3.0.0"",
@@ -983,7 +969,7 @@ namespace NuGet.CommandLine.FuncTest.Commands
                 }}";
 
             server.Get.Add("/search/query?q=json&skip=0&take=20&prerelease=false&semVerLevel=2.0.0", r => queryResult);
-
+            string expectedErrorMessage = string.Format(NuGetResources.Error_HttpSource_Single, "search", source);
             server.Start();
 
             // Act
@@ -997,37 +983,33 @@ namespace NuGet.CommandLine.FuncTest.Commands
                 nugetexe,
                 config.WorkingDirectory,
                 string.Join(" ", args),
-                waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
             server.Stop();
 
             // Assert
-            Assert.True(result.Success, $"{result.AllOutput}");
-            Assert.Contains("No results found.", $"{result.AllOutput}");
-            Assert.DoesNotContain(">", $"{result.AllOutput}");
-            Assert.Contains("WARNING: You are running the 'search' operation with an 'HTTP' source", result.AllOutput);
+            Assert.False(result.Success);
+            Assert.Contains(expectedErrorMessage, result.AllOutput);
         }
 
-        [Fact]
-        public void SearchCommand_WhenSearchWithHttpSources_Warns()
+        [Theory]
+        [InlineData("true", false)]
+        [InlineData("false", true)]
+        public void SearchCommand_WhenSearchWithHttpSourcesWithAllowInsecureConnections_DisplaysErrorCorrectly(string allowInsecureConnections, bool isHttpWarningExpected)
         {
             // Arrange
             string nugetexe = Util.GetNuGetExePath();
 
             using MockServer server1 = new MockServer();
+            PackageSource source1 = new PackageSource(server1.Uri + "v3/index.json", "http-feed1");
             using MockServer server2 = new MockServer();
+            PackageSource source2 = new PackageSource(server2.Uri + "v3/index.json", "http-feed2");
+            List<PackageSource> sources = new List<PackageSource>() { source1, source2 };
             using SimpleTestPathContext config = new SimpleTestPathContext();
-            CommandRunner.Run(
-                nugetexe,
-                config.WorkingDirectory,
-                $"source add -name mockSource -source {server1.Uri}v3/index.json -configfile {config.NuGetConfig}",
-                waitForExit: true);
 
-            CommandRunner.Run(
-                nugetexe,
-                config.WorkingDirectory,
-                $"source add -name mockSource -source {server2.Uri}v3/index.json -configfile {config.NuGetConfig}",
-                waitForExit: true);
+            // Arrange the NuGet.Config file
+            config.Settings.AddSource("http-feed1", $"{server1.Uri}v3/index.json", allowInsecureConnectionsValue: allowInsecureConnections);
+            config.Settings.AddSource("http-feed2", $"{server2.Uri}v3/index.json", allowInsecureConnectionsValue: allowInsecureConnections);
 
             string index = $@"
                 {{
@@ -1105,22 +1087,32 @@ namespace NuGet.CommandLine.FuncTest.Commands
             {
                 "search",
                 "json",
+                ""
             };
 
             CommandRunnerResult result = CommandRunner.Run(
                 nugetexe,
                 config.WorkingDirectory,
                 string.Join(" ", args),
-                waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
             server1.Stop();
             server2.Stop();
 
             // Assert
-            Assert.True(result.Success, $"{result.AllOutput}");
-            Assert.Contains("No results found.", $"{result.AllOutput}");
-            Assert.DoesNotContain(">", $"{result.AllOutput}");
-            Assert.Contains("WARNING: You are running the 'search' operation with an 'HTTP' source", result.AllOutput);
+            string expectedError = string.Format(CultureInfo.CurrentCulture, NuGetResources.Error_HttpSources_Multiple, "search", Environment.NewLine + string.Join(Environment.NewLine, sources.Select(e => e.Name)));
+
+            if (isHttpWarningExpected)
+            {
+                Assert.False(result.Success);
+                Assert.Contains(expectedError, result.AllOutput);
+            }
+            else
+            {
+                Assert.True(result.Success);
+                Assert.Contains("No results found.", $"{result.AllOutput}");
+                Assert.DoesNotContain(expectedError, result.AllOutput);
+            }
         }
     }
 }

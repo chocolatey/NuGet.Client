@@ -62,12 +62,13 @@ namespace NuGet.Commands
             }
 
             var newPackageSource = new Configuration.PackageSource(args.Source, args.Name);
+            newPackageSource.AllowInsecureConnections = args.AllowInsecureConnections;
 
-            if (newPackageSource.IsHttp && !newPackageSource.IsHttps)
+            if (newPackageSource.IsHttp && !newPackageSource.IsHttps && !newPackageSource.AllowInsecureConnections)
             {
-                getLogger().LogWarning(
+                throw new ArgumentException(
                     string.Format(CultureInfo.CurrentCulture,
-                        Strings.Warning_HttpServerUsage,
+                        Strings.Error_HttpSource_Single_Short,
                         "add source",
                         args.Source));
             }
@@ -81,6 +82,11 @@ namespace NuGet.Commands
                     args.StorePasswordInClearText,
                     args.ValidAuthenticationTypes);
                 newPackageSource.Credentials = credentials;
+            }
+
+            if (!newPackageSource.IsLocal && !string.IsNullOrEmpty(args.ProtocolVersion))
+            {
+                newPackageSource.ProtocolVersion = RunnerHelper.ParseProtocolVersion(args.ProtocolVersion);
             }
 
             sourceProvider.AddPackageSource(newPackageSource);
@@ -182,8 +188,6 @@ namespace NuGet.Commands
                             legend += " ";
                             getLogger().LogMinimal(legend + source.Source);
                         }
-
-                        WarnForHttpSources(sourcesList, getLogger);
                     }
                     break;
                 case SourcesListFormat.None:
@@ -197,7 +201,7 @@ namespace NuGet.Commands
             List<PackageSource> httpPackageSources = null;
             foreach (PackageSource packageSource in sources)
             {
-                if (packageSource.IsHttp && !packageSource.IsHttps)
+                if (packageSource.IsHttp && !packageSource.IsHttps && !packageSource.AllowInsecureConnections)
                 {
                     if (httpPackageSources == null)
                     {
@@ -213,16 +217,14 @@ namespace NuGet.Commands
                 {
                     getLogger().LogWarning(
                     string.Format(CultureInfo.CurrentCulture,
-                        Strings.Warning_HttpServerUsage,
-                        "list source",
+                        Strings.Warning_List_HttpSource,
                         httpPackageSources[0]));
                 }
                 else
                 {
                     getLogger().LogWarning(
                             string.Format(CultureInfo.CurrentCulture,
-                            Strings.Warning_HttpServerUsage_MultipleSources,
-                            "list source",
+                            Strings.Warning_List_HttpSources,
                             Environment.NewLine + string.Join(Environment.NewLine, httpPackageSources.Select(e => e.Name))));
                 }
             }
@@ -257,6 +259,7 @@ namespace NuGet.Commands
             var sourceProvider = RunnerHelper.GetSourceProvider(settings);
 
             var existingSource = sourceProvider.GetPackageSourceByName(args.Name);
+            existingSource.AllowInsecureConnections = args.AllowInsecureConnections;
             if (existingSource == null)
             {
                 throw new CommandException(Strings.SourcesCommandNoMatchingSourcesFound, args.Name);
@@ -277,11 +280,12 @@ namespace NuGet.Commands
                 }
 
                 existingSource = new Configuration.PackageSource(args.Source, existingSource.Name);
+                existingSource.AllowInsecureConnections = args.AllowInsecureConnections;
 
-                // If the existing source is not http, warn the user
-                if (existingSource.IsHttp && !existingSource.IsHttps)
+                // If the new source is not http, throw an error
+                if (existingSource.IsHttp && !existingSource.IsHttps && !existingSource.AllowInsecureConnections)
                 {
-                    getLogger().LogWarning(string.Format(CultureInfo.CurrentCulture, Strings.Warning_HttpServerUsage, "update source", args.Source));
+                    throw new ArgumentException(string.Format(CultureInfo.CurrentCulture, Strings.Error_HttpSource_Single, "update source", args.Source));
                 }
             }
 
@@ -303,6 +307,11 @@ namespace NuGet.Commands
                     args.StorePasswordInClearText,
                     args.ValidAuthenticationTypes);
                 existingSource.Credentials = credentials;
+            }
+
+            if (!existingSource.IsLocal && !string.IsNullOrEmpty(args.ProtocolVersion))
+            {
+                existingSource.ProtocolVersion = RunnerHelper.ParseProtocolVersion(args.ProtocolVersion);
             }
 
             sourceProvider.UpdatePackageSource(existingSource, updateCredentials: existingSource.Credentials != null, updateEnabled: false);
@@ -368,9 +377,9 @@ namespace NuGet.Commands
             {
                 getLogger().LogMinimal(string.Format(CultureInfo.CurrentCulture,
                     Strings.SourcesCommandSourceEnabledSuccessfully, name));
-                if (packageSource.IsHttp && !packageSource.IsHttps)
+                if (packageSource.IsHttp && !packageSource.IsHttps && !packageSource.AllowInsecureConnections)
                 {
-                    getLogger().LogWarning(string.Format(CultureInfo.CurrentCulture, Strings.Warning_HttpServerUsage, "enable source", packageSource.Source));
+                    throw new ArgumentException(string.Format(CultureInfo.CurrentCulture, Strings.Error_HttpSource_Single, "enable source", packageSource.Source));
                 }
             }
             else
@@ -397,6 +406,23 @@ namespace NuGet.Commands
                 // can't specify auth types without credentials
                 throw new CommandException(Strings.SourcesCommandCredentialsRequiredWithAuthTypes);
             }
+        }
+
+        public static int ParseProtocolVersion(string protocolVersionString)
+        {
+            var minSupportedProtocolVersion = PackageSource.DefaultProtocolVersion;
+            var maxSupportedProtocolVersion = PackageSource.MaxProtocolVersion;
+
+            if (int.TryParse(protocolVersionString, out var protocolVersion))
+            {
+                if (protocolVersion >= minSupportedProtocolVersion && protocolVersion <= maxSupportedProtocolVersion)
+                {
+                    return protocolVersion;
+                }
+            }
+
+            // specified protocol version is invalid
+            throw new CommandException(string.Format(Strings.SourcesCommandValidProtocolVersion, minSupportedProtocolVersion, maxSupportedProtocolVersion));
         }
     }
 }

@@ -13,10 +13,11 @@ using NuGet.Configuration;
 using NuGet.Protocol;
 using NuGet.Protocol.Plugins;
 using NuGet.Test.Utility;
-using NuGet.Versioning;
 
 namespace NuGet.Credentials.Test
 {
+    using SemanticVersion = Versioning.SemanticVersion;
+
     internal sealed class TestExpectation
     {
         internal IEnumerable<OperationClaim> OperationClaims { get; }
@@ -32,6 +33,7 @@ namespace NuGet.Credentials.Test
         public string ProxyPassword { get; }
         public bool PluginLaunched { get; }
         public bool CanShowDialog { get; }
+        public bool MessageCodeNotFound { get; }
 
         internal TestExpectation(
             IEnumerable<OperationClaim> operationClaims,
@@ -44,7 +46,8 @@ namespace NuGet.Credentials.Test
             string proxyUsername = null,
             string proxyPassword = null,
             bool pluginLaunched = true,
-            bool canShowDialog = true)
+            bool canShowDialog = true,
+            bool messageCodeNotFound = false)
         {
             OperationClaims = operationClaims;
             ClientConnectionOptions = connectionOptions;
@@ -57,6 +60,7 @@ namespace NuGet.Credentials.Test
             ProxyUsername = proxyUsername;
             PluginLaunched = pluginLaunched;
             CanShowDialog = canShowDialog;
+            MessageCodeNotFound = messageCodeNotFound;
         }
     }
 
@@ -64,7 +68,7 @@ namespace NuGet.Credentials.Test
     {
         private readonly Mock<IConnection> _connection;
         private readonly TestExpectation _expectations;
-        private readonly Mock<IPluginFactory> _factory;
+        private readonly Mock<PluginFactory> _factory;
         private readonly Mock<IPlugin> _plugin;
         private readonly Mock<IPluginDiscoverer> _pluginDiscoverer;
         private readonly Mock<IEnvironmentVariableReader> _reader;
@@ -95,7 +99,7 @@ namespace NuGet.Credentials.Test
             _plugin = new Mock<IPlugin>(MockBehavior.Strict);
             EnsurePluginSetupCalls();
 
-            _factory = new Mock<IPluginFactory>(MockBehavior.Strict);
+            _factory = new Mock<PluginFactory>(MockBehavior.Strict);
             EnsureFactorySetupCalls(pluginFilePath);
 
             // Setup connection
@@ -138,6 +142,21 @@ namespace NuGet.Credentials.Test
                         It.Is<GetAuthenticationCredentialsRequest>(e => e.Uri.Equals(expectations.Uri) && e.CanShowDialog.Equals(expectations.CanShowDialog)),
                         It.IsAny<CancellationToken>()))
                     .ReturnsAsync(new GetAuthenticationCredentialsResponse(expectations.AuthenticationUsername, expectations.AuthenticationPassword, message: null, authenticationTypes: null, responseCode: MessageResponseCode.Success));
+            }
+
+            if (_expectations.MessageCodeNotFound)
+            {
+                _connection.Setup(x => x.SendRequestAndReceiveResponseAsync<SetLogLevelRequest, SetLogLevelResponse>(
+                        It.Is<MessageMethod>(m => m == MessageMethod.SetLogLevel),
+                        It.IsAny<SetLogLevelRequest>(),
+                        It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new SetLogLevelResponse(MessageResponseCode.Success));
+
+                _connection.Setup(x => x.SendRequestAndReceiveResponseAsync<GetAuthenticationCredentialsRequest, GetAuthenticationCredentialsResponse>(
+                        It.Is<MessageMethod>(m => m == MessageMethod.GetAuthenticationCredentials),
+                        It.Is<GetAuthenticationCredentialsRequest>(e => e.Uri.Equals(expectations.Uri) && e.CanShowDialog.Equals(expectations.CanShowDialog)),
+                        It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new GetAuthenticationCredentialsResponse(expectations.AuthenticationUsername, expectations.AuthenticationPassword, message: null, authenticationTypes: null, responseCode: MessageResponseCode.NotFound));
             }
 
             PluginManager = new PluginManager(
@@ -262,7 +281,7 @@ namespace NuGet.Credentials.Test
         {
             _factory.Setup(x => x.Dispose());
             _factory.Setup(x => x.GetOrCreateAsync(
-                    It.Is<string>(p => p == pluginFilePath),
+                    It.Is<PluginFile>(p => p.Path == pluginFilePath),
                     It.IsNotNull<IEnumerable<string>>(),
                     It.IsNotNull<IRequestHandlers>(),
                     It.IsNotNull<ConnectionOptions>(),

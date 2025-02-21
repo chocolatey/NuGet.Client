@@ -10,7 +10,7 @@ namespace NuGet.Common.Migrations
 {
     internal static class Migration1
     {
-        public static void Run()
+        public static void Run(IEnvironmentVariableReader environmentVariableReader)
         {
             if (RuntimeEnvironmentHelper.IsWindows)
             {
@@ -26,10 +26,10 @@ namespace NuGet.Common.Migrations
             DeleteMigratedDirectories(nugetBaseDirectory: nugetPath);
 
             PosixPermissions umask = GetUmask();
-            HashSet<string> pathsToCheck = GetPathsToCheck();
+            HashSet<string> pathsToCheck = GetPathsToCheck(environmentVariableReader);
             EnsureExpectedPermissions(pathsToCheck: pathsToCheck, umask: umask);
 
-            EnsureConfigFilePermissions();
+            EnsureConfigFilePermissions(environmentVariableReader);
         }
 
         internal static void DeleteMigratedDirectories(string nugetBaseDirectory)
@@ -55,7 +55,7 @@ namespace NuGet.Common.Migrations
             }
         }
 
-        private static HashSet<string> GetPathsToCheck()
+        private static HashSet<string> GetPathsToCheck(IEnvironmentVariableReader environmentVariableReader)
         {
             HashSet<string> pathsToCheck = new HashSet<string>();
             var homePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -63,11 +63,14 @@ namespace NuGet.Common.Migrations
             // NuGetEnvironment.GetFolderPath(SpecialFolder.LocalApplicationData) is private, so we'll get the parent of the HTTP cache.
             var httpCachePath = NuGetEnvironment.GetFolderPath(NuGetFolderPath.HttpCacheDirectory);
             var nugetLocalAppDataPath = Path.GetDirectoryName(httpCachePath);
-            AddAllParentDirectoriesUpToHome(nugetLocalAppDataPath);
+            if (nugetLocalAppDataPath is not null)
+            {
+                AddAllParentDirectoriesUpToHome(nugetLocalAppDataPath);
+            }
 
             // We could be running in either mono or .NET (Core), and they use different paths for NuGetFolderPath.UserSettingsDirectory
             // So, we need to duplicate both of their path generation code to check both locations
-            var monoConfigHome = GetMonoConfigPath();
+            var monoConfigHome = GetMonoConfigPath(environmentVariableReader);
             AddAllParentDirectoriesUpToHome(monoConfigHome);
 
             var dotnetConfigHome = GetDotnetConfigPath();
@@ -86,8 +89,8 @@ namespace NuGet.Common.Migrations
                     return;
                 }
 
-                string parent = Path.GetDirectoryName(path);
-                while (parent != homePath)
+                string? parent = Path.GetDirectoryName(path);
+                while (parent is not null && parent != homePath)
                 {
                     pathsToCheck.Add(parent);
                     parent = Path.GetDirectoryName(parent);
@@ -95,9 +98,9 @@ namespace NuGet.Common.Migrations
             }
         }
 
-        private static string GetMonoConfigPath()
+        private static string GetMonoConfigPath(IEnvironmentVariableReader environmentVariableReader)
         {
-            string xdgConfigHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+            string? xdgConfigHome = environmentVariableReader.GetEnvironmentVariable("XDG_CONFIG_HOME");
             if (string.IsNullOrEmpty(xdgConfigHome))
             {
                 var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -115,14 +118,14 @@ namespace NuGet.Common.Migrations
             return Path.Combine(home, ".nuget", "NuGet");
         }
 
-        private static void EnsureConfigFilePermissions()
+        private static void EnsureConfigFilePermissions(IEnvironmentVariableReader environmentVariableReader)
         {
             // We want the file to be user readable only
             PosixPermissions umask = PosixPermissions.Parse("077");
 
             // We could be running in either mono or .NET (Core), and they use different paths for NuGetFolderPath.UserSettingsDirectory
             // So, we need to duplicate both of their path generation code to check both locations
-            EnsureConfigFilePermissions(GetMonoConfigPath(), umask);
+            EnsureConfigFilePermissions(GetMonoConfigPath(environmentVariableReader), umask);
             EnsureConfigFilePermissions(GetDotnetConfigPath(), umask);
         }
 
@@ -142,7 +145,7 @@ namespace NuGet.Common.Migrations
         private static PosixPermissions GetUmask()
         {
             var output = Exec("sh", "-c umask");
-            PosixPermissions umask = PosixPermissions.Parse(output);
+            PosixPermissions umask = PosixPermissions.Parse(output!);
             return umask;
         }
 
@@ -164,7 +167,7 @@ namespace NuGet.Common.Migrations
 
         internal static PosixPermissions? GetPermissions(string path)
         {
-            string output = Exec("ls", "-ld " + path.FormatWithDoubleQuotes());
+            string? output = Exec("ls", "-ld " + path.FormatWithDoubleQuotes());
             if (output == null)
             {
                 return null;
@@ -185,7 +188,7 @@ namespace NuGet.Common.Migrations
             return new PosixPermissions(permissions);
         }
 
-        internal static string Exec(string command, string args)
+        internal static string? Exec(string command, string args)
         {
             ProcessStartInfo startInfo = new ProcessStartInfo(command)
             {
@@ -207,7 +210,7 @@ namespace NuGet.Common.Migrations
                     return null;
                 }
 
-                string output = proc.StandardOutput.ReadLine();
+                string? output = proc.StandardOutput.ReadLine();
                 return output;
             }
         }

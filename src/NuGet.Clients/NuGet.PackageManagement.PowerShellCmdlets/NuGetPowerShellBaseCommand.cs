@@ -16,7 +16,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using EnvDTE;
-using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Threading;
 using NuGet.Commands;
@@ -32,7 +31,6 @@ using NuGet.Protocol.Core.Types;
 using NuGet.Versioning;
 using NuGet.VisualStudio;
 using NuGet.VisualStudio.Common.Telemetry.PowerShell;
-using NuGetConsole.Host.PowerShell;
 using ExecutionContext = NuGet.ProjectManagement.ExecutionContext;
 
 namespace NuGet.PackageManagement.PowerShellCmdlets
@@ -384,7 +382,6 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
         {
             var packageSource = new PackageSource(source);
             var repository = _sourceRepositoryProvider.CreateRepository(packageSource);
-            var resource = repository.GetResource<PackageSearchResource>();
 
             return repository;
         }

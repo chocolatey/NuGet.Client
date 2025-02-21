@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections.Generic;
 using NuGet.Common;
 using NuGet.Shared;
 
@@ -22,7 +21,7 @@ namespace NuGet.LibraryModel
             PrivateAssets = privateAssets;
         }
 
-        public int CompareTo(FrameworkDependency other)
+        public int CompareTo(FrameworkDependency? other)
         {
             if (ReferenceEquals(other, null))
             {
@@ -33,13 +32,15 @@ namespace NuGet.LibraryModel
 
             if (compare == 0)
             {
-                return PrivateAssets.CompareTo(other.PrivateAssets);
+                int thisPrivateAssets = (int)PrivateAssets;
+                int otherPrivateAssets = (int)other.PrivateAssets;
+                return thisPrivateAssets.CompareTo(otherPrivateAssets);
             }
 
             return compare;
         }
 
-        public bool Equals(FrameworkDependency other)
+        public bool Equals(FrameworkDependency? other)
         {
             if (other == null)
             {
@@ -52,7 +53,7 @@ namespace NuGet.LibraryModel
             }
 
             return ComparisonUtility.FrameworkReferenceNameComparer.Equals(Name, other.Name) &&
-                   PrivateAssets.Equals(other.PrivateAssets);
+                   PrivateAssets == other.PrivateAssets;
         }
 
         public override int GetHashCode()

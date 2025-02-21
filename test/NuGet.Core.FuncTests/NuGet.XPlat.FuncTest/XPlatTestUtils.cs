@@ -11,13 +11,11 @@ using System.Xml.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NuGet.CommandLine.XPlat;
-using NuGet.Commands;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Packaging.Core;
 using NuGet.ProjectModel;
 using NuGet.Test.Utility;
-using NuGet.Versioning;
 
 namespace NuGet.XPlat.FuncTest
 {
@@ -209,19 +207,16 @@ namespace NuGet.XPlat.FuncTest
             return package;
         }
 
-        internal static PackageReferenceArgs GetPackageReferenceArgs(string packageId, SimpleTestProjectContext project)
+        internal static PackageReferenceArgs GetPackageReferenceArgs(TestCommandOutputLogger logger, string packageId, SimpleTestProjectContext project)
         {
-            var logger = new TestCommandOutputLogger();
             return new PackageReferenceArgs(project.ProjectPath, logger)
             {
                 PackageId = packageId
             };
         }
 
-        internal static PackageReferenceArgs GetPackageReferenceArgs(string packageId, string packageVersion, SimpleTestProjectContext project,
-            string frameworks = "", string packageDirectory = "", string sources = "", bool noRestore = false, bool noVersion = false, bool prerelease = false)
+        internal static PackageReferenceArgs GetPackageReferenceArgs(TestCommandOutputLogger logger, string packageId, string packageVersion, SimpleTestProjectContext project, string frameworks = "", string packageDirectory = "", string sources = "", bool noRestore = false, bool noVersion = false, bool prerelease = false)
         {
-            var logger = new TestCommandOutputLogger();
             var dgFilePath = string.Empty;
             if (!noRestore)
             {
@@ -335,11 +330,10 @@ namespace NuGet.XPlat.FuncTest
         {
             var itemGroups = root.Descendants("ItemGroup");
             return itemGroups
-                    .Where(i => i.Descendants(GetReferenceType(packageType)).Any() &&
-                                i.FirstAttribute != null &&
-                                i.FirstAttribute.Name.LocalName.Equals("Condition", StringComparison.OrdinalIgnoreCase) &&
-                                i.FirstAttribute.Value.Trim().Equals(GetTargetFrameworkCondition(framework), StringComparison.OrdinalIgnoreCase))
-                     .First();
+                .First(i => i.Descendants(GetReferenceType(packageType)).Any() &&
+                            i.FirstAttribute != null &&
+                            i.FirstAttribute.Name.LocalName.Equals("Condition", StringComparison.OrdinalIgnoreCase) &&
+                            i.FirstAttribute.Value.Trim().Equals(GetTargetFrameworkCondition(framework), StringComparison.OrdinalIgnoreCase));
         }
 
         public static XElement GetItemGroupForAllFrameworks(XElement root, PackageType packageType = null)
@@ -350,10 +344,10 @@ namespace NuGet.XPlat.FuncTest
             {
                 var x = i.Descendants(referenceType);
             }
+
             return itemGroups
-                    .Where(i => i.Descendants(referenceType).Any() &&
-                                i.FirstAttribute == null)
-                     .First();
+                .First(i => i.Descendants(referenceType).Any() &&
+                            i.FirstAttribute == null);
         }
 
         public static bool ValidateTwoReferences(XElement root, SimpleTestPackageContext packageX, SimpleTestPackageContext packageY)

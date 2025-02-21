@@ -6,16 +6,24 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using NuGet.Common;
-using NuGet.Test.Utility;
-using Xunit;
+using Xunit.Abstractions;
 
 namespace Msbuild.Integration.Test
 {
     public class MsbuildIntegrationTestFixture : IDisposable
     {
-        internal readonly string _testDir;
-        private readonly Dictionary<string, string> _processEnvVars = new Dictionary<string, string>();
+        internal readonly string _testDir = Directory.GetCurrentDirectory();
+
+        private readonly Dictionary<string, string> _processEnvVars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["DOTNET_MULTILEVEL_LOOKUP"] = "0",
+            // Uncomment to debug the msbuild call
+            //["DEBUG_RESTORE_TASK"] = bool.TrueString,
+            ["UNIT_TEST_RESTORE_TASK"] = bool.TrueString,
+        };
+
         private readonly Lazy<string> _msbuildPath = new Lazy<string>(() =>
             {
                 string msbuildPath = FindMsbuildOnPath();
@@ -38,10 +46,9 @@ namespace Msbuild.Integration.Test
                     try
                     {
                         var result = CommandRunner.Run(
-                            process: msbuild,
+                            filename: msbuild,
                             workingDirectory: Environment.CurrentDirectory,
-                            arguments: "-help",
-                            waitForExit: true);
+                            arguments: "-help");
                         if (result.Success)
                         {
                             return msbuild;
@@ -59,10 +66,9 @@ namespace Msbuild.Integration.Test
                 {
                     string vswherePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft Visual Studio", "Installer", "vswhere.exe");
 
-                    CommandRunnerResult result = CommandRunner.Run(process: vswherePath,
+                    CommandRunnerResult result = CommandRunner.Run(filename: vswherePath,
                         workingDirectory: Environment.CurrentDirectory,
-                        arguments: "-latest -prerelease -requires Microsoft.Component.MSBuild -find MSBuild\\**\\Bin\\MSBuild.exe",
-                        waitForExit: true);
+                        arguments: "-latest -prerelease -requires Microsoft.Component.MSBuild -find MSBuild\\**\\Bin\\MSBuild.exe");
 
                     if (!result.Success)
                     {
@@ -87,29 +93,20 @@ namespace Msbuild.Integration.Test
                 }
             });
 
-        public MsbuildIntegrationTestFixture()
-        {
-            _testDir = Directory.GetCurrentDirectory();
-            _processEnvVars.Add("UseSharedCompilation", "false");
-            _processEnvVars.Add("DOTNET_MULTILEVEL_LOOKUP", "0");
-            _processEnvVars.Add("MSBUILDDISABLENODEREUSE ", "true");
-        }
-
         /// <summary>
         /// msbuild.exe args
         /// </summary>
-        internal CommandRunnerResult RunMsBuild(string workingDirectory, string args, bool ignoreExitCode = false)
+        internal CommandRunnerResult RunMsBuild(string workingDirectory, string args, bool ignoreExitCode = false, ITestOutputHelper testOutputHelper = null)
         {
             var restoreDllPath = Path.Combine(_testDir, "NuGet.Build.Tasks.dll");
+            var nugetRestorePropsPath = Path.Combine(_testDir, "NuGet.props");
             var nugetRestoreTargetsPath = Path.Combine(_testDir, "NuGet.targets");
-            // Uncomment to debug the msbuild call
-            // _processEnvVars.Add("DEBUG_RESTORE_TASK", "true");
-            _processEnvVars["UNIT_TEST_RESTORE_TASK"] = bool.TrueString;
+
             var result = CommandRunner.Run(_msbuildPath.Value,
                 workingDirectory,
-                $"/p:NuGetRestoreTargets={nugetRestoreTargetsPath} /p:RestoreTaskAssemblyFile={restoreDllPath} /p:ImportNuGetBuildTasksPackTargetsFromSdk=true {args}",
-                waitForExit: true,
-                environmentVariables: _processEnvVars);
+                $"/p:NuGetPropsFile={nugetRestorePropsPath} /p:NuGetRestoreTargets={nugetRestoreTargetsPath} /p:RestoreTaskAssemblyFile={restoreDllPath} /p:ImportNuGetBuildTasksPackTargetsFromSdk=true {args}",
+                environmentVariables: _processEnvVars,
+                testOutputHelper: testOutputHelper);
 
             if (!ignoreExitCode)
             {

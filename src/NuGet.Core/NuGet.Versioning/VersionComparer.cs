@@ -12,6 +12,23 @@ namespace NuGet.Versioning
     /// </summary>
     public sealed class VersionComparer : IVersionComparer
     {
+        /// <summary>
+        /// Gets an IVersionComparer based on the specified VersionComparison mode.
+        /// </summary>
+        /// <param name="versionComparison">The version comparison mode to use.</param>
+        /// <returns>An IVersionComparer instance.</returns>
+        public static IVersionComparer Get(VersionComparison versionComparison)
+        {
+            return versionComparison switch
+            {
+                VersionComparison.Default => Default,
+                VersionComparison.Version => Version,
+                VersionComparison.VersionRelease => VersionRelease,
+                VersionComparison.VersionReleaseMetadata => VersionReleaseMetadata,
+                _ => new VersionComparer(versionComparison)
+            };
+        }
+
         private readonly VersionComparison _mode;
 
         /// <summary>
@@ -34,7 +51,7 @@ namespace NuGet.Versioning
         /// <summary>
         /// Determines if both versions are equal.
         /// </summary>
-        public bool Equals(SemanticVersion x, SemanticVersion y)
+        public bool Equals(SemanticVersion? x, SemanticVersion? y)
         {
             if (ReferenceEquals(x, y))
             {
@@ -68,10 +85,13 @@ namespace NuGet.Versioning
         /// <summary>
         /// Compares the given versions using the VersionComparison mode.
         /// </summary>
-        public static int Compare(SemanticVersion version1, SemanticVersion version2, VersionComparison versionComparison)
+        public static int Compare(SemanticVersion? version1, SemanticVersion? version2, VersionComparison versionComparison)
         {
-            IVersionComparer comparer = new VersionComparer(versionComparison);
+            IVersionComparer comparer = VersionComparer.Get(versionComparison);
+#pragma warning disable CS8604 // Possible null reference argument.
+            // The BCL is missing nullable annotations on IComparable<T> before net5.0
             return comparer.Compare(version1, version2);
+#pragma warning restore CS8604 // Possible null reference argument.
         }
 
         /// <summary>
@@ -124,7 +144,7 @@ namespace NuGet.Versioning
         /// <summary>
         /// Compare versions.
         /// </summary>
-        public int Compare(SemanticVersion x, SemanticVersion y)
+        public int Compare(SemanticVersion? x, SemanticVersion? y)
         {
             if (ReferenceEquals(x, y))
             {
@@ -214,7 +234,7 @@ namespace NuGet.Versioning
         /// <summary>
         /// Compares the 4th digit of the version number.
         /// </summary>
-        private static int CompareLegacyVersion(NuGetVersion legacyX, NuGetVersion legacyY)
+        private static int CompareLegacyVersion(NuGetVersion? legacyX, NuGetVersion? legacyY)
         {
             var result = 0;
 
@@ -337,9 +357,9 @@ namespace NuGet.Versioning
         /// <summary>
         /// Returns an array of release labels from the version, or null.
         /// </summary>
-        private static string[] GetReleaseLabelsOrNull(SemanticVersion version)
+        private static string[]? GetReleaseLabelsOrNull(SemanticVersion version)
         {
-            string[] labels = null;
+            string[]? labels = null;
 
             // Check if labels exist
             if (version.IsPrerelease)

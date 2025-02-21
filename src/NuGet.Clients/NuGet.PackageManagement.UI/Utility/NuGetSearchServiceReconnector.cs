@@ -103,15 +103,20 @@ namespace NuGet.PackageManagement.UI.Utility
             _service?.Dispose();
         }
 
-        public IReconnectingNuGetSearchService Object => _object;
+        public INuGetSearchService Object => _object;
 
-        private class ManagedNuGetSearchService : IReconnectingNuGetSearchService
+        private class ManagedNuGetSearchService : INuGetSearchService
         {
             NuGetSearchServiceReconnector _parent;
 
             public ManagedNuGetSearchService(NuGetSearchServiceReconnector service)
             {
                 _parent = service;
+            }
+
+            public void ClearFromCache(string id, IReadOnlyCollection<PackageSourceContextInfo> packageSources, bool includePrerelease)
+            {
+                _parent._service.ClearFromCache(id, packageSources, includePrerelease);
             }
 
             public ValueTask<SearchResultContextInfo> ContinueSearchAsync(CancellationToken cancellationToken)
@@ -124,6 +129,11 @@ namespace NuGet.PackageManagement.UI.Utility
                 // do not dispose `_parent`, it's the responsibility of the object owning the instance.
             }
 
+            public Task<IReadOnlyList<SourceRepository>> GetAllPackageFoldersAsync(IReadOnlyCollection<IProjectContextInfo> projectContextInfos, CancellationToken cancellationToken)
+            {
+                return _parent._service.GetAllPackageFoldersAsync(projectContextInfos, cancellationToken);
+            }
+
             public ValueTask<IReadOnlyCollection<PackageSearchMetadataContextInfo>> GetAllPackagesAsync(
                 IReadOnlyCollection<IProjectContextInfo> projectContextInfos,
                 IReadOnlyCollection<PackageSourceContextInfo> packageSources,
@@ -134,11 +144,6 @@ namespace NuGet.PackageManagement.UI.Utility
                 CancellationToken cancellationToken)
             {
                 return _parent._service.GetAllPackagesAsync(projectContextInfos, packageSources, targetFrameworks, searchFilter, itemFilter, isSolution, cancellationToken);
-            }
-
-            public ValueTask<PackageDeprecationMetadataContextInfo> GetDeprecationMetadataAsync(PackageIdentity identity, IReadOnlyCollection<PackageSourceContextInfo> packageSources, bool includePrerelease, CancellationToken cancellationToken)
-            {
-                return _parent._service.GetDeprecationMetadataAsync(identity, packageSources, includePrerelease, cancellationToken);
             }
 
             public ValueTask<(PackageSearchMetadataContextInfo, PackageDeprecationMetadataContextInfo)> GetPackageMetadataAsync(PackageIdentity identity, IReadOnlyCollection<PackageSourceContextInfo> packageSources, bool includePrerelease, CancellationToken cancellationToken)

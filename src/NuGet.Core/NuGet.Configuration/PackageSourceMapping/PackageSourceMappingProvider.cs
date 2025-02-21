@@ -16,9 +16,26 @@ namespace NuGet.Configuration
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         }
 
+        /// <summary>
+        /// Supports the disabling of saving to disk for any <see cref="ISettings"/> changes.
+        /// </summary>
+        /// <param name="settings">The settings to be used by the provider.</param>
+        /// <param name="shouldSkipSave">True to avoid saving any changes to disk and only modify the <see cref="ISettings"/> in memory.
+        /// Default is false.</param>
+        public PackageSourceMappingProvider(ISettings settings, bool shouldSkipSave)
+            : this(settings)
+        {
+            ShouldSkipSave = shouldSkipSave;
+        }
+
+        /// <summary>
+        /// Avoid saving to disk and only modify the <see cref="ISettings"/> in memory.
+        /// </summary>
+        public bool ShouldSkipSave { get; }
+
         public IReadOnlyList<PackageSourceMappingSourceItem> GetPackageSourceMappingItems()
         {
-            SettingSection packageSourceMappingSection = _settings.GetSection(ConfigurationConstants.PackageSourceMapping);
+            SettingSection? packageSourceMappingSection = _settings.GetSection(ConfigurationConstants.PackageSourceMapping);
             if (packageSourceMappingSection == null)
             {
                 return Enumerable.Empty<PackageSourceMappingSourceItem>().ToList();
@@ -44,7 +61,10 @@ namespace NuGet.Configuration
                 catch { }
             }
 
-            _settings.SaveToDisk();
+            if (!ShouldSkipSave)
+            {
+                _settings.SaveToDisk();
+            }
         }
 
         internal void AddOrUpdatePackageSourceMappingSourceItem(PackageSourceMappingSourceItem packageSourceMappingSourceItem)
@@ -56,7 +76,10 @@ namespace NuGet.Configuration
 
             _settings.AddOrUpdate(ConfigurationConstants.PackageSourceMapping, packageSourceMappingSourceItem);
 
-            _settings.SaveToDisk();
+            if (!ShouldSkipSave)
+            {
+                _settings.SaveToDisk();
+            }
         }
 
         public void SavePackageSourceMappings(IReadOnlyList<PackageSourceMappingSourceItem> packageSourceMappingsSourceItems)

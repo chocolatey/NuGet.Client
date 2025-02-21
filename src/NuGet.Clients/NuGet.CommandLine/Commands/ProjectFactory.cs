@@ -294,12 +294,12 @@ namespace NuGet.CommandLine
             // Only override properties from assembly extracted metadata if they haven't
             // been specified also at construction time for the factory (that is,
             // console properties always take precedence.
-            foreach (var key in builder.Properties.Keys)
+            foreach ((var key, var value) in builder.Properties)
             {
                 if (!_properties.ContainsKey(key) &&
                     !ProjectProperties.ContainsKey(key))
                 {
-                    _properties.Add(key, builder.Properties[key]);
+                    _properties.Add(key, value);
                 }
             }
 
@@ -396,9 +396,9 @@ namespace NuGet.CommandLine
             _properties.Clear();
 
             // Allow Id to be overriden by cmd line properties
-            if (ProjectProperties.ContainsKey("Id"))
+            if (ProjectProperties.TryGetValue("Id", out var id))
             {
-                _properties.Add("Id", ProjectProperties["Id"]);
+                _properties.Add("Id", id);
             }
             else
             {
@@ -761,7 +761,9 @@ namespace NuGet.CommandLine
 
                 projectFactory.InitializeProperties(builder);
 
+#pragma warning disable CS0612 // Type or member is obsolete
                 if (!projectFactory.ProcessJsonFile(builder, project.DirectoryPath, null))
+#pragma warning restore CS0612 // Type or member is obsolete
                 {
                     projectFactory.ProcessNuspec(builder, null);
                 }
@@ -774,9 +776,9 @@ namespace NuGet.CommandLine
                 }
 
                 VersionRange versionRange = null;
-                if (dependencies.ContainsKey(builder.Id))
+                if (dependencies.TryGetValue(builder.Id, out PackageDependency dependency))
                 {
-                    VersionRange nuspecVersion = dependencies[builder.Id].VersionRange;
+                    VersionRange nuspecVersion = dependency.VersionRange;
                     if (nuspecVersion != null)
                     {
                         versionRange = nuspecVersion;
@@ -1084,7 +1086,7 @@ namespace NuGet.CommandLine
             var findLocalPackagesResource = Repository
                 .Factory
                 .GetCoreV3(packagesFolderPath)
-                .GetResource<FindLocalPackagesResource>();
+                .GetResource<FindLocalPackagesResource>(CancellationToken.None);
 
             // Collect all packages
             IDictionary<PackageIdentity, PackageReference> packageReferences =

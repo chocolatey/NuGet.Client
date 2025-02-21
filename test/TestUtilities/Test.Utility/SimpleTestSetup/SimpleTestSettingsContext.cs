@@ -63,6 +63,31 @@ namespace NuGet.Test.Utility
             Save();
         }
 
+        /// <summary>
+        /// Just disable “Automatically check for missing packages during build in Visual Studio” and save the file.
+        /// </summary>
+        public void DisableAutomaticInPackageRestoreSection()
+        {
+            var section = GetOrAddSection(XML, "packageRestore");
+
+            AddEntry(section, "enabled", "True");
+            AddEntry(section, "automatic", "false");
+
+            Save();
+        }
+
+        /// <summary>
+        /// Set default package management format to PackageReference.
+        /// </summary>
+        public void SetPackageFormatToPackageReference()
+        {
+            var section = GetOrAddSection(XML, "packageManagement");
+
+            AddEntry(section, "format", "1");
+            AddEntry(section, "disabled", "False");
+            Save();
+        }
+
         private static XDocument GetDefault(string userPackagesFolder, string packagesV2, string fallbackFolder, string packageSource)
         {
             var doc = GetEmptyConfig();
@@ -87,11 +112,13 @@ namespace NuGet.Test.Utility
 
             var config = GetOrAddSection(doc, "config");
             var packageSources = GetOrAddSection(doc, "packageSources");
+            var auditSources = GetOrAddSection(doc, "auditSources");
             var disabledSources = GetOrAddSection(doc, "disabledPackageSources");
             var fallbackFolders = GetOrAddSection(doc, "fallbackPackageFolders");
             var packageSourceMapping = GetOrAddSection(doc, "packageSourceMapping");
 
             packageSources.Add(new XElement(XName.Get("clear")));
+            auditSources.Add(new XElement(XName.Get("clear")));
             disabledSources.Add(new XElement(XName.Get("clear")));
             packageSourceMapping.Add(new XElement(XName.Get("clear")));
 
@@ -151,6 +178,16 @@ namespace NuGet.Test.Utility
             section.Add(setting);
         }
 
+        public static void AddEntry(XElement section, string key, string value, string additionalAtrributeName, string additionalAttributeValue, string additionalAtrributeName2, string additionalAttributeValue2)
+        {
+            var setting = new XElement(XName.Get("add"));
+            setting.Add(new XAttribute(XName.Get("key"), key));
+            setting.Add(new XAttribute(XName.Get("value"), value));
+            setting.Add(new XAttribute(XName.Get(additionalAtrributeName), additionalAttributeValue));
+            setting.Add(new XAttribute(XName.Get(additionalAtrributeName2), additionalAttributeValue2));
+            section.Add(setting);
+        }
+
         public static void AddSetting(XDocument doc, string key, string value)
         {
             RemoveSetting(doc, key);
@@ -193,10 +230,30 @@ namespace NuGet.Test.Utility
             Save();
         }
 
+        public void RemoveSource(string key)
+        {
+            RemoveSource(XML, key);
+            Save();
+        }
+
         public void AddSource(string sourceName, string sourceUri)
         {
             var section = GetOrAddSection(XML, "packageSources");
             AddEntry(section, sourceName, sourceUri);
+            Save();
+        }
+
+        public void AddSource(string sourceName, string sourceUri, string allowInsecureConnectionsValue)
+        {
+            var section = GetOrAddSection(XML, "packageSources");
+            AddEntry(section, sourceName, sourceUri, "allowInsecureConnections", allowInsecureConnectionsValue);
+            Save();
+        }
+
+        public void AddSource(string sourceName, string sourceUri, string attributeName, string attributeValue)
+        {
+            var section = GetOrAddSection(XML, "packageSources");
+            AddEntry(section, sourceName, sourceUri, attributeName, attributeValue);
             Save();
         }
 

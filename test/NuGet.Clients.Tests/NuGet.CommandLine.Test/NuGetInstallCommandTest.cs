@@ -9,6 +9,7 @@ using System.Net;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using NuGet.Common;
 using NuGet.Configuration.Test;
 using NuGet.Packaging;
@@ -667,7 +668,6 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     workingPath,
                     string.Join(" ", args),
-                    waitForExit: true,
                     environmentVariables: envVars);
 
                 // Assert
@@ -850,6 +850,35 @@ namespace NuGet.CommandLine.Test
 
                 // Assert
                 var alreadyInstalledMessage = "Package \"testPackage1.1.1.0\" is already installed.";
+                Assert.Contains(alreadyInstalledMessage, output, StringComparison.OrdinalIgnoreCase);
+                r.ExitCode.Should().Be(0);
+            }
+        }
+
+        [Fact]
+        public void InstallCommand_ExcludeVersion_HigherVersionAlreadyInstalled()
+        {
+            using (var pathContext = new SimpleTestPathContext())
+            {
+                var outputDirectory = pathContext.SolutionRoot;
+                var source = pathContext.PackageSource;
+                // Arrange
+                PackageCreator.CreatePackage("testPackage", "1.2.0", source);
+                PackageCreator.CreatePackage("testPackage", "1.1.0", source);
+
+                // Act
+                var r = RunInstall(pathContext, "testPackage", 0, new[] { "-OutputDirectory", outputDirectory, "-ExcludeVersion", "-Version", "1.2.0" });
+
+                // Assert
+                Assert.Equal(0, r.ExitCode);
+
+                // Act
+                var result = RunInstall(pathContext, "testPackage", 0, new[] { "-OutputDirectory", outputDirectory, "-ExcludeVersion", "-Version", "1.1.0" });
+
+                var output = result.Output;
+
+                // Assert
+                var alreadyInstalledMessage = string.Format(CultureInfo.CurrentCulture, NuGetResources.InstallCommandHigherVersionAlreadyExists, "testPackage.1.1.0", "testPackage.1.2.0");
                 Assert.Contains(alreadyInstalledMessage, output, StringComparison.OrdinalIgnoreCase);
                 r.ExitCode.Should().Be(0);
             }
@@ -1051,8 +1080,7 @@ namespace NuGet.CommandLine.Test
                     var r1 = CommandRunner.Run(
                         nugetexe,
                         workingPath,
-                        args,
-                        waitForExit: true);
+                        args);
 
                     // Assert
                     r1.Success.Should().BeTrue(because: r1.AllOutput);
@@ -1089,8 +1117,7 @@ namespace NuGet.CommandLine.Test
                     var r1 = CommandRunner.Run(
                         nugetexe,
                         workingPath,
-                        args,
-                        waitForExit: true);
+                        args);
 
                     // Assert
                     Assert.Equal(0, r1.ExitCode);
@@ -1126,8 +1153,7 @@ namespace NuGet.CommandLine.Test
                     var r1 = CommandRunner.Run(
                         nugetexe,
                         workingPath,
-                        args,
-                        waitForExit: true);
+                        args);
 
                     // Assert
                     Assert.Equal(0, r1.ExitCode);
@@ -1187,8 +1213,7 @@ namespace NuGet.CommandLine.Test
                     var r1 = CommandRunner.Run(
                         nugetexe,
                         pathContext.WorkingDirectory,
-                        args,
-                        waitForExit: true);
+                        args);
 
                     // Assert
                     r1.Success.Should().BeTrue(r1.AllOutput);
@@ -1243,14 +1268,12 @@ namespace NuGet.CommandLine.Test
                     var r1 = CommandRunner.Run(
                         nugetexe,
                         workingPath,
-                        args,
-                        waitForExit: true);
+                        args);
 
                     var r2 = CommandRunner.Run(
                         nugetexe,
                         workingPath,
-                        args,
-                        waitForExit: true);
+                        args);
 
                     // Assert
                     r1.ExitCode.Should().Be(0);
@@ -1280,8 +1303,7 @@ namespace NuGet.CommandLine.Test
                 var r1 = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    args,
-                    waitForExit: true);
+                    args);
 
                 // Assert
                 r1.ExitCode.Should().Be(1);
@@ -1388,8 +1410,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.WorkingDirectory,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 r.Success.Should().BeTrue(because: r.AllOutput);
@@ -1437,8 +1458,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    args,
-                    waitForExit: true);
+                    args);
 
                 // Assert
                 Assert.NotEqual(0, r.ExitCode);
@@ -1510,8 +1530,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.WorkingDirectory,
-                    cmd,
-                    waitForExit: true);
+                    cmd);
 
                 // Assert
                 Assert.Equal(0, r.ExitCode);
@@ -1628,8 +1647,7 @@ namespace NuGet.CommandLine.Test
                     var result = CommandRunner.Run(
                         nugetexe,
                         Directory.GetCurrentDirectory(),
-                        string.Join(" ", args),
-                        true);
+                        string.Join(" ", args));
 
                     // Assert
                     Assert.True(credentialsPassedToRegistrationEndPoint);
@@ -1660,8 +1678,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                    nugetexe,
                    testDir,
-                   string.Join(" ", args),
-                   true);
+                   string.Join(" ", args));
                 Util.VerifyResultFailure(result, "'-outputdirectory' is not a valid version string.");
             }
         }
@@ -1704,8 +1721,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     nugetexe,
                     randomTestFolder,
-                    string.Join(" ", args),
-                    true);
+                    string.Join(" ", args));
 
                 var expectedPath = Path.Combine(
                     randomTestFolder,
@@ -2027,7 +2043,7 @@ namespace NuGet.CommandLine.Test
         }
 
         [Fact]
-        public async Task Install_WithPackagesConfigAndHttpSource_Warns()
+        public async Task Install_WithPackagesConfigAndHttpSource_Errors()
         {
             // Arrange
             using var pathContext = new SimpleTestPathContext();
@@ -2065,8 +2081,105 @@ namespace NuGet.CommandLine.Test
 
             // Assert
             result.Success.Should().BeTrue();
+            result.Errors.Should().Contain("http://api.source/api/v2");
+        }
+
+        [Theory]
+        [InlineData("false")]
+        [InlineData("FALSE")]
+        [InlineData("invalidString")]
+        [InlineData("")]
+        public async Task Install_PackagesConfigWithHttpSourceAndAllowInsecureConnectionsFalse_Errors(string allowInsecureConnections)
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+            // Set up solution, project, and packages
+            var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+            var packageA = new SimpleTestPackageContext("a", "1.0.0");
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(pathContext.PackageSource, packageA);
+            var packageAPath = Path.Combine(pathContext.PackageSource, packageA.Id, packageA.Version, packageA.PackageName);
+
+            pathContext.Settings.AddSource("http-feed", "http://api.source/index.json", allowInsecureConnections);
+            pathContext.Settings.AddSource("https-feed", "https://api.source/index.json", allowInsecureConnections);
+
+            var projectB = new SimpleTestProjectContext(
+                "b",
+                ProjectStyle.PackagesConfig,
+                pathContext.SolutionRoot);
+
+            Util.CreateFile(Path.GetDirectoryName(projectB.ProjectPath), "packages.config",
+@"<packages>
+  <package id=""A"" version=""1.0.0"" targetFramework=""net461"" />
+</packages>");
+
+            solution.Projects.Add(projectB);
+            solution.Create(pathContext.SolutionRoot);
+
+            var config = Path.Combine(Path.GetDirectoryName(projectB.ProjectPath), "packages.config");
+            var args = new string[]
+            {
+                "-OutputDirectory",
+                pathContext.PackagesV2
+            };
+
+            // Act
+            CommandRunnerResult result = RunInstall(pathContext, config, expectedExitCode: 0, additionalArgs: args);
+
+            // Assert
+
+            result.Success.Should().BeTrue();
+
+            Assert.DoesNotContain("https://api.source/index.json", result.Errors);
+
+            Assert.Contains("http://api.source/index.json", result.Errors);
+
+        }
+
+        [Theory]
+        [InlineData("true")]
+        [InlineData("TRUE")]
+        public async Task Install_PackagesConfigWithHttpSourceAndAllowInsecureConnections_WarnsCorrectly(string allowInsecureConnections)
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+            // Set up solution, project, and packages
+            var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+            var packageA = new SimpleTestPackageContext("a", "1.0.0");
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(pathContext.PackageSource, packageA);
+            var packageAPath = Path.Combine(pathContext.PackageSource, packageA.Id, packageA.Version, packageA.PackageName);
+
+            pathContext.Settings.AddSource("http-feed", "http://api.source/index.json", allowInsecureConnections);
+            pathContext.Settings.AddSource("https-feed", "https://api.source/index.json", allowInsecureConnections);
+
+            var projectB = new SimpleTestProjectContext(
+                "b",
+                ProjectStyle.PackagesConfig,
+                pathContext.SolutionRoot);
+
+            Util.CreateFile(Path.GetDirectoryName(projectB.ProjectPath), "packages.config",
+@"<packages>
+  <package id=""A"" version=""1.0.0"" targetFramework=""net461"" />
+</packages>");
+
+            solution.Projects.Add(projectB);
+            solution.Create(pathContext.SolutionRoot);
+
+            var config = Path.Combine(Path.GetDirectoryName(projectB.ProjectPath), "packages.config");
+            var args = new string[]
+            {
+                "-OutputDirectory",
+                pathContext.PackagesV2
+            };
+
+            // Act
+            CommandRunnerResult result = RunInstall(pathContext, config, expectedExitCode: 0, additionalArgs: args);
+
+            // Assert
+
+            result.Success.Should().BeTrue();
             result.AllOutput.Should().Contain($"Added package 'A.1.0.0' to folder '{pathContext.PackagesV2}'");
-            result.AllOutput.Should().Contain("You are running the 'restore' operation with an 'http' source, 'http://api.source/api/v2'. Support for 'http' sources will be removed in a future version.");
+            Assert.DoesNotContain("http://api.source/index.json", result.Errors);
+            Assert.DoesNotContain("https://api.source/index.json", result.Errors); ;
         }
 
         [Fact]
@@ -2087,7 +2200,43 @@ namespace NuGet.CommandLine.Test
 
             server.Stop();
             result.AllOutput.Should().Contain($"Added package 'A.1.0.0' to folder");
-            result.AllOutput.Should().Contain("You are running the 'install' operation with an 'http' source");
+            result.AllOutput.Should().Contain("You are running the 'install' operation with an 'HTTP' source");
+        }
+
+        // https://github.com/NuGet/Home/issues/8594"
+        [SkipMono()]
+        public async Task InstallCommand_WithASourceThatReportsVulnerabilities_RaisesVulnerabilityWarnings()
+        {
+            using var pathContext = new SimpleTestPathContext();
+            using var mockServer = new FileSystemBackedV3MockServer(pathContext.PackageSource, sourceReportsVulnerabilities: true);
+
+            //Replace the default package source of folder to ServiceIndexUri
+            var settings = pathContext.Settings;
+            SimpleTestSettingsContext.RemoveSource(settings.XML, "source");
+            var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
+            SimpleTestSettingsContext.AddEntry(section, "source", mockServer.ServiceIndexUri);
+            settings.Save();
+
+            // Arrange
+            var a1 = new SimpleTestPackageContext("a", "1.0.0");
+            var a2 = new SimpleTestPackageContext("a", "2.0.0");
+
+            SimpleTestPackageContext[] packages = [a1, a2];
+            await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, packages);
+
+            mockServer.Start();
+            var pathResolver = new PackagePathResolver(pathContext.SolutionRoot);
+
+            // Act
+            var r1 = RunInstall(pathContext, "a", 0, "-Version", "2.0.0", "-OutputDirectory", pathContext.SolutionRoot);
+
+            mockServer.Stop();
+
+            // Assert
+            var a1Nupkg = pathResolver.GetInstalledPackageFilePath(a1.Identity);
+
+            r1.Success.Should().BeTrue();
+            File.Exists(a1Nupkg).Should().BeFalse();
         }
 
         public static CommandRunnerResult RunInstall(SimpleTestPathContext pathContext, string input, int expectedExitCode = 0, params string[] additionalArgs)
@@ -2114,7 +2263,6 @@ namespace NuGet.CommandLine.Test
                 nugetexe,
                 pathContext.WorkingDirectory,
                 string.Join(" ", args),
-                waitForExit: true,
                 environmentVariables: envVars);
 
             // Assert

@@ -5,9 +5,14 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+#if IS_SIGNING_SUPPORTED
 using System.Text;
+#endif
 using System.Threading;
 using System.Threading.Tasks;
+#if IS_SIGNING_SUPPORTED
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
+#endif
 using Moq;
 using NuGet.Common;
 using NuGet.Frameworks;
@@ -15,7 +20,9 @@ using NuGet.Packaging.Core;
 using NuGet.Packaging.Signing;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
+#if IS_SIGNING_SUPPORTED
 using Test.Utility.Signing;
+#endif
 using Xunit;
 
 namespace NuGet.Packaging.Test
@@ -156,7 +163,7 @@ namespace NuGet.Packaging.Test
                 {
                     var groups = reader.GetReferenceItems().ToArray();
 
-                    var emptyGroup = groups.Where(g => g.TargetFramework == NuGetFramework.ParseFolder("net45")).Single();
+                    var emptyGroup = groups.Single(g => g.TargetFramework == NuGetFramework.ParseFolder("net45"));
 
                     Assert.Equal(0, emptyGroup.Items.Count());
                 }
@@ -899,7 +906,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "../../A.dll",
                    "content/net40/B.nuspec");
 
@@ -931,7 +938,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    $"{rootPath}/A.dll",
                    "content/net40/B.nuspec");
 
@@ -962,7 +969,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    ".",
                    "content/net40/B.nuspec");
 
@@ -1016,13 +1023,13 @@ namespace NuGet.Packaging.Test
                        root,
                        identity.Id,
                        identity.Version.ToString(),
-                       DateTimeOffset.UtcNow.LocalDateTime,
+                       entryModifiedTime: DateTimeOffset.Now,
                        @"readme~.txt");
 
                     using (var packageStream = File.OpenRead(packageFileInfo.FullName))
                     using (var packageReader = new PackageArchiveReader(packageStream))
                     {
-                        // Act & Assert                         
+                        // Act & Assert
                         var files = await packageReader.CopyFilesAsync(
                             destination.Path.ToUpper(),
                             new[] { @"readme~.txt" },
@@ -1055,7 +1062,7 @@ namespace NuGet.Packaging.Test
                        root,
                        identity.Id,
                        identity.Version.ToString(),
-                       DateTimeOffset.UtcNow.LocalDateTime,
+                       entryModifiedTime: DateTimeOffset.Now,
                        @"readme~.txt");
 
                     using (var packageStream = File.OpenRead(packageFileInfo.FullName))
@@ -1701,7 +1708,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "../../A.dll",
                    "content/net40/B.nuspec");
 
@@ -1728,7 +1735,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    $"{rootPath}/A.dll",
                    "content/net40/B.nuspec");
 
@@ -1755,7 +1762,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    ".",
                    "content/net40/B.nuspec");
 
@@ -1780,7 +1787,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "C++.dll",
                    "content/net40/B&#A.txt",
                    "content/net40/B.nuspec");
@@ -1807,7 +1814,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net40/A.dll",
                    "content/net40/B.nuspec");
 
@@ -1907,7 +1914,7 @@ namespace NuGet.Packaging.Test
                 }
             }
         }
-#endif 
+#endif
 
         private static Zip CreateZipWithNestedStoredZipArchives()
         {
@@ -2092,7 +2099,7 @@ namespace NuGet.Packaging.Test
             using (var packageArchiveReader = new PackageArchiveReader(packageStream, environmentVariableReader: environment.Object))
             {
                 // Act
-                bool expectedResult = CanVerifySignedPackages();
+                bool expectedResult = CanVerifySignedPackages(environment.Object);
                 bool actualResult = packageArchiveReader.CanVerifySignedPackages(null);
 
                 // Assert
@@ -2100,14 +2107,26 @@ namespace NuGet.Packaging.Test
             }
         }
 
-        private static bool CanVerifySignedPackages()
+        private static bool CanVerifySignedPackages(IEnvironmentVariableReader environmentVariableReader = null)
         {
-            return RuntimeEnvironmentHelper.IsWindows &&
+            return (RuntimeEnvironmentHelper.IsWindows ||
+                IsVerificationEnabledByEnvironmentVariable(environmentVariableReader)) &&
 #if IS_SIGNING_SUPPORTED
                 true;
 #else
                 false;
 #endif
+        }
+
+        private static bool IsVerificationEnabledByEnvironmentVariable(
+            IEnvironmentVariableReader environmentVariableReader = null)
+        {
+            IEnvironmentVariableReader reader = environmentVariableReader ?? EnvironmentVariableWrapper.Instance;
+
+            string value = reader.GetEnvironmentVariable(
+                EnvironmentVariableConstants.DotNetNuGetSignatureVerification);
+
+            return string.Equals(bool.TrueString, value, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string ExtractFile(string sourcePath, string targetPath, Stream sourceStream)

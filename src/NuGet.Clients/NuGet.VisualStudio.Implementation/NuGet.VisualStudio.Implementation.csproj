@@ -6,6 +6,7 @@
     <Description>Implementation of the NuGet.VisualStudio extensibility APIs.</Description>
     <Guid>9623cf30-192c-4864-b419-29649169ae30</Guid>
     <ImportedFromTypeLib>NuGet.VisualStudio.Implementation</ImportedFromTypeLib>
+    <ExcludeFromDotNetBuild>true</ExcludeFromDotNetBuild>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Microsoft.CSharp" />
@@ -47,6 +48,9 @@
     <Reference Include="Microsoft.VisualStudio.ExtensionEngine">
       <HintPath>$(PkgMicrosoft_VSSDK_BuildTools)\tools\vssdk\Microsoft.VisualStudio.ExtensionEngine.dll</HintPath>
     </Reference>
+    <Reference Include="Microsoft.VisualStudio.ExtensionEngineContract">
+      <HintPath>$(PkgMicrosoft_VSSDK_BuildTools)\tools\vssdk\Microsoft.VisualStudio.ExtensionEngineContract.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Update="CommonResources.resx">
@@ -67,5 +71,15 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>VsResources.resx</DependentUpon>
     </Compile>
+  </ItemGroup>
+
+  <ItemGroup Label="NuGet Shared">
+    <Compile Include="$(SharedDirectory)\DeconstructionExtensions.cs" />
+    <Compile Include="$(SharedDirectory)\NullableAttributes.cs" />
+    <Compile Include="$(SharedDirectory)\XmlUtility.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="NuGet.VisualStudio.Implementation.Test" />
   </ItemGroup>
 </Project>

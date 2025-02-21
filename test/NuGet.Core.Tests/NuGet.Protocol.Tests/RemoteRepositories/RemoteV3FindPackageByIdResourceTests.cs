@@ -294,7 +294,7 @@ namespace NuGet.Protocol.Tests
                 var logger = new TestLogger();
 
                 // Act
-                var resource = await repo.GetResourceAsync<FindPackageByIdResource>();
+                var resource = await repo.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None);
                 var info = await resource.GetDependencyInfoAsync(
                     "DEEPEQUAL",
                     new NuGetVersion("1.4.0.1-RC"),
@@ -550,7 +550,7 @@ namespace NuGet.Protocol.Tests
         private static HttpSource CreateDummyHttpSource()
         {
             var packageSource = new PackageSource("https://unit.test");
-            Task<HttpHandlerResource> messageHandlerFactory() => Task.FromResult<HttpHandlerResource>(null);
+            Task<HttpHandlerResource> messageHandlerFactory() => TaskResult.Null<HttpHandlerResource>();
 
             return new HttpSource(packageSource, messageHandlerFactory, Mock.Of<IThrottle>());
         }

@@ -30,10 +30,23 @@
     </Compile>
   </ItemGroup>
 
+  <ItemGroup Label="NuGet Shared">
+    <Compile Include="$(SharedDirectory)\HashCodeCombiner.cs" />
+    <Compile Include="$(SharedDirectory)\NoAllocEnumerateExtensions.cs" />
+    <Compile Include="$(SharedDirectory)\NullableAttributes.cs" />
+    <Compile Include="$(SharedDirectory)\SharedExtensions.cs" />
+    <Compile Include="$(SharedDirectory)\TaskResult.cs" />
+    <Compile Include="$(SharedDirectory)\TaskResultCache.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <EmbeddedResource Update="Strings.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Strings.Designer.cs</LastGenOutput>
     </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="NuGet.DependencyResolver.Core.Tests" />
   </ItemGroup>
 </Project>

@@ -27,9 +27,9 @@ using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 using NuGet.Versioning;
 using NuGet.VisualStudio;
-using NuGet.VisualStudio.Common.Test;
 using NuGet.VisualStudio.Internal.Contracts;
 using Test.Utility;
+using Test.Utility.VisualStudio;
 using Xunit;
 using Task = System.Threading.Tasks.Task;
 
@@ -43,6 +43,8 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         private readonly IEnumerable<ITransitivePackageReferenceContextInfo> _transitivePackages;
         private readonly IReadOnlyCollection<IProjectContextInfo> _projects;
         private readonly Mock<IComponentModel> _componentModel;
+        private readonly Mock<IOutputConsoleProvider> _outputConsoleProviderMock;
+        private readonly Lazy<IOutputConsoleProvider> _outputConsoleProvider;
 
         public NuGetPackageSearchServiceTests(GlobalServiceProvider globalServiceProvider)
             : base(globalServiceProvider)
@@ -68,8 +70,9 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 { "https://api.nuget.org/v3/registration3-gz-semver2/microsoft.extensions.logging.abstractions/index.json", ProtocolUtility.GetResource("NuGet.PackageManagement.VisualStudio.Test.compiler.resources.loggingAbstractions.json", GetType()) }
             };
             _componentModel = new Mock<IComponentModel>();
-            var expService = new NuGetExperimentationService(new TestEnvironmentVariableReader(new Dictionary<string, string>()), new TestVisualStudioExperimentalService(_experimentationFlags), new Lazy<IOutputConsoleProvider>(() => new TestOutputConsoleProvider()));
-            _componentModel.Setup(x => x.GetService<INuGetExperimentationService>()).Returns(expService);
+            var mockOutputConsoleUtility = OutputConsoleUtility.GetMock();
+            _outputConsoleProviderMock = mockOutputConsoleUtility.mockIOutputConsoleProvider;
+            _outputConsoleProvider = new Lazy<IOutputConsoleProvider>(() => _outputConsoleProviderMock.Object);
 
             globalServiceProvider.AddService(typeof(SComponentModel), _componentModel.Object);
 
@@ -200,23 +203,6 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         }
 
         [Fact]
-        public async Task GetDeprecationMetadataAsync_WhenDeprecationMetadataExists_ReturnsDeprecationMetadata()
-        {
-            using (NuGetPackageSearchService searchService = SetupSearchService())
-            {
-                PackageDeprecationMetadataContextInfo deprecationMetadata = await searchService.GetDeprecationMetadataAsync(
-                    new PackageIdentity("microsoft.extensions.logging.abstractions", new Versioning.NuGetVersion("5.0.0-rc.2.20475.5")),
-                    new List<PackageSourceContextInfo> { PackageSourceContextInfo.Create(_sourceRepository.PackageSource) },
-                    includePrerelease: true,
-                    CancellationToken.None);
-
-                Assert.NotNull(deprecationMetadata);
-                Assert.Equal("This is deprecated.", deprecationMetadata.Message);
-                Assert.Equal("Legacy", deprecationMetadata.Reasons.First());
-            }
-        }
-
-        [Fact]
         public async Task GetPackageVersionsAsync_WhenPackageVersionsExist_ReturnsPackageVersions()
         {
             using (NuGetPackageSearchService searchService = SetupSearchService())
@@ -290,6 +276,38 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         }
 
         [Fact]
+        public void ClearFromCache_WhenPackageSearchMetadataMemoryCacheHasItem_ItemCleared()
+        {
+            using (NuGetPackageSearchService searchService = SetupSearchService())
+            {
+                IPackageSearchMetadata packageMetadata = PackageSearchMetadataBuilder.FromIdentity(new PackageIdentity("microsoft.extensions.logging.abstractions", NuGetVersion.Parse("5.0.0-rc.2.20475.5"))).Build();
+                IPackageSearchMetadata packageMetadataToRemove = PackageSearchMetadataBuilder.FromIdentity(new PackageIdentity("microsoft.extensions.test", NuGetVersion.Parse("5.0.0-rc.2.20475.5"))).Build();
+                var packageSources = new List<PackageSourceContextInfo> { PackageSourceContextInfo.Create(_sourceRepository.PackageSource) };
+                var metadataProvider = Mock.Of<IPackageMetadataProvider>();
+                CacheItemPolicy _cacheItemPolicy = new CacheItemPolicy
+                {
+                    SlidingExpiration = ObjectCache.NoSlidingExpiration,
+                    AbsoluteExpiration = ObjectCache.InfiniteAbsoluteExpiration,
+                };
+
+                string cacheId = PackageSearchMetadataCacheItem.GetCacheId(packageMetadata.Identity.Id, includePrerelease: true, packageSources);
+                var cacheEntry = new PackageSearchMetadataCacheItem(packageMetadata, metadataProvider);
+                NuGetPackageSearchService.PackageSearchMetadataMemoryCache.AddOrGetExisting(cacheId, cacheEntry, _cacheItemPolicy);
+
+                string cacheIdToRemove = PackageSearchMetadataCacheItem.GetCacheId(packageMetadataToRemove.Identity.Id, includePrerelease: true, packageSources);
+                var cacheEntryToRemove = new PackageSearchMetadataCacheItem(packageMetadataToRemove, metadataProvider);
+                NuGetPackageSearchService.PackageSearchMetadataMemoryCache.AddOrGetExisting(cacheIdToRemove, cacheEntryToRemove, _cacheItemPolicy);
+
+
+                searchService.ClearFromCache(packageMetadataToRemove.Identity.Id, packageSources, includePrerelease: true);
+
+                Assert.Equal(1, NuGetPackageSearchService.PackageSearchMetadataMemoryCache.Count());
+                Assert.Null(NuGetPackageSearchService.PackageSearchMetadataMemoryCache.Get(cacheIdToRemove));
+                Assert.NotNull(NuGetPackageSearchService.PackageSearchMetadataMemoryCache.Get(cacheId));
+            }
+        }
+
+        [Fact]
         public async Task GetPackageVersionsAsync_WithProjectAndIsTransitiveAndCacheIsNotPopulatedAsync()
         {
             using (NuGetPackageSearchService searchService = SetupSearchService())
@@ -353,8 +371,8 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     CancellationToken.None);
                 SearchResultContextInfo continueSearchResult = await searchService.ContinueSearchAsync(CancellationToken.None);
 
-                Assert.True(searchResult.PackageSearchItems.First().Title.Equals("NuGet.Core1", StringComparison.OrdinalIgnoreCase));
-                Assert.True(continueSearchResult.PackageSearchItems.First().Title.Equals("NuGet.Core27", StringComparison.OrdinalIgnoreCase));
+                Assert.Equal(searchResult.PackageSearchItems.First().Title, "NuGet.Core1", ignoreCase: true);
+                Assert.Equal(continueSearchResult.PackageSearchItems.First().Title, "NuGet.Core27", ignoreCase: true);
 
                 TelemetryEvent[] events = eventsQueue.ToArray();
                 Assert.True(4 == events.Length, string.Join(Environment.NewLine, events.Select(e => e.Name)));
@@ -391,35 +409,21 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         }
 
         [Theory]
-        [InlineData(false, ItemFilter.All, true, typeof(MultiSourcePackageFeed))]
-        [InlineData(false, ItemFilter.All, false, typeof(MultiSourcePackageFeed))]
-        [InlineData(false, ItemFilter.Installed, true, typeof(InstalledPackageFeed))]
-        [InlineData(false, ItemFilter.Installed, false, typeof(InstalledPackageFeed))]
-        [InlineData(false, ItemFilter.UpdatesAvailable, true, typeof(UpdatePackageFeed))]
-        [InlineData(false, ItemFilter.UpdatesAvailable, false, typeof(UpdatePackageFeed))]
-        [InlineData(false, ItemFilter.Consolidate, true, typeof(ConsolidatePackageFeed))]
-        [InlineData(false, ItemFilter.Consolidate, false, typeof(ConsolidatePackageFeed))]
-        [InlineData(true, ItemFilter.All, true, typeof(MultiSourcePackageFeed))]
-        [InlineData(true, ItemFilter.All, false, typeof(MultiSourcePackageFeed))]
-        [InlineData(true, ItemFilter.Installed, true, typeof(InstalledPackageFeed))]
-        [InlineData(true, ItemFilter.Installed, false, typeof(InstalledAndTransitivePackageFeed))] // Only when transitive experiment is enabled, show Transitive Dependencies in Installed Tab
-        [InlineData(true, ItemFilter.UpdatesAvailable, true, typeof(UpdatePackageFeed))]
-        [InlineData(true, ItemFilter.UpdatesAvailable, false, typeof(UpdatePackageFeed))]
-        [InlineData(true, ItemFilter.Consolidate, true, typeof(ConsolidatePackageFeed))]
-        [InlineData(true, ItemFilter.Consolidate, false, typeof(ConsolidatePackageFeed))]
-        public async Task CreatePackageFeedAsync_WithTransitiveOriginsExpFlag_OnlyInstalledFeedOnSolutionViewAsync(bool transitiveDependenciesExperimentEnabled, ItemFilter itemFilter, bool isSolution, Type expectedFeedType)
+        [InlineData(ItemFilter.All, true, typeof(MultiSourcePackageFeed))]
+        [InlineData(ItemFilter.All, false, typeof(MultiSourcePackageFeed))]
+        [InlineData(ItemFilter.Installed, true, typeof(InstalledAndTransitivePackageFeed))]
+        [InlineData(ItemFilter.Installed, false, typeof(InstalledAndTransitivePackageFeed))]
+        [InlineData(ItemFilter.UpdatesAvailable, true, typeof(UpdatePackageFeed))]
+        [InlineData(ItemFilter.UpdatesAvailable, false, typeof(UpdatePackageFeed))]
+        [InlineData(ItemFilter.Consolidate, true, typeof(ConsolidatePackageFeed))]
+        [InlineData(ItemFilter.Consolidate, false, typeof(ConsolidatePackageFeed))]
+        public async Task CreatePackageFeedAsync_WithTransitiveOrigins_OnlyInstalledFeedOnSolutionViewAsync(ItemFilter itemFilter, bool isSolution, Type expectedFeedType)
         {
             // Arrange
-            // Recreate async lazy on each test
-            _experimentationFlags[ExperimentationConstants.TransitiveDependenciesInPMUI.FlightFlag] = transitiveDependenciesExperimentEnabled;
-            ExperimentUtility.ResetAsyncValues();
-
             using NuGetPackageSearchService searchService = SetupSearchService();
-            bool expValue = await ExperimentUtility.IsTransitiveOriginExpEnabled.GetValueAsync();
-            Assert.Equal(transitiveDependenciesExperimentEnabled, expValue);
 
             // Act
-            (IPackageFeed main, IPackageFeed recommender) = await searchService.CreatePackageFeedAsync(
+            IPackageFeed packageFeed = await searchService.CreatePackageFeedAsync(
                 projectContextInfos: _projects,
                 targetFrameworks: new List<string>() { "net45" },
                 itemFilter: itemFilter,
@@ -429,71 +433,8 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 cancellationToken: CancellationToken.None);
 
             // Assert
-            Assert.IsType(expectedFeedType, main);
-            Assert.Null(recommender);
-        }
-
-        [Fact]
-        public async Task CreatePackageFeedAsync_ProjectPMUIInstalledTab_EmitsCounterfactualTelemetryAsync()
-        {
-            // Arrange
-            var telemetrySession = new Mock<ITelemetrySession>();
-            var telemetryEvents = new ConcurrentQueue<TelemetryEvent>();
-            telemetrySession
-                .Setup(x => x.PostEvent(It.IsAny<TelemetryEvent>()))
-                .Callback<TelemetryEvent>(x => telemetryEvents.Enqueue(x));
-            TelemetryActivity.NuGetTelemetryService = new NuGetVSTelemetryService(telemetrySession.Object);
-
-            using NuGetPackageSearchService searchService = SetupSearchService();
-            CounterfactualLoggers.PMUITransitiveDependencies.Reset();
-
-            // Act
-            _ = await searchService.CreatePackageFeedAsync(
-                projectContextInfos: _projects,
-                targetFrameworks: new List<string>() { "net45" },
-                itemFilter: ItemFilter.Installed,
-                isSolution: false,
-                recommendPackages: It.IsAny<bool>(),
-                sourceRepositories: new List<SourceRepository>() { _sourceRepository },
-                cancellationToken: CancellationToken.None);
-
-            // Assert
-            Assert.Contains(telemetryEvents, evt => evt.Name == CounterfactualLoggers.PMUITransitiveDependencies.EventName);
-        }
-
-        [Theory] // Installed tab and and project PM UI emits counterfactual, proved in test above
-        [InlineData(ItemFilter.All, true)]
-        [InlineData(ItemFilter.Installed, true)]
-        [InlineData(ItemFilter.UpdatesAvailable, true)]
-        [InlineData(ItemFilter.Consolidate, true)]
-        [InlineData(ItemFilter.All, false)]
-        [InlineData(ItemFilter.UpdatesAvailable, false)]
-        [InlineData(ItemFilter.Consolidate, false)]
-        public async Task CreatePackageFeedAsync_NotInProjectPMUIInstalledTab_DoesNotEmitCounterfactualTelemetryAsync(ItemFilter itemFilter, bool isSolution)
-        {
-            // Arrange
-            var telemetrySession = new Mock<ITelemetrySession>();
-            var telemetryEvents = new ConcurrentQueue<TelemetryEvent>();
-            telemetrySession
-                .Setup(x => x.PostEvent(It.IsAny<TelemetryEvent>()))
-                .Callback<TelemetryEvent>(x => telemetryEvents.Enqueue(x));
-            TelemetryActivity.NuGetTelemetryService = new NuGetVSTelemetryService(telemetrySession.Object);
-
-            using NuGetPackageSearchService searchService = SetupSearchService();
-            CounterfactualLoggers.PMUITransitiveDependencies.Reset();
-
-            // Act
-            _ = await searchService.CreatePackageFeedAsync(
-                projectContextInfos: _projects,
-                targetFrameworks: new List<string>() { "net45" },
-                itemFilter: itemFilter,
-                isSolution: isSolution,
-                recommendPackages: It.IsAny<bool>(),
-                sourceRepositories: new List<SourceRepository>() { _sourceRepository },
-                cancellationToken: CancellationToken.None);
-
-            // Assert
-            Assert.DoesNotContain(telemetryEvents, evt => evt.Name == CounterfactualLoggers.PMUITransitiveDependencies.EventName);
+            Assert.IsType(expectedFeedType, packageFeed);
+            Assert.IsNotType<RecommenderPackageFeed>(packageFeed);
         }
 
         private NuGetPackageSearchService SetupSearchService()

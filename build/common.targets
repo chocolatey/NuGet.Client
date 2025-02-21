@@ -1,33 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0">
   <!-- Compiler flags -->
-  <PropertyGroup Condition=" '$(TargetFramework)' == '$(NETFXTargetFramework)' ">
-    <DefineConstants>$(DefineConstants);IS_DESKTOP</DefineConstants>
-    <IsDesktop>true</IsDesktop>
-  </PropertyGroup>
-
-  <PropertyGroup Condition=" $(TargetFramework.StartsWith('netcoreapp')) OR $(TargetFramework.StartsWith('netstandard')) OR $(TargetFramework.StartsWith('net6')) OR $(TargetFramework.StartsWith('net7')) ">
-    <DefineConstants>$(DefineConstants);IS_CORECLR</DefineConstants>
-    <IsCore>true</IsCore>
-  </PropertyGroup>
-
-  <PropertyGroup Condition=" '$(TargetFramework)' == 'netcoreapp5.0' ">
-    <DefineConstants>$(DefineConstants);NETCORE5_0</DefineConstants>
-  </PropertyGroup>
-
   <PropertyGroup>
-    <SigningNotSupported Condition=" '$(TargetFramework)' == 'netstandard2.0' OR '$(TargetFramework)' == 'netcoreapp2.1' OR '$(TargetFramework)' == 'netstandard2.1' OR '$(TargetFramework)' == 'netcoreapp3.1'">true</SigningNotSupported>
-    <SigningNotSupported Condition=" '$(SigningNotSupported)' != 'true'">false</SigningNotSupported>
+    <DefineConstants Condition="'$(TargetFramework)' == '$(NETFXTargetFramework)'">$(DefineConstants);IS_DESKTOP</DefineConstants>
+    <DefineConstants Condition="'$(TargetFramework)' != '$(NETFXTargetFramework)'">$(DefineConstants);IS_CORECLR</DefineConstants>
+    <!-- Signing is only supported in net5.0+ and netframework. -->
+    <DefineConstants Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework' Or ('$(TargetFrameworkIdentifier)' == '.NETCoreApp' and $([MSBuild]::VersionGreaterThanOrEquals($(TargetFrameworkVersion), 5.0)))">$(DefineConstants);IS_SIGNING_SUPPORTED</DefineConstants>
   </PropertyGroup>
-
-  <PropertyGroup Condition=" '$(SigningNotSupported)' != 'true' ">
-    <DefineConstants>$(DefineConstants);IS_SIGNING_SUPPORTED</DefineConstants>
-  </PropertyGroup>
-
-  <!-- Include shared files for netcore projects -->
-  <ItemGroup Condition=" ('$(IsNetCoreProject)' == 'true' AND '$(SkipShared)' != 'true' AND '$(TestProject)' != 'true') OR '$(IncludeNuGetSharedFiles)' == 'true'">
-    <Compile Include="$(SharedDirectory)\*.cs" Exclude="bin\**;obj\**;**\*.xproj;packages\**" />
-  </ItemGroup>
 
   <!-- Include shared files for test netcore projects -->
   <ItemGroup Condition=" '$(IsNetCoreProject)' == 'true' AND '$(SkipShared)' != 'true' AND '$(TestProject)' == 'true' ">
@@ -41,9 +20,7 @@
     </ItemGroup>
   </Target>
 
-  <ImportGroup Condition=" '$(SkipSigning)' != 'true' ">
-    <Import Project="sign.targets" />
-  </ImportGroup>
+  <Import Project="sign.targets" Condition=" '$(SkipSigning)' != 'true' "/>
 
   <PropertyGroup Condition="'$(Shipping)' == 'true'">
     <GetSigningInputsDependsOn Condition="'$(GetSigningInputsDependsOn)' == ''">GetSigningInputsDefault</GetSigningInputsDependsOn>
@@ -52,13 +29,7 @@
     <SymbolTargetsToGetPdbs Condition="'$(SymbolTargetsToGetPdbs)' == ''">GetDebugSymbolsProjectOutput</SymbolTargetsToGetPdbs>
     <LocTargets>GetBuildOutputWithLocMetadata</LocTargets>
   </PropertyGroup>
-
-  <!-- Write out .XML files for projects that will be packed. -->
-  <PropertyGroup Condition=" '$(PackProject)' == 'true' ">
-    <GenerateDocumentationFile Condition=" '$(GenerateDocumentationFile)' == '' ">true</GenerateDocumentationFile>
-    <DocumentationFile Condition=" '$(DocumentationFile)' == '' AND '$(GenerateDocumentationFile)' == 'true' AND '$(IsNetCoreProject)' != 'true' ">$(OutputPath)\$(AssemblyName).xml</DocumentationFile>
-  </PropertyGroup>
-
+  
   <ImportGroup Condition=" '$(PackProject)' == 'true' AND '$(NuGetBuildTasksPackTargets)' != '' ">
       <Import Project="$(NuGetBuildTasksPackTargets)" />
   </ImportGroup>
@@ -68,18 +39,22 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
+  <PropertyGroup Condition=" '$(PackProject)' != 'true' ">
+    <NoWarn>$(NoWarn);CS0419;CS1570;CS1572;CS1573;CS1574;CS1584;CS1587;CS1591</NoWarn>
+  </PropertyGroup>
+
   <ItemGroup Condition=" '$(PackProject)' == 'true' ">
     <None Include="$(MSBuildThisFileDirectory)..\icon.png" Pack="true" PackagePath="\" Visible="false" />
     <None Include="$(MSBuildProjectDirectory)\README.md" Pack="true" PackagePath="\"/>
   </ItemGroup>
 
     <!-- Don't use PublicApiAnalyzer on source-build .NET -->
-  <PropertyGroup Condition=" '$(DotNetBuildFromSource)' == 'true' ">
+  <PropertyGroup Condition=" '$(DotNetBuildSourceOnly)' == 'true' ">
     <UsePublicApiAnalyzer>false</UsePublicApiAnalyzer>
   </PropertyGroup>
 
   <!-- Projects we pack become public APIs that others can use -->
-  <PropertyGroup Condition=" '$(DotNetBuildFromSource)' != 'true' and '$(PackProject)' == 'true' ">
+  <PropertyGroup Condition=" '$(DotNetBuildSourceOnly)' != 'true' and '$(PackProject)' == 'true' ">
     <UsePublicApiAnalyzer Condition=" '$(UsePublicApiAnalyzer)' == '' " >true</UsePublicApiAnalyzer>
   </PropertyGroup>
 
@@ -96,15 +71,13 @@
   <ImportGroup Condition=" '$(TestProject)' == 'true' ">
     <Import Project="test.targets" />
   </ImportGroup>
-  
+
 
   <!-- Allow WPF projects to run under NETCore SDK -->
   <!-- Errors occur if the output path is not set correctly -->
   <PropertyGroup Condition=" '$(NETCoreWPFProject)' == 'true' ">
-    <TargetFrameworkVersion>$(NETFXTargetFrameworkVersion)</TargetFrameworkVersion>
     <BaseOutputPath>bin\</BaseOutputPath>
     <OutputPath>bin\$(Configuration)</OutputPath>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
@@ -166,11 +139,11 @@
   <!--
     ============================================================
     GetSymbolsToIndex - depends on targets that gather symbols that
-    need to be indexed on the symbol server.  
+    need to be indexed on the symbol server.
     ============================================================
   -->
   <Target Name="GetSymbolsToIndex" DependsOnTargets="$(GetSymbolsToIndexDependsOn)" Returns="@(SymbolFilesToIndex)" />
-  
+
   <Target Name="GetSymbolsToIndexDefault" DependsOnTargets="GetTargetFrameworkSet" Returns="@(SymbolFilesToIndex)" Condition=" '$(Shipping)' == 'true' ">
     <MSBuild
       Projects="$(MSBuildProjectFullPath)"
@@ -192,7 +165,7 @@
     ============================================================
   -->
   <Target Name="GetSigningInputs" DependsOnTargets="$(GetSigningInputsDependsOn)" Returns="@(DllsToSign)" />
- 
+
  <!--
     ============================================================
     The default target to get signing inputs for a particular project
@@ -201,7 +174,7 @@
   <Target Name="GetSigningInputsDefault" DependsOnTargets="GetTargetFrameworkSet" Returns="@(DllsToSign)" Condition=" '$(Shipping)' == 'true' ">
     <MSBuild
       Projects="$(MSBuildProjectFullPath)"
-      Targets="$(SignTargetsForRealSigning)"
+      Targets="$(SignTargetsForRealSigning);$(AdditionalSignTargetsForRealSigning)"
       Properties="TargetFramework=%(ProjectTargetFrameworkEntries.Identity);
                   BuildProjectReferences=false;">
 
@@ -367,8 +340,8 @@ Condition=" ('%(Extension)' == '.dll' OR '%(Filename)' == 'NuGet.CommandLine.XPl
 
     <ItemGroup>
       <TestAssemblyPath Include="$(AbsoluteTestAssemblyPath)">
-        <IsDesktop Condition=" '$(IsDesktop)' == 'true' ">true</IsDesktop>
-        <IsCore Condition=" '$(IsDesktop)' != 'true' ">true</IsCore>
+        <IsDesktop Condition=" '$(TargetFramework)' == '$(NETFXTargetFramework)' ">true</IsDesktop>
+        <IsCore Condition=" '$(TargetFramework)' != '$(NETFXTargetFramework)' ">true</IsCore>
       </TestAssemblyPath>
     </ItemGroup>
   </Target>
@@ -396,6 +369,13 @@ Condition=" ('%(Extension)' == '.dll' OR '%(Filename)' == 'NuGet.CommandLine.XPl
       Condition=" %(Reference.NuGetPackageId) == 'Newtonsoft.Json' AND %(Reference.NuGetPackageVersion) != '$(NewtonsoftJsonPackageVersion)' " />
   </Target>
 
-  <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), 'README.md'))\packages\Microsoft.VisualStudioEng.MicroBuild.Core\1.0.0\build\Microsoft.VisualStudioEng.MicroBuild.Core.targets" Condition="Exists('$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), &quot;README.md&quot;))\packages\Microsoft.VisualStudioEng.MicroBuild.Core\1.0.0\build\Microsoft.VisualStudioEng.MicroBuild.Core.targets')" />
+  <Target Name="GetAllTargetFrameworks">
+  <PropertyGroup>
+      <EffectiveFramework Condition=" '$(TargetFrameworks)' != '' ">$(TargetFrameworks)</EffectiveFramework>
+      <EffectiveFramework Condition=" '$(EffectiveFramework)' == '' ">$(TargetFramework)</EffectiveFramework>
+    </PropertyGroup>
+    <Message
+      Text="$(MSBuildProjectFile) = $(EffectiveFramework)" Importance="High" />
+  </Target>
 
 </Project>

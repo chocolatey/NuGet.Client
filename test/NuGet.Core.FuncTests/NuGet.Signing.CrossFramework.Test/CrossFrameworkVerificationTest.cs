@@ -6,6 +6,8 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using NuGet.Test.Utility;
 using Test.Utility.Signing;
 using Xunit;
@@ -401,8 +403,7 @@ namespace NuGet.Signing.CrossFramework.Test
             CommandRunnerResult verifyResult = CommandRunner.Run(
                 command,
                 workingDirectory: ".",
-                arguments,
-                waitForExit: true);
+                arguments: arguments);
 
             return verifyResult;
         }

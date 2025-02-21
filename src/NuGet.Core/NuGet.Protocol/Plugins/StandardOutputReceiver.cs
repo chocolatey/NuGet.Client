@@ -2,8 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace NuGet.Protocol.Plugins
 {
@@ -23,7 +21,7 @@ namespace NuGet.Protocol.Plugins
         /// Instantiates a new <see cref="StandardOutputReceiver" /> class.
         /// </summary>
         /// <param name="process">A plugin process.</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="process" /> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="process" /> is <see langword="null" />.</exception>
         public StandardOutputReceiver(IPluginProcess process)
         {
             if (process == null)

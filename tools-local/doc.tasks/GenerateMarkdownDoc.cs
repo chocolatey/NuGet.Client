@@ -2,12 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Xml.XPath;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
@@ -59,12 +55,12 @@ namespace NuGetTasks
 
                 file.WriteLine($"\n\n# {Title}\n");
 
-                if(!string.IsNullOrEmpty(Summary))
+                if (!string.IsNullOrEmpty(Summary))
                 {
                     file.WriteLine($"{Summary}\n");
                 }
-                
-                for (int j = 0; j < Sections.Length; j++) 
+
+                for (int j = 0; j < Sections.Length; j++)
                 {
                     string sectionTitle = Sections[j].GetMetadata("Title");
                     if (!string.IsNullOrEmpty(sectionTitle))
@@ -77,7 +73,7 @@ namespace NuGetTasks
                     {
                         file.WriteLine($"{summary}\n");
                     }
-                    
+
                     WriteSectionProjecs(Sections[j], file);
 
                     if (j + 1 < Sections.Length)
@@ -165,7 +161,7 @@ namespace NuGetTasks
             XPathExpression expr = nav.Compile("/Project/PropertyGroup/Description");
 
             XPathNodeIterator iter = nav.Select(expr);
-            
+
             while (iter.MoveNext())
             {
                 return iter.Current.Value;

@@ -6,11 +6,14 @@ using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using NuGet.Common;
 using NuGet.Configuration.Test;
 using NuGet.Test.Utility;
 using Test.Utility.Signing;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Dotnet.Integration.Test
 {
@@ -19,17 +22,19 @@ namespace Dotnet.Integration.Test
     {
         private const string _successfulAddTrustedSigner = "Successfully added a trusted {0} '{1}'.";
         private const string _successfulRemoveTrustedSigner = "Successfully removed the trusted signer '{0}'.";
-        private MsbuildIntegrationTestFixture _msbuildFixture;
+        private DotnetIntegrationTestFixture _dotnetFixture;
+        private readonly ITestOutputHelper _testOutputHelper;
 
-        public DotnetTrustTests(MsbuildIntegrationTestFixture fixture)
+        public DotnetTrustTests(DotnetIntegrationTestFixture dotnetFixture, ITestOutputHelper testOutputHelper)
         {
-            _msbuildFixture = fixture;
+            _dotnetFixture = dotnetFixture;
+            _testOutputHelper = testOutputHelper;
         }
 
         [Fact]
         public void DotnetTrust_Implicit_ListAction_Succeeds()
         {
-            using (SimpleTestPathContext pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 // Arrange
                 var nugetConfigFileName = "NuGet.Config";
@@ -51,12 +56,12 @@ namespace Dotnet.Integration.Test
                 File.WriteAllText(nugetConfigPath, nugetConfigContent);
 
                 //Act
-                CommandRunnerResult result = _msbuildFixture.RunDotnet(
+                CommandRunnerResult result = _dotnetFixture.RunDotnetExpectSuccess(
                     pathContext.WorkingDirectory,
-                    $"nuget trust --configfile {nugetConfigPath}");
+                    $"nuget trust --configfile {nugetConfigPath}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
-                result.Success.Should().BeTrue();
                 SettingsTestUtils.RemoveWhitespace(result.Output).Should().Contain(SettingsTestUtils.RemoveWhitespace(expectedAuthorContent));
             }
         }
@@ -64,19 +69,19 @@ namespace Dotnet.Integration.Test
         [Fact]
         public void DotnetTrust_Implicity_ListAction_EmptySettings_Succeeds()
         {
-            using (SimpleTestPathContext pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 // Arrange
                 var nugetConfigFileName = "NuGet.Config";
                 var nugetConfigPath = Path.Combine(pathContext.WorkingDirectory, nugetConfigFileName);
 
                 // Act
-                CommandRunnerResult result = _msbuildFixture.RunDotnet(
+                CommandRunnerResult result = _dotnetFixture.RunDotnetExpectSuccess(
                     pathContext.SolutionRoot,
-                    $"nuget trust --configfile {nugetConfigPath}");
+                    $"nuget trust --configfile {nugetConfigPath}",
+                    testOutputHelper: _testOutputHelper);
 
                 //// Assert
-                result.Success.Should().BeTrue();
                 result.Output.Should().Contain("There are no trusted signers.");
             }
         }
@@ -84,7 +89,7 @@ namespace Dotnet.Integration.Test
         [Fact]
         public void DotnetTrust_ListAction_Succeeds()
         {
-            using (SimpleTestPathContext pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 // Arrange
                 var nugetConfigFileName = "NuGet.Config";
@@ -107,12 +112,12 @@ namespace Dotnet.Integration.Test
                 File.WriteAllText(nugetConfigPath, nugetConfigContent);
 
                 //Act
-                CommandRunnerResult result = _msbuildFixture.RunDotnet(
+                CommandRunnerResult result = _dotnetFixture.RunDotnetExpectSuccess(
                     pathContext.WorkingDirectory,
-                    $"nuget trust list --configfile {nugetConfigPath}");
+                    $"nuget trust list --configfile {nugetConfigPath}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
-                result.Success.Should().BeTrue();
                 SettingsTestUtils.RemoveWhitespace(result.Output).Should().Contain(SettingsTestUtils.RemoveWhitespace(expectedAuthorContent));
             }
         }
@@ -120,7 +125,7 @@ namespace Dotnet.Integration.Test
         [Fact]
         public void DotnetTrust_ListAction_WithRelativePathNugetConfig_Succeeds()
         {
-            using (SimpleTestPathContext pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 // Arrange
                 var nugetConfigFileName = "NuGet.Config";
@@ -142,12 +147,12 @@ namespace Dotnet.Integration.Test
                 File.WriteAllText(nugetConfigPath, nugetConfigContent);
 
                 //Act
-                CommandRunnerResult result = _msbuildFixture.RunDotnet(
+                CommandRunnerResult result = _dotnetFixture.RunDotnetExpectSuccess(
                     pathContext.SolutionRoot,
-                    $"nuget trust list --configfile ..{Path.DirectorySeparatorChar}{nugetConfigFileName}");
+                    $"nuget trust list --configfile ..{Path.DirectorySeparatorChar}{nugetConfigFileName}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
-                result.Success.Should().BeTrue();
                 SettingsTestUtils.RemoveWhitespace(result.Output).Should().Contain(SettingsTestUtils.RemoveWhitespace(expectedAuthorContent));
             }
         }
@@ -161,7 +166,7 @@ namespace Dotnet.Integration.Test
             var nugetConfigFileName = "NuGet.Config";
             var package = new SimpleTestPackageContext();
 
-            using (SimpleTestPathContext pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             using (MemoryStream zipStream = await package.CreateAsStreamAsync())
             using (TrustedTestCert<TestCertificate> trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate())
             {
@@ -186,9 +191,10 @@ namespace Dotnet.Integration.Test
                 var allowUntruestedRootValue = allowUntrustedRoot ? "true" : "false";
 
                 // Act
-                CommandRunnerResult resultAdd = _msbuildFixture.RunDotnet(
+                CommandRunnerResult resultAdd = _dotnetFixture.RunDotnetExpectSuccess(
                     pathContext.SolutionRoot,
-                    $"nuget trust author nuget {signedPackagePath}  {allowUntrustedRootArg} --configfile ..{Path.DirectorySeparatorChar}{nugetConfigFileName}");
+                    $"nuget trust author nuget {signedPackagePath}  {allowUntrustedRootArg} --configfile ..{Path.DirectorySeparatorChar}{nugetConfigFileName}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 resultAdd.Success.Should().BeTrue();
@@ -222,7 +228,7 @@ namespace Dotnet.Integration.Test
             var nugetConfigFileName = "NuGet.Config";
             var package = new SimpleTestPackageContext();
 
-            using (SimpleTestPathContext pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             using (MemoryStream zipStream = await package.CreateAsStreamAsync())
             using (TrustedTestCert<TestCertificate> trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate())
             {
@@ -243,9 +249,10 @@ namespace Dotnet.Integration.Test
                 var nugetConfigPath = Path.Combine(pathContext.WorkingDirectory, nugetConfigFileName);
 
                 // Act
-                CommandRunnerResult resultAdd = _msbuildFixture.RunDotnet(
+                CommandRunnerResult resultAdd = _dotnetFixture.RunDotnetExpectSuccess(
                     pathContext.SolutionRoot,
-                    $"nuget trust author nuget {signedPackagePath} --configfile ..{Path.DirectorySeparatorChar}{nugetConfigFileName}");
+                    $"nuget trust author nuget {signedPackagePath} --configfile ..{Path.DirectorySeparatorChar}{nugetConfigFileName}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 resultAdd.Success.Should().BeTrue();
@@ -281,7 +288,7 @@ namespace Dotnet.Integration.Test
             var nugetConfigFileName = "NuGet.Config";
             var package = new SimpleTestPackageContext();
 
-            using (SimpleTestPathContext pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             using (MemoryStream zipStream = await package.CreateAsStreamAsync())
             using (TrustedTestCert<TestCertificate> trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate())
             {
@@ -296,9 +303,10 @@ namespace Dotnet.Integration.Test
                 var allowUntruestedRootValue = allowUntrustedRoot ? "true" : "false";
 
                 // Act
-                CommandRunnerResult resultAdd = _msbuildFixture.RunDotnet(
+                CommandRunnerResult resultAdd = _dotnetFixture.RunDotnetExpectSuccess(
                     pathContext.SolutionRoot,
-                    $"nuget trust author nuget {signedPackagePath}  {allowUntrustedRootArg} --configfile {nugetConfigPath}");
+                    $"nuget trust author nuget {signedPackagePath}  {allowUntrustedRootArg} --configfile {nugetConfigPath}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 resultAdd.Success.Should().BeTrue();
@@ -326,7 +334,7 @@ namespace Dotnet.Integration.Test
             var nugetConfigFileName = "NuGet.Config";
             var package = new SimpleTestPackageContext();
 
-            using (SimpleTestPathContext pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             using (MemoryStream zipStream = await package.CreateAsStreamAsync())
             using (TrustedTestCert<TestCertificate> trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate())
             {
@@ -341,20 +349,21 @@ namespace Dotnet.Integration.Test
                 var allowUntruestedRootValue = allowUntrustedRoot ? "true" : "false";
 
                 // Act
-                CommandRunnerResult resultAdd = _msbuildFixture.RunDotnet(
+                CommandRunnerResult resultAdd = _dotnetFixture.RunDotnetExpectSuccess(
                     pathContext.SolutionRoot,
-                    $"nuget trust author nuget {signedPackagePath}  {allowUntrustedRootArg} --configfile {nugetConfigPath}");
+                    $"nuget trust author nuget {signedPackagePath}  {allowUntrustedRootArg} --configfile {nugetConfigPath}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 resultAdd.Success.Should().BeTrue();
 
                 // Try to add same author again.
-                resultAdd = _msbuildFixture.RunDotnet(
+                resultAdd = _dotnetFixture.RunDotnetExpectFailure(
                     pathContext.SolutionRoot,
-                    $"nuget trust author nuget {signedPackagePath}  {allowUntrustedRootArg} --configfile {nugetConfigPath}", ignoreExitCode: true);
+                    $"nuget trust author nuget {signedPackagePath}  {allowUntrustedRootArg} --configfile {nugetConfigPath}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Main assert
-                resultAdd.Success.Should().BeFalse();
                 resultAdd.AllOutput.Should().Contain("error: A trusted signer 'nuget' already exists.");
                 resultAdd.AllOutput.Should().NotContain("--help");
             }
@@ -372,7 +381,7 @@ namespace Dotnet.Integration.Test
             var nugetConfigFileName = "NuGet.Config";
             var package = new SimpleTestPackageContext();
 
-            using (SimpleTestPathContext pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             using (MemoryStream zipStream = await package.CreateAsStreamAsync())
             using (TrustedTestCert<TestCertificate> trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate())
             {
@@ -397,9 +406,10 @@ namespace Dotnet.Integration.Test
                 }
 
                 // Act
-                CommandRunnerResult resultAdd = _msbuildFixture.RunDotnet(
+                CommandRunnerResult resultAdd = _dotnetFixture.RunDotnetExpectSuccess(
                     pathContext.SolutionRoot,
-                    $"nuget trust repository nuget {signedPackagePath}  {allowUntrustedRootArg} {ownersArgs} --configfile {nugetConfigPath}");
+                    $"nuget trust repository nuget {signedPackagePath}  {allowUntrustedRootArg} {ownersArgs} --configfile {nugetConfigPath}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 resultAdd.Success.Should().BeTrue();
@@ -425,7 +435,7 @@ namespace Dotnet.Integration.Test
             var nugetConfigFileName = "NuGet.Config";
             var package = new SimpleTestPackageContext();
 
-            using (SimpleTestPathContext pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             using (MemoryStream zipStream = await package.CreateAsStreamAsync())
             using (TrustedTestCert<TestCertificate> trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate())
             {
@@ -440,20 +450,21 @@ namespace Dotnet.Integration.Test
                 var nugetConfigPath = Path.Combine(pathContext.WorkingDirectory, nugetConfigFileName);
 
                 // Act
-                CommandRunnerResult resultAdd = _msbuildFixture.RunDotnet(
+                CommandRunnerResult resultAdd = _dotnetFixture.RunDotnetExpectSuccess(
                     pathContext.SolutionRoot,
-                    $"nuget trust repository nuget {signedPackagePath} --configfile {nugetConfigPath}");
+                    $"nuget trust repository nuget {signedPackagePath} --configfile {nugetConfigPath}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 resultAdd.Success.Should().BeTrue();
 
                 // Try to add same repository again
-                resultAdd = _msbuildFixture.RunDotnet(
+                resultAdd = _dotnetFixture.RunDotnetExpectFailure(
                     pathContext.SolutionRoot,
-                    $"nuget trust repository nuget {signedPackagePath} --configfile {nugetConfigPath}", ignoreExitCode: true);
+                    $"nuget trust repository nuget {signedPackagePath} --configfile {nugetConfigPath}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Main assert
-                resultAdd.Success.Should().BeFalse();
                 resultAdd.AllOutput.Should().Contain("error: A trusted signer 'nuget' already exists.");
                 resultAdd.AllOutput.Should().NotContain("--help");
             }
@@ -468,7 +479,7 @@ namespace Dotnet.Integration.Test
             var nugetConfigFileName = "NuGet.Config";
             var package = new SimpleTestPackageContext();
 
-            using (SimpleTestPathContext pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             using (MemoryStream zipStream = await package.CreateAsStreamAsync())
             using (TrustedTestCert<TestCertificate> trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate())
             {
@@ -486,12 +497,12 @@ namespace Dotnet.Integration.Test
                 var authorName = "MyCompanyCert";
 
                 // Act
-                CommandRunnerResult result = _msbuildFixture.RunDotnet(
+                CommandRunnerResult result = _dotnetFixture.RunDotnetExpectSuccess(
                     pathContext.SolutionRoot,
-                    $"nuget trust certificate {authorName} {certFingerprint} {allowUntrustedRootArg}  --algorithm SHA256 --configfile {nugetConfigPath}");
+                    $"nuget trust certificate {authorName} {certFingerprint} {allowUntrustedRootArg}  --algorithm SHA256 --configfile {nugetConfigPath}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
-                result.Success.Should().BeTrue();
                 result.AllOutput.Should().Contain(string.Format(CultureInfo.CurrentCulture, _successfulAddTrustedSigner, "author", authorName));
 
                 string expectedResult = SettingsTestUtils.RemoveWhitespace($@"<?xml version=""1.0"" encoding=""utf-8""?>
@@ -516,7 +527,7 @@ namespace Dotnet.Integration.Test
             var nugetConfigFileName = "NuGet.Config";
             var package = new SimpleTestPackageContext();
 
-            using (SimpleTestPathContext pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             using (MemoryStream zipStream = await package.CreateAsStreamAsync())
             using (TrustedTestCert<TestCertificate> trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate())
             {
@@ -534,21 +545,21 @@ namespace Dotnet.Integration.Test
                 var authorName = "MyCompanyCert";
 
                 // Act
-                CommandRunnerResult result = _msbuildFixture.RunDotnet(
+                CommandRunnerResult result = _dotnetFixture.RunDotnetExpectSuccess(
                     pathContext.SolutionRoot,
-                    $"nuget trust certificate {authorName} {certFingerprint} {allowUntrustedRootArg}  --algorithm SHA256 --configfile {nugetConfigPath}");
+                    $"nuget trust certificate {authorName} {certFingerprint} {allowUntrustedRootArg}  --algorithm SHA256 --configfile {nugetConfigPath}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
-                result.Success.Should().BeTrue();
                 result.AllOutput.Should().Contain(string.Format(CultureInfo.CurrentCulture, _successfulAddTrustedSigner, "author", authorName));
 
                 // Try to add same certificate fingerprint should fail
-                result = _msbuildFixture.RunDotnet(
+                result = _dotnetFixture.RunDotnetExpectFailure(
                     pathContext.SolutionRoot,
-                    $"nuget trust certificate {authorName} {certFingerprint} {allowUntrustedRootArg}  --algorithm SHA256 --configfile {nugetConfigPath}", ignoreExitCode: true);
+                    $"nuget trust certificate {authorName} {certFingerprint} {allowUntrustedRootArg}  --algorithm SHA256 --configfile {nugetConfigPath}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Main assert
-                result.Success.Should().BeFalse();
                 result.AllOutput.Should().Contain("The certificate finger you're trying to add is already in the certificate fingerprint list");
                 result.AllOutput.Should().NotContain("--help");
             }
@@ -563,7 +574,7 @@ namespace Dotnet.Integration.Test
             var nugetConfigFileName = "NuGet.Config";
             var package = new SimpleTestPackageContext();
 
-            using (SimpleTestPathContext pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             using (MemoryStream zipStream = await package.CreateAsStreamAsync())
             using (TrustedTestCert<TestCertificate> trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate())
             {
@@ -587,9 +598,10 @@ namespace Dotnet.Integration.Test
                 var authorName = "MyCompanyCert";
 
                 // Act
-                CommandRunnerResult resultAdd = _msbuildFixture.RunDotnet(
+                CommandRunnerResult resultAdd = _dotnetFixture.RunDotnetExpectSuccess(
                     pathContext.SolutionRoot,
-                    $"nuget trust certificate {authorName} {certFingerprint} {allowUntrustedRootArg}  --algorithm SHA256 --configfile {nugetConfigPath}");
+                    $"nuget trust certificate {authorName} {certFingerprint} {allowUntrustedRootArg}  --algorithm SHA256 --configfile {nugetConfigPath}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 resultAdd.Success.Should().BeTrue();
@@ -616,7 +628,7 @@ namespace Dotnet.Integration.Test
             var nugetConfigFileName = "NuGet.Config";
             var package = new SimpleTestPackageContext();
 
-            using (SimpleTestPathContext pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             using (MemoryStream zipStream = await package.CreateAsStreamAsync())
             using (TrustedTestCert<TestCertificate> trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate())
             {
@@ -637,9 +649,10 @@ namespace Dotnet.Integration.Test
                 var nugetConfigPath = Path.Combine(pathContext.WorkingDirectory, nugetConfigFileName);
 
                 // Act
-                CommandRunnerResult resultSync = _msbuildFixture.RunDotnet(
+                CommandRunnerResult resultSync = _dotnetFixture.RunDotnetExpectSuccess(
                     pathContext.SolutionRoot,
-                    $"nuget trust remove {repositoryName} --configfile {nugetConfigPath}");
+                    $"nuget trust remove {repositoryName} --configfile {nugetConfigPath}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 resultSync.Success.Should().BeTrue();
@@ -660,7 +673,7 @@ namespace Dotnet.Integration.Test
             var nugetConfigFileName = "NuGet.Config";
             var package = new SimpleTestPackageContext();
 
-            using (SimpleTestPathContext pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             using (MemoryStream zipStream = await package.CreateAsStreamAsync())
             using (TrustedTestCert<TestCertificate> trustedTestCert = SigningTestUtility.GenerateTrustedTestCertificate())
             {
@@ -682,9 +695,10 @@ namespace Dotnet.Integration.Test
                 var nugetConfigPath = Path.Combine(pathContext.WorkingDirectory, nugetConfigFileName);
 
                 // Act
-                CommandRunnerResult resultSync = _msbuildFixture.RunDotnet(
+                CommandRunnerResult resultSync = _dotnetFixture.RunDotnetExpectSuccess(
                     pathContext.SolutionRoot,
-                    $"nuget trust remove {repositoryWrongName} --configfile {nugetConfigPath}");
+                    $"nuget trust remove {repositoryWrongName} --configfile {nugetConfigPath}",
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 resultSync.Success.Should().BeTrue();

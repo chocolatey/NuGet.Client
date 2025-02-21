@@ -12,18 +12,17 @@ using System.Threading.Tasks;
 using Microsoft;
 using Microsoft.ServiceHub.Framework;
 using Microsoft.ServiceHub.Framework.Services;
-using Microsoft.VisualStudio.Services.Common;
 using Microsoft.VisualStudio.Threading;
 using NuGet.Common;
 using NuGet.Frameworks;
 using NuGet.PackageManagement.Telemetry;
 using NuGet.Packaging;
 using NuGet.Packaging.Core;
-using NuGet.Packaging.Signing;
 using NuGet.ProjectManagement;
 using NuGet.ProjectManagement.Projects;
 using NuGet.Protocol.Core.Types;
 using NuGet.Resolver;
+using NuGet.Shared;
 using NuGet.Versioning;
 using NuGet.VisualStudio;
 using NuGet.VisualStudio.Internal.Contracts;
@@ -274,6 +273,30 @@ namespace NuGet.PackageManagement.VisualStudio
             return targetFrameworks;
         }
 
+        public async ValueTask<bool> IsCentralPackageManagementEnabledAsync(string projectId, CancellationToken cancellationToken)
+        {
+            Assumes.NotNullOrEmpty(projectId);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            NuGetProject? project = await SolutionUtility.GetNuGetProjectAsync(
+                _sharedState.SolutionManager,
+                projectId,
+                cancellationToken);
+
+            Assumes.NotNull(project);
+
+            if (project is BuildIntegratedNuGetProject buildIntegratedProject)
+            {
+                var dgcContext = new DependencyGraphCacheContext();
+                IReadOnlyList<ProjectModel.PackageSpec>? packageSpecs = await buildIntegratedProject.GetPackageSpecsAsync(dgcContext);
+
+                return packageSpecs.Any(spec => spec.RestoreMetadata.CentralPackageVersionsEnabled);
+            }
+
+            return false;
+        }
+
         public async ValueTask<IProjectMetadataContextInfo> GetMetadataAsync(string projectId, CancellationToken cancellationToken)
         {
             Assumes.NotNullOrEmpty(projectId);
@@ -323,7 +346,9 @@ namespace NuGet.PackageManagement.VisualStudio
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+#pragma warning disable RS0030 // Do not used banned APIs
             _semaphoreReleaser = await _state.AsyncSemaphore.EnterAsync(cancellationToken);
+#pragma warning restore RS0030 // Do not used banned APIs
 
             _state.Reset();
 
@@ -406,7 +431,7 @@ namespace NuGet.PackageManagement.VisualStudio
             IReadOnlyList<string> packageSourceNames,
             CancellationToken cancellationToken)
         {
-            return await GetInstallActionsAsync(projectIds, packageIdentity, versionConstraints, includePrerelease, dependencyBehavior, packageSourceNames, versionRange: null, cancellationToken);
+            return await GetInstallActionsAsync(projectIds, packageIdentity, versionConstraints, includePrerelease, dependencyBehavior, packageSourceNames, versionRange: null, newMappingID: null, newMappingSource: null, cancellationToken);
         }
 
         public async ValueTask<IReadOnlyList<ProjectAction>> GetInstallActionsAsync(
@@ -417,6 +442,8 @@ namespace NuGet.PackageManagement.VisualStudio
             DependencyBehavior dependencyBehavior,
             IReadOnlyList<string> packageSourceNames,
             VersionRange? versionRange,
+            string? newMappingID,
+            string? newMappingSource,
             CancellationToken cancellationToken)
         {
             Assumes.NotNullOrEmpty(projectIds);
@@ -457,6 +484,8 @@ namespace NuGet.PackageManagement.VisualStudio
                     projectContext,
                     sourceRepositories,
                     versionRange,
+                    newMappingID,
+                    newMappingSource,
                     cancellationToken);
 
                 var projectActions = new List<ProjectAction>();

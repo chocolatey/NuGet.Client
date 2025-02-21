@@ -10,7 +10,7 @@ namespace NuGet.Common
     public static class ClientVersionUtility
     {
         // Cache the value since it cannot change
-        private static string _clientVersion;
+        private static string? _clientVersion;
 
         /// <summary>
         /// Find the current NuGet client version from the assembly info as a string.
@@ -23,7 +23,7 @@ namespace NuGet.Common
             {
                 string version = string.Empty;
 
-                var assembly = typeof(ClientVersionUtility).GetTypeInfo().Assembly;
+                var assembly = typeof(ClientVersionUtility).Assembly;
 
                 var informationalVersionAttr = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
                 if (informationalVersionAttr != null)

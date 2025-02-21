@@ -215,7 +215,7 @@ namespace NuGet.Packaging
 
             var ns = Xml.Root.GetDefaultNamespace().NamespaceName;
 
-            var groups = new Dictionary<NuGetFramework, HashSet<string>>(new NuGetFrameworkFullComparer());
+            var groups = new Dictionary<NuGetFramework, HashSet<string>>(NuGetFrameworkFullComparer.Instance);
 
             foreach (var group in MetadataNode.Elements(XName.Get(FrameworkAssemblies, ns)).Elements(XName.Get(FrameworkAssembly, ns))
                 .GroupBy(n => GetAttributeValue(n, TargetFramework)))
@@ -255,9 +255,9 @@ namespace NuGet.Packaging
             }
 
             // Sort items to make this deterministic for the caller
-            foreach (var framework in groups.Keys.OrderBy(e => e, new NuGetFrameworkSorter()))
+            foreach ((var framework, var items) in groups.OrderBy(e => e.Key, NuGetFrameworkSorter.Instance))
             {
-                var group = new FrameworkSpecificGroup(framework, groups[framework].OrderBy(item => item, StringComparer.OrdinalIgnoreCase));
+                var group = new FrameworkSpecificGroup(framework, items.OrderBy(item => item, StringComparer.OrdinalIgnoreCase));
 
                 results.Add(group);
             }
@@ -639,12 +639,28 @@ namespace NuGet.Packaging
                 return EmptyList;
             }
 
-            var set = new HashSet<string>(
-                flags.Split(CommaArray, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(flag => flag.Trim()),
-                StringComparer.OrdinalIgnoreCase);
+            // PERF: Avoid Linq on hot paths
+            var splitFlags = flags.Split(CommaArray, StringSplitOptions.RemoveEmptyEntries);
 
-            return set.OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToList();
+#if NETSTANDARD2_0
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+#elif NET472_OR_GREATER || NET5_0_OR_GREATER
+            var set = new HashSet<string>(splitFlags.Length, StringComparer.OrdinalIgnoreCase);
+#endif
+            foreach (string flag in splitFlags)
+            {
+                set.Add(flag.Trim());
+            }
+
+            var result = new List<string>(set.Count);
+            foreach (var s in set)
+            {
+                result.Add(s);
+            }
+
+            result.Sort(StringComparer.OrdinalIgnoreCase);
+
+            return result;
         }
 
         private HashSet<PackageDependency> GetPackageDependencies(IEnumerable<XElement> nodes, bool useStrictVersionCheck)

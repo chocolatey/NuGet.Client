@@ -3,10 +3,11 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
+using System.CommandLine;
+using System.CommandLine.Parsing;
 using System.Globalization;
 using System.Linq;
-using System.Reflection;
+using System.Threading;
 using Microsoft.Extensions.CommandLineUtils;
 using NuGet.Commands;
 using NuGet.Common;
@@ -21,20 +22,21 @@ namespace NuGet.CommandLine.XPlat
         private const string DotnetNuGetAppName = "dotnet nuget";
         private const string DotnetPackageAppName = "NuGet.CommandLine.XPlat.dll package";
 
+        private const int DotnetPackageSearchTimeOut = 15;
+
         public static int Main(string[] args)
         {
             var log = new CommandOutputLogger(LogLevel.Information);
-            return MainInternal(args, log);
+            return MainInternal(args, log, EnvironmentVariableWrapper.Instance);
         }
 
         /// <summary>
         /// Internal Main. This is used for testing.
         /// </summary>
-        public static int MainInternal(string[] args, CommandOutputLogger log)
+        public static int MainInternal(string[] args, CommandOutputLogger log, IEnvironmentVariableReader environmentVariableReader)
         {
-#if DEBUG
-            // Uncomment the following when debugging. Also uncomment the PackageReference for Microsoft.Build.Locator.
-            /*try
+#if USEMSBUILDLOCATOR
+            try
             {
                 // .NET JIT compiles one method at a time. If this method calls `MSBuildLocator` directly, the
                 // try block is never entered if Microsoft.Build.Locator.dll can't be found. So, run it in a
@@ -45,14 +47,16 @@ namespace NuGet.CommandLine.XPlat
             {
                 // MSBuildLocator is used only to enable Visual Studio debugging.
                 // It's not needed when using a patched dotnet sdk, so it doesn't matter if it fails.
-            }*/
+            }
+#endif
 
-            var debugNuGetXPlat = Environment.GetEnvironmentVariable("DEBUG_NUGET_XPLAT");
+#if DEBUG
+            var debugNuGetXPlat = environmentVariableReader.GetEnvironmentVariable("DEBUG_NUGET_XPLAT");
 
             if (args.Contains(DebugOption) || string.Equals(bool.TrueString, debugNuGetXPlat, StringComparison.OrdinalIgnoreCase))
             {
                 args = args.Where(arg => !StringComparer.OrdinalIgnoreCase.Equals(arg, DebugOption)).ToArray();
-                Debugger.Launch();
+                System.Diagnostics.Debugger.Launch();
             }
 #endif
 
@@ -63,11 +67,64 @@ namespace NuGet.CommandLine.XPlat
             }
             else
             {
-                UILanguageOverride.Setup(log);
+                UILanguageOverride.Setup(log, environmentVariableReader);
             }
             log.LogDebug(string.Format(CultureInfo.CurrentCulture, Strings.Debug_CurrentUICulture, CultureInfo.DefaultThreadCurrentUICulture));
 
             NuGet.Common.Migrations.MigrationRunner.Run();
+
+            // TODO: Migrating from Microsoft.Extensions.CommandLineUtils.CommandLineApplication to System.Commandline.CliCommand
+            // If we are looking to add further commands here, we should also look to redesign this parsing logic at that time
+            // See related issues:
+            //    - https://github.com/NuGet/Home/issues/11996
+            //    - https://github.com/NuGet/Home/issues/11997
+            //    - https://github.com/NuGet/Home/issues/13089
+            if ((args.Count() >= 2 && args[0] == "package" && args[1] == "search")
+                || (args.Any() && args[0] == "config")
+                || (args.Any() && args[0] == "why"))
+            {
+                Func<ILoggerWithColor> getHidePrefixLogger = () =>
+                {
+                    log.HidePrefixForInfoAndMinimal = true;
+                    return log;
+                };
+
+                CliCommand rootCommand;
+                if (args[0] == "package")
+                {
+                    rootCommand = new CliCommand("package");
+
+                    PackageSearchCommand.Register(rootCommand, getHidePrefixLogger);
+                }
+                else
+                {
+                    rootCommand = new CliCommand("nuget");
+
+                    ConfigCommand.Register(rootCommand, getHidePrefixLogger);
+                    Commands.Why.WhyCommand.Register(rootCommand, getHidePrefixLogger);
+                }
+
+                CancellationTokenSource tokenSource = new CancellationTokenSource();
+                tokenSource.CancelAfter(TimeSpan.FromMinutes(DotnetPackageSearchTimeOut));
+                int exitCodeValue = 0;
+                CliConfiguration config = new(rootCommand);
+                ParseResult parseResult = rootCommand.Parse(args, config);
+
+                try
+                {
+                    exitCodeValue = parseResult.Invoke();
+                }
+                catch (Exception ex)
+                {
+                    LogException(ex, log);
+                    var tokenList = parseResult.Tokens.TakeWhile(token => token.Type == CliTokenType.Argument || token.Type == CliTokenType.Command || token.Type == CliTokenType.Directive).Select(t => t.Value).ToList();
+                    tokenList.Add("-h");
+                    rootCommand.Parse(tokenList).Invoke();
+                    exitCodeValue = 1;
+                }
+
+                return exitCodeValue;
+            }
 
             var app = InitializeApp(args, log);
 
@@ -151,9 +208,12 @@ namespace NuGet.CommandLine.XPlat
                     // Log the stack trace as verbose output.
                     log.LogVerbose(e.ToString());
 
-                    exitCode = 1;
+                    if (e is CommandParsingException)
+                    {
+                        ShowBestHelp(app, args);
+                    }
 
-                    ShowBestHelp(app, args);
+                    exitCode = 1;
                 }
             }
 
@@ -166,11 +226,26 @@ namespace NuGet.CommandLine.XPlat
             return exitCode;
         }
 
+        internal static void LogException(Exception e, ILogger log)
+        {
+            // Log the error
+            if (ExceptionLogger.Instance.ShowStack)
+            {
+                log.LogError(e.ToString());
+            }
+            else
+            {
+                log.LogError(ExceptionUtilities.DisplayMessage(e));
+            }
+
+            // Log the stack trace as verbose output.
+            log.LogVerbose(e.ToString());
+        }
 
         private static CommandLineApplication InitializeApp(string[] args, CommandOutputLogger log)
         {
             // Many commands don't want prefixes output. Use this func instead of () => log to set the HidePrefix property first.
-            Func<ILogger> getHidePrefixLogger = () =>
+            Func<ILoggerWithColor> getHidePrefixLogger = () =>
             {
                 log.HidePrefixForInfoAndMinimal = true;
                 return log;
@@ -200,11 +275,14 @@ namespace NuGet.CommandLine.XPlat
                 VerifyCommand.Register(app, getHidePrefixLogger, setLogLevel, () => new VerifyCommandRunner());
                 TrustedSignersCommand.Register(app, getHidePrefixLogger, setLogLevel);
                 SignCommand.Register(app, getHidePrefixLogger, setLogLevel, () => new SignCommandRunner());
+                // The commands below are implemented with System.CommandLine, and are here only for `dotnet nuget --help`
+                ConfigCommand.Register(app);
+                Commands.Why.WhyCommand.Register(app);
             }
 
             app.FullName = Strings.App_FullName;
             app.HelpOption(XPlatUtility.HelpOption);
-            app.VersionOption("--version", typeof(Program).GetTypeInfo().Assembly.GetName().Version.ToString());
+            app.VersionOption("--version", typeof(Program).Assembly.GetName().Version.ToString());
 
             return app;
         }

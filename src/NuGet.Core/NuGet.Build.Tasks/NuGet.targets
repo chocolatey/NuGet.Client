@@ -63,6 +63,31 @@ Copyright (c) .NET Foundation. All rights reserved.
     <_CentralPackageVersionsEnabled Condition="'$(ManagePackageVersionsCentrally)' == 'true' AND '$(CentralPackageVersionsFileImported)' == 'true'">true</_CentralPackageVersionsEnabled>
   </PropertyGroup>
 
+  <!--
+    Visual Studio's project property page requires defaults to be set to inform customers what the default values are.
+    Project-system uses DefaultValueSourceLocation.AfterContext to detect when a customer's project changes the value, so these defaults must be set here in the targets file.
+  -->
+  <PropertyGroup>
+    <!-- Enable NuGetAudit by default -->
+    <NuGetAudit Condition=" '$(NuGetAudit)' == '' ">true</NuGetAudit>
+    <!-- Report all severity vulnerabilities (low severity and higher). Allowed values are: low, moderate, high, critical -->
+    <NuGetAuditLevel Condition=" '$(NuGetAuditLevel)' == '' ">low</NuGetAuditLevel>
+    <!-- Report known vulnerabilities on direct and transitive dependencies, unless SdkAnalysisLevel (or equalivant) is lower than 9.0.100. Allowed values are: direct, all -->
+    <NuGetAuditMode Condition=" '$(NuGetAuditMode)' == '' ">direct</NuGetAuditMode>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <RestoreEnablePackagePruning Condition="'$(RestoreEnablePackagePruning)' == ''
+                    AND '$(UsingMicrosoftNETSdk)' == 'true'
+                    AND '$(NuGetExeSkipSdkAnalysisLevelCheck)' != 'true'
+                    AND '$(SdkAnalysisLevel)' != ''
+                    AND $([MSBuild]::VersionGreaterThanOrEquals('$(SdkAnalysisLevel)', '10.0.100'))
+                    AND ('$(TargetFrameworkIdentifier)' == '.NETCoreApp'
+                        OR ('$(TargetFrameworkIdentifier)' == '.NETStandard' AND '$(TargetFrameworkVersion)' != '' AND $([MSBuild]::VersionGreaterThanOrEquals('$(TargetFrameworkVersion)', '2.0'))))"
+                    >true</RestoreEnablePackagePruning>
+    <RestoreEnablePackagePruning Condition="$(RestoreEnablePackagePruning) == '' ">false</RestoreEnablePackagePruning>
+  </PropertyGroup>
+
   <PropertyGroup>
     <!-- Exclude packages from changing restore inputs.  -->
     <_GenerateRestoreGraphProjectEntryInputProperties>ExcludeRestorePackageImports=true</_GenerateRestoreGraphProjectEntryInputProperties>
@@ -92,6 +117,30 @@ Copyright (c) .NET Foundation. All rights reserved.
     </_GenerateRestoreGraphProjectEntryInputProperties>
   </PropertyGroup>
 
+  <ItemGroup Condition="'$(ManagePackageVersionsCentrally)' == 'true' And '$(RestoreEnableGlobalPackageReference)' != 'false'">
+    <!--
+        Add GlobalPackageReference items to the PackageReference item group with no version.
+
+        Global package references only include the same assets as a development dependency (runtime; build; native; contentfiles; analyzers)
+        because those kind of packages are the best candidate for a global package reference.  They are generally packages that
+        extend the build.
+
+        Global package references have all assets private because central package references are generally packages that provide
+        versioning, signing, etc and should not flow to downstream dependencies.  Also, central package references are already
+        referenced by every project in the tree so they don't need to be transitive.
+      -->
+    <PackageReference Include="@(GlobalPackageReference)"
+                      Version=""
+                      IncludeAssets="Runtime;Build;Native;contentFiles;Analyzers"
+                      PrivateAssets="All" />
+
+      <!--
+        Add GlobalPackageReference items to the PackageVersion item group with the version.
+      -->
+    <PackageVersion Include="@(GlobalPackageReference)"
+                    Version="%(Version)" />
+  </ItemGroup>
+
   <!-- Tasks -->
   <UsingTask TaskName="NuGet.Build.Tasks.RestoreTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
   <UsingTask TaskName="NuGet.Build.Tasks.WriteRestoreGraphTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
@@ -101,6 +150,8 @@ Copyright (c) .NET Foundation. All rights reserved.
   <UsingTask TaskName="NuGet.Build.Tasks.GetCentralPackageVersionsTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
   <UsingTask TaskName="NuGet.Build.Tasks.GetRestorePackageDownloadsTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
   <UsingTask TaskName="NuGet.Build.Tasks.GetRestoreFrameworkReferencesTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
+  <UsingTask TaskName="NuGet.Build.Tasks.GetRestoreNuGetAuditSuppressionsTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
+  <UsingTask TaskName="NuGet.Build.Tasks.GetRestorePrunePackageReferencesTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
   <UsingTask TaskName="NuGet.Build.Tasks.GetRestoreDotnetCliToolsTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
   <UsingTask TaskName="NuGet.Build.Tasks.GetProjectTargetFrameworksTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
   <UsingTask TaskName="NuGet.Build.Tasks.GetRestoreSolutionProjectsTask" AssemblyFile="$(RestoreTaskAssemblyFile)" />
@@ -133,13 +184,20 @@ Copyright (c) .NET Foundation. All rights reserved.
       RestoreGraphItems="@(_RestoreGraphEntryFiltered)"
       RestoreDisableParallel="$(RestoreDisableParallel)"
       RestoreNoCache="$(RestoreNoCache)"
+      RestoreNoHttpCache="$(RestoreNoHttpCache)"
       RestoreIgnoreFailedSources="$(RestoreIgnoreFailedSources)"
       RestoreRecursive="$(RestoreRecursive)"
       RestoreForce="$(RestoreForce)"
       HideWarningsAndErrors="$(HideWarningsAndErrors)"
       Interactive="$(NuGetInteractive)"
       RestoreForceEvaluate="$(RestoreForceEvaluate)"
-      RestorePackagesConfig="$(RestorePackagesConfig)"/>
+      RestorePackagesConfig="$(RestorePackagesConfig)"
+      EmbedFilesInBinlog="$(RestoreEmbedFilesInBinlog)">
+      <Output TaskParameter="EmbedInBinlog" ItemName="EmbedInBinlog" />
+      <Output TaskParameter="ProjectsRestored" PropertyName="RestoreProjectCount" />
+      <Output TaskParameter="ProjectsAlreadyUpToDate" PropertyName="RestoreSkippedCount" />
+      <Output TaskParameter="ProjectsAudited" PropertyName="RestoreProjectsAuditedCount" />
+    </RestoreTask>
   </Target>
 
   <!--
@@ -182,25 +240,6 @@ Copyright (c) .NET Foundation. All rights reserved.
       <CollectPackageReferencesContinueOnError Condition="'$(ContinueOnError)' == '' ">false</CollectPackageReferencesContinueOnError>
     </PropertyGroup>
 
-    <ItemGroup Condition="'$(ManagePackageVersionsCentrally)' == 'true' And '$(RestoreEnableGlobalPackageReference)' != 'false'">
-      <!--
-        Add GlobalPackageReference items to the PackageReference item group with no version.  The PackageVersion items are added
-        in the CollectCentralPackageVersions target.
-
-        Global package references only include the same assets as a development dependency (runtime; build; native; contentfiles; analyzers)
-        because those kind of packages are the best candidate for a global package reference.  They are generally packages that
-        extend the build.
-
-        Global package references have all assets private because central package references are generally packages that provide
-        versioning, signing, etc and should not flow to downstream dependencies.  Also, central package references are already
-        referenced by every project in the tree so they don't need to be transitive.
-      -->
-      <PackageReference Include="@(GlobalPackageReference)"
-                        Version=""
-                        IncludeAssets="Runtime;Build;Native;contentFiles;Analyzers"
-                        PrivateAssets="All" />
-    </ItemGroup>
-
     <CheckForDuplicateNuGetItemsTask
       Condition="'$(DisableCheckingDuplicateNuGetItems)' != 'true' "
       Items="@(PackageReference)"
@@ -236,14 +275,6 @@ Copyright (c) .NET Foundation. All rights reserved.
       <CollectCentralPackageVersionsContinueOnError>$(ContinueOnError)</CollectCentralPackageVersionsContinueOnError>
       <CollectCentralPackageVersionsContinueOnError Condition="'$(ContinueOnError)' == '' ">false</CollectCentralPackageVersionsContinueOnError>
     </PropertyGroup>
-
-    <ItemGroup Condition="'$(ManagePackageVersionsCentrally)' == 'true' And '$(RestoreEnableGlobalPackageReference)' != 'false'">
-      <!--
-        Add GlobalPackageReference items to the PackageVersion item group with the version.  The PackageReference items are added
-        in the CollectPackageReferences target.
-      -->
-      <PackageVersion Include="@(GlobalPackageReference)" Version="%(Version)" />
-    </ItemGroup>
 
     <CheckForDuplicateNuGetItemsTask
       Condition="'$(DisableCheckingDuplicateNuGetItems)' != 'true' "
@@ -315,6 +346,81 @@ Copyright (c) .NET Foundation. All rights reserved.
         Condition="'%(FrameworkReference.IsTransitiveFrameworkReference)' != 'true'"/>
     </ItemGroup>
   </Target>
+
+  <!--
+    ============================================================
+    CollectNuGetAuditSuppressions
+    Gathers all NuGetAuditSuppress items from the project.
+    This target may be used as an extension point to modify
+    advisory suppressions before NuGet reads them.
+    ============================================================
+  -->
+  <Target Name="CollectNuGetAuditSuppressions" Returns="@(NuGetAuditSuppress)">
+    <!-- NOTE for design-time builds we need to ensure that we continue on error. -->
+    <PropertyGroup>
+      <CollectNuGetAuditSuppressionsContinueOnError>$(ContinueOnError)</CollectNuGetAuditSuppressionsContinueOnError>
+      <CollectNuGetAuditSuppressionsContinueOnError Condition="'$(ContinueOnError)' == '' ">false</CollectNuGetAuditSuppressionsContinueOnError>
+    </PropertyGroup>
+
+    <CheckForDuplicateNuGetItemsTask
+      Items="@(NuGetAuditSuppress)"
+      ItemName="NuGetAuditSuppress"
+      LogCode="NU1508"
+      MSBuildProjectFullPath="$(MSBuildProjectFullPath)"
+      TreatWarningsAsErrors="$(TreatWarningsAsErrors)"
+      WarningsAsErrors="$(WarningsAsErrors)"
+      WarningsNotAsErrors="$(WarningsNotAsErrors)"
+      NoWarn="$(NoWarn)"
+      ContinueOnError="$(CollectNuGetAuditSuppressionsContinueOnError)"
+      >
+      <Output TaskParameter="DeduplicatedItems" ItemName="DeduplicatedNuGetAuditSuppressions" />
+    </CheckForDuplicateNuGetItemsTask>
+
+    <ItemGroup Condition="'@(DeduplicatedNuGetAuditSuppressions)' != ''">
+      <NuGetAuditSuppress Remove="@(NuGetAuditSuppress)" />
+      <NuGetAuditSuppress Include="@(DeduplicatedNuGetAuditSuppressions)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="CollectPrunePackageReferences" Returns="@(PrunePackageReference)">
+    <!-- NOTE for design-time builds we need to ensure that we continue on error. -->
+    <PropertyGroup>
+      <CollectPrunePackageReferencesContinueOnError>$(ContinueOnError)</CollectPrunePackageReferencesContinueOnError>
+      <CollectPrunePackageReferencesContinueOnError Condition="'$(ContinueOnError)' == '' ">false</CollectPrunePackageReferencesContinueOnError>
+  </PropertyGroup>
+
+    <CheckForDuplicateNuGetItemsTask
+      Condition="'$(DisableCheckingDuplicateNuGetItems)' != 'true' "
+      Items="@(PrunePackageReference)"
+      ItemName="PrunePackageReference"
+      LogCode="NU1509"
+      MSBuildProjectFullPath="$(MSBuildProjectFullPath)"
+      TreatWarningsAsErrors="$(TreatWarningsAsErrors)"
+      WarningsAsErrors="$(WarningsAsErrors)"
+      WarningsNotAsErrors="$(WarningsNotAsErrors)"
+      NoWarn="$(NoWarn)"
+      ContinueOnError="$(CollectPrunePackageReferencesContinueOnError)"
+      >
+      <Output TaskParameter="DeduplicatedItems" ItemName="DeduplicatedPrunePackageReference" />
+    </CheckForDuplicateNuGetItemsTask>
+
+    <ItemGroup Condition="'@(DeduplicatedPrunePackageReference)' != ''">
+      <PrunePackageReference Remove="@(PrunePackageReference)" />
+      <PrunePackageReference Include="@(DeduplicatedPrunePackageReference)" />
+    </ItemGroup>
+  </Target>
+
+
+  <!--
+    ============================================================
+    _CollectRestoreInputs
+    Runs all the 'Collect' targets
+    ============================================================
+  -->
+  <Target Name="_CollectRestoreInputs"
+          DependsOnTargets="CollectPackageReferences;CollectPackageDownloads;CollectFrameworkReferences;CollectCentralPackageVersions;CollectNuGetAuditSuppressions;CollectPrunePackageReferences">
+  </Target>
+
   <!--
     ============================================================
     _LoadRestoreGraphEntryPoints
@@ -377,6 +483,7 @@ Copyright (c) .NET Foundation. All rights reserved.
        Condition=" '%(RestoreGraphProjectInputItems.Extension)' != '.metaproj'
                    AND '%(RestoreGraphProjectInputItems.Extension)' != '.shproj'
                    AND '%(RestoreGraphProjectInputItems.Extension)' != '.vcxitems'
+                   AND '%(RestoreGraphProjectInputItems.Extension)' != '.vdproj'
                    AND '%(RestoreGraphProjectInputItems.Extension)' != '' " />
     </ItemGroup>
 
@@ -848,8 +955,15 @@ Copyright (c) .NET Foundation. All rights reserved.
         <NuGetLockFilePath>$(NuGetLockFilePath)</NuGetLockFilePath>
         <RestoreLockedMode>$(RestoreLockedMode)</RestoreLockedMode>
         <_CentralPackageVersionsEnabled>$(_CentralPackageVersionsEnabled)</_CentralPackageVersionsEnabled>
+        <CentralPackageFloatingVersionsEnabled>$(CentralPackageFloatingVersionsEnabled)</CentralPackageFloatingVersionsEnabled>
         <CentralPackageVersionOverrideEnabled>$(CentralPackageVersionOverrideEnabled)</CentralPackageVersionOverrideEnabled>
         <CentralPackageTransitivePinningEnabled>$(CentralPackageTransitivePinningEnabled)</CentralPackageTransitivePinningEnabled>
+        <NuGetAudit>$(NuGetAudit)</NuGetAudit>
+        <NuGetAuditLevel>$(NuGetAuditLevel)</NuGetAuditLevel>
+        <NuGetAuditMode>$(NuGetAuditMode)</NuGetAuditMode>
+        <SdkAnalysisLevel>$(SdkAnalysisLevel)</SdkAnalysisLevel>
+        <UsingMicrosoftNETSdk>$(UsingMicrosoftNETSdk)</UsingMicrosoftNETSdk>
+        <RestoreUseLegacyDependencyResolver>$(RestoreUseLegacyDependencyResolver)</RestoreUseLegacyDependencyResolver>
       </_RestoreGraphEntry>
     </ItemGroup>
 
@@ -889,6 +1003,8 @@ Copyright (c) .NET Foundation. All rights reserved.
         <ConfigFilePaths>$(_OutputConfigFilePaths)</ConfigFilePaths>
         <PackagesPath>$(_OutputPackagesPath)</PackagesPath>
         <TargetFrameworks>@(_RestoreTargetFrameworksOutputFiltered)</TargetFrameworks>
+        <NuGetAudit>$(NuGetAudit)</NuGetAudit>
+        <NuGetAuditLevel>$(NuGetAuditLevel)</NuGetAuditLevel>
       </_RestoreGraphEntry>
     </ItemGroup>
 
@@ -977,7 +1093,7 @@ Copyright (c) .NET Foundation. All rights reserved.
     ============================================================
   -->
   <Target Name="_GenerateProjectRestoreGraphPerFramework"
-    DependsOnTargets="_GetRestoreProjectStyle;CollectPackageReferences;CollectPackageDownloads;CollectFrameworkReferences;CollectCentralPackageVersions"
+    DependsOnTargets="_GetRestoreProjectStyle;_CollectRestoreInputs"
     Returns="@(_RestoreGraphEntry)">
 
     <!-- Write out project references -->
@@ -1044,6 +1160,29 @@ Copyright (c) .NET Foundation. All rights reserved.
         ItemName="_RestoreGraphEntry" />
     </GetRestoreFrameworkReferencesTask>
 
+    <!-- Write out advisory suppressions-->
+    <GetRestoreNuGetAuditSuppressionsTask
+      ProjectUniqueName="$(MSBuildProjectFullPath)"
+      NuGetAuditSuppressions="@(NuGetAuditSuppress)"
+      TargetFrameworks="$(TargetFramework)"
+      >
+
+      <Output
+        TaskParameter="RestoreGraphItems"
+        ItemName="_RestoreGraphEntry" />
+    </GetRestoreNuGetAuditSuppressionsTask>
+
+    <!-- Write out pruned package references-->
+    <GetRestorePrunePackageReferencesTask
+      ProjectUniqueName="$(MSBuildProjectFullPath)"
+      PrunePackageReferences="@(PrunePackageReference)"
+      TargetFrameworks="$(TargetFramework)"
+      >
+      <Output
+        TaskParameter="RestoreGraphItems"
+        ItemName="_RestoreGraphEntry" />
+    </GetRestorePrunePackageReferencesTask>
+
     <!-- Write out target framework information -->
     <ItemGroup Condition="  '$(PackageReferenceCompatibleProjectStyle)' == 'true'">
       <_RestoreGraphEntry Include="$([System.Guid]::NewGuid())">
@@ -1062,6 +1201,8 @@ Copyright (c) .NET Foundation. All rights reserved.
         <TargetPlatformMinVersion>$(TargetPlatformMinVersion)</TargetPlatformMinVersion>
         <CLRSupport>$(CLRSupport)</CLRSupport>
         <RuntimeIdentifierGraphPath>$(RuntimeIdentifierGraphPath)</RuntimeIdentifierGraphPath>
+        <WindowsTargetPlatformMinVersion>$(WindowsTargetPlatformMinVersion)</WindowsTargetPlatformMinVersion>
+        <RestoreEnablePackagePruning>$(RestoreEnablePackagePruning)</RestoreEnablePackagePruning>
       </_RestoreGraphEntry>
     </ItemGroup>
   </Target>

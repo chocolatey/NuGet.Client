@@ -117,12 +117,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Log_CheckingCompatibility" xml:space="preserve">
-    <value>Checking compatibility of packages on {0}.</value>
-  </data>
-  <data name="Log_CheckingPackageCompatibility" xml:space="preserve">
-    <value>Checking compatibility for {0} {1} with {2}.</value>
-  </data>
   <data name="Log_GeneratingMsBuildFile" xml:space="preserve">
     <value>Generating MSBuild file {0}.</value>
   </data>
@@ -444,10 +438,10 @@ For more information, visit https://docs.nuget.org/docs/reference/command-line-r
     <value>The lock file for {0} at location {1} does not exist, no-op is not possible. Continuing restore.</value>
   </data>
   <data name="Warning_MinVersionDoesNotExist" xml:space="preserve">
-    <value>{0} depends on {1} but {2} was not found. An approximate best match of {3} was resolved.</value>
+    <value>{0} depends on {1} but {2} was not found. {3} was resolved instead.</value>
   </data>
   <data name="Warning_MinVersionNonInclusive" xml:space="preserve">
-    <value>{0} does not provide an inclusive lower bound for dependency {1}. An approximate best match of {2} was resolved.</value>
+    <value>{0} does not provide an inclusive lower bound for dependency {1}. {2} was resolved instead.</value>
   </data>
   <data name="Warning_ProjectDependencyMissingLowerBound" xml:space="preserve">
     <value>Project dependency {0} does not contain an inclusive lower bound. Include a lower bound in the dependency version to ensure consistent restore results.</value>
@@ -775,8 +769,12 @@ For more information, visit https://docs.nuget.org/docs/reference/command-line-r
     <comment>{0} is the path to the project file. {1} is the restore duration.</comment>
   </data>
   <data name="Error_PackageDownload_OnlyExactVersionsAreAllowed" xml:space="preserve">
-    <value>'{0}' is not an exact version like '[1.0.0]'. Only exact versions are allowed with PackageDownload.</value>
-    <comment>0 - the version string that's not exact</comment>
+    <value>Package '{0} {1}' does not have an exact version like '[1.0.0]'. Only exact versions are allowed with PackageDownload.</value>
+    <comment>0 - The package that does not have an exact version. Do not translate 'PackageDownload'. 1 - the version string that's not exact.</comment>
+  </data>
+  <data name="Error_PackageDownload_NoVersion" xml:space="preserve">
+    <value>Package '{0}' does not have an exact version like '[1.0.0]'. Only exact versions are allowed with PackageDownload.</value>
+    <comment>0 - The package that does not have an exact version. Do not translate 'PackageDownload'.</comment>
   </data>
   <data name="Error_IncompatiblePackageType" xml:space="preserve">
     <value>The package {0} {1} has a package type {2} that is incompatible with this project.</value>
@@ -1040,5 +1038,105 @@ Non-HTTPS access will be removed in a future version. Consider migrating to 'HTT
   <data name="WarningAsError" xml:space="preserve">
     <value>Warning As Error: {0}</value>
     <comment>{0} is a warning message</comment>
+  </data>
+  <data name="Vulnerability_Severity_Low" xml:space="preserve">
+    <value>low</value>
+    <comment>As in "This package has a low severity vulnerability"</comment>
+  </data>
+  <data name="Vulnerability_Severity_Moderate" xml:space="preserve">
+    <value>moderate</value>
+    <comment>As in "This package has a moderate severity vulnerability"</comment>
+  </data>
+  <data name="Vulnerability_Severity_High" xml:space="preserve">
+    <value>high</value>
+    <comment>As in "This package has a high severity vulnerability"</comment>
+  </data>
+  <data name="Vulnerability_Severity_Critical" xml:space="preserve">
+    <value>critical</value>
+    <comment>As in "This package has a critical severity vulnerability"</comment>
+  </data>
+  <data name="Vulnerability_Severity_unknown" xml:space="preserve">
+    <value>unknown</value>
+    <comment>As in "This package has a unknown severity vulnerability"</comment>
+  </data>
+  <data name="Warning_PackageWithKnownVulnerability" xml:space="preserve">
+    <value>Package '{0}' {1} has a known {2} severity vulnerability, {3}</value>
+    <comment>{0} - package id
+{1} - package version
+{2} - severity, for example low, moderate, high, or critical
+{3} - URL for more info on the known vulnerability</comment>
+  </data>
+  <data name="Error_InvalidNuGetAuditLevelValue" xml:space="preserve">
+    <value>Invalid NuGetAuditLevel value '{0}'. Valid values: {1}</value>
+    <comment>Don't translate 'NuGetAuditLevel'
+{0} - is the value from the customer's project file
+{1} is the list of valid values "low, moderate, high, critical" (these should not be translated either)</comment>
+  </data>
+  <data name="Error_VulnerabilityDataFetch" xml:space="preserve">
+    <value>Error occurred while getting package vulnerability data: {0}</value>
+    <comment>{0} is an error message</comment>
+  </data>
+  <data name="Error_InvalidWindowsTargetPlatformMinVersion" xml:space="preserve">
+    <value>Invalid value for WindowsTargetPlatformMinVersion: {0}</value>
+    <comment>{0} is the value supplied </comment>
+  </data>
+  <data name="Error_InvalidNuGetAuditModeValue" xml:space="preserve">
+    <value>Invalid NuGetAuditMode value '{0}'. Valid values: {1}</value>
+    <comment>Don't translate 'NuGetAuditMode'
+{0} - is the value from the customer's project file
+{1} is the list of valid values "direct, all"</comment>
+  </data>
+  <data name="Error_InvalidNuGetAuditValue" xml:space="preserve">
+    <value>Invalid NuGetAudit value '{0}'. Valid values: {1}</value>
+    <comment>Don't translate 'NuGetAudit'
+{0} - is the value from the customer's project file
+{1} is the list of valid values "true, false"</comment>
+  </data>
+  <data name="SourcesCommandValidProtocolVersion" xml:space="preserve">
+    <value>The protocol version specified is invalid. Valid protocol versions are from {0} to {1}.</value>
+  </data>
+  <data name="Error_HttpSources_Multiple" xml:space="preserve">
+    <value>You are running the '{0}' operation with 'HTTP' sources: {1}. NuGet requires HTTPS sources. To use HTTP sources, you must explicitly set 'allowInsecureConnections' to true in your NuGet.Config file. Refer to https://aka.ms/nuget-https-everywhere for more information.</value>
+    <comment>0 - The command name. Ex. Push/Delete. 1 - list of server URIs</comment>
+  </data>
+  <data name="Error_HttpSource_Single" xml:space="preserve">
+    <value>You are running the '{0}' operation with an 'HTTP' source: {1}. NuGet requires HTTPS sources. To use an HTTP source, you must explicitly set 'allowInsecureConnections' to true in your NuGet.Config file. Refer to https://aka.ms/nuget-https-everywhere for more information.</value>
+    <comment>0 - The command name. Ex. Push/Delete. 1 - server URI.</comment>
+  </data>
+  <data name="Error_HttpSource_Single_Short" xml:space="preserve">
+    <value>You are running the '{0}' operation with an 'HTTP' source: {1}. NuGet requires HTTPS sources. Refer to https://aka.ms/nuget-https-everywhere for more information.</value>
+    <comment>0 - The command name. Ex. Push/Delete. 1 - server URI.</comment>
+  </data>
+  <data name="Warning_List_HttpSource" xml:space="preserve">
+    <value>The following is a 'Non-HTTPS' source: {0}
+NuGet requires HTTPS sources. Refer to https://aka.ms/nuget-https-everywhere for more information.</value>
+    <comment>{0} - list of server URIs</comment>
+  </data>
+  <data name="Warning_List_HttpSources" xml:space="preserve">
+    <value>The following are 'Non-HTTPS' sources: {0}
+NuGet requires HTTPS sources. Refer to https://aka.ms/nuget-https-everywhere for more information.</value>
+    <comment>{0} - list of server URIs</comment>
+  </data>
+  <data name="Invalid_AttributeValue" xml:space="preserve">
+    <value>The {0} value: `{1}` is invalid. Valid example: `{2}`</value>
+    <comment>{0} - is the attribute
+{1} is the invalid value of the attribute.
+{2} a valid attriibute value example</comment>
+  </data>
+  <data name="Warning_AuditSourceWithoutVulnerabilityData" xml:space="preserve">
+    <value>Audit source '{0}' did not provide any vulnerability data.</value>
+    <comment>{0} is the source name</comment>
+  </data>
+  <data name="RestoreDebugPruningPackageReference" xml:space="preserve">
+    <value>Pruning the package '{0}' as a dependency of '{1}'. The maximum prunable version is '{2}'</value>
+    <comment>0 - package id and version, 1 - version</comment>
+  </data>
+  <data name="Error_RestorePruningDirectPackageReference" xml:space="preserve">
+    <value>PackageReference {0} will not be pruned. Consider removing this package from your dependencies, as it is likely unnecessary.</value>
+    <comment>0 - package id and version</comment>
+  </data>
+  <data name="Error_RestorePruningProjectReference" xml:space="preserve">
+    <value>A ProjectReference cannot be pruned, {0}.</value>
+    <comment>0 - project reference</comment>
   </data>
 </root>

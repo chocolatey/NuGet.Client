@@ -24,9 +24,11 @@ namespace NuGet.Protocol.Core.Types
         Uri LicenseUrl { get; }
         Uri ProjectUrl { get; }
         Uri ReadmeUrl { get; }
+        string ReadmeFileUrl { get; }
         Uri ReportAbuseUrl { get; }
         Uri PackageDetailsUrl { get; }
         DateTimeOffset? Published { get; }
+        IReadOnlyList<string> OwnersList { get; }
         string Owners { get; }
         bool RequireLicenseAcceptance { get; }
         string Summary { get; }

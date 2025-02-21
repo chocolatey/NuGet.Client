@@ -314,9 +314,9 @@ namespace NuGet.PackageManagement
         {
             var specs = await project.GetPackageSpecsAsync(context);
 
-            var projectSpec = specs.Where(e => e.RestoreMetadata.ProjectStyle != ProjectStyle.Standalone
-               && e.RestoreMetadata.ProjectStyle != ProjectStyle.DotnetCliTool)
-                .FirstOrDefault();
+            var projectSpec = specs
+                .FirstOrDefault(e => e.RestoreMetadata.ProjectStyle != ProjectStyle.Standalone
+                                     && e.RestoreMetadata.ProjectStyle != ProjectStyle.DotnetCliTool);
 
             return projectSpec;
         }
@@ -424,7 +424,7 @@ namespace NuGet.PackageManagement
                 caching.AddSourceRepository(source);
             }
 
-            var dgProvider = new DependencyGraphSpecRequestProvider(providerCache, dgFile);
+            var dgProvider = new DependencyGraphSpecRequestProvider(providerCache, dgFile, context.Settings);
 
             var restoreContext = new RestoreArgs()
             {

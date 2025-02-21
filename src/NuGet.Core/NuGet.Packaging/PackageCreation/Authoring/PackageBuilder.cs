@@ -492,7 +492,7 @@ namespace NuGet.Packaging
         private static string CreatorInfo()
         {
             List<string> creatorInfo = new List<string>();
-            var assembly = typeof(PackageBuilder).GetTypeInfo().Assembly;
+            var assembly = typeof(PackageBuilder).Assembly;
             creatorInfo.Add(assembly.FullName);
 #if !IS_CORECLR // CORECLR_TODO: Environment.OSVersion
             creatorInfo.Add(Environment.OSVersion.ToString());
@@ -657,7 +657,7 @@ namespace NuGet.Packaging
         /// <param name="filePath">The file path to search for</param>
         /// <param name="packageFiles">The list of files to search within</param>
         /// <param name="filePathIncorrectCase">If the file was not found, this will be a path which almost matched but had the incorrect case</param>
-        /// <returns>An <see cref="IPackageFile"/> matching the specified path or <c>null</c></returns>
+        /// <returns>An <see cref="IPackageFile"/> matching the specified path or <see langword="null" /></returns>
         private static IPackageFile FindFileInPackage(string filePath, IEnumerable<IPackageFile> packageFiles, out string filePathIncorrectCase)
         {
             filePathIncorrectCase = null;
@@ -809,7 +809,7 @@ namespace NuGet.Packaging
                 set.Add(file);
             }
 
-            var managedCodeConventions = new ManagedCodeConventions(new RuntimeGraph());
+            var managedCodeConventions = new ManagedCodeConventions(RuntimeGraph.Empty);
             var collection = new ContentItemCollection();
             collection.Load(set.Select(path => path.Replace('\\', '/')).ToArray());
 
@@ -838,7 +838,7 @@ namespace NuGet.Packaging
                 ContentExtractor.GetContentForPattern(collection, pattern, targetedItemGroups);
                 foreach (ContentItemGroup group in targetedItemGroups)
                 {
-                    foreach (ContentItem item in group.Items)
+                    foreach (ContentItem item in group.Items.NoAllocEnumerate())
                     {
                         var framework = (NuGetFramework)item.Properties["tfm"];
                         if (framework == null)
@@ -1008,7 +1008,7 @@ namespace NuGet.Packaging
             return entry;
         }
 
-        private ZipArchiveEntry CreatePackageFileEntry(ZipArchive package, string entryName, DateTimeOffset timeOffset, CompressionLevel compressionLevel, StringBuilder warningMessage)
+        private static ZipArchiveEntry CreatePackageFileEntry(ZipArchive package, string entryName, DateTimeOffset timeOffset, CompressionLevel compressionLevel, StringBuilder warningMessage)
         {
             var entry = package.CreateEntry(entryName, compressionLevel);
 

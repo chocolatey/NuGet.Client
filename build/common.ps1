@@ -1,16 +1,16 @@
 ### Constants ###
 $NuGetClientRoot = Split-Path -Path $PSScriptRoot -Parent
 $CLIRoot = Join-Path $NuGetClientRoot cli
+$DotNetInstall = Join-Path $CLIRoot 'dotnet-install.ps1'
+$SdkTestingRoot = Join-Path $NuGetClientRoot ".test\dotnet"
 $Artifacts = Join-Path $NuGetClientRoot artifacts
 $Nupkgs = Join-Path $Artifacts nupkgs
 $ConfigureJson = Join-Path $Artifacts configure.json
 $BuiltInVsWhereExe = "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 $VSVersion = $env:VisualStudioVersion
 $DotNetExe = Join-Path $CLIRoot 'dotnet.exe'
-$ILMerge = Join-Path $NuGetClientRoot 'packages\ilmerge\2.14.1208\tools\ILMerge.exe'
 
 Set-Alias dotnet $DotNetExe
-Set-Alias ilmerge $ILMerge
 
 Function Read-PackageSources {
     param($NuGetConfig)
@@ -106,9 +106,6 @@ Function Invoke-BuildStep {
             }
             $completed = $true
         }
-        catch {
-            Error-Log $_
-        }
         finally {
             $sw.Stop()
             Reset-Colors
@@ -122,7 +119,7 @@ Function Invoke-BuildStep {
                 Trace-Log "[STOPPED +$(Format-ElapsedTime $sw.Elapsed)] $BuildStep"
             }
             else {
-                Error-Log "[FAILED +$(Format-ElapsedTime $sw.Elapsed)] $BuildStep"
+                Trace-Log "[FAILED +$(Format-ElapsedTime $sw.Elapsed)] $BuildStep"
             }
         }
     }
@@ -151,48 +148,99 @@ Function Update-Submodules {
     }
 }
 
-Function Install-DotnetCLI {
+Function Download-DotNetInstallScript {
     [CmdletBinding()]
     param(
         [switch]$Force
     )
-    $MSBuildExe = Get-MSBuildExe
-
-    $CmdOutLines = ((& $msbuildExe $NuGetClientRoot\build\config.props /restore:false "/ConsoleLoggerParameters:Verbosity=Minimal;NoSummary;ForceNoAlign" /nologo /target:GetCliBranchForTesting) | Out-String).Trim()
-    $CliBranchListForTesting = ($CmdOutLines -split [Environment]::NewLine)[-1]
-    $CliBranchList = $CliBranchListForTesting -split ';'
-
-    $DotNetInstall = Join-Path $CLIRoot 'dotnet-install.ps1'
 
     #If "-force" is specified, or dotnet.exe under cli folder doesn't exist, create cli folder and download dotnet-install.ps1 into cli folder.
     if ($Force -or -not (Test-Path $DotNetExe)) {
-        Trace-Log "Downloading .NET CLI '$CliBranchList'"
+        Trace-Log "Downloading .NET CLI install script"
 
         New-Item -ItemType Directory -Force -Path $CLIRoot | Out-Null
 
-        Invoke-WebRequest 'https://dot.net/v1/dotnet-install.ps1' -OutFile $DotNetInstall
+        Download-FileWithRetry 'https://dot.net/v1/dotnet-install.ps1' -OutFile $DotNetInstall
+    }
+}
+
+Function Install-DotnetCLI {
+    [CmdletBinding()]
+    param(
+        [switch]$Force,
+        [switch]$SkipDotnetInfo
+    )
+
+    Download-DotNetInstallScript -Force:$Force
+
+    if (-not ([string]::IsNullOrEmpty($env:DOTNET_SDK_VERSIONS))) {
+        Trace-Log "Using environment variable DOTNET_SDK_VERSIONS instead of DotNetSdkVersions.txt.  Value: '$env:DOTNET_SDK_VERSIONS'"
+        $CliBranchList = $env:DOTNET_SDK_VERSIONS -Split ";"
+    } else {
+        $CliBranchList = (Get-Content -Path "$NuGetClientRoot\build\DotNetSdkVersions.txt")
     }
 
     ForEach ($CliBranch in $CliBranchList) {
         $CliBranch = $CliBranch.trim()
-        $CliChannelAndVersion = $CliBranch -split ":"
-
-        # If version is not specified, use 'latest' as the version.
-        $Channel = $CliChannelAndVersion[0].trim()
-        if ($CliChannelAndVersion.count -eq 1) {
-            $Version = 'latest'
-        }
-        else {
-            $Version = $CliChannelAndVersion[1].trim()
+        if ($CliBranch.StartsWith("#") -or $CliBranch.Equals("")) {
+            continue
         }
 
-        $cli = @{
-            Root    = $CLIRoot
-            Version = $Version
-            Channel = $Channel
+        Trace-Log "$DotNetInstall $CliBranch -InstallDir $CLIRoot -NoPath"
+ 
+        & powershell $DotNetInstall $CliBranch -InstallDir $CLIRoot -NoPath
+        if ($LASTEXITCODE -ne 0)
+        {
+            throw "dotnet-install.ps1 exited with non-zero exit code"
         }
+    }
+    
+    if (-not (Test-Path $DotNetExe)) {
+        Error-Log "Unable to find dotnet.exe. The CLI install may have failed." -Fatal
+    }
 
-        $DotNetExe = Join-Path $cli.Root 'dotnet.exe';
+    if ($SkipDotnetInfo -ne $true) {
+        # Display build info
+        & $DotNetExe --info
+        if ($LASTEXITCODE -ne 0)
+        {
+            throw "dotnet --info exited with non-zero exit code"
+        }
+    }
+    
+    if ($env:CI -eq "true") {
+        Write-Host "##vso[task.setvariable variable=DOTNET_ROOT;isOutput=false;issecret=false;]$CLIRoot"
+        Write-Host "##vso[task.setvariable variable=DOTNET_MULTILEVEL_LOOKUP;isOutput=false;issecret=false;]0"
+        Write-Host "##vso[task.prependpath]$CLIRoot"
+    } else {
+        $env:DOTNET_ROOT=$CLIRoot
+        $env:DOTNET_MULTILEVEL_LOOKUP=0
+        if (-not $env:path.Contains($CLIRoot)) {
+            $env:path = $CLIRoot + ";" + $env:path
+        }
+    }
+}
+
+Function Install-DotNetSdksForTesting {
+    [CmdletBinding()]
+    param(
+        [switch]$Force
+    )
+
+    Download-DotNetInstallScript -Force:$Force
+
+    if (-not ([string]::IsNullOrEmpty($env:DOTNET_SDK_TEST_VERSIONS))) {
+        Trace-Log "Using environment variable DOTNET_SDK_TEST_VERSIONS instead of DotNetSdkTestVersions.txt.  Value: '$env:DOTNET_SDK_TEST_VERSIONS'"
+        $SdkList = $env:DOTNET_SDK_TEST_VERSIONS -Split ";"
+    } else {
+        $SdkList = (Get-Content -Path "$NuGetClientRoot\build\DotNetSdkTestVersions.txt")
+    }
+
+    ForEach ($SdkItem in $SdkList) {
+        $SdkItem = $SdkItem.trim()
+        if ($SdkItem.StartsWith("#") -or $SdkItem.Equals("")) {
+            continue
+        }
 
         if ([Environment]::Is64BitOperatingSystem) {
             $arch = "x64";
@@ -201,44 +249,13 @@ Function Install-DotnetCLI {
             $arch = "x86";
         }
 
-        Trace-Log "$DotNetInstall -Channel $($cli.Channel) -InstallDir $($cli.Root) -Version $($cli.Version) -Architecture $arch -NoPath"
+        Trace-Log "$DotNetInstall $SdkItem -InstallDir $SdkTestingRoot -Architecture $arch -NoPath"
  
-        & powershell $DotNetInstall -Channel $cli.Channel -InstallDir $cli.Root -Version $cli.Version -Architecture $arch -NoPath
+        & powershell $DotNetInstall $SdkItem -InstallDir $SdkTestingRoot -Architecture $arch -NoPath
         if ($LASTEXITCODE -ne 0)
         {
             throw "dotnet-install.ps1 exited with non-zero exit code"
         }
-
-        if (-not (Test-Path $DotNetExe)) {
-            Error-Log "Unable to find dotnet.exe. The CLI install may have failed." -Fatal
-        }
-
-        # Display build info
-        & $DotNetExe --info
-        if ($LASTEXITCODE -ne 0)
-        {
-            throw "dotnet --info exited with non-zero exit code"
-        }
-    }
-
-    # Install the 3.x runtime because our tests target netcoreapp2x
-    Trace-Log "$DotNetInstall -Runtime dotnet -Channel 3.1 -InstallDir $CLIRoot -NoPath"
-    # dotnet-install might make http requests that fail, but it handles those errors internally
-    # However, Invoke-BuildStep checks if any error happened, ever. Hence we need to run dotnet-install
-    # in a different process, to avoid treating their handled errors as build errors.
-    & powershell $DotNetInstall -Runtime dotnet -Channel 3.1 -InstallDir $CLIRoot -NoPath
-    & powershell $DotNetInstall -Runtime dotnet -Channel 5.0 -InstallDir $CLIRoot -NoPath
-
-    if ($LASTEXITCODE -ne 0)
-    {
-        throw "dotnet-install.ps1 exited with non-zero exit code"
-    }
-
-    # Display build info
-    & $DotNetExe --info
-    if ($LASTEXITCODE -ne 0)
-    {
-        throw "dotnet --info exited with non-zero exit code"
     }
 }
 
@@ -302,6 +319,32 @@ Function Test-BuildEnvironment {
     }
 }
 
+Function Install-ProcDump {
+    [CmdletBinding()]
+    param()
+    if ($Env:OS -eq "Windows_NT")
+    {
+        Trace-Log "Downloading ProcDump..."
+        
+        $ProcDumpZip = Join-Path $env:TEMP 'ProcDump.zip'
+        $TestDir = Join-Path $NuGetClientRoot '.test'
+        $ProcDumpDir = Join-Path $TestDir 'ProcDump'
+
+        Download-FileWithRetry 'https://download.sysinternals.com/files/Procdump.zip' -OutFile $ProcDumpZip
+        if (Test-Path $ProcDumpDir) {
+            Remove-Item $ProcDumpDir -Recurse -Force | Out-Null
+        }
+        New-Item $ProcDumpDir -ItemType Directory -Force | Out-Null
+        Expand-Archive $ProcDumpZip -DestinationPath $ProcDumpDir
+
+        if ($env:CI -eq "true") {
+            Write-Host "##vso[task.setvariable variable=PROCDUMP_PATH;isOutput=false;issecret=false;]$ProcDumpDir"
+        } else {
+            $env:PROCDUMP_PATH=$ProcDumpDir
+        }
+    }
+}
+
 Function Clear-PackageCache {
     [CmdletBinding()]
     param()
@@ -328,17 +371,40 @@ Function Clear-Nupkgs {
     }
 }
 
-Function Restore-SolutionPackages {
-    [CmdletBinding()]
-    param(
+Function Download-FileWithRetry {
+    param
+    (
+        [Parameter(Mandatory = $true)]
+        [string] $Uri,
+        [Parameter(Mandatory = $true)]
+        [string] $OutFile,
+        [Parameter(Mandatory = $false)]
+        [int] $Retries = 5
     )
-    $opts = 'msbuild', '-t:restore'
-    $opts += "${NuGetClientRoot}\build\bootstrap.proj"
 
-    Trace-Log "Restoring packages @""$NuGetClientRoot"""
-    Trace-Log "dotnet $opts"
-    & dotnet $opts
-    if (-not $?) {
-        Error-Log "Restore failed @""$NuGetClientRoot"". Code: ${LASTEXITCODE}"
+    while($true)
+    {
+        try
+        {
+            Trace-Log "Downloading '$Uri' to '$OutFile'"
+            Invoke-WebRequest $Uri -OutFile $OutFile
+            break
+        }
+        catch
+        {
+            $exceptionMessage = $_.Exception.Message
+            Warning-Log "Failed to download '$Uri': $exceptionMessage"
+            if ($Retries -gt 0) {
+                $Retries--
+                Trace-Log "Waiting 10 seconds before retrying. Retries left: $Retries"
+                Start-Sleep -Seconds 10
+ 
+            }
+            else
+            {
+                $exception = $_.Exception
+                throw $exception
+            }
+        }
     }
 }

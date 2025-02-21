@@ -22,7 +22,7 @@ namespace NuGet.Protocol
         [JsonConverter(typeof(MetadataFieldConverter))]
         public string Authors { get; private set; }
 
-        [JsonProperty(PropertyName = JsonProperties.DependencyGroups, ItemConverterType = typeof(PackageDependencyGroupConverter))]
+        [JsonProperty(PropertyName = JsonProperties.DependencyGroups)]
         public IEnumerable<PackageDependencyGroup> DependencySetsInternal { get; private set; }
 
         [JsonIgnore]
@@ -62,9 +62,35 @@ namespace NuGet.Protocol
         [JsonConverter(typeof(SafeUriConverter))]
         public Uri LicenseUrl { get; private set; }
 
+        private IReadOnlyList<string> _ownersList;
+
         [JsonProperty(PropertyName = JsonProperties.Owners)]
-        [JsonConverter(typeof(MetadataFieldConverter))]
-        public string Owners { get; private set; }
+        [JsonConverter(typeof(MetadataStringOrArrayConverter))]
+        public IReadOnlyList<string> OwnersList
+        {
+            get { return _ownersList; }
+            private set
+            {
+                if (_ownersList != value)
+                {
+                    _ownersList = value;
+                    _owners = null;
+                }
+            }
+        }
+
+        private string _owners;
+        public string Owners
+        {
+            get
+            {
+                if (_owners == null)
+                {
+                    _owners = OwnersList != null ? string.Join(", ", OwnersList.Where(s => !string.IsNullOrWhiteSpace(s))) : null;
+                }
+                return _owners;
+            }
+        }
 
         [JsonProperty(PropertyName = JsonProperties.PackageId)]
         public string PackageId { get; private set; }
@@ -79,6 +105,9 @@ namespace NuGet.Protocol
         [JsonProperty(PropertyName = JsonProperties.ReadmeUrl)]
         [JsonConverter(typeof(SafeUriConverter))]
         public Uri ReadmeUrl { get; private set; }
+
+        [JsonIgnore]
+        public string ReadmeFileUrl { get; internal set; }
 
         [JsonIgnore]
         public Uri ReportAbuseUrl { get; set; }

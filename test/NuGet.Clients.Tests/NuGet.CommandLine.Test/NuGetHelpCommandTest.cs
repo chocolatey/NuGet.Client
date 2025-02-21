@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using NuGet.Test.Utility;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using Xunit;
 
 namespace NuGet.CommandLine.Test
@@ -12,6 +12,7 @@ namespace NuGet.CommandLine.Test
         [InlineData("client-certs")]
         [InlineData("config")]
         [InlineData("delete")]
+        [InlineData("eula")]
         [InlineData("help")]
         [InlineData("init")]
         [InlineData("install")]
@@ -37,8 +38,7 @@ namespace NuGet.CommandLine.Test
             CommandRunnerResult r = CommandRunner.Run(
                 nugetexe,
                 Directory.GetCurrentDirectory(),
-                "help " + command,
-                waitForExit: true);
+                "help " + command);
 
             // Assert
             Assert.True(0 == r.ExitCode, r.Output + Environment.NewLine + r.Errors);
@@ -55,8 +55,7 @@ namespace NuGet.CommandLine.Test
             CommandRunnerResult r = CommandRunner.Run(
                 nugetexe,
                 Directory.GetCurrentDirectory(),
-                "help spec",
-                waitForExit: true);
+                "help spec");
 
             // Assert
             Assert.Equal(0, r.ExitCode);
@@ -79,8 +78,7 @@ namespace NuGet.CommandLine.Test
             CommandRunnerResult r = CommandRunner.Run(
                 nugetexe,
                 Directory.GetCurrentDirectory(),
-                "help help -ForceEnglishOutput",
-                waitForExit: true);
+                "help help -ForceEnglishOutput");
 
             // Assert
             Assert.Equal(0, r.ExitCode);

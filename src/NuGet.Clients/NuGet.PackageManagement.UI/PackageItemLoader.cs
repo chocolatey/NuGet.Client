@@ -13,9 +13,8 @@ using Microsoft.ServiceHub.Framework;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Threading;
 using NuGet.Common;
-using NuGet.PackageManagement.UI.Utility;
+using NuGet.PackageManagement.UI.ViewModels;
 using NuGet.PackageManagement.VisualStudio;
-using NuGet.Packaging.Core;
 using NuGet.Protocol.Core.Types;
 using NuGet.Versioning;
 using NuGet.VisualStudio;
@@ -34,11 +33,12 @@ namespace NuGet.PackageManagement.UI
         private readonly IReadOnlyCollection<PackageSourceContextInfo> _packageSources;
         private readonly ContractItemFilter _itemFilter;
         private readonly bool _useRecommender;
+        private readonly IPackageVulnerabilityService _packageVulnerabilityService;
         private PackageCollection _installedPackages;
         private IEnumerable<IPackageReferenceContextInfo> _packageReferences;
         private PackageFeedSearchState _state = new PackageFeedSearchState();
         private SearchFilter _searchFilter;
-        private IReconnectingNuGetSearchService _searchService;
+        private INuGetSearchService _searchService;
         public IItemLoaderState State => _state;
         private IServiceBroker _serviceBroker;
         private INuGetPackageFileService _packageFileService;
@@ -47,13 +47,14 @@ namespace NuGet.PackageManagement.UI
 
         private PackageItemLoader(
             IServiceBroker serviceBroker,
-            IReconnectingNuGetSearchService searchService,
+            INuGetSearchService searchService,
             PackageLoadContext context,
             IReadOnlyCollection<PackageSourceContextInfo> packageSources,
             ContractItemFilter itemFilter,
             string searchText,
             bool includePrerelease,
-            bool useRecommender)
+            bool useRecommender,
+            IPackageVulnerabilityService vulnerabilityService = default)
         {
             Assumes.NotNull(serviceBroker);
             Assumes.NotNull(context);
@@ -67,17 +68,19 @@ namespace NuGet.PackageManagement.UI
             _packageSources = packageSources;
             _itemFilter = itemFilter;
             _useRecommender = useRecommender;
+            _packageVulnerabilityService = vulnerabilityService;
         }
 
         public static async ValueTask<PackageItemLoader> CreateAsync(
             IServiceBroker serviceBroker,
-            IReconnectingNuGetSearchService searchService,
+            INuGetSearchService searchService,
             PackageLoadContext context,
             IReadOnlyCollection<PackageSourceContextInfo> packageSources,
             ContractItemFilter itemFilter,
             string searchText = null,
             bool includePrerelease = true,
-            bool useRecommender = false)
+            bool useRecommender = false,
+            IPackageVulnerabilityService vulnerabilityService = default)
         {
             var itemLoader = new PackageItemLoader(
                 serviceBroker,
@@ -87,7 +90,8 @@ namespace NuGet.PackageManagement.UI
                 itemFilter,
                 searchText,
                 includePrerelease,
-                useRecommender);
+                useRecommender,
+                vulnerabilityService);
 
             await itemLoader.InitializeAsync();
 
@@ -100,11 +104,12 @@ namespace NuGet.PackageManagement.UI
             PackageLoadContext context,
             IReadOnlyCollection<PackageSourceContextInfo> packageSources,
             ContractItemFilter itemFilter,
-            IReconnectingNuGetSearchService searchService,
+            INuGetSearchService searchService,
             INuGetPackageFileService packageFileService,
             string searchText = null,
             bool includePrerelease = true,
-            bool useRecommender = false)
+            bool useRecommender = false,
+            IPackageVulnerabilityService vulnerabilityService = default)
         {
             var itemLoader = new PackageItemLoader(
                 serviceBroker,
@@ -114,7 +119,8 @@ namespace NuGet.PackageManagement.UI
                 itemFilter,
                 searchText,
                 includePrerelease,
-                useRecommender);
+                useRecommender,
+                vulnerabilityService);
 
             await itemLoader.InitializeAsync(packageFileService);
 
@@ -256,87 +262,116 @@ namespace NuGet.PackageManagement.UI
                 return Enumerable.Empty<PackageItemViewModel>();
             }
 
-            var listItemViewModels = new List<PackageItemViewModel>();
+            var listItemViewModels = new Dictionary<string, PackageItemViewModel>();
 
-            foreach (PackageSearchMetadataContextInfo metadata in _state.Results.PackageSearchItems)
+            foreach (PackageSearchMetadataContextInfo metadataContextInfo in _state.Results.PackageSearchItems)
             {
-                VersionRange allowedVersions = VersionRange.All;
+                var packageId = metadataContextInfo.Identity.Id;
+                var packageVersion = metadataContextInfo.Identity.Version;
+                var packageLevel = metadataContextInfo.TransitiveOrigins != null ? PackageLevel.Transitive : PackageLevel.TopLevel;
 
-                // get the allowed version range and pass it to package item view model to choose the latest version based on that
-                if (_packageReferences != null)
+                if (listItemViewModels.TryGetValue(packageId, out PackageItemViewModel existingListItem))
                 {
-                    IEnumerable<IPackageReferenceContextInfo> matchedPackageReferences = _packageReferences.Where(r => StringComparer.OrdinalIgnoreCase.Equals(r.Identity.Id, metadata.Identity.Id));
-                    VersionRange[] allowedVersionsRange = matchedPackageReferences.Select(r => r.AllowedVersions).Where(v => v != null).ToArray();
-
-                    if (allowedVersionsRange.Length > 0)
+                    if (packageLevel == PackageLevel.Transitive)
                     {
-                        allowedVersions = allowedVersionsRange[0];
+                        UpdateTransitiveInfo(existingListItem, metadataContextInfo);
                     }
-                }
 
-                var packageLevel = metadata.TransitiveOrigins != null ? PackageLevel.Transitive : PackageLevel.TopLevel;
-
-                var transitiveToolTipMessage = string.Empty;
-                if (packageLevel == PackageLevel.Transitive)
-                {
-                    transitiveToolTipMessage = string.Format(CultureInfo.CurrentCulture, Resources.PackageVersionWithTransitiveOrigins, metadata.Identity.Version, string.Join(", ", metadata.TransitiveOrigins));
-                }
-
-                var listItem = new PackageItemViewModel(_searchService)
-                {
-                    Id = metadata.Identity.Id,
-                    Version = metadata.Identity.Version,
-                    IconUrl = metadata.IconUrl,
-                    Author = metadata.Authors,
-                    DownloadCount = metadata.DownloadCount,
-                    Summary = metadata.Summary,
-                    AllowedVersions = allowedVersions,
-                    PrefixReserved = metadata.PrefixReserved && !IsMultiSource,
-                    Recommended = metadata.IsRecommended,
-                    RecommenderVersion = metadata.RecommenderVersion,
-                    Vulnerabilities = metadata.Vulnerabilities,
-                    Sources = _packageSources,
-                    PackagePath = metadata.PackagePath,
-                    PackageFileService = _packageFileService,
-                    IncludePrerelease = _includePrerelease,
-                    PackageLevel = packageLevel,
-                    TransitiveToolTipMessage = transitiveToolTipMessage,
-                };
-
-                if (packageLevel == PackageLevel.TopLevel)
-                {
-                    listItem.UpdatePackageStatus(_installedPackages);
+                    existingListItem.UpdateInstalledPackagesVulnerabilities(metadataContextInfo.Identity);
                 }
                 else
                 {
-                    listItem.UpdateTransitivePackageStatus(metadata.Identity.Version);
-                }
+                    VersionRange allowedVersions = VersionRange.All;
+                    VersionRange versionOverride = null;
 
-                listItemViewModels.Add(listItem);
+                    // get the allowed version range and pass it to package item view model to choose the latest version based on that
+                    if (_packageReferences != null)
+                    {
+                        IEnumerable<IPackageReferenceContextInfo> matchedPackageReferences = _packageReferences.Where(r => StringComparer.OrdinalIgnoreCase.Equals(r.Identity.Id, metadataContextInfo.Identity.Id));
+                        var allowedVersionsRange = new List<VersionRange>();
+                        var versionOverrides = new List<VersionRange>();
+
+                        foreach (var reference in matchedPackageReferences)
+                        {
+                            if (reference.AllowedVersions != null)
+                            {
+                                allowedVersionsRange.Add(reference.AllowedVersions);
+                            }
+                            if (reference.VersionOverride != null)
+                            {
+                                versionOverrides.Add(reference.VersionOverride);
+                            }
+                        }
+
+                        allowedVersions = allowedVersionsRange.FirstOrDefault() ?? VersionRange.All;
+                        versionOverride = versionOverrides.FirstOrDefault();
+                    }
+
+                    ImmutableList<KnownOwnerViewModel> knownOwnerViewModels = null;
+
+                    // Only load KnownOwners for the Browse tab and not for any Recommended packages.
+                    // Recommended packages won't have KnownOwners metadata as they are not part of the search results.
+                    if (_itemFilter == ContractItemFilter.All && !metadataContextInfo.IsRecommended)
+                    {
+                        knownOwnerViewModels = LoadKnownOwnerViewModels(metadataContextInfo);
+                    }
+
+                    var listItem = new PackageItemViewModel(_searchService, _packageVulnerabilityService)
+                    {
+                        Id = metadataContextInfo.Identity.Id,
+                        Version = metadataContextInfo.Identity.Version,
+                        IconUrl = metadataContextInfo.IconUrl,
+                        Owner = metadataContextInfo.Owners,
+                        KnownOwnerViewModels = knownOwnerViewModels,
+                        Author = metadataContextInfo.Authors,
+                        DownloadCount = metadataContextInfo.DownloadCount,
+                        Summary = metadataContextInfo.Summary,
+                        AllowedVersions = allowedVersions,
+                        VersionOverride = versionOverride,
+                        PrefixReserved = metadataContextInfo.PrefixReserved && !IsMultiSource,
+                        Recommended = metadataContextInfo.IsRecommended,
+                        RecommenderVersion = metadataContextInfo.RecommenderVersion,
+                        Vulnerabilities = metadataContextInfo.Vulnerabilities,
+                        Sources = _packageSources,
+                        PackagePath = metadataContextInfo.PackagePath,
+                        PackageFileService = _packageFileService,
+                        IncludePrerelease = _includePrerelease,
+                        PackageLevel = packageLevel,
+                    };
+
+                    if (listItem.PackageLevel == PackageLevel.TopLevel)
+                    {
+                        listItem.UpdatePackageStatus(_installedPackages);
+                    }
+                    else
+                    {
+                        UpdateTransitiveInfo(listItem, metadataContextInfo);
+                        listItem.UpdateTransitivePackageStatus(metadataContextInfo.Identity.Version);
+                    }
+
+                    listItemViewModels[packageId] = listItem;
+                }
             }
 
-            return listItemViewModels.ToArray();
+            return listItemViewModels.Values.ToArray();
         }
 
-        private async Task<PackageDeprecationMetadataContextInfo> GetDeprecationMetadataAsync(PackageIdentity identity)
+        private static void UpdateTransitiveInfo(PackageItemViewModel listItem, PackageSearchMetadataContextInfo metadataContextInfo)
         {
-            Assumes.NotNull(identity);
-
-            return await _searchService.GetDeprecationMetadataAsync(identity, _packageSources, _includePrerelease, CancellationToken.None);
+            listItem.TransitiveInstalledVersions.Add(metadataContextInfo.Identity.Version);
+            listItem.TransitiveOrigins.AddRange(metadataContextInfo.TransitiveOrigins);
+            listItem.TransitiveToolTipMessage = string.Format(CultureInfo.CurrentCulture, Resources.PackageVersionWithTransitiveOrigins, string.Join(", ", listItem.TransitiveInstalledVersions), string.Join(", ", listItem.TransitiveOrigins));
         }
 
-        private async Task<IReadOnlyCollection<VersionInfoContextInfo>> GetVersionInfoAsync(PackageIdentity identity)
+        private static ImmutableList<KnownOwnerViewModel> LoadKnownOwnerViewModels(PackageSearchMetadataContextInfo metadataContextInfo)
         {
-            Assumes.NotNull(identity);
+            ImmutableList<KnownOwnerViewModel> knownOwnerViewModels = null;
+            if (metadataContextInfo.KnownOwners != null)
+            {
+                knownOwnerViewModels = metadataContextInfo.KnownOwners.Select(knownOwner => new KnownOwnerViewModel(knownOwner)).ToImmutableList();
+            }
 
-            return await _searchService.GetPackageVersionsAsync(identity, _packageSources, _includePrerelease, CancellationToken.None);
-        }
-
-        private async Task<(PackageSearchMetadataContextInfo, PackageDeprecationMetadataContextInfo)> GetDetailedPackageSearchMetadataContextInfoAsync(PackageIdentity identity)
-        {
-            Assumes.NotNull(identity);
-
-            return await _searchService.GetPackageMetadataAsync(identity, _packageSources, _includePrerelease, CancellationToken.None);
+            return knownOwnerViewModels;
         }
 
         public void Dispose()

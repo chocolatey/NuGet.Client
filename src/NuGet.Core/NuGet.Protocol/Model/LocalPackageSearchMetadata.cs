@@ -38,9 +38,26 @@ namespace NuGet.Protocol
 
         public Uri IconUrl => GetIconUri();
 
+        public string ReadmeFileUrl => GetReadmeUri();
+
         public PackageIdentity Identity => _nuspec.GetIdentity();
 
         public Uri LicenseUrl => Convert(_nuspec.GetLicenseUrl());
+
+        private IReadOnlyList<string> _ownersList;
+
+        public IReadOnlyList<string> OwnersList
+        {
+            get
+            {
+                if (_ownersList is null)
+                {
+                    _ownersList = Owners != null ? Owners.Split(',').Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()).ToList() : null;
+                }
+
+                return _ownersList;
+            }
+        }
 
         public string Owners => _nuspec.GetOwners();
 
@@ -90,7 +107,7 @@ namespace NuGet.Protocol
         }
 
         /// <inheritdoc cref="IPackageSearchMetadata.GetVersionsAsync" />
-        public Task<IEnumerable<VersionInfo>> GetVersionsAsync() => Task.FromResult(Enumerable.Empty<VersionInfo>());
+        public Task<IEnumerable<VersionInfo>> GetVersionsAsync() => TaskResult.EmptyEnumerable<VersionInfo>();
 
         /// <summary>
         /// Convert a string to a URI safely. This will return null if there are errors.
@@ -117,7 +134,7 @@ namespace NuGet.Protocol
         public LicenseMetadata LicenseMetadata => _nuspec.GetLicenseMetadata();
 
         /// <inheritdoc cref="IPackageSearchMetadata.GetDeprecationMetadataAsync" />
-        public Task<PackageDeprecationMetadata> GetDeprecationMetadataAsync() => Task.FromResult<PackageDeprecationMetadata>(null);
+        public Task<PackageDeprecationMetadata> GetDeprecationMetadataAsync() => TaskResult.Null<PackageDeprecationMetadata>();
 
         /// <inheritdoc cref="IPackageSearchMetadata.Vulnerabilities" />
         public IEnumerable<PackageVulnerabilityMetadata> Vulnerabilities => null;
@@ -190,6 +207,24 @@ namespace NuGet.Protocol
 
             // get the special icon url
             return builder.Uri;
+        }
+
+        private string GetReadmeUri()
+        {
+            string embeddedReadme = _nuspec.GetReadme();
+            if (embeddedReadme == null)
+            {
+                return null;
+            }
+
+            var baseUri = Convert(_package.Path);
+            UriBuilder builder = new UriBuilder(baseUri)
+            {
+                Fragment = embeddedReadme
+            };
+
+            // get the readme url
+            return builder.Uri.AbsoluteUri;
         }
     }
 }

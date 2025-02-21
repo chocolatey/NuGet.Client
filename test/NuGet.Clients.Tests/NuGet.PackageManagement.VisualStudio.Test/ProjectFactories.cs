@@ -17,6 +17,7 @@ using NuGet.Protocol.Core.Types;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
 using NuGet.VisualStudio;
+using Test.Utility;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -78,11 +79,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
         internal static IVsProjectAdapter CreateProjectAdapter(string fullPath)
         {
-            var projectBuildProperties = new Mock<IProjectBuildProperties>();
+            var projectBuildProperties = new Mock<IVsProjectBuildProperties>();
             return CreateProjectAdapter(fullPath, projectBuildProperties);
         }
 
-        internal static IVsProjectAdapter CreateProjectAdapter(string fullPath, Mock<IProjectBuildProperties> projectBuildProperties)
+        internal static IVsProjectAdapter CreateProjectAdapter(string fullPath, Mock<IVsProjectBuildProperties> projectBuildProperties)
         {
             var projectAdapter = CreateProjectAdapter(projectBuildProperties);
 
@@ -90,19 +91,19 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 .Setup(x => x.FullProjectPath)
                 .Returns(Path.Combine(fullPath, "foo.csproj"));
             projectAdapter
-                .Setup(x => x.GetTargetFrameworkAsync())
-                .ReturnsAsync(NuGetFramework.Parse("netstandard13"));
+                .Setup(x => x.GetTargetFramework())
+                .Returns(NuGetFramework.Parse("netstandard13"));
 
             var testMSBuildProjectExtensionsPath = Path.Combine(fullPath, "obj");
             Directory.CreateDirectory(testMSBuildProjectExtensionsPath);
             projectAdapter
-                .Setup(x => x.GetMSBuildProjectExtensionsPathAsync())
-                .Returns(Task.FromResult(testMSBuildProjectExtensionsPath));
+                .Setup(x => x.GetMSBuildProjectExtensionsPath())
+                .Returns(testMSBuildProjectExtensionsPath);
 
             return projectAdapter.Object;
         }
 
-        internal static Mock<IVsProjectAdapter> CreateProjectAdapter(Mock<IProjectBuildProperties> projectBuildProperties)
+        internal static Mock<IVsProjectAdapter> CreateProjectAdapter(Mock<IVsProjectBuildProperties> projectBuildProperties)
         {
             var projectAdapter = new Mock<IVsProjectAdapter>();
 
@@ -156,11 +157,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
         internal static async Task CreatePackagesAsync(SimpleTestPathContext rootDir, string packageAVersion = "2.15.3", string packageBVersion = "1.0.0")
         {
-            await SimpleTestPackageUtility.CreateFullPackageAsync(rootDir.PackageSource, "packageB", packageBVersion);
-            await SimpleTestPackageUtility.CreateFullPackageAsync(rootDir.PackageSource, "packageA", packageAVersion,
+            await SimpleTestPackageUtility.CreateFullPackageAsync(rootDir.PackageSource, "PackageB", packageBVersion);
+            await SimpleTestPackageUtility.CreateFullPackageAsync(rootDir.PackageSource, "PackageA", packageAVersion,
                 new Packaging.Core.PackageDependency[]
                 {
-                    new Packaging.Core.PackageDependency("packageB", VersionRange.Parse(packageBVersion))
+                    new Packaging.Core.PackageDependency("PackageB", VersionRange.Parse(packageBVersion))
                 });
         }
 
@@ -176,7 +177,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         internal static void UpdateProjectSystemCache(IProjectSystemCache projectCache, PackageSpec packageSpec, NuGetProject project)
         {
             ProjectNames projectNames = GetTestProjectNames(packageSpec.FilePath, packageSpec.Name);
-            DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectCache.AddProjectRestoreInfo(projectNames, dgSpec, new List<IAssetsLogMessage>());
             projectCache.AddProject(projectNames, Mock.Of<IVsProjectAdapter>(), project);
         }
@@ -192,7 +193,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 CacheContext = new SourceCacheContext(),
             };
 
-            DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpecs);
+            DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpecs);
             var dgProvider = new DependencyGraphSpecRequestProvider(new RestoreCommandProvidersCache(), dgSpec);
 
             foreach (RestoreSummaryRequest request in await dgProvider.CreateRequests(restoreContext))

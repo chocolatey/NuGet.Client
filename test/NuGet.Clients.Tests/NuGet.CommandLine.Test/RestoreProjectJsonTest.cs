@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using NuGet.Packaging;
 using NuGet.Packaging.Core;
 using NuGet.ProjectModel;
@@ -41,11 +42,11 @@ namespace NuGet.CommandLine.Test
                 await SimpleTestPackageUtility.CreatePackagesAsync(repositoryPath, packageContext);
 
                 var projectJson = @"{
-                                                    'dependencies': {
-                                                    'packageA': '1.0.0'
+                                                    ""dependencies"": {
+                                                    ""packageA"": ""1.0.0""
                                                     },
-                                                    'frameworks': {
-                                                            'uap10.0': { }
+                                                    ""frameworks"": {
+                                                            ""uap10.0"": { }
                                                         }
                                                  }";
 
@@ -64,8 +65,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(1 == r.ExitCode, r.Output + " " + r.Errors);
@@ -91,20 +91,20 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir1, "project.json",
                                                 @"{
-                                                    'dependencies': {
+                                                    ""dependencies"": {
                                                     },
-                                                    'frameworks': {
-                                                                'uap10.0': { }
+                                                    ""frameworks"": {
+                                                                ""uap10.0"": { }
                                                             }
                                                     }");
 
                 Util.CreateFile(projectDir2, "project.json",
                                     @"{
-                                        'version': '1.0.0-*',
-                                        'dependencies': {
+                                        ""version"": ""1.0.0-*"",
+                                        ""dependencies"": {
                                         },
-                                        'frameworks': {
-                                                    'uap10.0': { }
+                                        ""frameworks"": {
+                                                    ""uap10.0"": { }
                                                 }
                                         }");
 
@@ -121,8 +121,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(1 == r.ExitCode, r.Output + " " + r.Errors);
@@ -153,10 +152,10 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir1, "project.json",
                                                 @"{
-                                                    'dependencies': {
+                                                    ""dependencies"": {
                                                     },
-                                                    'frameworks': {
-                                                                'uap10.0': { }
+                                                    ""frameworks"": {
+                                                                ""uap10.0"": { }
                                                             }
                                                     }");
 
@@ -165,11 +164,11 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir2, "project.json",
                                     @"{
-                                        'version': '1.0.0-*',
-                                        'dependencies': {
+                                        ""version"": ""1.0.0-*"",
+                                        ""dependencies"": {
                                         },
-                                        'frameworks': {
-                                                    'uap10.0': { }
+                                        ""frameworks"": {
+                                                    ""uap10.0"": { }
                                                 }
                                         }");
 
@@ -217,8 +216,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -270,10 +268,10 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir1, "project.json",
                                                 @"{
-                                                    'dependencies': {
+                                                    ""dependencies"": {
                                                     },
-                                                    'frameworks': {
-                                                                'uap10.0': { }
+                                                    ""frameworks"": {
+                                                                ""uap10.0"": { }
                                                             }
                                                     }");
 
@@ -282,13 +280,13 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir2, "project.json",
                                     @"{
-                                        'version': '1.0.0-*',
-                                        'dependencies': {
-                                            'packageA': '1.0.0',
-                                            'packageB': '1.0.0'
+                                        ""version"": ""1.0.0-*"",
+                                        ""dependencies"": {
+                                            ""packageA"": ""1.0.0"",
+                                            ""packageB"": ""1.0.0""
                                         },
-                                        'frameworks': {
-                                                    'uap10.0': { }
+                                        ""frameworks"": {
+                                                    ""uap10.0"": { }
                                                 }
                                         }");
 
@@ -306,8 +304,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -336,10 +333,10 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir1, "project.json",
                                                 @"{
-                                                    'dependencies': {
+                                                    ""dependencies"": {
                                                     },
-                                                    'frameworks': {
-                                                                'uap10.0': { }
+                                                    ""frameworks"": {
+                                                                ""uap10.0"": { }
                                                             }
                                                     }");
 
@@ -383,8 +380,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 var test1Lock = new FileInfo(Path.Combine(projectDir1, "project.lock.json"));
 
@@ -417,26 +413,26 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir1, "project.json",
                                                 @"{
-                                                    'dependencies': {
+                                                    ""dependencies"": {
                                                     },
-                                                    'frameworks': {
-                                                                'net45': { }
+                                                    ""frameworks"": {
+                                                                ""net45"": { }
                                                             }
                                                     }");
                 Util.CreateFile(projectDir2, "project.json",
                                                 @"{
-                                                    'dependencies': {
+                                                    ""dependencies"": {
                                                     },
-                                                    'frameworks': {
-                                                                'net45': { }
+                                                    ""frameworks"": {
+                                                                ""net45"": { }
                                                             }
                                                     }");
                 Util.CreateFile(projectDir3, "project.json",
                                                 @"{
-                                                    'dependencies': {
+                                                    ""dependencies"": {
                                                     },
-                                                    'frameworks': {
-                                                                'net45': { }
+                                                    ""frameworks"": {
+                                                                ""net45"": { }
                                                             }
                                                     }");
 
@@ -533,8 +529,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 var test1Lock = new FileInfo(Path.Combine(projectDir1, "project.lock.json"));
 
@@ -576,10 +571,10 @@ namespace NuGet.CommandLine.Test
 
                     Util.CreateFile(projectDir, "project.json",
                                                     @"{
-                                                    'dependencies': {
+                                                    ""dependencies"": {
                                                     },
-                                                    'frameworks': {
-                                                                'uap10.0': { }
+                                                    ""frameworks"": {
+                                                                ""uap10.0"": { }
                                                             }
                                                     }");
 
@@ -647,8 +642,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    args,
-                    waitForExit: true);
+                    args);
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + Environment.NewLine + r.Errors);
@@ -659,7 +653,7 @@ namespace NuGet.CommandLine.Test
 
                 var prefix = "MSBuild P2P timeout [ms]: ";
 
-                var timeoutLineResult = lines.Where(line => line.Contains(prefix)).SingleOrDefault();
+                var timeoutLineResult = lines.SingleOrDefault(line => line.Contains(prefix));
 
                 Assert.NotNull(timeoutLineResult);
 
@@ -694,10 +688,10 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir1, "project.json",
                                                 @"{
-                                                    'dependencies': {
+                                                    ""dependencies"": {
                                                     },
-                                                    'frameworks': {
-                                                                'uap10.0': { }
+                                                    ""frameworks"": {
+                                                                ""uap10.0"": { }
                                                             }
                                                     }");
 
@@ -720,12 +714,12 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir2, "project.json",
                                     @"{
-                                        'version': '1.0.0-*',
-                                        'dependencies': {
+                                        ""version"": ""1.0.0-*"",
+                                        ""dependencies"": {
                                             ""packageA"": ""1.0.0""
                                         },
-                                        'frameworks': {
-                                                    'uap10.0': { }
+                                        ""frameworks"": {
+                                                    ""uap10.0"": { }
                                                 }
                                         }");
 
@@ -777,8 +771,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -791,12 +784,10 @@ namespace NuGet.CommandLine.Test
                 var lockFile2 = format.Read(test2Lock.FullName);
 
                 var a1 = lockFile1.Libraries
-                    .Where(lib => lib.Name.Equals("packageA", StringComparison.OrdinalIgnoreCase))
-                    .FirstOrDefault();
+                    .FirstOrDefault(lib => lib.Name.Equals("packageA", StringComparison.OrdinalIgnoreCase));
 
                 var a2 = lockFile2.Libraries
-                    .Where(lib => lib.Name.Equals("packageA", StringComparison.OrdinalIgnoreCase))
-                    .FirstOrDefault();
+                    .FirstOrDefault(lib => lib.Name.Equals("packageA", StringComparison.OrdinalIgnoreCase));
 
                 Assert.True(test1Lock.Exists);
                 Assert.True(test2Lock.Exists);
@@ -837,8 +828,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 var test1Lock = new FileInfo(Path.Combine(workingPath, "project.lock.json"));
 
@@ -877,8 +867,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 var test1Lock = new FileInfo(Path.Combine(workingPath, "project.lock.json"));
 
@@ -907,10 +896,10 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir1, "project.json",
                                                 @"{
-                                            'dependencies': {
+                                            ""dependencies"": {
                                             },
-                                            'frameworks': {
-                                                        'uap10.0': { }
+                                            ""frameworks"": {
+                                                        ""uap10.0"": { }
                                                     }
                                             }");
 
@@ -929,8 +918,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 var test1Lock = new FileInfo(Path.Combine(projectDir1, "project.lock.json"));
 
@@ -958,10 +946,10 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir1, "project.json",
                                                 @"{
-                                            'dependencies': {
+                                            ""dependencies"": {
                                             },
-                                            'frameworks': {
-                                                        'uap10.0': { }
+                                            ""frameworks"": {
+                                                        ""uap10.0"": { }
                                                     }
                                             }");
 
@@ -980,8 +968,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 var test1Lock = new FileInfo(Path.Combine(projectDir1, "project.lock.json"));
 
@@ -1014,11 +1001,11 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir1, "project.json",
                                                 @"{
-                                            'dependencies': {
-                                            'packageA': '1.1.0-beta-*'
+                                            ""dependencies"": {
+                                            ""packageA"": ""1.1.0-beta-*""
                                             },
-                                            'frameworks': {
-                                                        'uap10.0': { }
+                                            ""frameworks"": {
+                                                        ""uap10.0"": { }
                                                     }
                                             }");
 
@@ -1026,12 +1013,12 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir2, "project.json",
                                     @"{
-                                        'version': '1.0.0-*',
-                                        'dependencies': {
-                                        'packageA': '1.1.0-beta-*'
+                                        ""version"": ""1.0.0-*"",
+                                        ""dependencies"": {
+                                        ""packageA"": ""1.1.0-beta-*""
                                         },
-                                        'frameworks': {
-                                                    'uap10.0': { }
+                                        ""frameworks"": {
+                                                    ""uap10.0"": { }
                                                 }
                                         }");
 
@@ -1079,8 +1066,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -1125,11 +1111,11 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir1, "project.json",
                                                 @"{
-                                                    'dependencies': {
-                                                        'packageA': '1.0.0'
+                                                    ""dependencies"": {
+                                                        ""packageA"": ""1.0.0""
                                                     },
-                                                    'frameworks': {
-                                                                'uap10.0': { }
+                                                    ""frameworks"": {
+                                                                ""uap10.0"": { }
                                                             }
                                                     }");
 
@@ -1137,12 +1123,12 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir2, "project.json",
                                     @"{
-                                        'version': '1.0.0-*',
-                                        'dependencies': {
-                                            'packageB': '1.0.0'
+                                        ""version"": ""1.0.0-*"",
+                                        ""dependencies"": {
+                                            ""packageB"": ""1.0.0""
                                         },
-                                        'frameworks': {
-                                                    'uap10.0': { }
+                                        ""frameworks"": {
+                                                    ""uap10.0"": { }
                                                 }
                                         }");
 
@@ -1197,11 +1183,10 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
-                // Verify restore worked, this requires finding the packages from the repository, which is in 
+                // Verify restore worked, this requires finding the packages from the repository, which is in
                 // the solution level nuget.config.
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
@@ -1229,11 +1214,11 @@ namespace NuGet.CommandLine.Test
                 Util.CreateTestPackage("packageA", "1.0.0-beta-01", repositoryPath);
                 Util.CreateTestPackage("packageA", "1.0.0-beta-02", repositoryPath);
                 var projectJson = @"{
-                                        'dependencies': {
-                                        'packageA': '1.0.0-*'
+                                        ""dependencies"": {
+                                        ""packageA"": ""1.0.0-*""
                                         },
-                                        'frameworks': {
-                                                'uap10.0': { }
+                                        ""frameworks"": {
+                                                ""uap10.0"": { }
                                             }
                                         }";
 
@@ -1253,8 +1238,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 var lockFilePath = Path.Combine(workingPath, "project.lock.json");
                 var lockFileFormat = new LockFileFormat();
@@ -1286,11 +1270,11 @@ namespace NuGet.CommandLine.Test
                 Util.CreateTestPackage("packageA", "1.0.0-beta-01", repositoryPath);
                 Util.CreateTestPackage("packageA", "1.0.0-beta-02", repositoryPath);
                 var projectJson = @"{
-                                                    'dependencies': {
-                                                    'packageA': '1.0.0-*'
+                                                    ""dependencies"": {
+                                                    ""packageA"": ""1.0.0-*""
                                                     },
-                                                    'frameworks': {
-                                                            'uap10.0': { }
+                                                    ""frameworks"": {
+                                                            ""uap10.0"": { }
                                                         }
                                                   }";
 
@@ -1309,8 +1293,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 var lockFilePath = Path.Combine(workingPath, "project.lock.json");
                 var lockFileFormat = new LockFileFormat();
@@ -1368,8 +1351,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 var lockFilePath = Path.Combine(workingPath, "project.lock.json");
                 var lockFileFormat = new LockFileFormat();
@@ -1400,11 +1382,11 @@ namespace NuGet.CommandLine.Test
                 Util.CreateTestPackage("packageB", "2.0.0-beta", repositoryPath);
                 Util.CreateTestPackage("packageB", "3.0.0", repositoryPath);
                 var projectJson = @"{
-                                                    'dependencies': {
-                                                    'packageA': '1.0.0'
+                                                    ""dependencies"": {
+                                                    ""packageA"": ""1.0.0""
                                                     },
-                                                    'frameworks': {
-                                                            'uap10.0': { }
+                                                    ""frameworks"": {
+                                                            ""uap10.0"": { }
                                                         }
                                                  }";
 
@@ -1423,8 +1405,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 var lockFilePath = Path.Combine(workingPath, "project.lock.json");
                 var lockFileFormat = new LockFileFormat();
@@ -1457,12 +1438,12 @@ namespace NuGet.CommandLine.Test
                 Util.CreateTestPackage("packageC", "1.0.0", repositoryPath);
                 Util.CreateTestPackage("packageC", "2.0.0-beta", repositoryPath);
                 var projectJson = @"{
-                                        'dependencies': {
-                                        'packageA': '1.0.0',
-                                        'packageB': '1.0.0-*'
+                                        ""dependencies"": {
+                                        ""packageA"": ""1.0.0"",
+                                        ""packageB"": ""1.0.0-*""
                                         },
-                                        'frameworks': {
-                                                'uap10.0': { }
+                                        ""frameworks"": {
+                                                ""uap10.0"": { }
                                             }
                                         }";
 
@@ -1481,8 +1462,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 var lockFilePath = Path.Combine(workingPath, "project.lock.json");
                 var lockFileFormat = new LockFileFormat();
@@ -1514,12 +1494,12 @@ namespace NuGet.CommandLine.Test
                 Util.CreateTestPackage("packageC", "3.0.0", repositoryPath);
                 Util.CreateTestPackage("packageC", "2.1.0", repositoryPath);
                 var projectJson = @"{
-                                                    'dependencies': {
-                                                    'packageA': '1.0.0',
-                                                    'packageB': '1.0.0'
+                                                    ""dependencies"": {
+                                                    ""packageA"": ""1.0.0"",
+                                                    ""packageB"": ""1.0.0""
                                                     },
-                                                    'frameworks': {
-                                                            'uap10.0': { }
+                                                    ""frameworks"": {
+                                                            ""uap10.0"": { }
                                                         }
                                                 }";
 
@@ -1538,8 +1518,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 var lockFilePath = Path.Combine(workingPath, "project.lock.json");
                 var lockFileFormat = new LockFileFormat();
@@ -1571,12 +1550,12 @@ namespace NuGet.CommandLine.Test
                 Util.CreateTestPackage("packageC", "2.0.0-beta", repositoryPath);
                 Util.CreateConfigForGlobalPackagesFolder(workingPath);
                 var projectJson = @"{
-                                                    'dependencies': {
-                                                    'packageA': '1.0.0',
-                                                    'packageB': '1.0.0-*'
+                                                    ""dependencies"": {
+                                                    ""packageA"": ""1.0.0"",
+                                                    ""packageB"": ""1.0.0-*""
                                                     },
-                                                    'frameworks': {
-                                                            'uap10.0': { }
+                                                    ""frameworks"": {
+                                                            ""uap10.0"": { }
                                                         }
                                                   }";
 
@@ -1595,8 +1574,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 var lockFilePath = Path.Combine(workingPath, "project.lock.json");
                 var lockFileFormat = new LockFileFormat();
@@ -1634,21 +1612,21 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir, "testA.project.json",
                                                 @"{
-                                            'dependencies': {
-                                            'packageA': '1.1.0-beta-*'
+                                            ""dependencies"": {
+                                            ""packageA"": ""1.1.0-beta-*""
                                             },
-                                            'frameworks': {
-                                                        'uap10.0': { }
+                                            ""frameworks"": {
+                                                        ""uap10.0"": { }
                                                     }
                                             }");
 
                 Util.CreateFile(projectDir, "testB.project.json",
                                                 @"{
-                                                    'dependencies': {
-                                                    'packageA': '1.1.0-beta-*'
+                                                    ""dependencies"": {
+                                                    ""packageA"": ""1.1.0-beta-*""
                                                     },
-                                                    'frameworks': {
-                                                                'uap10.0': { }
+                                                    ""frameworks"": {
+                                                                ""uap10.0"": { }
                                                             }
                                                  }");
 
@@ -1713,8 +1691,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -1746,11 +1723,11 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(workingPath, "test.project.json",
                                                 @"{
-                                                        'dependencies': {
-                                                        'packageA': '1.1.0-beta-*'
+                                                        ""dependencies"": {
+                                                        ""packageA"": ""1.1.0-beta-*""
                                                         },
-                                                        'frameworks': {
-                                                                    'uap10.0': { }
+                                                        ""frameworks"": {
+                                                                    ""uap10.0"": { }
                                                         }
                                                    }");
 
@@ -1774,8 +1751,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -1808,11 +1784,11 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir, "project.json",
                                                 @"{
-                                            'dependencies': {
-                                            'packageA': '1.1.0-beta-*'
+                                            ""dependencies"": {
+                                            ""packageA"": ""1.1.0-beta-*""
                                             },
-                                            'frameworks': {
-                                                        'uap10.0': { }
+                                            ""frameworks"": {
+                                                        ""uap10.0"": { }
                                                     }
                                             }");
 
@@ -1862,8 +1838,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -1900,12 +1875,12 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(workingPath, "project.json",
                                                 @"{
-                                                    'dependencies': {
-                                                    'packageA': '1.1.0-beta-*',
-                                                    'packageB': '2.2.0-beta-*'
+                                                    ""dependencies"": {
+                                                    ""packageA"": ""1.1.0-beta-*"",
+                                                    ""packageB"": ""2.2.0-beta-*""
                                                     },
-                                                    'frameworks': {
-                                                                'uap10.0': { }
+                                                    ""frameworks"": {
+                                                                ""uap10.0"": { }
                                                             }
                                                 }");
 
@@ -1928,8 +1903,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -1997,12 +1971,12 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(projectDir, "project.json",
                                                 @"{
-                                                    'dependencies': {
-                                                    'packageA': '1.1.0-beta-*',
-                                                    'packageB': '2.2.0-beta-*'
+                                                    ""dependencies"": {
+                                                    ""packageA"": ""1.1.0-beta-*"",
+                                                    ""packageB"": ""2.2.0-beta-*""
                                                     },
-                                                    'frameworks': {
-                                                                'uap10.0': { }
+                                                    ""frameworks"": {
+                                                                ""uap10.0"": { }
                                                             }
                                                 }");
 
@@ -2029,8 +2003,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -2064,12 +2037,12 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(workingPath, "project.json",
                                                 @"{
-                                                    'dependencies': {
-                                                    'packageA': '1.1.0-beta-*',
-                                                    'packageB': '2.2.0-beta-*'
+                                                    ""dependencies"": {
+                                                    ""packageA"": ""1.1.0-beta-*"",
+                                                    ""packageB"": ""2.2.0-beta-*""
                                                     },
-                                                    'frameworks': {
-                                                                'uap10.0': { }
+                                                    ""frameworks"": {
+                                                                ""uap10.0"": { }
                                                             }
                                                 }");
 
@@ -2092,8 +2065,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -2130,12 +2102,12 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(workingPath, "project.json",
                                                 @"{
-                                                    'dependencies': {
-                                                    'packageA': '1.1.0-beta-*',
-                                                    'packageB': '2.2.0-beta-*'
+                                                    ""dependencies"": {
+                                                    ""packageA"": ""1.1.0-beta-*"",
+                                                    ""packageB"": ""2.2.0-beta-*""
                                                     },
-                                                    'frameworks': {
-                                                                'uap10.0': { }
+                                                    ""frameworks"": {
+                                                                ""uap10.0"": { }
                                                             }
                                                   }");
 
@@ -2156,8 +2128,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -2193,11 +2164,11 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(workingPath, "project.json",
                                                 @"{
-                                                    'dependencies': {
-                                                    'packageA': '3.1.0',
+                                                    ""dependencies"": {
+                                                    ""packageA"": ""3.1.0"",
                                                     },
-                                                    'frameworks': {
-                                                                'uap10.0': { }
+                                                    ""frameworks"": {
+                                                                ""uap10.0"": { }
                                                   }
                                                }");
 
@@ -2219,8 +2190,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -2261,12 +2231,12 @@ namespace NuGet.CommandLine.Test
 
                 Util.CreateFile(workingPath, "project.json",
                                                 @"{
-                                                    'dependencies': {
-                                                    'packageA': '1.1.0-beta-*',
-                                                    'packageB': '2.2.0-beta-*'
+                                                    ""dependencies"": {
+                                                    ""packageA"": ""1.1.0-beta-*"",
+                                                    ""packageB"": ""2.2.0-beta-*""
                                                     },
-                                                    'frameworks': {
-                                                                'uap10.0': { }
+                                                    ""frameworks"": {
+                                                                ""uap10.0"": { }
                                                             }
                                                 }");
 
@@ -2287,8 +2257,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -2305,8 +2274,7 @@ namespace NuGet.CommandLine.Test
                 r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert 2
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -2323,8 +2291,7 @@ namespace NuGet.CommandLine.Test
                 r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert 3
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -2354,12 +2321,12 @@ namespace NuGet.CommandLine.Test
                 Util.CreateTestPackage("packageA", "1.1.0", repositoryPath);
                 Util.CreateTestPackage("packageB", "2.2.0", repositoryPath);
                 var projectJson = @"{
-                                        'dependencies': {
-                                        'packageA': '1.1.0',
-                                        'packageB': '2.2.0'
+                                        ""dependencies"": {
+                                        ""packageA"": ""1.1.0"",
+                                        ""packageB"": ""2.2.0""
                                         },
-                                        'frameworks': {
-                                                    'uap10.0': { }
+                                        ""frameworks"": {
+                                                    ""uap10.0"": { }
                                                 }
                                         }";
 
@@ -2385,8 +2352,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 var lockFile = lockFileFormat.Read(lockFilePath);
 

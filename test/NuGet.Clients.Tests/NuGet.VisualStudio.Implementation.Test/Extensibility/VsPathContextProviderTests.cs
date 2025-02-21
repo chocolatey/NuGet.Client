@@ -3,10 +3,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Runtime.Remoting.Contexts;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.Threading;
@@ -25,7 +23,6 @@ using NuGet.Test.Utility;
 using NuGet.Versioning;
 using NuGet.VisualStudio.Implementation.Exceptions;
 using NuGet.VisualStudio.Implementation.Extensibility;
-using NuGet.VisualStudio.Implementation.Resources;
 using NuGet.VisualStudio.Telemetry;
 using Xunit;
 
@@ -538,6 +535,11 @@ namespace NuGet.VisualStudio.Implementation.Test.Extensibility
             }
 
             public override Task<bool> UninstallPackageAsync(PackageIdentity packageIdentity, INuGetProjectContext nuGetProjectContext, CancellationToken token)
+            {
+                throw new NotImplementedException();
+            }
+
+            public override Task<bool> UninstallPackageAsync(string packageId, BuildIntegratedInstallationContext installationContext, CancellationToken token)
             {
                 throw new NotImplementedException();
             }

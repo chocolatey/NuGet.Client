@@ -13,7 +13,9 @@ using NuGet.Protocol.Plugins;
 
 namespace NuGet.Credentials
 {
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
     public sealed class SecurePluginCredentialProvider : ICredentialProvider
+#pragma warning restore CS1591 // Missing XML comment for publicly visible type or member
     {
         private const string _basicAuthenticationType = "Basic";
 
@@ -209,6 +211,10 @@ namespace NuGet.Credentials
                     credentialResponse.AuthenticationTypes ?? Enumerable.Empty<string>());
 
                 taskResponse = new CredentialResponse(result);
+            }
+            else if (credentialResponse.ResponseCode == MessageResponseCode.NotFound)
+            {
+                taskResponse = new CredentialResponse(CredentialStatus.UserCanceled);
             }
             else
             {

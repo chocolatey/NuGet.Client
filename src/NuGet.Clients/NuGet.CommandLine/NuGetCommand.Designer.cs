@@ -296,6 +296,15 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Disable the use of the HTTP cache and contact all configured package sources for live information..
+        /// </summary>
+        internal static string CommandNoHttpCache {
+            get {
+                return ResourceManager.GetString("CommandNoHttpCache", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Does not append &quot;api/v2/packages&quot; to the source URL..
         /// </summary>
         internal static string CommandNoServiceEndpointDescription {
@@ -430,6 +439,15 @@ namespace NuGet.CommandLine {
         internal static string DeleteCommandUsageSummary {
             get {
                 return ResourceManager.GetString("DeleteCommandUsageSummary", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Display NuGet.exe&apos;s End User Liscence Agreement (EULA).
+        /// </summary>
+        internal static string EulaDescription {
+            get {
+                return ResourceManager.GetString("EulaDescription", resourceCulture);
             }
         }
         
@@ -873,6 +891,15 @@ namespace NuGet.CommandLine {
         internal static string LocalsCommandSummary {
             get {
                 return ResourceManager.GetString("LocalsCommandSummary", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to NoCache is deprecated and has been renamed to NoHttpCache. Please use NoHttpCache instead..
+        /// </summary>
+        internal static string Log_RestoreNoCacheInformation {
+            get {
+                return ResourceManager.GetString("Log_RestoreNoCacheInformation", resourceCulture);
             }
         }
         
@@ -1493,7 +1520,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to SHA-1 fingerprint of the certificate used to search a local certificate store for the certificate.
+        ///   Looks up a localized string similar to SHA-256, SHA-384 or SHA-512 fingerprint of the certificate used to search a local certificate store for the certificate.
         ///The certificate store can be specified by -CertificateStoreName and -CertificateStoreLocation options..
         /// </summary>
         internal static string SignCommandCertificateFingerprintDescription {
@@ -1578,6 +1605,15 @@ namespace NuGet.CommandLine {
         internal static string SignCommandHashAlgorithmDescription {
             get {
                 return ResourceManager.GetString("SignCommandHashAlgorithmDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Invalid value for &apos;CertificateFingerprint&apos; option. The value must be a SHA-256, SHA-384, or SHA-512 certificate fingerprint (in hexadecimal)..
+        /// </summary>
+        internal static string SignCommandInvalidCertificateFingerprint {
+            get {
+                return ResourceManager.GetString("SignCommandInvalidCertificateFingerprint", resourceCulture);
             }
         }
         
@@ -1711,6 +1747,15 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Allows HTTP connections for adding or updating packages. Note: This method is not secure. For secure options, see https://aka.ms/nuget-https-everywhere for more information..
+        /// </summary>
+        internal static string SourcesCommandAllowInsecureConnectionsDescription {
+            get {
+                return ResourceManager.GetString("SourcesCommandAllowInsecureConnectionsDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Provides the ability to manage list of sources located in NuGet.config files..
         /// </summary>
         internal static string SourcesCommandDescription {
@@ -1743,6 +1788,15 @@ namespace NuGet.CommandLine {
         internal static string SourcesCommandPasswordDescription {
             get {
                 return ResourceManager.GetString("SourcesCommandPasswordDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The NuGet server protocol version to be used. Currently supported versions are 2 and 3. See https://learn.microsoft.com/nuget/api/overview for information about the version 3 protocol. Defaults to 2 if not specified..
+        /// </summary>
+        internal static string SourcesCommandProtocolVersionDescription {
+            get {
+                return ResourceManager.GetString("SourcesCommandProtocolVersionDescription", resourceCulture);
             }
         }
         

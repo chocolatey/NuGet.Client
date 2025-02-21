@@ -303,6 +303,9 @@
   <data name="InstallCommandPackageAlreadyExists" xml:space="preserve">
     <value>Package "{0}" is already installed.</value>
   </data>
+  <data name="InstallCommandHigherVersionAlreadyExists" xml:space="preserve">
+    <value>Skipping installation of package "{0}" because higher version "{1}" is already installed.</value>
+  </data>
   <data name="PackageCommandNoFilesForLibPackage" xml:space="preserve">
     <value>Failed to build package. Ensure '{0}' includes assembly files. For help on building symbols package, visit {1}.</value>
   </data>
@@ -637,7 +640,7 @@ To prevent NuGet from downloading packages during build, open the Visual Studio 
     <value>Using Msbuild from '{0}'.</value>
   </data>
   <data name="MsbuildPathNotExist" xml:space="preserve">
-    <value>MSBuildPath : {0}  doesn't not exist.</value>
+    <value>MSBuildPath : {0} does not exist.</value>
   </data>
   <data name="PackageRestoreConsentCheckBoxText" xml:space="preserve">
     <value>&amp;Allow NuGet to download missing packages</value>
@@ -711,14 +714,6 @@ You can set the '{1}' environment variable to 'true' to temporarily reenable thi
   <data name="Error_NuGetExeNeedsToBeUnblockedAfterDownloading" xml:space="preserve">
     <value>NuGet.exe file on path {0} needs to be unblocked after downloading.</value>
   </data>
-  <data name="Warning_HttpServerUsage" xml:space="preserve">
-    <value>You are running the '{0}' operation with an 'HTTP' source, '{1}'. Non-HTTPS access will be removed in a future version. Consider migrating to an 'HTTPS' source.</value>
-    <comment>0 - The command name. Ex. Push/Delete. 1 - server uri.</comment>
-  </data>
-  <data name="Warning_HttpSources_Multiple" xml:space="preserve">
-    <value>You are running the '{0}' operation with 'HTTP' sources: {1}
-Non-HTTPS access will be removed in a future version. Consider migrating to 'HTTPS' sources.</value>
-  </data>
   <data name="Error_SourceProviderIsNull" xml:space="preserve">
     <value>Property SourceProvider is null.</value>
     <comment>Don't localize 'SourceProvider'</comment>
@@ -734,5 +729,20 @@ Do not localize `SDK`, `dotnet pack`, msbuild -t:pack` and 'true'.</comment>
   <data name="Error_InvalidCultureInfo" xml:space="preserve">
     <value>Invalid culture identifier in {0} environment variable. Value read is '{1}'</value>
     <comment>0 - Environment variable name, 1 - value set in environment variable</comment>
+  </data>
+  <data name="Error_CannotFindNonArchitectureSpecificMsbuild" xml:space="preserve">
+    <value>The resolved MSBuild directory is `{0}` which is an architecture-specific directory. Could not find MSBuild in its parent directory (non-architecture specific).</value>
+  </data>
+  <data name="Warning_CommandDeprecated" xml:space="preserve">
+    <value>'{0} {1}' is deprecated. Use '{0} {2}' instead.</value>
+    <comment>{0} - name of the assembly running the command, e.g., NuGet
+{1} - current command marked as deprecated, e.g., list
+{2} - replacement command. For example, search</comment>
+  </data>
+  <data name="Error_HttpSources_Multiple" xml:space="preserve">
+    <value>You are running the '{0}' operation with 'HTTP' sources: {1}. NuGet requires HTTPS sources. To use HTTP sources, you must explicitly set 'allowInsecureConnections' to true in your NuGet.Config file. Refer to https://aka.ms/nuget-https-everywhere for more information.</value>
+  </data>
+  <data name="Error_HttpSource_Single" xml:space="preserve">
+    <value>You are running the '{0}' operation with an 'HTTP' source: {1}. NuGet requires HTTPS sources. To use an HTTP source, you must explicitly set 'allowInsecureConnections' to true in your NuGet.Config file. Refer to https://aka.ms/nuget-https-everywhere for more information.</value>
   </data>
 </root>

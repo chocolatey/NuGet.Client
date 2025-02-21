@@ -1,20 +1,26 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using NuGet.Configuration;
 using NuGet.Test.Utility;
+using Test.Utility;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace NuGet.XPlat.FuncTest
 {
     public class XPlatPushTests
     {
+        private readonly ITestOutputHelper _testOutputHelper;
+
+        public XPlatPushTests(ITestOutputHelper testOutputHelper)
+        {
+            _testOutputHelper = testOutputHelper;
+        }
+
         [PackageSourceTheory]
         [PackageSourceData(TestSources.MyGet)]
         [PackageSourceData(TestSources.ProGet, Skip = "No such host is known")]
@@ -30,7 +36,7 @@ namespace NuGet.XPlat.FuncTest
                 var packageVersion = "1.0.0";
                 var packageFile = await TestPackagesCore.GetRuntimePackageAsync(packageDir, packageId, packageVersion);
                 var configFile = XPlatTestUtils.CopyFuncTestConfig(packageDir);
-                var log = new TestCommandOutputLogger();
+                var log = new TestCommandOutputLogger(_testOutputHelper);
 
                 var apiKey = XPlatTestUtils.ReadApiKey(packageSource.Name);
                 Assert.False(string.IsNullOrEmpty(apiKey));
@@ -47,7 +53,7 @@ namespace NuGet.XPlat.FuncTest
                 };
 
                 // Act
-                var exitCode = NuGet.CommandLine.XPlat.Program.MainInternal(pushArgs.ToArray(), log);
+                var exitCode = NuGet.CommandLine.XPlat.Program.MainInternal(pushArgs.ToArray(), log, TestEnvironmentVariableReader.EmptyInstance);
 
                 // Assert
                 Assert.Equal(string.Empty, log.ShowErrors());
@@ -72,8 +78,8 @@ namespace NuGet.XPlat.FuncTest
                 var packageVersion = "1.0.0";
                 var packageFile = await TestPackagesCore.GetRuntimePackageAsync(packageDir, packageId, packageVersion);
                 var configFile = XPlatTestUtils.CopyFuncTestConfig(packageDir);
-                var logFirstPush = new TestCommandOutputLogger();
-                var logSecondPush = new TestCommandOutputLogger();
+                var logFirstPush = new TestCommandOutputLogger(_testOutputHelper);
+                var logSecondPush = new TestCommandOutputLogger(_testOutputHelper);
 
                 var apiKey = XPlatTestUtils.ReadApiKey(packageSource.Name);
                 Assert.False(string.IsNullOrEmpty(apiKey));
@@ -89,8 +95,8 @@ namespace NuGet.XPlat.FuncTest
                 };
 
                 // Act
-                var exitCodeFirstPush = NuGet.CommandLine.XPlat.Program.MainInternal(pushArgs.ToArray(), logFirstPush);
-                var exitCodeSecondPush = NuGet.CommandLine.XPlat.Program.MainInternal(pushArgs.ToArray(), logSecondPush);
+                var exitCodeFirstPush = NuGet.CommandLine.XPlat.Program.MainInternal(pushArgs.ToArray(), logFirstPush, TestEnvironmentVariableReader.EmptyInstance);
+                var exitCodeSecondPush = NuGet.CommandLine.XPlat.Program.MainInternal(pushArgs.ToArray(), logSecondPush, TestEnvironmentVariableReader.EmptyInstance);
 
                 // Assert First Push - it should happen without error.
                 var outputMessagesFirstPush = logFirstPush.ShowMessages();
@@ -121,12 +127,12 @@ namespace NuGet.XPlat.FuncTest
                 var packageVersion = "1.0.0";
                 var packageFile = await TestPackagesCore.GetRuntimePackageAsync(packageDir, packageId, packageVersion);
                 var configFile = XPlatTestUtils.CopyFuncTestConfig(packageDir);
-                var log = new TestCommandOutputLogger();
+                var log = new TestCommandOutputLogger(_testOutputHelper);
 
                 var apiKey = XPlatTestUtils.ReadApiKey(packageSource.Name);
                 Assert.False(string.IsNullOrEmpty(apiKey));
 
-                DeletePackageBeforePush(packageId, packageVersion, packageSource.Source, apiKey);
+                DeletePackageBeforePush(packageId, packageVersion, packageSource.Source, apiKey, _testOutputHelper);
 
                 var pushArgs = new List<string>
                 {
@@ -139,7 +145,7 @@ namespace NuGet.XPlat.FuncTest
                 };
 
                 // Act
-                var exitCode = NuGet.CommandLine.XPlat.Program.MainInternal(pushArgs.ToArray(), log);
+                var exitCode = NuGet.CommandLine.XPlat.Program.MainInternal(pushArgs.ToArray(), log, TestEnvironmentVariableReader.EmptyInstance);
 
                 // Assert
                 Assert.Equal(string.Empty, log.ShowErrors());
@@ -157,7 +163,7 @@ namespace NuGet.XPlat.FuncTest
             using (var source = TestDirectory.Create())
             {
                 // Arrange
-                var log = new TestCommandOutputLogger();
+                var log = new TestCommandOutputLogger(_testOutputHelper);
                 var packageInfoCollection = new[]
                 {
                     await TestPackagesCore.GetRuntimePackageAsync(packageDirectory, "testPackageA", "1.1.0"),
@@ -174,7 +180,7 @@ namespace NuGet.XPlat.FuncTest
                 };
 
                 // Act
-                var exitCode = CommandLine.XPlat.Program.MainInternal(pushArgs.ToArray(), log);
+                var exitCode = CommandLine.XPlat.Program.MainInternal(pushArgs.ToArray(), log, TestEnvironmentVariableReader.EmptyInstance);
 
                 // Assert
                 Assert.Equal(string.Empty, log.ShowErrors());
@@ -192,10 +198,10 @@ namespace NuGet.XPlat.FuncTest
         /// This is called when the package must be deleted before being pushed. It's ok if this
         /// fails, maybe the package was never pushed.
         /// </summary>
-        private static void DeletePackageBeforePush(string packageId, string packageVersion, string sourceUri, string apiKey)
+        private static void DeletePackageBeforePush(string packageId, string packageVersion, string sourceUri, string apiKey, ITestOutputHelper testOutputHelper)
         {
             var packageUri = $"{sourceUri.TrimEnd('/')}/{packageId}/{packageVersion}";
-            var log = new TestCommandOutputLogger();
+            var log = new TestCommandOutputLogger(testOutputHelper);
             var args = new List<string>
             {
                 "delete",
@@ -208,7 +214,7 @@ namespace NuGet.XPlat.FuncTest
                 "--non-interactive"
             };
 
-            var exitCode = NuGet.CommandLine.XPlat.Program.MainInternal(args.ToArray(), log);
+            var exitCode = NuGet.CommandLine.XPlat.Program.MainInternal(args.ToArray(), log, TestEnvironmentVariableReader.EmptyInstance);
             Assert.InRange(exitCode, 0, 1);
 
             Assert.Contains($"DELETE {packageUri}", log.ShowMessages());

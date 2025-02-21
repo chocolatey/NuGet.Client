@@ -122,6 +122,11 @@ namespace NuGet.Common
         NU1013 = 1013,
 
         /// <summary>
+        /// NuGetAudit* MSBuild property input errors
+        /// </summary>
+        NU1014 = 1014,
+
+        /// <summary>
         /// Unable to resolve package, generic message for unknown type constraints.
         /// </summary>
         NU1100 = 1100,
@@ -173,6 +178,11 @@ namespace NuGet.Common
         NU1109 = 1109,
 
         /// <summary>
+        /// The package `packageId` is available in the Global packages folder, but the source it came from `package source URI` is not one of the configured sources.
+        /// </summary>
+        NU1110 = 1110,
+
+        /// <summary>
         /// Dependency project has an incompatible framework.
         /// </summary>
         NU1201 = 1201,
@@ -211,6 +221,11 @@ namespace NuGet.Common
         /// Package Source is unreachable.
         /// </summary>
         NU1301 = 1301,
+
+        /// <summary>
+        /// Insecure Source specified.
+        /// </summary>
+        NU1302 = 1302,
 
         /// <summary>
         /// Package MinClientVersion did not match.
@@ -271,6 +286,26 @@ namespace NuGet.Common
         /// Central package management is in use but there are multiple feeds configured without using package source mapping.
         /// </summary>
         NU1507 = 1507,
+
+        /// <summary>
+        /// Duplicate NuGetAuditSuppress found
+        /// </summary>
+        NU1508 = 1508,
+
+        /// <summary>
+        /// Duplicate PrunedPackageReference found
+        /// </summary>
+        NU1509 = 1509,
+
+        /// <summary>
+        /// Direct reference to a package that will not be pruned.
+        /// </summary>
+        NU1510 = 1510,
+
+        /// <summary>
+        /// Project references cannot be pruned
+        /// </summary>
+        NU1511 = 1511,
 
         /// <summary>
         /// Dependency bumped up
@@ -335,6 +370,36 @@ namespace NuGet.Common
         /// HTTP Source specified, but HTTP sources will be deprecated.
         /// </summary>
         NU1803 = 1803,
+
+        /// <summary>
+        /// Server/package source vulnerability issue
+        /// </summary>
+        NU1900 = 1900,
+
+        /// <summary>
+        /// Package with known low severity vulnerability
+        /// </summary>
+        NU1901 = 1901,
+
+        /// <summary>
+        /// Package with known moderate severity vulnerability
+        /// </summary>
+        NU1902 = 1902,
+
+        /// <summary>
+        /// Package with known high severity vulnerability
+        /// </summary>
+        NU1903 = 1903,
+
+        /// <summary>
+        /// Package with known critical severity vulnerability
+        /// </summary>
+        NU1904 = 1904,
+
+        /// <summary>
+        /// Audit source did not provide vulnerability data
+        /// </summary>
+        NU1905 = 1905,
 
         /// <summary>
         /// Undefined signature error
@@ -551,6 +616,16 @@ namespace NuGet.Common
         /// Downloading a package from a plugin is not supported since unsigned packages are not allowed and package download plugins do not support signed package verification.
         /// </summary>
         NU3041 = 3041,
+
+        /// <summary>
+        /// An X.509 trust store does not contain a root certificate observed in a package signature.
+        /// </summary>
+        NU3042 = 3042,
+
+        /// <summary>
+        /// The certificate fingerprint is invalid.
+        /// </summary>
+        NU3043 = 3043,
 
         /// <summary>
         /// Undefined Package Error.

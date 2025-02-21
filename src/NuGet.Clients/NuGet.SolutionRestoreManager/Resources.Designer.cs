@@ -70,7 +70,16 @@ namespace NuGet.SolutionRestoreManager {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to &apos;{0}&apos; is not an exact version like &apos;[1.0.0]&apos;. Only exact versions are allowed with PackageDownload..
+        ///   Looks up a localized string similar to Package &apos;{0}&apos; does not have an exact version like &apos;[1.0.0]&apos;. Only exact versions are allowed with PackageDownload..
+        /// </summary>
+        internal static string Error_PackageDownload_NoVersion {
+            get {
+                return ResourceManager.GetString("Error_PackageDownload_NoVersion", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package &apos;{0} {1}&apos; does not have an exact version like &apos;[1.0.0]&apos;. Only exact versions are allowed with PackageDownload..
         /// </summary>
         internal static string Error_PackageDownload_OnlyExactVersionsAreAllowed {
             get {
@@ -84,6 +93,33 @@ namespace NuGet.SolutionRestoreManager {
         internal static string ErrorOccurredRestoringPackages {
             get {
                 return ResourceManager.GetString("ErrorOccurredRestoringPackages", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Manage NuGet Packages.
+        /// </summary>
+        internal static string InfoBar_HyperlinkMessage {
+            get {
+                return ResourceManager.GetString("InfoBar_HyperlinkMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to This solution contains packages with vulnerabilities..
+        /// </summary>
+        internal static string InfoBar_TextMessage {
+            get {
+                return ResourceManager.GetString("InfoBar_TextMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to &apos;{0}&apos; items do not have the same value(s) across all target frameworks. Remove any condition from MSBuild files for &apos;{0}&apos; items..
+        /// </summary>
+        internal static string ItemValuesAreDifferentAcrossTargetFrameworks {
+            get {
+                return ResourceManager.GetString("ItemValuesAreDifferentAcrossTargetFrameworks", resourceCulture);
             }
         }
         
@@ -195,6 +231,15 @@ namespace NuGet.SolutionRestoreManager {
         internal static string PackageRestoreOptOutMessage {
             get {
                 return ResourceManager.GetString("PackageRestoreOptOutMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The property {0} was expected to have a single value across all target frameworks, but instead had the following values: {1}.
+        /// </summary>
+        internal static string PropertyDoesNotHaveSingleValue {
+            get {
+                return ResourceManager.GetString("PropertyDoesNotHaveSingleValue", resourceCulture);
             }
         }
         

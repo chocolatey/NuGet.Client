@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
@@ -15,6 +16,12 @@ namespace NuGet.Test.Utility
 {
     public static class TestDotnetCLiUtility
     {
+#if NET8_0 // This override allows us to test the next version of the CLI without making all the projects target that version.
+        private static NuGetFramework FrameworkOverride = new NuGetFramework("net9.0");
+#elif !IS_DESKTOP
+        private static NuGetFramework FrameworkOverride = null;
+#endif
+
         internal static string SdkVersion { get; private set; }
         internal static NuGetFramework SdkTfm { get; private set; }
         internal static string CliDirSource { get; private set; }
@@ -63,8 +70,6 @@ namespace NuGet.Test.Utility
 
         private static void CopyLatestCliToTestDirectory(string destinationDir)
         {
-            WriteGlobalJson(destinationDir);
-
             var sdkPath = Path.Combine(SdkDirSource, SdkVersion + Path.DirectorySeparatorChar);
             var fallbackFolderPath = Path.Combine(SdkDirSource, "NuGetFallbackFolder");
 
@@ -104,7 +109,7 @@ namespace NuGet.Test.Utility
         private static string GetSdkToTestByAssemblyPath(string testAssemblyPath)
         {
             // The TFM we're testing
-            var testTfm = AssemblyReader.GetTargetFramework(testAssemblyPath);
+            var testTfm = FrameworkOverride ?? AssemblyReader.GetTargetFramework(testAssemblyPath);
 
             var selectedVersion =
                 Directory.EnumerateDirectories(SdkDirSource) // get all directories in sdk folder
@@ -181,8 +186,7 @@ SDKs found: {string.Join(", ", Directory.EnumerateDirectories(SdkDirSource).Sele
             var artifactsDirectory = TestFileSystemUtility.GetArtifactsDirectoryInRepo();
             var pathToSdkInCli = Path.Combine(
                     Directory.EnumerateDirectories(Path.Combine(cliDirectory, "sdk"))
-                    .Where(d => !string.Equals(Path.GetFileName(d), "NuGetFallbackFolder", StringComparison.OrdinalIgnoreCase))
-                    .First());
+                        .First(d => !string.Equals(Path.GetFileName(d), "NuGetFallbackFolder", StringComparison.OrdinalIgnoreCase)));
             const string configuration =
 #if DEBUG
                 "Debug";
@@ -195,7 +199,7 @@ SDKs found: {string.Join(", ", Directory.EnumerateDirectories(SdkDirSource).Sele
 
         private static void CopyRestoreArtifacts(string artifactsDirectory, string pathToSdkInCli, string configuration)
         {
-            var fileExtensions = new[] { ".dll", ".pdb", ".targets" };
+            var fileExtensions = new[] { ".dll", ".pdb", ".targets", ".props" };
 
             var sdkDependencies = new List<string> { "NuGet.Build.Tasks.Console", "NuGet.CommandLine.XPlat" };
 
@@ -210,7 +214,28 @@ SDKs found: {string.Join(", ", Directory.EnumerateDirectories(SdkDirSource).Sele
                 {
                     foreach (FileInfo file in frameworkArtifactsFolder.EnumerateFiles($"*{fileExtension}"))
                     {
-                        file.CopyTo(Path.Combine(pathToSdkInCli, file.Name), overwrite: true);
+                        var dependencyTargetPath = Path.Combine(pathToSdkInCli, file.Name);
+
+                        if (file.Name.Contains("NuGet"))
+                        {
+                            file.CopyTo(dependencyTargetPath, overwrite: true);
+                        }
+                        else
+                        {
+                            if (File.Exists(dependencyTargetPath)) // If a dependency exists in the SDK, only copy it if our version is higher than the SDK version.
+                            {
+                                var targetFileVersion = new Version(FileVersionInfo.GetVersionInfo(dependencyTargetPath).FileVersion);
+                                var fileToPatchVersion = new Version(FileVersionInfo.GetVersionInfo(file.FullName).FileVersion);
+                                if (fileToPatchVersion > targetFileVersion)
+                                {
+                                    file.CopyTo(dependencyTargetPath, overwrite: true);
+                                }
+                            }
+                            else // If a dependency does not exist in the SDK, copy it, as we'll need it.
+                            {
+                                file.CopyTo(dependencyTargetPath, overwrite: true);
+                            }
+                        }
                     }
                 }
 
@@ -309,7 +334,12 @@ project TFMs found: {string.Join(", ", compiledTfms.Keys.Select(k => k.ToString(
 
         public static void WriteGlobalJson(string path)
         {
-            string globalJsonText = $"{{\"sdk\": {{\"version\": \"{SdkVersion}\"}}}}";
+            string globalJsonText = $@"{{
+  ""sdk"": {{
+    ""version"": ""{SdkVersion}"",
+    ""allowPrerelease"": true
+  }}
+}}";
             var globalJsonPath = Path.Combine(path, "global.json");
             File.WriteAllText(globalJsonPath, globalJsonText);
         }

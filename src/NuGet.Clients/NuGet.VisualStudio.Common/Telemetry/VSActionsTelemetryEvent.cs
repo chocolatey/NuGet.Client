@@ -17,7 +17,7 @@ namespace NuGet.VisualStudio
         public VSActionsTelemetryEvent(
            string operationId,
            string[] projectIds,
-           NuGetOperationType operationType,
+           NuGetProjectActionType operationType,
            OperationSource source,
            DateTimeOffset startTime,
            NuGetOperationStatus status,
@@ -32,6 +32,6 @@ namespace NuGet.VisualStudio
         }
 
         public OperationSource Source => (OperationSource)base[nameof(Source)];
-        internal const string PackageSourceMappingIsMappingEnabled = "PackageSourceMapping.IsMappingEnabled";
+        public const string PackageSourceMappingIsMappingEnabled = "PackageSourceMapping.IsMappingEnabled";
     }
 }

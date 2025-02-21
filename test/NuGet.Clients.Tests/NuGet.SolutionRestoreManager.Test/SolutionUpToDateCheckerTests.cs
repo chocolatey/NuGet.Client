@@ -248,42 +248,45 @@ namespace NuGet.SolutionRestoreManager.Test
         [Fact]
         public void PerformUpToDateCheck_WhenNonBuildIntegratedProjectIsAParentOfADirtySpec_ReturnsAListWithoutNonBuildIntegratedProjects()
         {
-            var projectA = GetPackageSpec("A");
-            var projectB = GetPackageSpec("B");
-            var projectC = GetPackageSpec("C");
-            var projectD = GetPackageSpec("D");
-            var projectE = GetPackageSpec("E");
-            var projectF = GetUnknownPackageSpec("F");
+            using (var testFolder = TestDirectory.Create())
+            {
+                var projectA = GetPackageSpec("A", testFolder);
+                var projectB = GetPackageSpec("B", testFolder);
+                var projectC = GetPackageSpec("C", testFolder);
+                var projectD = GetPackageSpec("D", testFolder);
+                var projectE = GetPackageSpec("E", testFolder);
+                var projectF = GetUnknownPackageSpec("F", testFolder);
 
-            // A => B & D & E
-            projectA = projectA.WithTestProjectReference(projectB).WithTestProjectReference(projectD).WithTestProjectReference(projectE);
-            // B => C
-            projectB = projectB.WithTestProjectReference(projectC);
-            // E => F
-            projectE = projectE.WithTestProjectReference(projectF);
+                // A => B & D & E
+                projectA = projectA.WithTestProjectReference(projectB).WithTestProjectReference(projectD).WithTestProjectReference(projectE);
+                // B => C
+                projectB = projectB.WithTestProjectReference(projectC);
+                // E => F
+                projectE = projectE.WithTestProjectReference(projectF);
 
-            DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(projectA, projectB, projectC, projectD, projectE, projectF);
+                DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecForAllProjects(projectA, projectB, projectC, projectD, projectE, projectF);
 
-            var checker = new SolutionUpToDateChecker();
+                var checker = new SolutionUpToDateChecker();
 
-            var actual = checker.PerformUpToDateCheck(dgSpec, NullLogger.Instance);
-            var expected = GetUniqueNames(projectA, projectB, projectC, projectD, projectE);
-            actual.Should().BeEquivalentTo(expected);
+                var actual = checker.PerformUpToDateCheck(dgSpec, NullLogger.Instance);
+                var expected = GetUniqueNames(projectA, projectB, projectC, projectD, projectE);
+                actual.Should().BeEquivalentTo(expected);
 
-            // Now we run 
-            var results = RunRestore(failedProjects: new HashSet<string>(), projectsWithWarnings: new HashSet<string>(), projectA, projectB, projectC, projectD, projectE);
-            checker.SaveRestoreStatus(results);
+                // Now we run
+                var results = RunRestore(failedProjects: new HashSet<string>(), projectsWithWarnings: new HashSet<string>(), projectA, projectB, projectC, projectD, projectE);
+                checker.SaveRestoreStatus(results);
 
-            // Prepare the new DG Spec:
-            // Make projectE dirty by setting a random value that's usually not there :)
-            projectF = projectF.Clone();
-            projectF.RestoreMetadata.PackagesPath = @"C:\";
-            dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(projectA, projectB, projectC, projectD, projectE, projectF);
+                // Prepare the new DG Spec:
+                // Make projectE dirty by setting a random value that's usually not there :)
+                projectF = projectF.Clone();
+                projectF.RestoreMetadata.PackagesPath = testFolder;
+                dgSpec = ProjectTestHelpers.GetDGSpecForAllProjects(projectA, projectB, projectC, projectD, projectE, projectF);
 
-            // Act & Assert.
-            expected = GetUniqueNames(projectA, projectE);
-            actual = checker.PerformUpToDateCheck(dgSpec, NullLogger.Instance);
-            actual.Should().BeEquivalentTo(expected);
+                // Act & Assert.
+                expected = GetUniqueNames(projectA, projectE);
+                actual = checker.PerformUpToDateCheck(dgSpec, NullLogger.Instance);
+                actual.Should().BeEquivalentTo(expected);
+            }
         }
 
         [Fact]
@@ -340,7 +343,7 @@ namespace NuGet.SolutionRestoreManager.Test
                 projectA = projectA.WithTestProjectReference(projectB);
                 // B => C
                 projectB = projectB.WithTestProjectReference(projectC);
-                DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(projectA, projectB, projectC, projectD);
+                DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecForAllProjects(projectA, projectB, projectC, projectD);
 
                 var checker = new SolutionUpToDateChecker();
 
@@ -353,7 +356,7 @@ namespace NuGet.SolutionRestoreManager.Test
 
                 // Set-up, B => D
                 projectB = projectB.WithTestProjectReference(projectD);
-                dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(projectA, projectB, projectC, projectD);
+                dgSpec = ProjectTestHelpers.GetDGSpecForAllProjects(projectA, projectB, projectC, projectD);
 
                 // Act & Assert
                 actual = checker.PerformUpToDateCheck(dgSpec, NullLogger.Instance);
@@ -377,7 +380,7 @@ namespace NuGet.SolutionRestoreManager.Test
                 projectA = projectA.WithTestProjectReference(projectB);
                 // B => C
                 projectB = projectB.WithTestProjectReference(projectC);
-                DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(projectA, projectB, projectC);
+                DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecForAllProjects(projectA, projectB, projectC);
 
                 var checker = new SolutionUpToDateChecker();
 
@@ -414,7 +417,7 @@ namespace NuGet.SolutionRestoreManager.Test
                 projectA = projectA.WithTestProjectReference(projectB);
                 // B => C
                 projectB = projectB.WithTestProjectReference(projectC);
-                DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(projectA, projectB, projectC);
+                DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecForAllProjects(projectA, projectB, projectC);
 
                 var checker = new SolutionUpToDateChecker();
 
@@ -453,7 +456,7 @@ namespace NuGet.SolutionRestoreManager.Test
 
                 // A => B & C
                 projectA = projectA.WithTestProjectReference(projectB).WithTestProjectReference(projectC);
-                DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(projectA, projectB, projectC, projectD);
+                DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecForAllProjects(projectA, projectB, projectC, projectD);
 
                 var checker = new SolutionUpToDateChecker();
 
@@ -467,7 +470,7 @@ namespace NuGet.SolutionRestoreManager.Test
                 // Set-up, make C dirty.
                 projectC = projectC.Clone();
                 projectC.RestoreMetadata.ConfigFilePaths = new List<string>() { "newFeed" };
-                dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(projectA, projectB, projectC, projectD);
+                dgSpec = ProjectTestHelpers.GetDGSpecForAllProjects(projectA, projectB, projectC, projectD);
 
                 // Act & Assert
                 actual = checker.PerformUpToDateCheck(dgSpec, NullLogger.Instance);
@@ -489,7 +492,7 @@ namespace NuGet.SolutionRestoreManager.Test
                 projectA = projectA.WithTestProjectReference(projectB);
                 // B => C
                 projectB = projectB.WithTestProjectReference(projectC);
-                DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(projectA, projectB, projectC);
+                DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecForAllProjects(projectA, projectB, projectC);
 
                 var checker = new SolutionUpToDateChecker();
 
@@ -523,7 +526,7 @@ namespace NuGet.SolutionRestoreManager.Test
                 projectA = projectA.WithTestProjectReference(projectB);
                 // B => C
                 projectB = projectB.WithTestProjectReference(projectC);
-                DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(projectA, projectB, projectC);
+                DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecForAllProjects(projectA, projectB, projectC);
 
                 var checker = new SolutionUpToDateChecker();
 
@@ -715,7 +718,7 @@ namespace NuGet.SolutionRestoreManager.Test
                 // A => D
                 projectA = projectA.WithTestProjectReference(projectD);
 
-                DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(projectA, projectB, projectC, projectD, projectE);
+                DependencyGraphSpec dgSpec = ProjectTestHelpers.GetDGSpecForAllProjects(projectA, projectB, projectC, projectD, projectE);
 
                 var checker = new SolutionUpToDateChecker();
 
@@ -730,7 +733,7 @@ namespace NuGet.SolutionRestoreManager.Test
                 projectD = projectD.WithTestProjectReference(projectE);
 
                 // Set-up dg spec
-                dgSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(projectA, projectB, projectC, projectD, projectE);
+                dgSpec = ProjectTestHelpers.GetDGSpecForAllProjects(projectA, projectB, projectC, projectD, projectE);
                 // 2nd check
                 actual = checker.PerformUpToDateCheck(dgSpec, NullLogger.Instance);
                 expected = GetUniqueNames(projectA, projectD);
@@ -755,10 +758,10 @@ namespace NuGet.SolutionRestoreManager.Test
             return projects;
         }
 
-        private static PackageSpec GetUnknownPackageSpec(string projectName)
+        private static PackageSpec GetUnknownPackageSpec(string projectName, string rootPath)
         {
             var packageSpec = new PackageSpec();
-            var projectPath = Path.Combine(@"C:\", projectName, $"{projectName}.csproj");
+            var projectPath = Path.Combine(rootPath, projectName, $"{projectName}.csproj");
             packageSpec.RestoreMetadata = new ProjectRestoreMetadata()
             {
                 ProjectUniqueName = projectPath,

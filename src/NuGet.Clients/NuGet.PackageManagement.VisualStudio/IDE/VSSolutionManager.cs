@@ -542,8 +542,11 @@ namespace NuGet.PackageManagement.VisualStudio
         private static object GetVSSolutionProperty(IVsSolution vsSolution, int propId)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            ErrorHandler.ThrowOnFailure(vsSolution.GetProperty(propId, out object value));
-            return value;
+            if (ErrorHandler.Succeeded(vsSolution.GetProperty(propId, out object value)))
+            {
+                return value;
+            }
+            return null;
         }
 
         private object GetVSSolutionProperty(int propId)
@@ -909,13 +912,13 @@ namespace NuGet.PackageManagement.VisualStudio
             }
         }
 
-        private async Task<NuGetProject> CreateNuGetProjectAsync(IVsProjectAdapter project, INuGetProjectContext projectContext = null)
+        private Task<NuGetProject> CreateNuGetProjectAsync(IVsProjectAdapter project, INuGetProjectContext projectContext = null)
         {
             var context = new ProjectProviderContext(
                 projectContext ?? EmptyNuGetProjectContext,
                 () => PackagesFolderPathUtility.GetPackagesFolderPath(this, _settings.Value));
 
-            return await _projectSystemFactory.TryCreateNuGetProjectAsync(project, context);
+            return _projectSystemFactory.TryCreateNuGetProjectAsync(project, context);
         }
 
         internal async Task<IDictionary<string, List<IVsProjectAdapter>>> GetDependentProjectsDictionaryAsync()

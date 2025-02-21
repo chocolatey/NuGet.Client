@@ -13,7 +13,6 @@ using EnvDTE;
 using Microsoft;
 using Microsoft.ServiceHub.Framework;
 using Microsoft.VisualStudio;
-using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Threading;
@@ -293,7 +292,7 @@ namespace NuGet.VisualStudio.OnlineEnvironment.Client
                 INuGetUI uiController = await UIFactory.Value.CreateAsync(serviceBroker, projectContextInfo);
                 // This model takes ownership of --- and Dispose() responsibility for --- the INuGetUI instance.
                 var model = new PackageManagerModel(uiController, isSolution: false, editorFactoryGuid: GuidList.NuGetEditorType);
-                var control = await PackageManagerControl.CreateAsync(model, OutputConsoleLogger.Value);
+                var control = await PackageManagerControl.CreateAsync(model, OutputConsoleLogger.Value, VsShellUtilities.ShutdownToken);
                 var caption = string.Format(CultureInfo.CurrentCulture, Resx.Label_NuGetWindowCaption, Path.GetFileNameWithoutExtension(workspaceVisualNodeBase.NodeMoniker));
 
                 int[] pfDefaultPosition = null;
