@@ -1,29 +1,30 @@
 issue-labels-include:
-- Breaking Change
-- Deprecate
-- Feature
-- C4B Feature
-- Bug
-- Enhancement
-- Documentation
+  - Breaking Change
+  - Deprecate
+  - Feature
+  - C4B Feature
+  - Bug
+  - Improvement
+  - Documentation
+  - Dependency Change
 issue-labels-exclude:
-- Internal Refactoring
-- Build
-- NO RELEASE NOTES
+  - Internal Refactoring
+  - BuildAutomation
+  - NO RELEASE NOTES
 issue-labels-alias:
-    - name:    Documentation
-      header:  Documentation
-      plural:  Documentation
-    - name: Bug
-      header: Bug Fix
-      plural: Bug Fixes
-    - name: Deprecate
-      header: Deprecated Feature
-      plural: Deprecated Features
+  - name:    Documentation
+    header:  Documentation
+    plural:  Documentation
+  - name:    Bug
+    header:  Bug Fix
+    plural:  Bug Fixes
+  - name:    Deprecate
+    header:  Deprecated Feature
+    plural:  Deprecated Features
 create:
-    include-sha-section: true
-    sha-section-heading: "SHA256 Hashes of the release artifacts"
-    sha-section-line-format: "- `{1}\t{0}`"
+  include-sha-section: true
+  sha-section-heading: "SHA256 Hashes of the release artifacts"
+  sha-section-line-format: "- `{1}\t{0}`"
 close:
   use-issue-comments: true
   issue-comment: |-
@@ -33,7 +34,7 @@ close:
 
     - [GitHub Release](https://github.com/{owner}/{repository}/releases/tag/{milestone})
     - [Chocolatey.NuGet.Commands NuGet Package](https://nuget.org/packages/Chocolatey.NuGet.Commands/{milestone})
-    - [Chocolatey.NuGet.Common NuGet Package](https://nuget.org/packages/Chocolatey.NuGet.Common/{milestone})    
+    - [Chocolatey.NuGet.Common NuGet Package](https://nuget.org/packages/Chocolatey.NuGet.Common/{milestone})
     - [Chocolatey.NuGet.Configuration NuGet Package](https://nuget.org/packages/Chocolatey.NuGet.Configuration/{milestone})
     - [Chocolatey.NuGet.Credentials NuGet Package](https://nuget.org/packages/Chocolatey.NuGet.Credentials/{milestone})
     - [Chocolatey.NuGet.DependencyResolver.Core NuGet Package](https://nuget.org/packages/Chocolatey.NuGet.DependencyResolver.Core/{milestone})
@@ -46,4 +47,4 @@ close:
     - [Chocolatey.NuGet.Resolver NuGet Package](https://nuget.org/packages/Chocolatey.NuGet.Resolver/{milestone})
     - [Chocolatey.NuGet.Versioning NuGet Package](https://nuget.org/packages/Chocolatey.NuGet.Versioning/{milestone})
 
-    Your **[GitReleaseManager](https://github.com/GitTools/GitReleaseManager)** bot :package::rocket:
+    Your **[GitReleaseManager](https://github.com/GitTools/GitReleaseManager)** bot :package: :rocket:

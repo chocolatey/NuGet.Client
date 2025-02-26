@@ -1,31 +1,67 @@
-<!-- DO NOT MODIFY OR DELETE THIS TEMPLATE. IT IS USED IN AUTOMATION. -->
-## Bug
+<!--
+BEFORE YOU CREATE A PULL REQUEST:
 
-<!-- Search https://github.com/NuGet/Home/issues, and create one if you can't find a suitable issue. -->
-<!-- Paste the full link, like https://github.com/nuget/home/issues/1000. GitHub will render is neatly. -->
-Fixes:
+Ensure you have read over [CONTRIBUTING.md](./CONTRIBUTING.md). We provide VERY defined guidance (as such, we strongly adhere to it).
 
-Regression? Last working version:
+A summary of our expectations:
+ - You are not submitting a pull request from your MASTER / MAIN branch.
+ - You are able to sign the Contributor License Agreement (CLA).
+ - YOUR GIT COMMIT MESSAGE FORMAT IS EXTREMELY IMPORTANT. We have a very defined expectation for this format and are sticklers about it. Really, READ the entire Contributing document. It will save you and us pain.
+ - Do not reformat code, it makes it hard to see what has changed. Leave the formatting to us.
 
-## Description
-<!-- Add details about the fix. Include any information that would help the maintainer review this change effective. -->
+THANKS! We appreciate you reading the entire Contributing document and not just scanning through it.
 
-## PR Checklist
+Name your pull request appropriately: give it a sentence that reads well enough for anyone seeing this.
 
-- [ ] PR has a meaningful title
-- [ ] PR has a linked issue.
-- [ ] Described changes
+if you were explaining it to somebody else. This helps others to understand the reasons for the pull request and for it to be searchable in future.
 
-- **Tests**
-  - [ ] Automated tests added
-  - **OR**
-  <!-- Describe why you haven't added automation. -->
-  - [ ] Test exception
-  - **OR**
-  - [ ] N/A <!-- Infrastructure, documentation etc. -->
+Please do not remove any of the headings.
+If a heading is not applicable then enter N/A: Why it's not applicable
 
-- **Documentation**
-  <!-- Please link the PR/issue if appropriate -->
-  - [ ] Documentation PR or issue filled
-  - **OR**
-  - [ ] N/A
+Make sure you have raised an issue for this pull request before continuing.
+
+Please remove all comments before submitting.
+-->
+
+## Description Of Changes
+<!-- Enter a description of the pull request changes -->
+
+## Motivation and Context
+<!-- Why is this change necessary and under what context is it being done -->
+
+## Testing
+<!-- How has this change been tested? If multiple different tests have been done please list them.
+1. Tested this way
+1. Tested that way
+-->
+### Operating Systems Testing
+<!-- If this is a code change, list the operating systems this has been tested on
+- Windows Server 2008R2
+- Windows 8.1
+...
+-->
+
+## Change Types Made
+<!-- Tick the boxes for the type of changes that have been made -->
+
+* [ ] Bug fix (non-breaking change).
+* [ ] Feature / Enhancement (non-breaking change).
+* [ ] Breaking change (fix or feature that could cause existing functionality to change).
+* [ ] Documentation changes.
+* [ ] PowerShell code changes.
+
+## Change Checklist
+
+* [ ] Requires a change to the documentation.
+* [ ] Documentation has been updated.
+* [ ] Tests to cover my changes, have been added.
+* [ ] All new and existing tests passed?
+* [ ] PowerShell code changes: PowerShell v2 compatibility checked?
+
+## Related Issue
+<!-- Make sure you have raised an issue for this pull request before
+continuing. -->
+
+Fixes #
+
+<!-- PLEASE REMOVE ALL COMMENTS BEFORE SUBMITTING -->
