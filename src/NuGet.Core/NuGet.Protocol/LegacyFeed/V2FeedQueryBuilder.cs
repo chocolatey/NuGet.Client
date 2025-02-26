@@ -58,7 +58,7 @@ namespace NuGet.Protocol
         private const string ExactFilterFormat = "tolower(Id)%20eq%20'{0}'";
         private const string ByIdOnlyFormat = "substringof('{0}',tolower(Id))";
         private const string ByTagOnlyFormat = "substringof('{0}',Tags)";
-        private const string IdStartsWithFormat = "startswith(tolower(Id),'chocolatey')";
+        private const string IdStartsWithFormat = "startswith(tolower(Id),'{0}')";
 
         //////////////////////////////////////////////////////////
         // End - Chocolatey Specific Modification
