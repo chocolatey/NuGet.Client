@@ -3,9 +3,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
 using Newtonsoft.Json.Linq;
 using NuGet.Commands;
 using NuGet.Common;
@@ -243,7 +245,7 @@ namespace NuGet.Test.Utility
                     .Select(f => new TargetFrameworkInformation()
                     {
                         FrameworkName = f.Framework,
-                        Dependencies = f.PackageReferences.Select(e => new LibraryDependency() { LibraryRange = new LibraryRange(e.Id, VersionRange.Parse(e.Version), LibraryDependencyTarget.Package) }).ToList(),
+                        Dependencies = f.PackageReferences.Select(e => new LibraryDependency() { LibraryRange = new LibraryRange(e.Id, VersionRange.Parse(e.Version), LibraryDependencyTarget.Package) }).ToImmutableArray(),
                         TargetAlias = f.TargetAlias,
                     }).ToList());
                 _packageSpec.RestoreMetadata = new ProjectRestoreMetadata();
@@ -258,7 +260,7 @@ namespace NuGet.Test.Utility
                 _packageSpec.RestoreMetadata.TargetFrameworks = Frameworks
                     .Select(f => new ProjectRestoreMetadataFrameworkInfo(f.Framework))
                     .ToList();
-                _packageSpec.RestoreMetadata.Sources = Sources.ToList();
+                _packageSpec.RestoreMetadata.Sources = Sources?.ToList();
                 _packageSpec.RestoreMetadata.PackagesPath = GlobalPackagesFolder;
                 _packageSpec.RestoreMetadata.FallbackFolders = FallbackFolders;
                 if (Type == ProjectStyle.ProjectJson)
@@ -293,8 +295,7 @@ namespace NuGet.Test.Utility
         public void AddPackageToFramework(string packageFramework, params SimpleTestPackageContext[] packages)
         {
             var framework = Frameworks
-                .Where(f => f.Framework == NuGetFramework.Parse(packageFramework))
-                .First();
+                .First(f => f.Framework == NuGetFramework.Parse(packageFramework));
             framework.PackageReferences.AddRange(packages);
         }
 
@@ -309,8 +310,7 @@ namespace NuGet.Test.Utility
         public void AddPackageDownloadToFramework(string packageFramework, params SimpleTestPackageContext[] packages)
         {
             var framework = Frameworks
-                .Where(f => f.Framework == NuGetFramework.Parse(packageFramework))
-                .First();
+                .First(f => f.Framework == NuGetFramework.Parse(packageFramework));
             framework.PackageDownloads.AddRange(packages);
         }
 
@@ -412,6 +412,7 @@ namespace NuGet.Test.Utility
             context.Frameworks.AddRange(frameworks.Select(f => new SimpleTestProjectFrameworkContext(NuGetFramework.Parse(f)) { TargetAlias = f }));
             context.ToolingVersion15 = true;
             context.Properties.Add("RestoreProjectStyle", "PackageReference");
+            context.Properties.Add("BuildWithNetFrameworkHostedCompiler", bool.FalseString);
             return context;
         }
 
@@ -440,10 +441,10 @@ namespace NuGet.Test.Utility
         public XDocument GetXML()
         {
             var sampleCSProjPath = (Type == ProjectStyle.PackageReference && ToolingVersion15) ?
-                "Test.Utility.compiler.resources.project2.csproj" :
-                "Test.Utility.compiler.resources.project1.csproj";
+                "Microsoft.Internal.NuGet.Testing.SignedPackages.compiler.resources.project2.csproj" :
+                "Microsoft.Internal.NuGet.Testing.SignedPackages.compiler.resources.project1.csproj";
 
-            var s = ResourceTestUtility.GetResource(sampleCSProjPath, typeof(SimpleTestProjectContext));
+            var s = ResourceTestUtility.GetResource(sampleCSProjPath, typeof(ResourceTestUtility));
             var xml = XDocument.Parse(s);
 
             //  MSBuildProjectExtensionsPath needs to be set before Microsoft.Common.props is imported, so add a new

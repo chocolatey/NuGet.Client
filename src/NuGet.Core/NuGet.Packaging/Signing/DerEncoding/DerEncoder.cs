@@ -8,7 +8,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
 using System.Security.Cryptography;
-using System.Text;
 
 namespace NuGet.Packaging.Signing.DerEncoding
 {
@@ -659,8 +658,8 @@ namespace NuGet.Packaging.Signing.DerEncoding
         /// </summary>
         /// <param name="chars">The characters to test.</param>
         /// <returns>
-        /// <c>true</c> if all of the characters in <paramref name="chars"/> are valid PrintableString characters,
-        /// <c>false</c> otherwise.
+        /// <see langword="true" /> if all of the characters in <paramref name="chars"/> are valid PrintableString characters,
+        /// <see langword="false" /> otherwise.
         /// </returns>
         internal static bool IsValidPrintableString(char[] chars)
         {
@@ -677,8 +676,8 @@ namespace NuGet.Packaging.Signing.DerEncoding
         /// <param name="offset">The starting character position within <paramref name="chars"/>.</param>
         /// <param name="count">The number of characters from <paramref name="chars"/> to read.</param>
         /// <returns>
-        /// <c>true</c> if all of the indexed characters in <paramref name="chars"/> are valid PrintableString
-        /// characters, <c>false</c> otherwise.
+        /// <see langword="true" /> if all of the indexed characters in <paramref name="chars"/> are valid PrintableString
+        /// characters, <see langword="false" /> otherwise.
         /// </returns>
         internal static bool IsValidPrintableString(char[] chars, int offset, int count)
         {

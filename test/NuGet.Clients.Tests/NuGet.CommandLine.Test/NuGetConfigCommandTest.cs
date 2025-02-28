@@ -5,9 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Test.Utility;
+using Test.Utility;
 using Xunit;
 
 namespace NuGet.CommandLine.Test
@@ -35,7 +37,7 @@ namespace NuGet.CommandLine.Test
                 // Act
                 // Set the working directory to C:\, otherwise,
                 // the test will change the nuget.config at the code repo's root directory
-                var result = Program.MainCore(root, args);
+                var result = Program.MainCore(root, args, TestEnvironmentVariableReader.EmptyInstance);
 
                 // Assert
                 Assert.Equal(0, result);
@@ -159,8 +161,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Act
                 args = new string[] {
@@ -174,8 +175,7 @@ namespace NuGet.CommandLine.Test
                 result = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 var output = result.Output;
 
@@ -205,8 +205,7 @@ namespace NuGet.CommandLine.Test
             var result = CommandRunner.Run(
                 nugetexe,
                 Directory.GetCurrentDirectory(),
-                string.Join(" ", args),
-                waitForExit: true);
+                string.Join(" ", args));
 
             // Assert
             Assert.True(result.Errors.Contains("Key 'nonExistentKey' not found."));
@@ -243,8 +242,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     nugetexe,
                     testFolder,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 var output = result.Output;
                 Environment.SetEnvironmentVariable("RP_ENV_VAR", string.Empty);

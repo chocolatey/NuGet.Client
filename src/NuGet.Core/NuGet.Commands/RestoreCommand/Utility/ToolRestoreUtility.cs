@@ -36,13 +36,13 @@ namespace NuGet.Commands
                     {
                         TargetAlias = frameworkShortFolderName,
                         FrameworkName = framework,
-                        Dependencies = new List<LibraryDependency>
-                        {
-                            new LibraryDependency
+                        Dependencies =
+                        [
+                            new LibraryDependency()
                             {
                                 LibraryRange = new LibraryRange(id, versionRange, LibraryDependencyTarget.Package)
                             }
-                        }
+                        ]
                     }
                 },
                 RestoreMetadata = new ProjectRestoreMetadata()

@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using System.Xml.Linq;
 using NuGet.Packaging;
 using NuGet.Packaging.Core;
 using NuGet.Protocol;
@@ -75,6 +74,8 @@ namespace NuGet.Test.Utility
 
             public Uri ReadmeUrl => null;
 
+            public string ReadmeFileUrl => null;
+
             public Uri LicenseUrl => null;
 
             public Uri ProjectUrl => null;
@@ -86,6 +87,8 @@ namespace NuGet.Test.Utility
             public string PackagePath => null;
 
             public DateTimeOffset? Published => DateTimeOffset.Now;
+
+            public IReadOnlyList<string> OwnersList => null;
 
             public string Owners => string.Empty;
 

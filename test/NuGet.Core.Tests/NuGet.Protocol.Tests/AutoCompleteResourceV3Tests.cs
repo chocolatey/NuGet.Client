@@ -1,17 +1,12 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using NuGet.Common;
-using NuGet.Packaging.Core;
 using NuGet.Protocol.Core.Types;
 using NuGet.Test.Utility;
-using NuGet.Versioning;
 using Test.Utility;
 using Xunit;
 
@@ -30,16 +25,16 @@ namespace NuGet.Protocol.Tests
                 JsonData.AutoCompleteEndpointNewtResult);
 
             var repo = StaticHttpHandler.CreateSource(sourceName, Repository.Provider.GetCoreV3(), responses);
-            var resource = await repo.GetResourceAsync<AutoCompleteResource>();
+            var resource = await repo.GetResourceAsync<AutoCompleteResource>(CancellationToken.None);
 
             var logger = new TestLogger();
 
             // Act
-            var result = resource.IdStartsWith("newt", true, logger, CancellationToken.None);
+            var result = await resource.IdStartsWith("newt", true, logger, CancellationToken.None);
 
             // Assert
-            Assert.Equal(10, result.Result.Count());
-            Assert.NotEqual(0, logger.Messages.Count);
+            Assert.Equal(10, result.Count());
+            Assert.NotEmpty(logger.Messages);
         }
     }
 }

@@ -144,13 +144,13 @@ namespace NuGet.Core.FuncTest
             {
                 action1HitSem.Set();
                 action1Sem.Wait();
-                return Task.FromResult(true);
+                return TaskResult.True;
             };
 
             Func<CancellationToken, Task<bool>> action2 = (ct) =>
             {
                 action2Sem.Set();
-                return Task.FromResult(true);
+                return TaskResult.True;
             };
 
             // Act
@@ -196,13 +196,13 @@ namespace NuGet.Core.FuncTest
             {
                 action1HitSem.Set();
                 action1Sem.Wait();
-                return Task.FromResult(true);
+                return TaskResult.True;
             };
 
             Func<CancellationToken, Task<bool>> action2 = (ct) =>
             {
                 action2Sem.Set();
-                return Task.FromResult(true);
+                return TaskResult.True;
             };
 
             // Act
@@ -231,6 +231,40 @@ namespace NuGet.Core.FuncTest
             // Assert
             Assert.True(task2blocked);
             Assert.True(result);
+        }
+
+        [Fact]
+        public void ExecuteWithFileLocked_WhenFileStreamIsUnauthorized_ThrowsInvalidOperationException()
+        {
+            // Arrange
+            using var testDirectory = TestDirectory.Create();
+
+            // This is the path that uniquely identifies the system-wide mutex.
+            var path = Path.Combine(testDirectory, nameof(ExecuteWithFileLocked_WhenFileStreamIsUnauthorized_ThrowsInvalidOperationException));
+
+            // This is a semaphore use to verify the lock.
+            var verificationSemaphore = new SemaphoreSlim(1);
+
+            // This is the action that is execute inside of the lock.
+            Action lockedActionSync = () =>
+            {
+                var acquired = verificationSemaphore.Wait(0);
+                Assert.True(acquired, "Unable to acquire the lock on the semaphore within the file lock");
+
+                // Hold the lock for a little bit.
+                Thread.Sleep(TimeSpan.FromMilliseconds(1));
+
+                verificationSemaphore.Release();
+            };
+
+            Assert.Throws<InvalidOperationException>(() =>
+            {
+                ConcurrencyUtilities.ExecuteWithFileLocked(
+                    path,
+                    lockedActionSync,
+                    acquireFileStream: (s) => throw new UnauthorizedAccessException(),
+                    numberOfRetries: 3);
+            });
         }
     }
 }

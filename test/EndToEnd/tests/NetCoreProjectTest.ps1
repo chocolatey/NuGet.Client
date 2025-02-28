@@ -139,7 +139,9 @@ function Test-NetCoreConsoleAppRebuildDoesNotDeleteCacheFile {
 }
 
 function Test-NetCoreVSandMSBuildNoOp {
-    
+    [SkipTest('https://github.com/NuGet/Home/issues/13003')]
+    param ()
+
     # Arrange
     $project = New-NetCoreConsoleApp ConsoleApp
     Build-Solution
@@ -148,11 +150,11 @@ function Test-NetCoreVSandMSBuildNoOp {
     $cacheFile = Get-ProjectCacheFilePath $project
 
     #Act
-    
+
     $VSRestoreTimestamp =( [datetime](Get-ItemProperty -Path $cacheFile -Name LastWriteTime).lastwritetime).Ticks
-    
+
     $MSBuildExe = Get-MSBuildExe
-    
+
     & "$MSBuildExe" /t:restore  $project.FullName
     Assert-True ($LASTEXITCODE -eq 0)
 
@@ -163,7 +165,9 @@ function Test-NetCoreVSandMSBuildNoOp {
 }
 
 function Test-NetCoreTargetFrameworksVSandMSBuildNoOp {
-    
+    [SkipTest('https://github.com/NuGet/Home/issues/13003')]
+    param ()
+
     # Arrange
     $project = New-NetCoreConsoleTargetFrameworksApp ConsoleApp
     Build-Solution
@@ -172,9 +176,9 @@ function Test-NetCoreTargetFrameworksVSandMSBuildNoOp {
     $cacheFile = Get-ProjectCacheFilePath $project
 
     #Act
-    
+
     $VSRestoreTimestamp =( [datetime](Get-ItemProperty -Path $cacheFile -Name LastWriteTime).lastwritetime).Ticks
-    
+
     $MSBuildExe = Get-MSBuildExe
 
     & "$MSBuildExe" /t:restore  $project.FullName
@@ -198,11 +202,11 @@ function Test-NetCoreMultipleTargetFrameworksVSandMSBuildNoOp {
     $cacheFile = Get-ProjectCacheFilePath $project
 
     #Act
-    
+
     $VSRestoreTimestamp =( [datetime](Get-ItemProperty -Path $cacheFile -Name LastWriteTime).lastwritetime).Ticks
-    
+
     $MSBuildExe = Get-MSBuildExe
-    
+
     & "$MSBuildExe" /t:restore  $project.FullName
     Assert-True ($LASTEXITCODE -eq 0)
 
@@ -213,18 +217,20 @@ function Test-NetCoreMultipleTargetFrameworksVSandMSBuildNoOp {
 }
 
 function Test-NetCoreToolsVSandMSBuildNoOp {
-    
+    [SkipTest('https://github.com/NuGet/Home/issues/11231')]
+    param ()
+
     # Arrange
     $project = New-NetCoreWebApp10 ConsoleApp
     Assert-NetCoreProjectCreation $project
 
     $ToolsCacheFile = Get-ProjectToolsCacheFilePath $project
-    
+
     #Act
     $VSRestoreTimestamp =( [datetime](Get-ItemProperty -Path $ToolsCacheFile -Name LastWriteTime).lastwritetime).Ticks
-    
+
     $MSBuildExe = Get-MSBuildExe
-    
+
     & "$MSBuildExe" /t:restore  $project.FullName
     Assert-True ($LASTEXITCODE -eq 0)
 

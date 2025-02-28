@@ -169,11 +169,20 @@ namespace NuGet.Packaging {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to X.509 certificate chain validation will use the default trust store selected by .NET..
+        ///   Looks up a localized string similar to X.509 certificate chain validation will use the default trust store selected by .NET for code signing..
         /// </summary>
-        internal static string ChainBuilding_UsingDefaultTrustStore {
+        internal static string ChainBuilding_UsingDefaultTrustStoreForCodeSigning {
             get {
-                return ResourceManager.GetString("ChainBuilding_UsingDefaultTrustStore", resourceCulture);
+                return ResourceManager.GetString("ChainBuilding_UsingDefaultTrustStoreForCodeSigning", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to X.509 certificate chain validation will use the default trust store selected by .NET for timestamping..
+        /// </summary>
+        internal static string ChainBuilding_UsingDefaultTrustStoreForTimestamping {
+            get {
+                return ResourceManager.GetString("ChainBuilding_UsingDefaultTrustStoreForTimestamping", resourceCulture);
             }
         }
         
@@ -772,7 +781,7 @@ namespace NuGet.Packaging {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Installed {0} {1} from {2} with content hash {3}..
+        ///   Looks up a localized string similar to Installed {0} {1} from {2} to {3} with content hash {4}..
         /// </summary>
         internal static string Log_InstalledPackage {
             get {
@@ -1713,6 +1722,32 @@ namespace NuGet.Packaging {
         internal static string UnsupportedSignatureFormatVersion {
             get {
                 return ResourceManager.GetString("UnsupportedSignatureFormatVersion", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The following X.509 root certificate is untrusted because it is not present in the certificate bundle at {0}.  For more information, see documentation for NU3042.
+        ///    Subject:  {1}
+        ///    Fingerprint (SHA-256):  {2}
+        ///    Certificate (PEM):
+        ///{3}.
+        /// </summary>
+        internal static string UntrustedRoot_WithCertificateBundle {
+            get {
+                return ResourceManager.GetString("UntrustedRoot_WithCertificateBundle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The following X.509 root certificate is untrusted because no certificate bundle was found.  For more information, see documentation for NU3042.
+        ///    Subject:  {0}
+        ///    Fingerprint (SHA-256):  {1}
+        ///    Certificate (PEM):
+        ///{2}.
+        /// </summary>
+        internal static string UntrustedRoot_WithoutCertificateBundle {
+            get {
+                return ResourceManager.GetString("UntrustedRoot_WithoutCertificateBundle", resourceCulture);
             }
         }
         

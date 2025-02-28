@@ -13,6 +13,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
 using NuGet.Common;
 using NuGet.Packaging.Signing;
 using NuGet.Test.Utility;
@@ -89,7 +90,7 @@ namespace NuGet.Packaging.FuncTest
                 // rebuild the chain to get the list of certificates
                 using (X509ChainHolder chainHolder = X509ChainHolder.CreateForTimestamping())
                 {
-                    var chain = chainHolder.Chain;
+                    IX509Chain chain = chainHolder.Chain2;
                     var policy = chain.ChainPolicy;
 
                     policy.ApplicationPolicy.Add(new Oid(Oids.TimeStampingEku));
@@ -99,7 +100,7 @@ namespace NuGet.Packaging.FuncTest
 
                     var timestampSignerCertificate = timestampCms.SignerInfos[0].Certificate;
                     chainBuildSuccess = chain.Build(timestampSignerCertificate);
-                    certificateChain = CertificateChainUtility.GetCertificateChain(chain);
+                    certificateChain = CertificateChainUtility.GetCertificateChain(chain.PrivateReference);
                 }
 
                 using (certificateChain)
@@ -266,7 +267,7 @@ namespace NuGet.Packaging.FuncTest
 
             certificateAuthority.Revoke(
                 timestampService.Certificate,
-                RevocationReason.KeyCompromise,
+                X509RevocationReason.KeyCompromise,
                 DateTimeOffset.UtcNow);
 
             VerifyTimestampData(
@@ -348,11 +349,12 @@ namespace NuGet.Packaging.FuncTest
         [CIOnlyFact]
         public async Task GetTimestampAsync_WhenCertificateSignatureAlgorithmIsSha1_ThrowsAsync()
         {
+            Oid sha1 = new(Oids.Sha1);
             var testServer = await _testFixture.GetSigningTestServerAsync();
             var certificateAuthority = await _testFixture.GetDefaultTrustedCertificateAuthorityAsync();
-            var timestampServiceOptions = new TimestampServiceOptions() { SignatureHashAlgorithm = new Oid(Oids.Sha1) };
+            var timestampServiceOptions = new TimestampServiceOptions() { SignatureHashAlgorithm = sha1 };
             var issueCertificateOptions = IssueCertificateOptions.CreateDefaultForTimestampService();
-            issueCertificateOptions.SignatureAlgorithmName = "SHA1WITHRSA";
+            issueCertificateOptions.SignatureAlgorithm = sha1;
 
             var timestampService = TimestampService.Create(certificateAuthority, timestampServiceOptions, issueCertificateOptions);
 

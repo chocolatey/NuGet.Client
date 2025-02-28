@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -96,6 +95,8 @@ namespace Test.Utility
 
         public IEnumerable<PackageSource> LoadPackageSources() => PackageSources;
 
+        public IReadOnlyList<PackageSource> LoadAuditSources() => Array.Empty<PackageSource>();
+
         public event EventHandler PackageSourcesChanged;
 
         public void SavePackageSources(IEnumerable<PackageSource> sources)
@@ -110,7 +111,7 @@ namespace Test.Utility
 
         public void SaveActivePackageSource(PackageSource source) => throw new NotImplementedException();
 
-        public PackageSource GetPackageSource(string name) => PackageSources.Where(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+        public PackageSource GetPackageSource(string name) => PackageSources.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
 
         public void RemovePackageSource(string name) => throw new NotImplementedException();
 

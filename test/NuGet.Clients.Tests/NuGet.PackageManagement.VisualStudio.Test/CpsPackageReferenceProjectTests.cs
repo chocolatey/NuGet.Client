@@ -9,7 +9,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
-using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.ProjectSystem;
 using Microsoft.VisualStudio.Sdk.TestFramework;
 using Microsoft.VisualStudio.Threading;
@@ -18,7 +17,6 @@ using NuGet.Commands;
 using NuGet.Commands.Test;
 using NuGet.Common;
 using NuGet.Configuration;
-using NuGet.Frameworks;
 using NuGet.LibraryModel;
 using NuGet.PackageManagement.VisualStudio.Exceptions;
 using NuGet.Packaging;
@@ -29,8 +27,8 @@ using NuGet.Protocol.Core.Types;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
 using NuGet.VisualStudio;
-using NuGet.VisualStudio.Common.Test;
 using Test.Utility;
+using Test.Utility.VisualStudio;
 using Xunit;
 using Xunit.Abstractions;
 using static NuGet.PackageManagement.VisualStudio.Test.ProjectFactories;
@@ -40,22 +38,14 @@ namespace NuGet.PackageManagement.VisualStudio.Test
     [Collection(MockedVS.Collection)]
     public class CpsPackageReferenceProjectTests : MockedVSCollectionTests
     {
+        private readonly Mock<IOutputConsoleProvider> _outputConsoleProviderMock;
+        private readonly Lazy<IOutputConsoleProvider> _outputConsoleProvider;
         public CpsPackageReferenceProjectTests(GlobalServiceProvider globalServiceProvider)
             : base(globalServiceProvider)
         {
-            var componentModel = new Mock<IComponentModel>();
-            AddService<SComponentModel>(Task.FromResult((object)componentModel.Object));
-
-            // Force Enable Transitive Origin experiment tests
-            var constant = ExperimentationConstants.TransitiveDependenciesInPMUI;
-            var flightsEnabled = new Dictionary<string, bool>()
-            {
-                { constant.FlightFlag, true },
-            };
-            var service = new NuGetExperimentationService(new TestEnvironmentVariableReader(new Dictionary<string, string>()), new TestVisualStudioExperimentalService(flightsEnabled), new Lazy<IOutputConsoleProvider>(() => new TestOutputConsoleProvider()));
-
-            service.IsExperimentEnabled(ExperimentationConstants.TransitiveDependenciesInPMUI).Should().Be(true);
-            componentModel.Setup(x => x.GetService<INuGetExperimentationService>()).Returns(service);
+            var mockOutputConsoleUtility = OutputConsoleUtility.GetMock();
+            _outputConsoleProviderMock = mockOutputConsoleUtility.mockIOutputConsoleProvider;
+            _outputConsoleProvider = new Lazy<IOutputConsoleProvider>(() => _outputConsoleProviderMock.Object);
         }
 
         [Fact]
@@ -76,7 +66,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var packageSpec = GetPackageSpec(projectName, projectFullPath, "[2.0.0, )");
 
                 // Restore info
-                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
 
@@ -126,7 +116,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var packageSpec = GetPackageSpec(projectName, projectFullPath, "[*, )");
 
                 // Restore info
-                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
 
@@ -179,7 +169,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var packageSpec = GetPackageSpec(projectName, projectFullPath, "[2.0.0, )");
 
                 // Restore info
-                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
 
@@ -222,7 +212,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var packageSpec = GetPackageSpecNoPackages(projectName, projectFullPath);
 
                 // Restore info
-                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
 
@@ -266,7 +256,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var packageSpec = GetPackageSpec(projectName, projectFullPath, "[2.0.0, )");
 
                 // Restore info
-                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
 
@@ -316,7 +306,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var packageSpec = GetPackageSpecNoPackages(projectName, projectFullPath);
 
                 // Restore info
-                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
 
@@ -365,7 +355,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var packageSpec = GetPackageSpecMultipleVersions(projectName, projectFullPath);
 
                 // Restore info
-                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
 
@@ -425,7 +415,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var projectNames = GetTestProjectNames(projectFullPath, projectName);
 
                 // Restore info
-                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
 
@@ -460,7 +450,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 packageSpec = GetPackageSpec(projectName, testDirectory, "[3.0.0, )");
 
                 // Restore info
-                projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
 
@@ -526,7 +516,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 // Create project
                 var projectName = "a";
                 var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                 // We need to treat NU1605 warning as error.
                 project.IsNu1605Error = true;
@@ -542,7 +532,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     packageA_InitialVersion.Version);
 
                 // Restore info
-                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
 
@@ -574,8 +564,10 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                         typeConstraint: LibraryDependencyTarget.Package),
                 };
 
-                packageSpec.TargetFrameworks.First().Dependencies.Insert(0, installed);
-                projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Insert(0, installed);
+                packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
 
                 // Assert
@@ -588,10 +580,10 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 Assert.Equal(builtIntegratedActions[0].VersionRange, VersionRange.Parse(versionRange));
 
                 var finalInstalledPackages = (await netCorePackageReferenceProjects[0].GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageA.Id
-                && f.PackageIdentity.Version == packageA.Version));
-                Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB.Id
-                && f.PackageIdentity.Version == packageB.Version));
+                Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageA.Id
+                && f.PackageIdentity.Version == packageA.Version);
+                Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB.Id
+                && f.PackageIdentity.Version == packageB.Version);
             }
         }
 
@@ -637,7 +629,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 // Create project
                 var projectName = "a";
                 var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                 // We need to treat NU1605 warning as error.
                 project.IsNu1605Error = true;
@@ -653,7 +645,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     packageA_InitialVersion.Version);
 
                 // Restore info
-                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
 
@@ -685,8 +677,10 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                         typeConstraint: LibraryDependencyTarget.Package),
                 };
 
-                packageSpec.TargetFrameworks.First().Dependencies.Insert(0, installed);
-                projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Insert(0, installed);
+                packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
 
                 // Assert
@@ -699,10 +693,10 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 Assert.Equal(builtIntegratedActions[0].VersionRange, VersionRange.Parse(versionRange));
 
                 var finalInstalledPackages = (await netCorePackageReferenceProjects[0].GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageA.Id
-                && f.PackageIdentity.Version == packageA.Version));
-                Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB_V1.Id
-                && f.PackageIdentity.Version.ToString() == "1.8.0"));
+                Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageA.Id
+                && f.PackageIdentity.Version == packageA.Version);
+                Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB_V1.Id
+                && f.PackageIdentity.Version.ToString() == "1.8.0");
             }
         }
 
@@ -758,7 +752,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -779,7 +773,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProj = projectFullPath;
@@ -819,8 +813,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     var packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Insert(0, installed);
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Insert(0, installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     var projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -839,10 +836,10 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 foreach (var netCorePackageReferenceProject in netCorePackageReferenceProjects)
                 {
                     var finalInstalledPackages = (await netCorePackageReferenceProject.GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                    Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageA.Id
-                    && f.PackageIdentity.Version == packageA.Version));
-                    Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB.Id
-                    && f.PackageIdentity.Version == packageB.Version));
+                    Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageA.Id
+                    && f.PackageIdentity.Version == packageA.Version);
+                    Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB.Id
+                    && f.PackageIdentity.Version == packageB.Version);
                 }
             }
         }
@@ -899,7 +896,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -920,7 +917,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProj = projectFullPath;
@@ -947,8 +944,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     var packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     var projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -982,8 +982,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     var packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Insert(0, installed);
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Insert(0, installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     var projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -1002,10 +1005,10 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 foreach (var netCorePackageReferenceProject in netCorePackageReferenceProjects)
                 {
                     var finalInstalledPackages = (await netCorePackageReferenceProject.GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                    Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageA.Id
-                    && f.PackageIdentity.Version == packageA.Version));
-                    Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB.Id
-                    && f.PackageIdentity.Version == packageB.Version));
+                    Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageA.Id
+                    && f.PackageIdentity.Version == packageA.Version);
+                    Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB.Id
+                    && f.PackageIdentity.Version == packageB.Version);
                 }
             }
         }
@@ -1057,7 +1060,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -1078,7 +1081,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProj = projectFullPath;
@@ -1101,8 +1104,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     var packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     var projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -1134,10 +1140,10 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 foreach (var netCorePackageReferenceProject in netCorePackageReferenceProjects)
                 {
                     var finalInstalledPackages = (await netCorePackageReferenceProject.GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                    Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageA.Id
-                    && f.PackageIdentity.Version == packageA.Version));
-                    Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB.Id
-                    && f.PackageIdentity.Version == packageB.Version));
+                    Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageA.Id
+                    && f.PackageIdentity.Version == packageA.Version);
+                    Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB.Id
+                    && f.PackageIdentity.Version == packageB.Version);
                 }
             }
         }
@@ -1192,7 +1198,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -1213,7 +1219,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProj = projectFullPath;
@@ -1238,8 +1244,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     var packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     var projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -1272,8 +1281,8 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 foreach (var netCorePackageReferenceProject in netCorePackageReferenceProjects)
                 {
                     var finalInstalledPackages = (await netCorePackageReferenceProject.GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                    Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB_UpgradeVersion.Id
-                    && f.PackageIdentity.Version == packageB_UpgradeVersion.Version));
+                    Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB_UpgradeVersion.Id
+                    && f.PackageIdentity.Version == packageB_UpgradeVersion.Version);
                 }
                 var restoringLogs = testNuGetProjectContext.Logs.Value.Where(l => l.StartsWith("Restoring packages for ")).ToList();
                 var restoredLogs = testNuGetProjectContext.Logs.Value.Where(l => l.StartsWith("Restored ")).ToList();
@@ -1341,7 +1350,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.SolutionRoot, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -1362,7 +1371,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProj = projectFullPath;
@@ -1387,8 +1396,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     var packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     var projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -1428,16 +1440,16 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 Assert.True(builtIntegratedActions.All(b => !b.RestoreResult.LogMessages.Any())); // There should be no error or warning.
                 // Make sure top parent project has packageB upgraded version.
                 var finalInstalledPackages = (await netCorePackageReferenceProjects[numberOfProjects - 1].GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB_UpgradeVersion.Id
-                && f.PackageIdentity.Version == packageB_UpgradeVersion.Version));
+                Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB_UpgradeVersion.Id
+                && f.PackageIdentity.Version == packageB_UpgradeVersion.Version);
                 // Make sure middle parent project still have non-upgraded version.
                 finalInstalledPackages = (await netCorePackageReferenceProjects[0].GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB.Id
-                && f.PackageIdentity.Version == packageB.Version));
+                Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB.Id
+                && f.PackageIdentity.Version == packageB.Version);
                 // Make sure bottom project still have non-upgraded version.
                 finalInstalledPackages = (await netCorePackageReferenceProjects[0].GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB.Id
-                && f.PackageIdentity.Version == packageB.Version));
+                Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB.Id
+                && f.PackageIdentity.Version == packageB.Version);
             }
         }
 
@@ -1491,7 +1503,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -1512,7 +1524,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProj = projectFullPath;
@@ -1537,8 +1549,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     var packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     var projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -1578,16 +1593,16 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 Assert.True(builtIntegratedActions.All(b => !b.RestoreResult.LogMessages.Any())); // There should be no error or warning.
                 // Make sure top parent project still have non-upgraded version.
                 var finalInstalledPackages = (await netCorePackageReferenceProjects[numberOfProjects - 1].GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB.Id
-                && f.PackageIdentity.Version == packageB.Version));
+                Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB.Id
+                && f.PackageIdentity.Version == packageB.Version);
                 // Make sure middle parent project have upgraded version.
                 finalInstalledPackages = (await netCorePackageReferenceProjects[numberOfProjects - 2].GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB_UpgradeVersion.Id
-                && f.PackageIdentity.Version == packageB_UpgradeVersion.Version));
+                Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB_UpgradeVersion.Id
+                && f.PackageIdentity.Version == packageB_UpgradeVersion.Version);
                 // Make sure bottom project still have non-upgraded version.
                 finalInstalledPackages = (await netCorePackageReferenceProjects[0].GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB.Id
-                && f.PackageIdentity.Version == packageB.Version));
+                Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB.Id
+                && f.PackageIdentity.Version == packageB.Version);
             }
         }
 
@@ -1641,7 +1656,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -1662,7 +1677,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProj = projectFullPath;
@@ -1687,8 +1702,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     var packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     var projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -1728,16 +1746,16 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 Assert.True(builtIntegratedActions.All(b => !b.RestoreResult.LogMessages.Any())); // There should be no error or warning.
                 // Make sure top parent project still have non-upgraded version.
                 var finalInstalledPackages = (await netCorePackageReferenceProjects[numberOfProjects - 1].GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB.Id
-                && f.PackageIdentity.Version == packageB.Version));
+                Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB.Id
+                && f.PackageIdentity.Version == packageB.Version);
                 // Make sure middle parent project still have non-upgraded version.
                 finalInstalledPackages = (await netCorePackageReferenceProjects[numberOfProjects - 2].GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB.Id
-                && f.PackageIdentity.Version == packageB.Version));
+                Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB.Id
+                && f.PackageIdentity.Version == packageB.Version);
                 // Make sure bottom project have upgraded version.
                 finalInstalledPackages = (await netCorePackageReferenceProjects[0].GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB_UpgradeVersion.Id
-                && f.PackageIdentity.Version == packageB_UpgradeVersion.Version));
+                Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB_UpgradeVersion.Id
+                && f.PackageIdentity.Version == packageB_UpgradeVersion.Version);
             }
         }
 
@@ -1791,7 +1809,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -1812,7 +1830,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProj = projectFullPath;
@@ -1837,8 +1855,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     var packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     var projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -1873,8 +1894,8 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 foreach (var netCorePackageReferenceProject in netCorePackageReferenceProjects)
                 {
                     var finalInstalledPackages = await netCorePackageReferenceProject.GetInstalledPackagesAsync(CancellationToken.None);
-                    Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB_DowngradeVersion.Id
-                    && f.PackageIdentity.Version == packageB_DowngradeVersion.Version));
+                    Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB_DowngradeVersion.Id
+                    && f.PackageIdentity.Version == packageB_DowngradeVersion.Version);
                 }
             }
         }
@@ -1929,7 +1950,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -1950,7 +1971,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProj = projectFullPath;
@@ -1975,8 +1996,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     var packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     var projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -2063,7 +2087,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -2084,7 +2108,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProj = projectFullPath;
@@ -2109,8 +2133,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     var packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     var projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -2197,7 +2224,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -2217,7 +2244,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProj = projectFullPath;
@@ -2242,8 +2269,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     var packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     var projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -2281,20 +2311,21 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 Assert.Equal(builtIntegratedActions.Sum(b => b.RestoreResult.LogMessages.Count()), 0);
                 // Make sure top parent project still have non-downgraded version.
                 var finalInstalledPackages = (await netCorePackageReferenceProjects[numberOfProjects - 1].GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB.Id
-                && f.PackageIdentity.Version == packageB.Version));
+                Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB.Id
+                && f.PackageIdentity.Version == packageB.Version);
                 // Make sure middle parent project still have non-downgraded version.
                 finalInstalledPackages = (await netCorePackageReferenceProjects[numberOfProjects - 2].GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB.Id
-                && f.PackageIdentity.Version == packageB.Version));
+                Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB.Id
+                && f.PackageIdentity.Version == packageB.Version);
                 // Make sure bottom project have downgraded version.
                 finalInstalledPackages = (await netCorePackageReferenceProjects[0].GetInstalledPackagesAsync(CancellationToken.None)).ToList();
-                Assert.True(finalInstalledPackages.Any(f => f.PackageIdentity.Id == packageB_DowngradeVersion.Id
-                && f.PackageIdentity.Version == packageB_DowngradeVersion.Version));
+                Assert.Contains(finalInstalledPackages, f => f.PackageIdentity.Id == packageB_DowngradeVersion.Id
+                && f.PackageIdentity.Version == packageB_DowngradeVersion.Version);
             }
         }
 
         [Fact]
+        [UseCulture("en-US")] // We are asserting exception messages in English
         public async Task TestPackageManager_CancellationTokenPassed()
         {
             using (var testDirectory = TestDirectory.Create())
@@ -2337,7 +2368,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     //project.IsNu1605Error = true;
@@ -2354,7 +2385,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProj = projectFullPath;
@@ -2435,7 +2466,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -2456,7 +2487,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProj = projectFullPath;
@@ -2488,7 +2519,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 // Assert
                 Assert.True(telemetryEvents.Count > 1);
                 var actionTelemetryStepEvents = telemetryEvents.OfType<ActionTelemetryStepEvent>();
-                Assert.True(actionTelemetryStepEvents.Any(t => t.SubStepName.Contains("Preview build integrated action time")));
+                Assert.Contains(actionTelemetryStepEvents, t => t.SubStepName.Contains("Preview build integrated action time"));
                 var builtIntegratedActions = actions.OfType<BuildIntegratedProjectAction>().ToList();
                 Assert.Equal(actions.Length, netCorePackageReferenceProjects.Count());
                 Assert.Equal(actions.Length, builtIntegratedActions.Count);
@@ -2543,7 +2574,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -2564,7 +2595,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProj = projectFullPath;
@@ -2589,8 +2620,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     var packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     var projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -2698,7 +2732,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     var projectName = $"project{i}";
                     var projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -2719,7 +2753,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProj = projectFullPath;
@@ -2744,8 +2778,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     var packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     var projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -2879,7 +2916,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             var project = await PrepareTestProjectAsync(testContext) as CpsPackageReferenceProject;
 
-            var tasks = new []
+            var tasks = new[]
             {
                 project.GetInstalledPackagesAsync(CancellationToken.None),
                 project.GetInstalledPackagesAsync(CancellationToken.None),
@@ -2928,7 +2965,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
                 var projectNames = GetTestProjectNames(projectFullPath, projectName);
                 var originalSpec = GetPackageSpec(projectName, projectFullPath, "1.0.0");
-                projectCache.AddProjectRestoreInfo(projectNames, ProjectTestHelpers.GetDGSpecFromPackageSpecs(originalSpec), new List<IAssetsLogMessage>());
+                projectCache.AddProjectRestoreInfo(projectNames, ProjectTestHelpers.GetDGSpecForAllProjects(originalSpec), new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, new Mock<IVsProjectAdapter>().Object, project).Should().BeTrue();
 
                 var request = new TestRestoreRequest(originalSpec, sources, testContext.UserPackagesFolder, logger)
@@ -2960,7 +2997,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 packages.Should().Contain(a => a.PackageIdentity.Equals(new PackageIdentity("packageA", new NuGetVersion("1.0.0"))));
 
                 // Act - Simulate a nomination. This should reset the cache and bring it to spec equivalent.
-                projectCache.AddProjectRestoreInfo(projectNames, ProjectTestHelpers.GetDGSpecFromPackageSpecs(updatedSpec), new List<IAssetsLogMessage>());
+                projectCache.AddProjectRestoreInfo(projectNames, ProjectTestHelpers.GetDGSpecForAllProjects(updatedSpec), new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, new Mock<IVsProjectAdapter>().Object, project).Should().BeTrue();
 
                 // Assert
@@ -3015,7 +3052,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     string projectName = $"project{i}";
                     string projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    TestCpsPackageReferenceProject project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    TestCpsPackageReferenceProject project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -3036,7 +3073,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProjectFullPath = projectFullPath;
@@ -3061,8 +3098,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     PackageSpec packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     ProjectNames projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -3157,7 +3197,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     string projectName = $"project{i}";
                     string projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    TestCpsPackageReferenceProject project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    TestCpsPackageReferenceProject project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -3178,7 +3218,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProjectFullPath = projectFullPath;
@@ -3203,8 +3243,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     PackageSpec packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     ProjectNames projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -3302,7 +3345,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     string projectName = $"project{i}";
                     string projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    TestCpsPackageReferenceProject project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    TestCpsPackageReferenceProject project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -3323,7 +3366,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProjectFullPath = projectFullPath;
@@ -3348,8 +3391,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     PackageSpec packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     ProjectNames projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -3446,7 +3492,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     string projectName = $"project{i}";
                     string projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    TestCpsPackageReferenceProject project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    TestCpsPackageReferenceProject project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -3467,7 +3513,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProjectFullPath = projectFullPath;
@@ -3492,8 +3538,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     PackageSpec packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     ProjectNames projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -3592,7 +3641,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 {
                     string projectName = $"project{i}";
                     string projectFullPath = Path.Combine(testDirectory.Path, projectName, projectName + ".csproj");
-                    TestCpsPackageReferenceProject project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                    TestCpsPackageReferenceProject project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
 
                     // We need to treat NU1605 warning as error.
                     project.IsNu1605Error = true;
@@ -3613,7 +3662,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     }
 
                     // Restore info
-                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                     projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
                     prevProjectFullPath = projectFullPath;
@@ -3638,8 +3687,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     };
 
                     PackageSpec packageSpec = packageSpecs[i];
-                    packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
-                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+
+                    var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(installed);
+                    packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+                    DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                     ProjectNames projectNames = GetTestProjectNames(projectFullPaths[i], $"project{i}");
                     projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 }
@@ -3658,7 +3710,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
                 // Assert
                 Assert.NotNull(exception);
-                Assert.True(exception.Message.StartsWith($"Package '{nonexistingPackage}' to be uninstalled could not be found in project"));
+                Assert.StartsWith($"Package '{nonexistingPackage}' to be uninstalled could not be found in project", exception.Message);
             }
         }
 
@@ -3680,7 +3732,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 PackageSpec packageSpec = GetPackageSpec(projectName, projectFullPath, "[2.0.0, )");
 
                 // Restore info
-                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
 
@@ -3712,7 +3764,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var command = new RestoreCommand(request);
                 RestoreResult result = await command.ExecuteAsync();
                 await result.CommitAsync(logger, CancellationToken.None);
-                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
+                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
 
                 // Assert
                 Assert.True(result.Success);
@@ -3739,7 +3791,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 PackageSpec packageSpec = GetPackageSpec(projectName, projectFullPath, "[2.0.0, )");
 
                 // Restore info
-                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
 
@@ -3779,7 +3831,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var command = new RestoreCommand(request);
                 RestoreResult result = await command.ExecuteAsync();
                 await result.CommitAsync(logger, CancellationToken.None);
-                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
+                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
 
                 // Assert
                 Assert.True(result.Success);
@@ -3807,7 +3859,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 PackageSpec packageSpec = GetPackageSpec(projectName, projectFullPath, "[2.0.0, )");
 
                 // Restore info
-                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
 
@@ -3831,7 +3883,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var command = new RestoreCommand(request);
                 RestoreResult result = await command.ExecuteAsync();
                 await result.CommitAsync(logger, CancellationToken.None);
-                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
+                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
 
                 // Assert
                 Assert.True(result.Success);
@@ -3858,7 +3910,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 PackageSpec packageSpec = GetPackageSpec(projectName, projectFullPath, "[2.0.0, )");
 
                 // Restore info
-                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
 
@@ -3891,78 +3943,16 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var command = new RestoreCommand(request);
                 RestoreResult result = await command.ExecuteAsync();
                 await result.CommitAsync(logger, CancellationToken.None);
-                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
+                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
                 DateTime lastWriteTime = File.GetLastWriteTimeUtc(lockFilePath);
-                File.WriteAllText(lockFilePath, "** replaced file content to test cache **");
                 File.SetLastWriteTimeUtc(lockFilePath, lastWriteTime);
-                ProjectPackages cache_packages = await project.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
+                ProjectPackages cache_packages = await project.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
 
                 // Assert
                 Assert.True(result.Success);
                 cache_packages.InstalledPackages.Should().Contain(a => a.PackageIdentity.Equals(new PackageIdentity("packageA", new NuGetVersion("2.15.3"))));
                 cache_packages.TransitivePackages.Should().Contain(a => a.PackageIdentity.Equals(new PackageIdentity("packageB", new NuGetVersion("1.0.0"))));
                 Assert.True(lastWriteTime == File.GetLastWriteTimeUtc(lockFilePath));
-            }
-        }
-
-        [Fact]
-        public async Task GetInstalledAndTransitivePackagesAsync_MethodWithNoParameters_ReturnsNoTransitiveOriginDataAsync()
-        {
-            using (var rootDir = new SimpleTestPathContext())
-            {
-                // Setup
-                var projectName = "project1";
-                string projectFullPath = Path.Combine(rootDir.SolutionRoot, projectName + ".csproj");
-
-                // Project
-                var projectCache = new ProjectSystemCache();
-                IVsProjectAdapter projectAdapter = Mock.Of<IVsProjectAdapter>();
-                CpsPackageReferenceProject project = CreateCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
-
-                ProjectNames projectNames = GetTestProjectNames(projectFullPath, projectName);
-                PackageSpec packageSpec = GetPackageSpec(projectName, projectFullPath, "[2.0.0, )");
-
-                // Restore info
-                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
-                projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
-                projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
-
-                // Package directories
-                var sources = new List<PackageSource>();
-                var packagesDir = new DirectoryInfo(Path.Combine(rootDir.SolutionRoot, "globalPackages"));
-                var packageSource = new DirectoryInfo(rootDir.PackageSource);
-                packagesDir.Create();
-                packageSource.Create();
-                sources.Add(new PackageSource(packageSource.FullName));
-
-                var logger = new TestLogger();
-                var request = new TestRestoreRequest(packageSpec, sources, packagesDir.FullName, logger)
-                {
-                    LockFilePath = Path.Combine(rootDir.SolutionRoot, "project.assets.json")
-                };
-
-                await SimpleTestPackageUtility.CreateFullPackageAsync(packageSource.FullName, "packageB", "1.0.0");
-                await SimpleTestPackageUtility.CreateFullPackageAsync(
-                    packageSource.FullName,
-                    "packageA",
-                    "2.15.3",
-                    new Packaging.Core.PackageDependency[]
-                    {
-                        new Packaging.Core.PackageDependency("packageB", VersionRange.Parse("1.0.0"))
-                    });
-
-                var command = new RestoreCommand(request);
-                RestoreResult result = await command.ExecuteAsync();
-                await result.CommitAsync(logger, CancellationToken.None);
-
-                // Act
-                ProjectPackages packages = await project.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
-
-                // Assert
-                Assert.True(result.Success);
-                Assert.NotEmpty(packages.InstalledPackages);
-                Assert.NotEmpty(packages.TransitivePackages);
-                Assert.All(packages.TransitivePackages, pkg => Assert.Empty(pkg.TransitiveOrigins));
             }
         }
 
@@ -3981,7 +3971,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             PackageSpec packageSpec = GetPackageSpec(projectName, projectFullPath, "[2.15.3, )");
 
             // Restore info
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
             IVsProjectAdapter projectAdapter = Mock.Of<IVsProjectAdapter>();
             projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
@@ -4105,12 +4095,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         public async Task GetInstalledAndTransitivePackagesAsync_ProjectReferenceWithSinglePackage_EmptyInstalledAndTransitivePackagesAsync()
         {
             // Project2 -> Project1 -> PackageB (1.0.0)
-            // PackageA (1.0.0) -> PackageB (1.0.0)
 
             // Arrange
             using var rootDir = new SimpleTestPathContext();
 
-            await CreatePackagesAsync(rootDir, packageAVersion: "1.0.0");
+            await CreatePackagesAsync(rootDir, packageBVersion: "1.0.0");
 
             PackageSpec prj1Spec = ProjectTestHelpers.GetPackageSpec("Project1", rootDir.SolutionRoot, framework: "netstandard2.0", dependencyName: "PackageB");
             PackageSpec prj2Spec = ProjectTestHelpers.GetPackageSpec("Project2", rootDir.SolutionRoot, framework: "netstandard2.0").WithTestProjectReference(prj1Spec);
@@ -4124,9 +4113,127 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             // Assert
             Assert.Empty(result.InstalledPackages); // No installed packages
-            // Foreign transitive packages in assets file don't have dependencies.
-            // Those are not considered transitive packages
+            Assert.Equal(1, result.TransitivePackages.Count);
+
+            var origins = result.TransitivePackages[0].TransitiveOrigins.Select(transitivePackage => transitivePackage.PackageIdentity.Id);
+            Assert.Contains("Project1", origins);
+        }
+
+        [Fact]
+        public async Task GetInstalledAndTransitivePackagesAsync_ProjectReferencesWithSamePackage_InstalledAndEmptyTransitivePackagesAsync()
+        {
+            // Project2 -> PackageB (1.0.0)
+            //          -> Project1 -> PackageB (1.0.0)
+
+            // Arrange
+            using var rootDir = new SimpleTestPathContext();
+
+            await CreatePackagesAsync(rootDir, packageAVersion: "1.0.0");
+
+            PackageSpec prj1Spec = ProjectTestHelpers.GetPackageSpec("Project1", rootDir.SolutionRoot, framework: "netstandard2.0", dependencyName: "PackageB");
+            PackageSpec prj2Spec = ProjectTestHelpers.GetPackageSpec("Project2", rootDir.SolutionRoot, framework: "netstandard2.0", dependencyName: "PackageB").WithTestProjectReference(prj1Spec);
+
+            await RestorePackageSpecsAsync(rootDir, output: null, prj1Spec, prj2Spec);
+
+            CpsPackageReferenceProject project2 = PrepareCpsRestoredProject(prj2Spec);
+
+            // Act
+            ProjectPackages result = await project2.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: true, CancellationToken.None);
+
+            // Assert
+            Assert.Equal(1, result.InstalledPackages.Count); // No installed packages
             Assert.Empty(result.TransitivePackages);
+        }
+
+        [Fact]
+        public async Task GetInstalledAndTransitivePackagesAsync_MutipleProjectReferencesWithSamePackage_EmptyInstalledAndTransitivePackagesAsync()
+        {
+            // Project3 -> Project2 ->  PackageA (1.0.0) -> PackageB (1.0.0)
+            //                          Project1 -> PackageB (1.0.0)
+
+            // Arrange
+            using var rootDir = new SimpleTestPathContext();
+
+            await CreatePackagesAsync(rootDir, packageAVersion: "1.0.0");
+
+            PackageSpec prj1Spec = ProjectTestHelpers.GetPackageSpec("Project1", rootDir.SolutionRoot, framework: "netstandard2.0", dependencyName: "PackageB");
+            PackageSpec prj2Spec = ProjectTestHelpers.GetPackageSpec("Project2", rootDir.SolutionRoot, framework: "netstandard2.0", dependencyName: "PackageA").WithTestProjectReference(prj1Spec);
+            PackageSpec prj3Spec = ProjectTestHelpers.GetPackageSpec("Project3", rootDir.SolutionRoot, framework: "netstandard2.0").WithTestProjectReference(prj2Spec);
+
+            await RestorePackageSpecsAsync(rootDir, output: null, prj1Spec, prj2Spec, prj3Spec);
+
+            CpsPackageReferenceProject project3 = PrepareCpsRestoredProject(prj3Spec);
+
+            // Act
+            ProjectPackages result = await project3.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: true, CancellationToken.None);
+
+            // Assert
+            Assert.Empty(result.InstalledPackages); // No installed packages
+            Assert.Equal(2, result.TransitivePackages.Count);
+
+            foreach (var transitivePackage in result.TransitivePackages)
+            {
+                var origins = transitivePackage.TransitiveOrigins.Select(transitivePackage => transitivePackage.PackageIdentity.Id).ToList();
+                if (transitivePackage.PackageIdentity.Id.Equals("PackageB") && origins.Count == 2)
+                {
+                    Assert.Contains("Project1", origins[0]);
+                    Assert.Contains("Project2", origins[1]);
+                }
+                if (transitivePackage.PackageIdentity.Id.Equals("PackageA") && origins.Count == 1)
+                {
+                    Assert.Contains("Project2", origins);
+                }
+            }
+        }
+
+        [Fact]
+        public async Task GetInstalledAndTransitivePackagesAsync_WithProjectReference_MultipleTransitivePackagesAsync()
+        {
+            // Project2 -> Project1 -> PackageA (1.0.0) -> PackageB (1.0.0)
+
+            // Arrange
+            using var rootDir = new SimpleTestPathContext();
+
+            await CreatePackagesAsync(rootDir, packageAVersion: "1.0.0");
+
+            PackageSpec prj1Spec = ProjectTestHelpers.GetPackageSpec("Project1", rootDir.SolutionRoot, framework: "netstandard2.0", dependencyName: "PackageA");
+            PackageSpec prj2Spec = ProjectTestHelpers.GetPackageSpec("Project2", rootDir.SolutionRoot, framework: "netstandard2.0").WithTestProjectReference(prj1Spec);
+
+            await RestorePackageSpecsAsync(rootDir, output: null, prj1Spec, prj2Spec);
+
+            CpsPackageReferenceProject project2 = PrepareCpsRestoredProject(prj2Spec);
+
+            // Act
+            ProjectPackages result = await project2.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: true, CancellationToken.None);
+
+            // Assert
+            Assert.Empty(result.InstalledPackages); // No installed packages
+            Assert.Equal(2, result.TransitivePackages.Count); // A and B are transitive
+        }
+
+        [Fact]
+        public async Task GetInstalledAndTransitivePackagesAsync_WithPackagesConfigProjectReferenceAsync()
+        {
+            // Project2 (PR) -> Project1 (PC)
+
+            // Arrange
+            using var rootDir = new SimpleTestPathContext();
+
+            await CreatePackagesAsync(rootDir, packageAVersion: "1.0.0");
+
+            PackageSpec prj1Spec = ProjectTestHelpers.GetPackagesConfigPackageSpec("Project1", rootDir.SolutionRoot, framework: "netstandard2.0");
+            PackageSpec prj2Spec = ProjectTestHelpers.GetPackageSpec("Project2", rootDir.SolutionRoot, framework: "netstandard2.0").WithTestProjectReference(prj1Spec);
+
+            await RestorePackageSpecsAsync(rootDir, output: null, prj1Spec, prj2Spec);
+
+            CpsPackageReferenceProject project2 = PrepareCpsRestoredProject(prj2Spec);
+
+            // Act
+            ProjectPackages result = await project2.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: true, CancellationToken.None);
+
+            // Assert
+            Assert.Empty(result.InstalledPackages); // No installed packages
+            Assert.Empty(result.TransitivePackages); // No transitive packages
         }
 
         [Fact]
@@ -4164,7 +4271,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         }
 
         [Fact]
-        public async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsParamSetToTrue_ReturnsTransitiveOriginsAsync()
+        public async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsParamSetToTrue_ReturnsPackagesWithTransitiveOriginsAsync()
         {
             using SimpleTestPathContext rootDir = new();
 
@@ -4181,8 +4288,115 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.All(packages.TransitivePackages, pkg => Assert.NotEmpty(pkg.TransitiveOrigins));
         }
 
+        [Theory]
+        [InlineData(false, false, 0, 0)]
+        [InlineData(false, true, 0, 0)]
+        [InlineData(true, false, 1, 0)]
+        [InlineData(true, true, 1, 1)]
+        public async Task GetInstalledAndTransitivePackagesAsync_InstalledAndTransitiveComputationNotNeeded_ReturnsExpectedTransitiveData(bool includeTransitivePackages, bool includeTransitiveOrigins, int transitivePackagesCount, int transitiveOriginsCount)
+        {
+            using var rootDir = new SimpleTestPathContext();
+            await CreatePackagesAsync(rootDir, packageAVersion: "1.0.0");
+            IProjectSystemCache cache = new ProjectSystemCache();
+
+            // Arrange
+            PackageSpec initialProjectSpec = ProjectTestHelpers.GetPackageSpec("MyProject", rootDir.SolutionRoot, framework: "net472", dependencyName: "PackageA");
+            await RestorePackageSpecsAsync(rootDir, output: null, initialProjectSpec);
+
+            CpsPackageReferenceProject project = PrepareCpsRestoredProject(initialProjectSpec, cache);
+            var installedPackagesBefore = await project.GetInstalledPackagesAsync(CancellationToken.None); // This will change IsInstalledAndTransitiveComputationNeeded to false
+
+            // Act
+            ProjectPackages installedAndTransitivePackagesAfter = await project.GetInstalledAndTransitivePackagesAsync(includeTransitivePackages, includeTransitiveOrigins, CancellationToken.None);
+
+            // Assert
+            Assert.Equal(installedAndTransitivePackagesAfter.InstalledPackages.Count, installedPackagesBefore.Count());
+            Assert.Equal(1, installedAndTransitivePackagesAfter.InstalledPackages.Count);
+            Assert.Equal(transitivePackagesCount, installedAndTransitivePackagesAfter.TransitivePackages.Count);
+            Assert.All(installedAndTransitivePackagesAfter.TransitivePackages, pkg => Assert.Equal(transitiveOriginsCount, pkg.TransitiveOrigins.Count()));
+        }
+
+        [Theory]
+        [InlineData(false, false, 0, 0)]
+        [InlineData(false, true, 0, 0)]
+        [InlineData(true, false, 1, 0)]
+        [InlineData(true, true, 1, 1)]
+        public async Task GetInstalledAndTransitivePackagesAsync_IsInstalledAndTransitiveComputationNeeded_ReturnsExpectedTransitiveData(bool includeTransitivePackages, bool includeTransitiveOrigins, int transitivePackagesCount, int transitiveOriginsCount)
+        {
+            using var rootDir = new SimpleTestPathContext();
+            await CreatePackagesAsync(rootDir, packageAVersion: "1.0.0");
+            IProjectSystemCache cache = new ProjectSystemCache();
+
+            // Arrange
+            PackageSpec initialProjectSpec = ProjectTestHelpers.GetPackageSpec("MyProject", rootDir.SolutionRoot, framework: "net472", dependencyName: "PackageA");
+            await RestorePackageSpecsAsync(rootDir, output: null, initialProjectSpec);
+
+            CpsPackageReferenceProject project = PrepareCpsRestoredProject(initialProjectSpec, cache);
+
+            // Act
+            ProjectPackages installedAndTransitivePackages = await project.GetInstalledAndTransitivePackagesAsync(includeTransitivePackages, includeTransitiveOrigins, CancellationToken.None);
+
+            // Assert
+            Assert.Equal(1, installedAndTransitivePackages.InstalledPackages.Count);
+            Assert.Equal(transitivePackagesCount, installedAndTransitivePackages.TransitivePackages.Count);
+            Assert.All(installedAndTransitivePackages.TransitivePackages, pkg => Assert.Equal(transitiveOriginsCount, pkg.TransitiveOrigins.Count()));
+        }
+
         [Fact]
-        public async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsParamSetToFalse_ReturnsInstalledAndTransitivePackagesOnlyAsync()
+        public async Task GetInstalledAndTransitivePackagesAsync_NoRestore_ReturnsOnlyTopLevelPackages()
+        {
+            using var rootDir = new SimpleTestPathContext();
+            await CreatePackagesAsync(rootDir, packageAVersion: "1.0.0"); // PackageA is top level package with a dependency on PackageB
+            IProjectSystemCache cache = new ProjectSystemCache();
+
+            // Arrange
+            PackageSpec initialProjectSpec = ProjectTestHelpers.GetPackageSpec("MyProject", rootDir.SolutionRoot, framework: "net472", dependencyName: "PackageA");
+
+            CpsPackageReferenceProject project = PrepareCpsRestoredProject(initialProjectSpec, cache);
+
+            // Act
+            ProjectPackages result = await project.GetInstalledAndTransitivePackagesAsync(true, true, CancellationToken.None);
+
+            // Assert
+            Assert.Equal(1, result.InstalledPackages.Count);
+            Assert.Empty(result.TransitivePackages);
+        }
+
+        [Fact]
+        public async Task GetInstalledAndTransitivePackagesAsync_IncludeTransitiveSetToTrue_WhenCacheWasCleared_ReturnsExpectedTransitiveData()
+        {
+            using var rootDir = new SimpleTestPathContext();
+            await CreatePackagesAsync(rootDir, packageAVersion: "1.0.0");
+            IProjectSystemCache cache = new ProjectSystemCache();
+
+            // Arrange
+            PackageSpec initialProjectSpec = ProjectTestHelpers.GetPackageSpec("MyProject", rootDir.SolutionRoot, framework: "net472", dependencyName: "PackageA");
+            await RestorePackageSpecsAsync(rootDir, output: null, initialProjectSpec);
+
+            CpsPackageReferenceProject project = PrepareCpsRestoredProject(initialProjectSpec, cache);
+
+            // Act
+            ProjectPackages result = await project.GetInstalledAndTransitivePackagesAsync(true, true, CancellationToken.None);
+
+            // do a restore
+            project = PrepareCpsRestoredProject(initialProjectSpec, cache);
+            result = await project.GetInstalledAndTransitivePackagesAsync(false, false, CancellationToken.None);
+
+            // Assert I: Cache for transitive was cleared
+            Assert.Equal(1, result.InstalledPackages.Count);
+            Assert.Equal(0, result.TransitivePackages.Count);
+            Assert.All(result.TransitivePackages, pkg => Assert.Equal(0, pkg.TransitiveOrigins.Count()));
+
+            result = await project.GetInstalledAndTransitivePackagesAsync(true, true, CancellationToken.None);
+
+            // Assert II: Transitive packages calculated correctly
+            Assert.Equal(1, result.InstalledPackages.Count);
+            Assert.Equal(1, result.TransitivePackages.Count);
+            Assert.All(result.TransitivePackages, pkg => Assert.Equal(1, pkg.TransitiveOrigins.Count()));
+        }
+
+        [Fact]
+        public async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsParamSetToFalse_ReturnsPackagesWithoutTransitiveOriginsAsync()
         {
             using SimpleTestPathContext rootDir = new();
 
@@ -4236,14 +4450,14 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 var projectCache = new ProjectSystemCache();
                 IVsProjectAdapter projectAdapter = (new Mock<IVsProjectAdapter>()).Object;
 
-                var project = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+                var project = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
                 testSolutionManager.NuGetProjects.Add(project);
 
                 var projectNames = GetTestProjectNames(projectFullPath, projectName);
                 var packageSpec = GetPackageSpec(projectName, projectFullPath, "[1.0.0, )");
 
                 // Restore info
-                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                var projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
                 projectCache.AddProject(projectNames, projectAdapter, project).Should().BeTrue();
 
@@ -4315,11 +4529,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             var settings = Settings.LoadDefaultSettings(pathContext.SolutionRoot);
             var projectCache = new ProjectSystemCache();
             var projectName = "project";
-            var dependencyGraphSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(ProjectTestHelpers.GetPackageSpec(settings, projectName, rootPath: pathContext.SolutionRoot));
+            var dependencyGraphSpec = ProjectTestHelpers.GetDGSpecForAllProjects(ProjectTestHelpers.GetPackageSpec(settings, projectName, rootPath: pathContext.SolutionRoot));
             var projectFullPath = dependencyGraphSpec.Projects[0].FilePath;
-            var cpsPackageReferenceProject = CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
+            var cpsPackageReferenceProject = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(projectName, projectFullPath, projectCache);
             testSolutionManager.NuGetProjects.Add(cpsPackageReferenceProject);
-            AddProjectDetailsToCache(projectCache, dependencyGraphSpec, cpsPackageReferenceProject, GetTestProjectNames(projectFullPath, projectName));
+            TestCpsPackageReferenceProject.AddProjectDetailsToCache(projectCache, dependencyGraphSpec, cpsPackageReferenceProject, GetTestProjectNames(projectFullPath, projectName));
 
             //  Setup expectations
             var progressReporter = new Mock<IRestoreProgressReporter>(MockBehavior.Strict);
@@ -4362,21 +4576,21 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             // Child project
             var childProject = "childProject";
             var childProjectPackageSpec = ProjectTestHelpers.GetPackageSpec(settings, childProject, rootPath: pathContext.SolutionRoot);
-            var childDependencyGraphSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(childProjectPackageSpec);
+            var childDependencyGraphSpec = ProjectTestHelpers.GetDGSpecForAllProjects(childProjectPackageSpec);
             var childProjectFullPath = childDependencyGraphSpec.Projects[0].FilePath;
-            var childPackageReferenceProject = CreateTestCpsPackageReferenceProject(childProject, childProjectFullPath, projectCache);
+            var childPackageReferenceProject = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(childProject, childProjectFullPath, projectCache);
 
             // Parent project
             var parentProject = "parentProject";
             var parentProjectPackageSpec = ProjectTestHelpers.GetPackageSpec(settings, parentProject, rootPath: pathContext.SolutionRoot);
             parentProjectPackageSpec = parentProjectPackageSpec.WithTestProjectReference(childProjectPackageSpec);
-            var parentDependencyGraphSpec = ProjectTestHelpers.GetDGSpecFromPackageSpecs(parentProjectPackageSpec);
+            var parentDependencyGraphSpec = ProjectTestHelpers.GetDGSpecForAllProjects(parentProjectPackageSpec);
             var parentProjectFullPath = parentDependencyGraphSpec.Projects[0].FilePath;
-            var parentPackageReferenceProject = CreateTestCpsPackageReferenceProject(parentProject, parentProjectFullPath, projectCache);
+            var parentPackageReferenceProject = TestCpsPackageReferenceProject.CreateTestCpsPackageReferenceProject(parentProject, parentProjectFullPath, projectCache);
 
             // Populate caches
-            AddProjectDetailsToCache(projectCache, parentDependencyGraphSpec, parentPackageReferenceProject, GetTestProjectNames(parentProjectFullPath, parentProject));
-            AddProjectDetailsToCache(projectCache, childDependencyGraphSpec, childPackageReferenceProject, GetTestProjectNames(childProjectFullPath, childProject));
+            TestCpsPackageReferenceProject.AddProjectDetailsToCache(projectCache, parentDependencyGraphSpec, parentPackageReferenceProject, GetTestProjectNames(parentProjectFullPath, parentProject));
+            TestCpsPackageReferenceProject.AddProjectDetailsToCache(projectCache, childDependencyGraphSpec, childPackageReferenceProject, GetTestProjectNames(childProjectFullPath, childProject));
             testSolutionManager.NuGetProjects.Add(parentPackageReferenceProject);
             testSolutionManager.NuGetProjects.Add(childPackageReferenceProject);
 
@@ -4404,26 +4618,6 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             // Assert 
             progressReporter.VerifyAll();
-        }
-
-        private static void AddProjectDetailsToCache(ProjectSystemCache projectCache, DependencyGraphSpec parentDependencyGraphSpec, TestCpsPackageReferenceProject parentPackageReferenceProject, ProjectNames parentProjectNames)
-        {
-            projectCache.AddProjectRestoreInfo(parentProjectNames, parentDependencyGraphSpec, new List<IAssetsLogMessage>());
-            projectCache.AddProject(parentProjectNames, vsProjectAdapter: (new Mock<IVsProjectAdapter>()).Object, parentPackageReferenceProject).Should().BeTrue();
-        }
-
-        private TestCpsPackageReferenceProject CreateTestCpsPackageReferenceProject(string projectName, string projectFullPath, ProjectSystemCache projectSystemCache, TestProjectSystemServices projectServices = null)
-        {
-            projectServices = projectServices == null ? new TestProjectSystemServices() : projectServices;
-
-            return new TestCpsPackageReferenceProject(
-                    projectName: projectName,
-                    projectUniqueName: projectName,
-                    projectFullPath: projectFullPath,
-                    projectSystemCache: projectSystemCache,
-                    unconfiguredProject: null,
-                    projectServices: projectServices,
-                    projectId: projectName);
         }
 
         private static PackageSpec GetPackageSpecNoPackages(string projectName, string testDirectory)
@@ -4481,182 +4675,6 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.NotEmpty(packagesWithOrigins.InstalledPackages);
             Assert.NotEmpty(packagesWithOrigins.TransitivePackages);
             Assert.All(packagesWithOrigins.TransitivePackages, pkg => Assert.NotEmpty(pkg.TransitiveOrigins));
-        }
-
-        private class TestCpsPackageReferenceProject
-            : CpsPackageReferenceProject
-            , IProjectScriptHostService
-            , IProjectSystemReferencesReader
-        {
-            public HashSet<PackageIdentity> ExecuteInitScriptAsyncCalls { get; }
-                = new HashSet<PackageIdentity>(PackageIdentity.Comparer);
-
-            public List<TestExternalProjectReference> ProjectReferences { get; }
-                = new List<TestExternalProjectReference>();
-
-            public bool IsCacheEnabled { get; set; }
-
-            public bool IsNu1605Error { get; set; }
-
-            public HashSet<PackageSource> ProjectLocalSources { get; set; } = new HashSet<PackageSource>();
-
-            public TestCpsPackageReferenceProject(
-                string projectName,
-                string projectUniqueName,
-                string projectFullPath,
-                IProjectSystemCache projectSystemCache,
-                UnconfiguredProject unconfiguredProject,
-                INuGetProjectServices projectServices,
-                string projectId)
-                : base(projectName, projectUniqueName, projectFullPath, projectSystemCache, unconfiguredProject, projectServices, projectId)
-            {
-                ProjectServices = projectServices;
-            }
-
-            public override string MSBuildProjectPath => base.MSBuildProjectPath;
-
-            public override string ProjectName => base.ProjectName;
-
-            public override async Task<IReadOnlyList<PackageSpec>> GetPackageSpecsAsync(DependencyGraphCacheContext context)
-            {
-                var packageSpecs = await base.GetPackageSpecsAsync(context);
-
-                if (IsNu1605Error)
-                {
-                    foreach (var packageSpec in packageSpecs)
-                    {
-                        if (packageSpec?.RestoreMetadata != null)
-                        {
-                            var allWarningsAsErrors = false;
-                            var noWarn = new HashSet<NuGetLogCode>();
-                            var warnAsError = new HashSet<NuGetLogCode>();
-
-                            if (packageSpec.RestoreMetadata.ProjectWideWarningProperties != null)
-                            {
-                                var warningProperties = packageSpec.RestoreMetadata.ProjectWideWarningProperties;
-                                allWarningsAsErrors = warningProperties.AllWarningsAsErrors;
-                                warnAsError.AddRange<NuGetLogCode>(warningProperties.WarningsAsErrors);
-                                noWarn.AddRange<NuGetLogCode>(warningProperties.NoWarn);
-                            }
-
-                            warnAsError.Add(NuGetLogCode.NU1605);
-                            noWarn.Remove(NuGetLogCode.NU1605);
-
-                            var warningsNotAsErrors = new HashSet<NuGetLogCode>();
-
-                            packageSpec.RestoreMetadata.ProjectWideWarningProperties = new WarningProperties(warnAsError, noWarn, allWarningsAsErrors, warningsNotAsErrors);
-
-                            packageSpec?.RestoreMetadata.Sources.AddRange(new List<PackageSource>(ProjectLocalSources));
-                        }
-                    }
-                }
-
-                return packageSpecs;
-            }
-
-            public Task ExecutePackageScriptAsync(PackageIdentity packageIdentity, string packageInstallPath, string scriptRelativePath, INuGetProjectContext projectContext, bool throwOnFailure, CancellationToken token)
-            {
-                throw new NotImplementedException();
-            }
-
-            public Task<bool> ExecutePackageInitScriptAsync(PackageIdentity packageIdentity, string packageInstallPath, INuGetProjectContext projectContext, bool throwOnFailure, CancellationToken token)
-            {
-                ExecuteInitScriptAsyncCalls.Add(packageIdentity);
-                return Task.FromResult(true);
-            }
-
-            public Task<IEnumerable<LibraryDependency>> GetPackageReferencesAsync(NuGetFramework targetFramework, CancellationToken token)
-            {
-                throw new NotImplementedException();
-            }
-
-            public Task<IEnumerable<ProjectRestoreReference>> GetProjectReferencesAsync(Common.ILogger logger, CancellationToken token)
-            {
-                var projectRefs = ProjectReferences.Select(e => new ProjectRestoreReference()
-                {
-                    ProjectUniqueName = e.MSBuildProjectPath,
-                    ProjectPath = e.MSBuildProjectPath,
-                });
-
-                return Task.FromResult(projectRefs);
-            }
-
-            public override Task PreProcessAsync(INuGetProjectContext nuGetProjectContext, CancellationToken token)
-            {
-                return base.PreProcessAsync(nuGetProjectContext, token);
-            }
-
-            public override Task PostProcessAsync(INuGetProjectContext nuGetProjectContext, CancellationToken token)
-            {
-                return base.PostProcessAsync(nuGetProjectContext, token);
-            }
-
-            public override Task<string> GetAssetsFilePathAsync()
-            {
-                return base.GetAssetsFilePathAsync();
-            }
-
-            public override Task<string> GetAssetsFilePathOrNullAsync()
-            {
-                return base.GetAssetsFilePathOrNullAsync();
-            }
-
-            public override Task AddFileToProjectAsync(string filePath)
-            {
-                return base.AddFileToProjectAsync(filePath);
-            }
-
-            public override Task<(IReadOnlyList<PackageSpec> dgSpecs, IReadOnlyList<IAssetsLogMessage> additionalMessages)> GetPackageSpecsAndAdditionalMessagesAsync(DependencyGraphCacheContext context)
-            {
-                return base.GetPackageSpecsAndAdditionalMessagesAsync(context);
-            }
-
-            public override async Task<bool> InstallPackageAsync(string packageId, VersionRange range, INuGetProjectContext nuGetProjectContext, BuildIntegratedInstallationContext installationContext, CancellationToken token)
-            {
-                var dependency = new LibraryDependency
-                {
-                    LibraryRange = new LibraryRange(
-                        name: packageId,
-                        versionRange: range,
-                        typeConstraint: LibraryDependencyTarget.Package),
-                    SuppressParent = installationContext.SuppressParent,
-                    IncludeType = installationContext.IncludeType
-                };
-
-                await ProjectServices.References.AddOrUpdatePackageReferenceAsync(dependency, token);
-
-                return true;
-            }
-
-            public override async Task<bool> UninstallPackageAsync(PackageIdentity packageIdentity, INuGetProjectContext nuGetProjectContext, CancellationToken token)
-            {
-                await ProjectServices.References.RemovePackageReferenceAsync(packageIdentity.Id);
-
-                return true;
-            }
-
-            public override Task<string> GetCacheFilePathAsync()
-            {
-                return base.GetCacheFilePathAsync();
-            }
-        }
-
-        private class TestExternalProjectReference
-        {
-            public IDependencyGraphProject Project { get; set; }
-
-            public IDependencyGraphProject[] Children { get; set; }
-
-            public TestExternalProjectReference(
-                IDependencyGraphProject project,
-                params IDependencyGraphProject[] children)
-            {
-                Project = project;
-                Children = children;
-                MSBuildProjectPath = project.MSBuildProjectPath;
-            }
-
-            public string MSBuildProjectPath { get; set; }
         }
     }
 }

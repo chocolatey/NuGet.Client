@@ -81,7 +81,9 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
                     WaitAndLogPackageActions();
                     UnsubscribeFromProgressEvents();
 
-                    return Task.FromResult(true);
+#pragma warning disable VSTHRD003 // Avoid awaiting foreign Tasks
+                    return TaskResult.True;
+#pragma warning restore VSTHRD003 // Avoid awaiting foreign Tasks
                 }, Token);
             });
 
@@ -92,7 +94,7 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
             var actionTelemetryEvent = VSTelemetryServiceUtility.GetActionTelemetryEvent(
                 OperationId.ToString(),
                 new[] { Project },
-                NuGetOperationType.Install,
+                NuGetProjectActionType.Install,
                 OperationSource.PMC,
                 startTime,
                 _status,

@@ -1,19 +1,6 @@
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices.ComTypes;
-using System.Text;
-using System.Threading.Tasks;
-using System.Xml.Linq;
-using Moq;
-using NuGet.Commands;
 using NuGet.Common;
 using NuGet.Packaging.Rules;
-using NuGet.Test.Utility;
 using Xunit;
 
 namespace NuGet.Packaging.Test
@@ -29,7 +16,7 @@ namespace NuGet.Packaging.Test
             var issues = rule.Validate(files);
 
             // Assert
-            Assert.True(issues.Any(p => p.Code == NuGetLogCode.NU5127));
+            Assert.Contains(issues, p => p.Code == NuGetLogCode.NU5127);
         }
 
         [Theory]
@@ -41,7 +28,7 @@ namespace NuGet.Packaging.Test
             var issues = rule.Validate(files);
 
             // Assert
-            Assert.False(issues.Any(p => p.Code == NuGetLogCode.NU5127));
+            Assert.DoesNotContain(issues, p => p.Code == NuGetLogCode.NU5127);
         }
 
         public static class FileSource

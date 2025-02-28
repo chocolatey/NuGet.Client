@@ -9,6 +9,7 @@ using System.Linq;
 using System.Text;
 using System.Xml.Linq;
 using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using NuGet.Commands;
 using NuGet.Common;
 using NuGet.Frameworks;
@@ -19,11 +20,19 @@ using NuGet.Packaging.Rules;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace NuGet.CommandLine.Test
 {
     public class NuGetPackCommandTest
     {
+        private readonly ITestOutputHelper _testOutputHelper;
+
+        public NuGetPackCommandTest(ITestOutputHelper testOutputHelper)
+        {
+            _testOutputHelper = testOutputHelper;
+        }
+
         [Fact]
         public void PackCommand_IncludeExcludePackageFromNuspec()
         {
@@ -73,7 +82,7 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -152,7 +161,7 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -206,7 +215,7 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -272,7 +281,7 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -320,7 +329,7 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -382,7 +391,7 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -437,7 +446,7 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -505,7 +514,7 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec -symbols -SymbolPackageFormat snupkg",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -590,7 +599,7 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec -symbols -SymbolPackageFormat snupkg",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(r.Success, r.AllOutput);
 
                 // Assert
@@ -673,7 +682,7 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec -symbols -SymbolPackageFormat snupkg",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -752,7 +761,7 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -871,7 +880,7 @@ namespace Proj2
                     nugetexe,
                     proj2Directory,
                     "pack proj2.csproj -build -IncludeReferencedProjects",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -961,8 +970,8 @@ namespace Proj1
                     nugetexe,
                     proj1Directory,
                     $"restore {project1Path}",
-                    waitForExit: true,
-                    environmentVariables: environmentVariables);
+                    environmentVariables: environmentVariables,
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(t.Success, t.AllOutput);
 
                 // Act
@@ -970,8 +979,8 @@ namespace Proj1
                     nugetexe,
                     proj1Directory,
                     "pack proj1.csproj -build ",
-                    waitForExit: true,
-                    environmentVariables: environmentVariables);
+                    environmentVariables: environmentVariables,
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 if (packEnabled)
@@ -1070,7 +1079,7 @@ namespace Proj1
                     nugetexe,
                     proj1Directory,
                     "restore packages.config -PackagesDirectory " + packagesDirectory,
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(t.Success, t.AllOutput);
 
                 // Act
@@ -1078,7 +1087,7 @@ namespace Proj1
                     nugetexe,
                     proj1Directory,
                     "pack proj1.csproj -build ",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -1173,7 +1182,7 @@ namespace Proj2
                     nugetexe,
                     proj2Directory,
                     $"pack proj2.csproj -build -IncludeReferencedProjects -symbols -SymbolPackageFormat {extension}",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -1247,7 +1256,7 @@ namespace Proj2
                     nugetexe,
                     projDirectory,
                     $"pack A.csproj -build -symbols -SymbolPackageFormat {extension}",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(result.ExitCode == 0, result.Output + " " + result.Errors);
 
                 // Assert
@@ -1319,7 +1328,7 @@ public class B
                     nugetexe,
                     projDirectory,
                     $"pack A.csproj -build -symbols -SymbolPackageFormat {extension}",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(result.ExitCode == 0, result.Output + " " + result.Errors);
 
                 // Assert
@@ -1390,7 +1399,7 @@ public class B
                     nugetexe,
                     projDirectory,
                     "pack A.csproj -build",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(result.ExitCode == 0, result.Output + " " + result.Errors);
 
                 // Assert
@@ -1487,7 +1496,7 @@ public class B
                     nugetexe,
                     proj1Directory,
                     "pack proj1.csproj -build -IncludeReferencedProjects",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -1600,7 +1609,8 @@ public class B
                     nugetexe,
                     proj1Directory,
                     "pack proj1.csproj -build -IncludeReferencedProjects",
-                    waitForExit: true);
+                    timeOutInMilliseconds: (int)TimeSpan.FromMinutes(4).TotalMilliseconds,
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 Assert.Contains(string.Format(NuGetResources.ProjectJsonPack_Deprecated, "proj2"), r.Output);
@@ -1714,7 +1724,7 @@ public class B
                     nugetexe,
                     proj1Directory,
                     $@"pack proj1.csproj -build -IncludeReferencedProjects  -MSBuildVersion {version}",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -1819,7 +1829,7 @@ public class B
                     nugetexe,
                     proj1Directory,
                     $@"pack proj1.csproj -build -IncludeReferencedProjects  -MSBuildVersion 15.0",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -1934,7 +1944,7 @@ public class B
                     nugetexe,
                     proj1Directory,
                     $@"pack proj1.csproj -build -IncludeReferencedProjects  -MSBuildVersion {version}",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -2045,7 +2055,7 @@ public class B
                     nugetexe,
                     proj1Directory,
                     $@"pack proj1.csproj -build -IncludeReferencedProjects  -MSBuildVersion 15.0",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -2159,7 +2169,7 @@ public class B
                     nugetexe,
                     proj1Directory,
                     "pack proj1.csproj -build -IncludeReferencedProjects -Properties prefix=" + prefixTokenValue,
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -2195,7 +2205,7 @@ public class B
                 var projectDirectory = Path.Combine(workingDirectory, "Foo");
 
                 // Act
-                var r = CommandRunner.Run(nugetexe, projectDirectory, "pack Foo.csproj -build", waitForExit: true);
+                var r = CommandRunner.Run(nugetexe, projectDirectory, "pack Foo.csproj -build", testOutputHelper: _testOutputHelper);
 
                 // The assembly version was used, not the informational version
                 var outputPackageFileName = Path.Combine(projectDirectory, $"Foo.{version}.nupkg");
@@ -2223,7 +2233,7 @@ public class B
                 var projectDirectory = Path.Combine(workingDirectory, "Foo");
 
                 // Act
-                var r = CommandRunner.Run(nugetexe, projectDirectory, "pack Foo.csproj -build", waitForExit: true);
+                var r = CommandRunner.Run(nugetexe, projectDirectory, "pack Foo.csproj -build", testOutputHelper: _testOutputHelper);
 
                 // The informational version without the build metadata part was used
                 var outputPackageFileName = Path.Combine(projectDirectory, $"Foo.{semverVersion}.nupkg");
@@ -2402,7 +2412,7 @@ namespace " + projectName + @"
                     nugetexe,
                     proj1Directory,
                     "pack proj1.csproj -build -IncludeReferencedProjects",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -2465,7 +2475,7 @@ namespace " + projectName + @"
                     Util.GetNuGetExePath(),
                     workingDirectory,
                     "pack packageA.nuspec -InstallPackageToOutputPath",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
 
@@ -2538,7 +2548,7 @@ namespace " + projectName + @"
                     Util.GetNuGetExePath(),
                     workingDirectory,
                     arguments,
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
 
@@ -2562,7 +2572,7 @@ namespace " + projectName + @"
                     Assert.Equal("packageATitle", nuspecReader.GetTitle());
                     Assert.Equal("test1@microsoft.com", nuspecReader.GetAuthors());
                     Assert.Equal("testOwner", nuspecReader.GetOwners());
-                    Assert.Equal(false, nuspecReader.GetRequireLicenseAcceptance());
+                    Assert.False(nuspecReader.GetRequireLicenseAcceptance());
                     Assert.Equal("the description", nuspecReader.GetDescription());
                     Assert.Equal("Copyright (C) Microsoft 2013", nuspecReader.GetCopyright());
                     Assert.Equal("Microsoft,Sample,CustomTag", nuspecReader.GetTags());
@@ -2640,7 +2650,7 @@ namespace " + projectName + @"
                     Util.GetNuGetExePath(),
                     workingDirectory,
                     "@" + responseFilePath,
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
 
@@ -2661,7 +2671,7 @@ namespace " + projectName + @"
                     Assert.Equal("packageATitle", nuspecReader.GetTitle());
                     Assert.Equal("test1@microsoft.com", nuspecReader.GetAuthors());
                     Assert.Equal("testOwner", nuspecReader.GetOwners());
-                    Assert.Equal(false, nuspecReader.GetRequireLicenseAcceptance());
+                    Assert.False(nuspecReader.GetRequireLicenseAcceptance());
                     Assert.Equal("the description", nuspecReader.GetDescription());
                     Assert.Equal("Copyright (C) Microsoft 2013", nuspecReader.GetCopyright());
                     Assert.Equal("Microsoft,Sample,CustomTag", nuspecReader.GetTags());
@@ -2704,7 +2714,7 @@ namespace " + projectName + @"
                     nugetexe,
                     proj1Directory,
                     $"pack proj1.csproj -build -IncludeReferencedProjects -outputDirectory \"{outputDirectory}\"",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Assert.True(0 == r.ExitCode, r.Output + Environment.NewLine + r.Errors);
 
@@ -2754,7 +2764,7 @@ namespace " + projectName + @"
                     nugetexe,
                     proj1Directory,
                     "pack proj1.csproj -build -IncludeReferencedProjects",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -2797,7 +2807,7 @@ namespace " + projectName + @"
                     nugetexe,
                     proj1Directory,
                     "pack proj1.csproj -build -IncludeReferencedProjects",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -2817,7 +2827,8 @@ namespace " + projectName + @"
 
         // Test that when -IncludeReferencedProjects is not specified,
         // pack command will not try to look for the output files of the
-        // referenced projects.
+        // referenced projects
+        [Fact]
         public void PackCommand_IncludeReferencedProjectsOff()
         {
             var msbuild = Path.Combine(
@@ -2919,26 +2930,25 @@ namespace Proj2
                     msbuild,
                     proj2Directory,
                     "proj2.csproj /p:Config=Release",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Act
                 r = CommandRunner.Run(
                     nugetexe,
                     proj2Directory,
                     "pack proj2.csproj -p Config=Release",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
                 var package = new PackageArchiveReader(File.OpenRead(Path.Combine(proj2Directory, "proj2.0.0.0.nupkg")));
-                var files = package.GetFiles().ToArray();
+                var files = package.GetNonPackageDefiningFiles().ToArray();
                 Array.Sort(files);
 
                 Assert.Equal(
-                    new string[]
-                    {
-                        Path.Combine("lib", "net40", "proj2.dll")
-                    },
+                    [
+                        "lib/net472/proj2.dll"
+                    ],
                     files);
             }
         }
@@ -3041,7 +3051,7 @@ namespace Proj2
                     nugetexe,
                     proj2Directory,
                     "pack proj2.csproj -build -IncludeReferencedProjects -p Config=Release",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -3101,7 +3111,7 @@ namespace Proj2
                     nugetexe,
                     projDirectory,
                     "pack package.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
@@ -3191,7 +3201,7 @@ namespace Proj1
                     nugetexe,
                     proj1Directory,
                     "pack proj1.csproj -build",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -3278,7 +3288,7 @@ namespace Proj1
                     nugetexe,
                     proj1Directory,
                     "pack proj1.csproj -build",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -3397,7 +3407,7 @@ namespace Proj1
                     nugetexe,
                     proj1Directory,
                     "pack proj1.csproj -build -IncludeReferencedProjects",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -3512,7 +3522,7 @@ namespace Proj1
                     nugetexe,
                     proj1Directory,
                     "pack proj1.csproj -build -IncludeReferencedProjects",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -3619,14 +3629,14 @@ namespace Proj1
                     msbuild,
                     proj1Directory,
                     "proj1.csproj /p:Config=Release",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Act
                 r = CommandRunner.Run(
                     nugetexe,
                     proj1Directory,
                     "pack proj1.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -3736,7 +3746,7 @@ namespace Proj2
                     nugetexe,
                     proj2Directory,
                     $@"pack proj2.csproj -build -IncludeReferencedProjects -p Config=Release -msbuildversion 14",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
@@ -3861,7 +3871,7 @@ namespace Proj2
                     nugetexe,
                     proj2Directory,
                     $@"pack proj2.csproj -build -IncludeReferencedProjects -p Config=Release -msbuildversion 15.0",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
@@ -3986,7 +3996,7 @@ namespace Proj2
                     nugetexe,
                     proj2Directory,
                     @"pack proj2.csproj -build -IncludeReferencedProjects -p Config=Release -MSBuildVersion 15.1",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -4114,7 +4124,7 @@ namespace Proj2
                     nugetexe,
                     proj2Directory,
                     $@"pack proj2.csproj -build -IncludeReferencedProjects -p Config=Release -MSBuildPath ""{msbuildPath}"" ",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -4243,7 +4253,7 @@ namespace Proj2
                     nugetexe,
                     proj2Directory,
                     $@"pack proj2.csproj -build -IncludeReferencedProjects -p Config=Release -MSBuildPath ""{msbuildPath}"" -MSBuildVersion 12 ",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -4369,12 +4379,12 @@ namespace Proj2
                     nugetexe,
                     proj2Directory,
                     $@"pack proj2.csproj -build -IncludeReferencedProjects -p Config=Release -MSBuildPath ""{msbuildPath}"" ",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(1 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
 
-                Assert.True(r.Errors.Contains($"MSBuildPath : {msbuildPath}  doesn't not exist."));
+                Assert.True(r.Errors.Contains($"MSBuildPath : {msbuildPath} does not exist."));
             }
         }
 
@@ -4393,7 +4403,7 @@ namespace Proj2
                     nugetexe,
                     proj1Directory,
                     "pack proj1.csproj -Build -Suffix alpha",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 Assert.True(r.Success, r.AllOutput);
@@ -4505,7 +4515,7 @@ stuff \n &lt;&lt;
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec -verbosity detailed",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -4595,7 +4605,7 @@ stuff \n <<".Replace("\r\n", "\n");
                     nugetexe,
                     proj1Directory,
                     "pack proj1.csproj -build",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.Equal(1, r.ExitCode);
 
                 // Assert
@@ -4641,7 +4651,7 @@ stuff \n <<".Replace("\r\n", "\n");
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -4717,7 +4727,7 @@ namespace Proj1
                     nugetexe,
                     proj1ProjectDirectory,
                     @"pack proj1.csproj -build -IncludeReferencedProjects -Properties Configuration=Release",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -4789,7 +4799,7 @@ namespace Proj1
                     nugetexe,
                     proj1Directory,
                     $"pack proj1.csproj -build -version 1.0.0-rtm+asdassd",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 r.Success.Should().BeTrue(because: r.AllOutput);
                 var expectedMessage = "WARNING: " + NuGetLogCode.NU5115.ToString();
                 if (expectToWarn)
@@ -4858,7 +4868,7 @@ namespace Proj1
                     nugetexe,
                     proj1Directory,
                     $"pack proj1.csproj -build -version 1.0.0-rtm+asdassd",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 var nupkgPath = Path.Combine(workingDirectory, "proj1", "proj1.1.0.0-rtm.nupkg");
 
@@ -4932,7 +4942,7 @@ namespace Proj1
                     nugetexe,
                     proj1Directory,
                     $"pack proj1.csproj -build -version 1.0.0-rtm+asdassd",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 var nupkgPath = Path.Combine(workingDirectory, "proj1", "proj1.1.0.0-rtm.nupkg");
 
@@ -4980,7 +4990,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -5044,7 +5054,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -5109,7 +5119,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 // This should fail.
                 Assert.True(1 == r.ExitCode, r.Output + " " + r.Errors);
 
@@ -5157,7 +5167,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 // This should fail.
                 Assert.True(1 == r.ExitCode, r.Output + " " + r.Errors);
 
@@ -5205,7 +5215,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 // This should fail.
                 Assert.True(1 == r.ExitCode, r.Output + " " + r.Errors);
 
@@ -5259,7 +5269,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -5327,7 +5337,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 // This should fail.
                 Assert.True(1 == r.ExitCode, r.Output + " " + r.Errors);
 
@@ -5378,7 +5388,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 // This should fail.
                 Assert.True(1 == r.ExitCode, r.Output + " " + r.Errors);
 
@@ -5430,7 +5440,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 // This should fail.
                 Assert.True(1 == r.ExitCode, r.Output + " " + r.Errors);
 
@@ -5479,7 +5489,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 // This should fail.
                 Assert.True(1 == r.ExitCode, r.Output + " " + r.Errors);
 
@@ -5525,7 +5535,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 Assert.Contains("NU5125", r.Output);
@@ -5591,7 +5601,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -5695,7 +5705,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     workingDirectory,
                     $"pack {packageName}.csproj -build -symbols -SymbolPackageFormat {extension}",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -5762,6 +5772,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
             Util.TestCommandInvalidArguments("pack a.nuspec b.nuspec");
         }
 
+        [Fact]
         public void PackCommand_PackageFromNuspecWithFrameworkReferences_MultiTargeting()
         {
             var nugetexe = Util.GetNuGetExePath();
@@ -5797,7 +5808,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -5865,7 +5876,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     workingDirectory,
                     "pack packageA.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -6016,7 +6027,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     Util.GetNuGetExePath(),
                     testDirBuilder.BaseDir,
                     $"pack {testDirBuilder.NuspecPath}",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Util.VerifyResultSuccess(r, expectedOutputMessage: NuGetLogCode.NU5048.ToString());
                 Assert.Contains(AnalysisResources.IconUrlDeprecationWarning, r.Output);
@@ -6166,7 +6177,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     Util.GetNuGetExePath(),
                     testDirBuilder.BaseDir,
                     $"pack A.csproj -Build -Symbols -SymbolPackageFormat {symbolExtension}",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Verify
                 Util.VerifyResultSuccess(r);
@@ -6186,7 +6197,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     if (symbolPackageFormat == SymbolPackageFormat.Snupkg)
                     {
                         var nuspecReader = snupkg.NuspecReader;
-                        Assert.Equal(null, nuspecReader.GetIcon());
+                        Assert.Null(nuspecReader.GetIcon());
                     }
                 }
             }
@@ -6235,7 +6246,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     Util.GetNuGetExePath(),
                     testDirBuilder.BaseDir,
                     $"pack A.csproj -Build",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Util.VerifyResultSuccess(r, expectedOutputMessage: NuGetLogCode.NU5048.ToString());
                 Assert.Contains(AnalysisResources.IconUrlDeprecationWarning, r.Output);
@@ -6277,7 +6288,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     Util.GetNuGetExePath(),
                     testDirBuilder.BaseDir,
                     $"pack {testDirBuilder.NuspecPath}",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 Util.VerifyResultSuccess(r, message);
@@ -6309,7 +6320,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     Util.GetNuGetExePath(),
                     testDirBuilder.BaseDir,
                     $"pack {testDirBuilder.NuspecPath}",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 Util.VerifyResultFailure(r, message);
@@ -6673,7 +6684,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     Util.GetNuGetExePath(),
                     testDirBuilder.BaseDir,
                     $"pack {testDirBuilder.NuspecPath}",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 Util.VerifyResultSuccess(r, message);
@@ -6746,7 +6757,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                         nugetexe,
                         workingDirectory,
                         string.Format(command, path),
-                        waitForExit: true);
+                        testOutputHelper: _testOutputHelper);
                     Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
 
@@ -6826,7 +6837,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     proj1Directory,
                     "pack proj1.csproj -build -solutionDir ../solution",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(r.Success, r.AllOutput);
             }
         }
@@ -6876,7 +6887,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     proj1Directory,
                     "pack proj1.csproj -build -packagesDir ../pkgs",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(r.Success, r.AllOutput);
             }
         }
@@ -7002,7 +7013,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     proj1Directory,
                     $"pack proj1.csproj -build -packagesDir {packagesFolder} -solutionDir {solDirectory}",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Util.VerifyResultSuccess(r);
                 Assert.True(File.Exists(Path.Combine(proj1Directory, "proj1.0.0.0.nupkg")));
 
@@ -7011,7 +7022,7 @@ $@"<package xmlns='http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd'>
                     nugetexe,
                     proj3Directory,
                     $"pack proj3.csproj -build -packagesDir {packagesFolder2} -solutionDir {solDirectory} -configFile {Path.Combine(solDirectory, "AlternateNuget.config")}",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Util.VerifyResultSuccess(r2);
                 Assert.True(File.Exists(Path.Combine(proj3Directory, "proj3.0.0.0.nupkg")));
             }
@@ -7069,7 +7080,7 @@ namespace Proj1
                     nugetexe,
                     proj1Directory,
                     $"pack proj1.csproj -build -version 1.0.0-rtm+asdassd",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 r.Success.Should().BeTrue(because: r.AllOutput);
                 r.AllOutput.Should().NotContain(NuGetLogCode.NU5105.ToString());
             }
@@ -7170,7 +7181,7 @@ using System.Runtime.InteropServices;
                     nugetexe,
                     projectDirectory,
                     "pack -build",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -7290,7 +7301,7 @@ using System.Runtime.InteropServices;
                     renamedNuGetExe,
                     projectDirectory,
                     "pack -build",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Assert
@@ -7336,7 +7347,7 @@ using System.Runtime.InteropServices;
                     nugetexe,
                     projDirectory,
                     "pack A.csproj -build",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(result.ExitCode == 0, result.Output + " " + result.Errors);
 
                 // Assert
@@ -7383,12 +7394,12 @@ using System.Runtime.InteropServices;
                     nugetexe,
                     workingDirectory,
                     "spec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 CommandRunnerResult packResult = CommandRunner.Run(
                     nugetexe,
                     workingDirectory,
                     "pack Package.nuspec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
                 Assert.True(0 == specResult.ExitCode, specResult.AllOutput);
                 Assert.True(0 == packResult.ExitCode, packResult.AllOutput);
 
@@ -7463,7 +7474,7 @@ namespace proj1
                     nugetexe,
                     workingDirectory,
                     "spec",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Assert.True(0 == specResult.ExitCode, specResult.AllOutput);
 
@@ -7471,7 +7482,7 @@ namespace proj1
                     nugetexe,
                     workingDirectory,
                     " pack -properties tagVar=CustomTag;author=microsoft.com;Description=aaaaaaa -build",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 Assert.True(0 == packResult.ExitCode, packResult.AllOutput);
@@ -7534,7 +7545,7 @@ namespace Proj1
                 Util.GetNuGetExePath(),
                 proj1Directory,
                 "pack proj1.csproj -build",
-                waitForExit: true);
+                testOutputHelper: _testOutputHelper);
             r.Success.Should().BeFalse();
             r.AllOutput.Should().Contain("NU5049");
             r.AllOutput.Should().Contain("dotnet pack");
@@ -7581,11 +7592,11 @@ namespace Proj1
                 Util.GetNuGetExePath(),
                 proj1Directory,
                 "pack proj1.csproj -build",
-                waitForExit: true,
                 environmentVariables: new Dictionary<string, string>()
                 {
                     { "NUGET_ENABLE_LEGACY_CSPROJ_PACK", "true" }
-                });
+                },
+                testOutputHelper: _testOutputHelper);
             r.Success.Should().BeTrue();
             r.AllOutput.Should().NotContain("NU5049");
             r.AllOutput.Should().NotContain("dotnet pack");

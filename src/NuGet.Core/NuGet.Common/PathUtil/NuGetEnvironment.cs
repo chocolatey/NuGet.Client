@@ -1,6 +1,9 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+// BCL annotations on Environment.GetEnvironmentVariable makes this file difficult to annotate in .NET 5+
+#nullable disable
+
 using System;
 using System.Globalization;
 using System.IO;
@@ -19,6 +22,45 @@ namespace NuGet.Common
 #endif
 
         private static readonly Lazy<string> _getHome = new Lazy<string>(() => GetHome());
+
+        private static string _nuGetTempDirectory = null;
+        internal static string NuGetTempDirectory
+        {
+            get { return _nuGetTempDirectory ??= GetNuGetTempDirectory(); }
+        }
+
+        internal static IEnvironmentVariableReader EnvironmentVariableReader { get; } = EnvironmentVariableWrapper.Instance;
+
+        private static string GetNuGetTempDirectory()
+        {
+            var nuGetScratch = EnvironmentVariableReader.GetEnvironmentVariable("NUGET_SCRATCH");
+            if (string.IsNullOrEmpty(nuGetScratch))
+            {
+#pragma warning disable RS0030 // Do not used banned APIs
+                // This is the only place in the product code we can use GetTempPath().
+                var tempPath = Path.GetTempPath();
+#pragma warning restore RS0030 // Do not used banned APIs
+
+                // On Windows and Mac the temp directories are per-user, but on Linux it's /tmp for everyone, so append the username on Linux.
+                nuGetScratch = Path.Combine(tempPath,
+                    RuntimeEnvironmentHelper.IsLinux ? "NuGetScratch" + Environment.UserName : "NuGetScratch");
+
+                if (RuntimeEnvironmentHelper.IsLinux)
+                {
+                    Directory.CreateDirectory(nuGetScratch);
+                    if (chmod(nuGetScratch, 0b111_000_000) != 0)   //0b111_000_000 = 700 permissions
+                    {
+                        // Another user created a folder pretending to be us! 
+                        var errno = Marshal.GetLastWin32Error(); // fetch the errno before running any other operation
+                        throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture,
+                            Strings.UnableToSetNuGetTempFolderPermission,
+                            nuGetScratch,
+                            errno));
+                    }
+                }
+            }
+            return nuGetScratch;
+        }
 
         public static string GetFolderPath(NuGetFolderPath folder)
         {
@@ -101,39 +143,7 @@ namespace NuGet.Common
 
                 case NuGetFolderPath.Temp:
                     {
-                        var nuGetScratch = Environment.GetEnvironmentVariable("NUGET_SCRATCH");
-                        if (string.IsNullOrEmpty(nuGetScratch))
-                        {
-#pragma warning disable RS0030 // Do not used banned APIs
-                            // This is the only place in the product code we can use GetTempPath().
-                            var tempPath = Path.GetTempPath();
-#pragma warning restore RS0030 // Do not used banned APIs
-                            nuGetScratch = Path.Combine(tempPath, "NuGetScratch");
-
-                            // On Windows and Mac the temp directories are per-user, but on Linux it's /tmp for everyone
-                            if (RuntimeEnvironmentHelper.IsLinux)
-                            {
-                                // ConcurrencyUtility uses the lock subdirectory, so make sure it exists, and create with world write
-                                string lockPath = Path.Combine(nuGetScratch, "lock");
-                                if (!Directory.Exists(lockPath))
-                                {
-                                    void CreateSharedDirectory(string path)
-                                    {
-                                        Directory.CreateDirectory(path);
-                                        if (chmod(path, 0x1ff) == -1) // 0x1ff == 777 permissions
-                                        {
-                                            // it's very unlikely we can't set the permissions of a directory we just created
-                                            var errno = Marshal.GetLastWin32Error(); // fetch the errno before running any other operation
-                                            throw new InvalidOperationException($"Unable to set permission while creating {path}, errno={errno}.");
-                                        }
-                                    }
-
-                                    CreateSharedDirectory(nuGetScratch);
-                                    CreateSharedDirectory(lockPath);
-                                }
-                            }
-                        }
-                        return nuGetScratch;
+                        return NuGetTempDirectory;
                     }
 
                 default:
@@ -141,9 +151,10 @@ namespace NuGet.Common
             }
         }
 
-        /// <summary>Only to be used for creating directories under /tmp on Linux. Do not use elsewhere.</summary>
+        /// <summary>Only to be used for setting permissions of directories under /tmp on Linux. Do not use elsewhere.</summary>
         [DllImport("libc", SetLastError = true, CharSet = CharSet.Ansi)]
         private static extern int chmod(string pathname, int mode);
+
 
 #if IS_CORECLR
 
@@ -152,10 +163,10 @@ namespace NuGet.Common
             switch (folder)
             {
                 case SpecialFolder.ProgramFilesX86:
-                    return Environment.GetEnvironmentVariable("PROGRAMFILES(X86)");
+                    return EnvironmentVariableReader.GetEnvironmentVariable("PROGRAMFILES(X86)");
 
                 case SpecialFolder.ProgramFiles:
-                    return Environment.GetEnvironmentVariable("PROGRAMFILES");
+                    return EnvironmentVariableReader.GetEnvironmentVariable("PROGRAMFILES");
 
                 case SpecialFolder.UserProfile:
                     return _getHome.Value;
@@ -163,14 +174,14 @@ namespace NuGet.Common
                 case SpecialFolder.CommonApplicationData:
                     if (RuntimeEnvironmentHelper.IsWindows)
                     {
-                        var programData = Environment.GetEnvironmentVariable("PROGRAMDATA");
+                        var programData = EnvironmentVariableReader.GetEnvironmentVariable("PROGRAMDATA");
 
                         if (!string.IsNullOrEmpty(programData))
                         {
                             return programData;
                         }
 
-                        return Environment.GetEnvironmentVariable("ALLUSERSPROFILE");
+                        return EnvironmentVariableReader.GetEnvironmentVariable("ALLUSERSPROFILE");
                     }
                     else if (RuntimeEnvironmentHelper.IsMacOSX)
                     {
@@ -178,7 +189,7 @@ namespace NuGet.Common
                     }
                     else
                     {
-                        var commonApplicationDataOverride = Environment.GetEnvironmentVariable("NUGET_COMMON_APPLICATION_DATA");
+                        var commonApplicationDataOverride = EnvironmentVariableReader.GetEnvironmentVariable("NUGET_COMMON_APPLICATION_DATA");
 
                         if (!string.IsNullOrEmpty(commonApplicationDataOverride))
                         {
@@ -191,7 +202,7 @@ namespace NuGet.Common
                 case SpecialFolder.ApplicationData:
                     if (RuntimeEnvironmentHelper.IsWindows)
                     {
-                        return Environment.GetEnvironmentVariable("APPDATA");
+                        return EnvironmentVariableReader.GetEnvironmentVariable("APPDATA");
                     }
                     else
                     {
@@ -201,11 +212,11 @@ namespace NuGet.Common
                 case SpecialFolder.LocalApplicationData:
                     if (RuntimeEnvironmentHelper.IsWindows)
                     {
-                        return Environment.GetEnvironmentVariable("LOCALAPPDATA");
+                        return EnvironmentVariableReader.GetEnvironmentVariable("LOCALAPPDATA");
                     }
                     else
                     {
-                        var xdgDataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+                        var xdgDataHome = EnvironmentVariableReader.GetEnvironmentVariable("XDG_DATA_HOME");
                         if (!string.IsNullOrEmpty(xdgDataHome))
                         {
                             return xdgDataHome;
@@ -218,12 +229,6 @@ namespace NuGet.Common
                     return null;
             }
         }
-
-        private static string GetDotNetHome()
-        {
-            return Environment.GetEnvironmentVariable(DotNetHome);
-        }
-
 #else
 
         internal static string GetFolderPath(SpecialFolder folder)
@@ -275,37 +280,30 @@ namespace NuGet.Common
         private static string GetHome()
         {
 #if IS_CORECLR
-            if (RuntimeEnvironmentHelper.IsWindows)
-            {
-                return GetValueOrThrowMissingEnvVarsDotnet(() => GetDotNetHome() ?? GetHomeWindows(), UserProfile, DotNetHome);
-            }
-            else
-            {
-                return GetValueOrThrowMissingEnvVarsDotnet(() => GetDotNetHome() ?? Environment.GetEnvironmentVariable(Home), Home, DotNetHome);
-            }
+            return EnvironmentVariableReader.GetEnvironmentVariable(DotNetHome) ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 #else
             if (RuntimeEnvironmentHelper.IsWindows)
             {
                 return GetValueOrThrowMissingEnvVar(() => GetHomeWindows(), UserProfile);
+
+                static string GetHomeWindows()
+                {
+                    var userProfile = EnvironmentVariableReader.GetEnvironmentVariable(UserProfile);
+                    if (!string.IsNullOrEmpty(userProfile))
+                    {
+                        return userProfile;
+                    }
+                    else
+                    {
+                        return EnvironmentVariableReader.GetEnvironmentVariable("HOMEDRIVE") + EnvironmentVariableReader.GetEnvironmentVariable("HOMEPATH");
+                    }
+                }
             }
             else
             {
-                return GetValueOrThrowMissingEnvVar(() => Environment.GetEnvironmentVariable(Home), Home);
+                return GetValueOrThrowMissingEnvVar(() => EnvironmentVariableReader.GetEnvironmentVariable(Home), Home);
             }
 #endif
-        }
-
-        private static string GetHomeWindows()
-        {
-            var userProfile = Environment.GetEnvironmentVariable(UserProfile);
-            if (!string.IsNullOrEmpty(userProfile))
-            {
-                return userProfile;
-            }
-            else
-            {
-                return Environment.GetEnvironmentVariable("HOMEDRIVE") + Environment.GetEnvironmentVariable("HOMEPATH");
-            }
         }
 
         /// <summary>
@@ -340,12 +338,11 @@ namespace NuGet.Common
 
         public static string GetDotNetLocation()
         {
-            var path = Environment.GetEnvironmentVariable("PATH");
+            var path = EnvironmentVariableReader.GetEnvironmentVariable("PATH");
             var isWindows = RuntimeEnvironmentHelper.IsWindows;
-            var splitChar = isWindows ? ';' : ':';
             var executable = isWindows ? DotNetExe : DotNet;
 
-            foreach (var dir in path.Split(splitChar))
+            foreach (var dir in path.Split(Path.PathSeparator))
             {
                 var fullPath = Path.Combine(dir, executable);
                 if (File.Exists(fullPath))

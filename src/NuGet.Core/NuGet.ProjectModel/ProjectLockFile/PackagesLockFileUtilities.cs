@@ -18,6 +18,10 @@ namespace NuGet.ProjectModel
     {
         public static bool IsNuGetLockFileEnabled(PackageSpec project)
         {
+            if (project == null)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
             var restorePackagesWithLockFile = project.RestoreMetadata?.RestoreLockProperties.RestorePackagesWithLockFile;
             return MSBuildStringUtility.IsTrue(restorePackagesWithLockFile) || File.Exists(GetNuGetLockFilePath(project));
         }
@@ -515,7 +519,7 @@ namespace NuGet.ProjectModel
         /// 2. If a central version that is a transitive dependency is removed from CPVM the lock file is invalidated.
         /// </summary>
         private static (bool, string) HasProjectTransitiveDependencyChanged(
-            IDictionary<string, CentralPackageVersion> centralPackageVersions,
+            IReadOnlyDictionary<string, CentralPackageVersion> centralPackageVersions,
             IList<LockFileDependency> lockFileCentralTransitiveDependencies,
             IList<LockFileDependency> lockTransitiveDependencies)
         {

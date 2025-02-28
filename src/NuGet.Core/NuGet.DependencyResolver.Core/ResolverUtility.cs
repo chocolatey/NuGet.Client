@@ -1,8 +1,9 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable enable
+
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -19,31 +20,32 @@ namespace NuGet.DependencyResolver
     public static class ResolverUtility
     {
         public static Task<GraphItem<RemoteResolveResult>> FindLibraryCachedAsync(
-            ConcurrentDictionary<LibraryRangeCacheKey, Task<GraphItem<RemoteResolveResult>>> cache,
             LibraryRange libraryRange,
             NuGetFramework framework,
-            string runtimeIdentifier,
+            string? runtimeIdentifier,
             RemoteWalkContext context,
             CancellationToken cancellationToken)
         {
-            var key = new LibraryRangeCacheKey(libraryRange, framework);
+            LibraryRangeCacheKey key = new(libraryRange, framework);
 
-            if (cache.TryGetValue(key, out var graphItem))
-                return graphItem;
-
-            graphItem = cache.GetOrAdd(key, FindLibraryEntryAsync(key.LibraryRange, framework, runtimeIdentifier, context, cancellationToken));
-
-            return graphItem;
+            return context.FindLibraryEntryCache.GetOrAddAsync(key,
+                static state => FindLibraryEntryAsync(state.LibraryRange, state.framework, state.runtimeIdentifier, state.context, state.cancellationToken),
+                (key.LibraryRange, framework, runtimeIdentifier, context, cancellationToken),
+                cancellationToken);
         }
 
         public static async Task<GraphItem<RemoteResolveResult>> FindLibraryEntryAsync(
             LibraryRange libraryRange,
             NuGetFramework framework,
-            string runtimeIdentifier,
+            string? runtimeIdentifier,
             RemoteWalkContext context,
             CancellationToken cancellationToken)
         {
-            GraphItem<RemoteResolveResult> graphItem = null;
+            if (libraryRange == null) throw new ArgumentNullException(nameof(libraryRange));
+            if (framework == null) throw new ArgumentNullException(nameof(framework));
+            if (context == null) throw new ArgumentNullException(nameof(context));
+
+            GraphItem<RemoteResolveResult>? graphItem = null;
             var currentCacheContext = context.CacheContext;
 
             IList<IRemoteDependencyProvider> remoteDependencyProviders = context.FilterDependencyProvidersForLibrary(libraryRange);
@@ -59,7 +61,7 @@ namespace NuGet.DependencyResolver
             // the package.
             for (var i = 0; i < 2 && graphItem == null; i++)
             {
-                var match = await FindLibraryMatchAsync(
+                RemoteMatch? match = await FindLibraryMatchAsync(
                     libraryRange,
                     framework,
                     runtimeIdentifier,
@@ -75,30 +77,34 @@ namespace NuGet.DependencyResolver
                 {
                     return CreateUnresolvedResult(libraryRange);
                 }
+                else
+                {
 
-                try
-                {
-                    graphItem = await CreateGraphItemAsync(match, framework, currentCacheContext, context.Logger, cancellationToken);
-                }
-                catch (InvalidCacheProtocolException) when (i == 0)
-                {
-                    // 1st failure, invalidate the cache and try again.
-                    // Clear the on disk and memory caches during the next request.
-                    currentCacheContext = currentCacheContext.WithRefreshCacheTrue();
-                }
-                catch (PackageNotFoundProtocolException ex) when (match.Provider.IsHttp && match.Provider.Source != null)
-                {
-                    // 2nd failure, the feed is likely corrupt or removing packages too fast to keep up with.
-                    var message = string.Format(CultureInfo.CurrentCulture,
-                                                Strings.Error_PackageNotFoundWhenExpected,
-                                                 match.Provider.Source,
-                                                ex.PackageIdentity.ToString());
+                    try
+                    {
+                        graphItem = await CreateGraphItemAsync(match, framework, currentCacheContext, context.Logger, cancellationToken);
+                    }
+                    catch (InvalidCacheProtocolException) when (i == 0)
+                    {
+                        // 1st failure, invalidate the cache and try again.
+                        // Clear the on disk and memory caches during the next request.
+                        currentCacheContext = currentCacheContext.WithRefreshCacheTrue();
+                    }
+                    catch (PackageNotFoundProtocolException ex) when (match.Provider.IsHttp && match.Provider.Source != null)
+                    {
+                        // 2nd failure, the feed is likely corrupt or removing packages too fast to keep up with.
+                        var message = string.Format(CultureInfo.CurrentCulture,
+                                                    Strings.Error_PackageNotFoundWhenExpected,
+                                                        match.Provider.Source,
+                                                    ex.PackageIdentity.ToString());
+                        context.Logger.LogError(message);
 
-                    throw new FatalProtocolException(message, ex);
+                        throw new FatalProtocolException(message, ex);
+                    }
                 }
             }
 
-            return graphItem;
+            return graphItem!;
         }
 
         private static async Task<GraphItem<RemoteResolveResult>> CreateGraphItemAsync(
@@ -146,10 +152,10 @@ namespace NuGet.DependencyResolver
             };
         }
 
-        public static async Task<RemoteMatch> FindLibraryMatchAsync(
+        public static async Task<RemoteMatch?> FindLibraryMatchAsync(
             LibraryRange libraryRange,
             NuGetFramework framework,
-            string runtimeIdentifier,
+            string? runtimeIdentifier,
             IEnumerable<IRemoteDependencyProvider> remoteProviders,
             IEnumerable<IRemoteDependencyProvider> localProviders,
             IEnumerable<IDependencyProvider> projectProviders,
@@ -158,6 +164,15 @@ namespace NuGet.DependencyResolver
             ILogger logger,
             CancellationToken cancellationToken)
         {
+            if (libraryRange == null) throw new ArgumentNullException(nameof(libraryRange));
+            if (framework == null) throw new ArgumentNullException(nameof(framework));
+            if (remoteProviders == null) throw new ArgumentNullException(nameof(remoteProviders));
+            if (localProviders == null) throw new ArgumentNullException(nameof(localProviders));
+            if (projectProviders == null) throw new ArgumentNullException(nameof(projectProviders));
+            if (lockFileLibraries == null) throw new ArgumentNullException(nameof(lockFileLibraries));
+            if (cacheContext == null) throw new ArgumentNullException(nameof(cacheContext));
+            if (logger == null) throw new ArgumentNullException(nameof(logger));
+
             var projectMatch = await FindProjectMatchAsync(libraryRange, framework, projectProviders, cancellationToken);
 
             if (projectMatch != null)
@@ -178,9 +193,9 @@ namespace NuGet.DependencyResolver
 
             var targetFramework = framework;
 
-            if (framework is AssetTargetFallbackFramework)
+            if (framework is AssetTargetFallbackFramework atfFramework)
             {
-                targetFramework = (framework as AssetTargetFallbackFramework).RootFramework;
+                targetFramework = atfFramework.RootFramework;
             }
 
             var key = new LockFileCacheKey(targetFramework, runtimeIdentifier);
@@ -220,22 +235,22 @@ namespace NuGet.DependencyResolver
             return await FindPackageLibraryMatchAsync(libraryRange, framework, remoteProviders, localProviders, cacheContext, logger, cancellationToken);
         }
 
-
         /// <summary>
         /// Resolves the library from the given sources. Note that it does not download the package.
         /// </summary>
-        /// <param name="cache">Cache of requests per library</param>
         /// <param name="libraryRange">The library requested</param>
         /// <param name="remoteWalkContext">remote Providers (all sources, including file sources)</param>
         /// <param name="cancellationToken">cancellation token</param>
         /// <returns>The requested range and remote match.</returns>
         public static Task<Tuple<LibraryRange, RemoteMatch>> FindPackageLibraryMatchCachedAsync(
-            ConcurrentDictionary<LibraryRange, Task<Tuple<LibraryRange, RemoteMatch>>> cache,
             LibraryRange libraryRange,
-           RemoteWalkContext remoteWalkContext,
+            RemoteWalkContext remoteWalkContext,
             CancellationToken cancellationToken)
         {
-            return cache.GetOrAdd(libraryRange, (cacheKey) => ResolvePackageLibraryMatchAsync(libraryRange, remoteWalkContext, cancellationToken));
+            return remoteWalkContext.ResolvePackageLibraryMatchCache.GetOrAddAsync(libraryRange,
+                static state => ResolvePackageLibraryMatchAsync(state.libraryRange, state.remoteWalkContext, state.cancellationToken),
+                (libraryRange, remoteWalkContext, cancellationToken),
+                cancellationToken);
         }
 
         private static async Task<Tuple<LibraryRange, RemoteMatch>> ResolvePackageLibraryMatchAsync(LibraryRange libraryRange, RemoteWalkContext remoteWalkContext, CancellationToken cancellationToken)
@@ -251,10 +266,11 @@ namespace NuGet.DependencyResolver
             {
                 match = CreateUnresolvedMatch(libraryRange);
             }
+
             return new Tuple<LibraryRange, RemoteMatch>(libraryRange, match);
         }
 
-        private static async Task<RemoteMatch> FindPackageLibraryMatchAsync(LibraryRange libraryRange, NuGetFramework framework, IEnumerable<IRemoteDependencyProvider> remoteProviders, IEnumerable<IRemoteDependencyProvider> localProviders, SourceCacheContext cacheContext, ILogger logger, CancellationToken cancellationToken)
+        private static async Task<RemoteMatch?> FindPackageLibraryMatchAsync(LibraryRange libraryRange, NuGetFramework framework, IEnumerable<IRemoteDependencyProvider> remoteProviders, IEnumerable<IRemoteDependencyProvider> localProviders, SourceCacheContext cacheContext, ILogger logger, CancellationToken cancellationToken)
         {
             // The resolution below is only for package types
             if (!libraryRange.TypeConstraintAllows(LibraryDependencyTarget.Package))
@@ -262,7 +278,7 @@ namespace NuGet.DependencyResolver
                 return null;
             }
 
-            if (libraryRange.VersionRange.IsFloating)
+            if (libraryRange.VersionRange!.IsFloating)
             {
                 // For snapshot dependencies, get the version remotely first.
                 var remoteMatch = await FindLibraryByVersionAsync(libraryRange, framework, remoteProviders, cacheContext, logger, cancellationToken);
@@ -331,13 +347,19 @@ namespace NuGet.DependencyResolver
             }
         }
 
-        public static Task<RemoteMatch> FindProjectMatchAsync(
+        public static Task<RemoteMatch?> FindProjectMatchAsync(
             LibraryRange libraryRange,
             NuGetFramework framework,
             IEnumerable<IDependencyProvider> projectProviders,
             CancellationToken cancellationToken)
         {
-            RemoteMatch result = null;
+            if (libraryRange == null) throw new ArgumentNullException(nameof(libraryRange));
+            if (framework == null) throw new ArgumentNullException(nameof(framework));
+            if (projectProviders == null) throw new ArgumentNullException(nameof(projectProviders));
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            RemoteMatch? result = null;
 
             // Check if projects are allowed for this dependency
             if (libraryRange.TypeConstraintAllowsAnyOf(
@@ -364,10 +386,10 @@ namespace NuGet.DependencyResolver
                 }
             }
 
-            return Task.FromResult<RemoteMatch>(result);
+            return Task.FromResult(result);
         }
 
-        public static async Task<RemoteMatch> FindLibraryByVersionAsync(
+        public static async Task<RemoteMatch?> FindLibraryByVersionAsync(
             LibraryRange libraryRange,
             NuGetFramework framework,
             IEnumerable<IRemoteDependencyProvider> providers,
@@ -375,7 +397,13 @@ namespace NuGet.DependencyResolver
             ILogger logger,
             CancellationToken token)
         {
-            if (libraryRange.VersionRange.IsFloating)
+            if (libraryRange == null) throw new ArgumentNullException(nameof(libraryRange));
+            if (framework == null) throw new ArgumentNullException(nameof(framework));
+            if (providers == null) throw new ArgumentNullException(nameof(providers));
+            if (cacheContext == null) throw new ArgumentNullException(nameof(cacheContext));
+            if (logger == null) throw new ArgumentNullException(nameof(logger));
+
+            if (libraryRange.VersionRange!.IsFloating)
             {
                 // Don't optimize the non http path for floating versions or we'll miss things
                 return await FindLibraryFromSourcesAsync(
@@ -422,7 +450,8 @@ namespace NuGet.DependencyResolver
             return nonHttpMatch;
         }
 
-        private static async Task<RemoteMatch> FindLibraryFromSourcesAsync(
+
+        private static async Task<RemoteMatch?> FindLibraryFromSourcesAsync(
             LibraryRange libraryRange,
             IEnumerable<IRemoteDependencyProvider> providers,
             NuGetFramework framework,
@@ -430,14 +459,14 @@ namespace NuGet.DependencyResolver
             ILogger logger,
             CancellationToken token)
         {
-            var tasks = new List<Task<RemoteMatch>>();
+            var tasks = new List<Task<RemoteMatch?>>();
 
             foreach (var provider in providers)
             {
                 tasks.Add(FindLibraryFromProviderAsync(provider, libraryRange, framework, cacheContext, logger, token));
             }
 
-            RemoteMatch bestMatch = null;
+            RemoteMatch? bestMatch = null;
 
             while (tasks.Count > 0)
             {
@@ -447,7 +476,7 @@ namespace NuGet.DependencyResolver
 
                 // If we found an exact match then use it.
                 // This allows us to shortcircuit slow feeds even if there's an exact match
-                if (!libraryRange.VersionRange.IsFloating &&
+                if (!libraryRange.VersionRange!.IsFloating &&
                     match?.Library?.Version != null &&
                     libraryRange.VersionRange.IsMinInclusive &&
                     match.Library.Version.Equals(libraryRange.VersionRange.MinVersion))
@@ -464,7 +493,7 @@ namespace NuGet.DependencyResolver
                 }
             }
 
-            static async Task<RemoteMatch> FindLibraryFromProviderAsync(IRemoteDependencyProvider provider, LibraryRange libraryRange,
+            static async Task<RemoteMatch?> FindLibraryFromProviderAsync(IRemoteDependencyProvider provider, LibraryRange libraryRange,
                 NuGetFramework framework, SourceCacheContext cacheContext, ILogger logger, CancellationToken token)
             {
                 var library = await provider.FindLibraryAsync(libraryRange, framework, cacheContext, logger, token);
@@ -505,7 +534,7 @@ namespace NuGet.DependencyResolver
                 {
                     Name = libraryRange.Name,
                     Type = LibraryType.Unresolved,
-                    Version = libraryRange.VersionRange?.MinVersion
+                    Version = libraryRange.VersionRange?.MinVersion!
                 },
                 Path = null,
                 Provider = null

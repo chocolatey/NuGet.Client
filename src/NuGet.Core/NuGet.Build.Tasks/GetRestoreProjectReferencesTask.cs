@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using Newtonsoft.Json;
@@ -41,13 +40,6 @@ namespace NuGet.Build.Tasks
 
         public override bool Execute()
         {
-            // Log inputs
-            var log = new MSBuildLogger(Log);
-            log.LogDebug($"(in) ProjectUniqueName '{ProjectUniqueName}'");
-            log.LogDebug($"(in) TargetFrameworks '{TargetFrameworks}'");
-            log.LogDebug($"(in) ProjectReferences '{string.Join(";", ProjectReferences.Select(p => p.ItemSpec))}'");
-            log.LogDebug($"(in) ParentProjectPath '{ParentProjectPath}'");
-
             var entries = new List<ITaskItem>();
 
             // Filter obvious duplicates without considering OS case sensitivity.

@@ -7,6 +7,7 @@ using System;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using NuGet.Common;
 using NuGet.ProjectModel;
 
 namespace NuGet.VisualStudio.SolutionExplorer.Models
@@ -16,7 +17,7 @@ namespace NuGet.VisualStudio.SolutionExplorer.Models
     /// </summary>
     internal sealed class AssetsFileTargetLibrary
     {
-        public static bool TryCreate(LockFile lockFile, LockFileTargetLibrary lockFileLibrary, [NotNullWhen(returnValue: true)] out AssetsFileTargetLibrary? targetLibrary)
+        public static bool TryCreate(LockFile lockFile, LockFileTargetLibrary lockFileLibrary, LogLevel? logLevel, [NotNullWhen(returnValue: true)] out AssetsFileTargetLibrary? targetLibrary)
         {
             AssetsFileLibraryType type;
             if (lockFileLibrary.Type == "package")
@@ -35,15 +36,43 @@ namespace NuGet.VisualStudio.SolutionExplorer.Models
 
             LockFileLibrary? library = lockFile.Libraries.FirstOrDefault(lib => lib.Name == lockFileLibrary.Name);
 
-            targetLibrary = new AssetsFileTargetLibrary(library, lockFileLibrary, type);
+            targetLibrary = new AssetsFileTargetLibrary(library, lockFileLibrary, type, logLevel);
             return true;
         }
 
-        private AssetsFileTargetLibrary(LockFileLibrary? library, LockFileTargetLibrary targetLibrary, AssetsFileLibraryType type)
+        /// <summary>
+        /// Creates a dummy placeholder for a library in cases where we only know the name of the library.
+        /// </summary>
+        /// <remarks>
+        /// This is useful, for example, when a referenced package does not exist. It will not have an entry in "libraries",
+        /// yet we want to model its presence in our snapshot so that we can display diagnostic nodes to it. For such libraries,
+        /// the version is unknown, which we represent with a <see langword="null"/> value.
+        /// </remarks>
+        public static AssetsFileTargetLibrary CreatePlaceholder(string name)
         {
-            Name = targetLibrary.Name;
-            Version = targetLibrary.Version.ToNormalizedString();
+            return new AssetsFileTargetLibrary(name);
+        }
+
+        private AssetsFileTargetLibrary(string name)
+        {
+            Name = name;
+            Version = null;
+            Type = AssetsFileLibraryType.Unknown;
+            Dependencies = ImmutableArray<string>.Empty;
+            FrameworkAssemblies = ImmutableArray<string>.Empty;
+            CompileTimeAssemblies = ImmutableArray<string>.Empty;
+            ContentFiles = ImmutableArray<AssetsFileTargetLibraryContentFile>.Empty;
+            BuildFiles = ImmutableArray<string>.Empty;
+            BuildMultiTargetingFiles = ImmutableArray<string>.Empty;
+            DocumentationFiles = ImmutableArray<string>.Empty;
+        }
+
+        private AssetsFileTargetLibrary(LockFileLibrary? library, LockFileTargetLibrary targetLibrary, AssetsFileLibraryType type, LogLevel? logLevel)
+        {
+            Name = targetLibrary.Name!;
+            Version = targetLibrary.Version!.ToNormalizedString();
             Type = type;
+            LogLevel = logLevel;
 
             Dependencies = targetLibrary.Dependencies.Select(dep => dep.Id).ToImmutableArray();
 
@@ -103,7 +132,15 @@ namespace NuGet.VisualStudio.SolutionExplorer.Models
         }
 
         public string Name { get; }
-        public string Version { get; }
+
+        /// <summary>
+        /// Gets the version of the library, or <see langword="null"/> if it is unknown.
+        /// </summary>
+        /// <remarks>
+        /// The version can be unknown for packages that fail to resolve at all, for example when the package
+        /// name is not found. For resolved packages however, this value will always be present.
+        /// </remarks>
+        public string? Version { get; }
         public AssetsFileLibraryType Type { get; }
         public ImmutableArray<string> Dependencies { get; }
         public ImmutableArray<string> FrameworkAssemblies { get; }
@@ -112,7 +149,8 @@ namespace NuGet.VisualStudio.SolutionExplorer.Models
         public ImmutableArray<string> BuildFiles { get; }
         public ImmutableArray<string> BuildMultiTargetingFiles { get; }
         public ImmutableArray<string> DocumentationFiles { get; }
+        public LogLevel? LogLevel { get; }
 
-        public override string ToString() => $"{Type} {Name} ({Version}) {Dependencies.Length} {(Dependencies.Length == 1 ? "dependency" : "dependencies")}";
+        public override string ToString() => $"{Type} {Name} ({Version ?? "Unknown"}) {Dependencies.Length} {(Dependencies.Length == 1 ? "dependency" : "dependencies")}";
     }
 }

@@ -3,6 +3,7 @@
 
 using System;
 using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using NuGet.Test.Utility;
 using Xunit;
 
@@ -19,8 +20,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     nugetexe,
                     randomTestFolder,
-                    "hello",
-                    true);
+                    "hello");
                 result.Output.Should().Be("Hello!" + Environment.NewLine);
             }
         }

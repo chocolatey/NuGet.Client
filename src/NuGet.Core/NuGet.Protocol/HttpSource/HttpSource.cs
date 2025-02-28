@@ -300,7 +300,7 @@ namespace NuGet.Protocol
                 {
                     if (stream == null)
                     {
-                        return Task.FromResult<JObject>(null);
+                        return TaskResult.Null<JObject>();
                     }
 
                     return stream.AsJObjectAsync(token);
@@ -435,7 +435,7 @@ namespace NuGet.Protocol
                 throw new ArgumentNullException(nameof(throttle));
             }
 
-            Func<Task<HttpHandlerResource>> factory = () => source.GetResourceAsync<HttpHandlerResource>();
+            Func<Task<HttpHandlerResource>> factory = () => source.GetResourceAsync<HttpHandlerResource>(CancellationToken.None);
 
             return new HttpSource(source.PackageSource, factory, throttle);
         }

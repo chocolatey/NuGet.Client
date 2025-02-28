@@ -20,11 +20,10 @@ namespace NuGet.VisualStudio
 
         /// <summary>
         /// The environment variable means of enabled this feature.
-        /// Might be <see cref="null"/>.
+        /// Might be <c>null</c>.
         /// </summary>
         internal string FlightEnvironmentVariable { get; }
 
         public static readonly ExperimentationConstants PackageManagerBackgroundColor = new("nuGetPackageManagerBackgroundColor", "NUGET_PACKAGE_MANAGER_BACKGROUND_COLOR");
-        public static readonly ExperimentationConstants TransitiveDependenciesInPMUI = new("nugetTransitiveDependenciesInPMUI", "NUGET_TRANSITIVE_DEPENDENCIES_IN_PMUI");
     }
 }

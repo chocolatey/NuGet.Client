@@ -194,11 +194,11 @@ namespace NuGet.ProjectManagement
             }
 
             var installedPackagesList = GetInstalledPackagesList();
-            var packageReference = installedPackagesList.Where(p => p.PackageIdentity.Equals(packageIdentity)).FirstOrDefault();
+            var packageReference = installedPackagesList.FirstOrDefault(p => p.PackageIdentity.Equals(packageIdentity));
             if (packageReference == null)
             {
                 nuGetProjectContext.Log(MessageLevel.Warning, Strings.PackageDoesNotExisttInPackagesConfig, packageIdentity, Path.GetFileName(FullPath));
-                return Task.FromResult(false);
+                return TaskResult.False;
             }
 
             try
@@ -231,7 +231,7 @@ namespace NuGet.ProjectManagement
             }
 
             nuGetProjectContext.Log(MessageLevel.Info, Strings.RemovedPackageFromPackagesConfig, packageIdentity, Path.GetFileName(FullPath));
-            return Task.FromResult(true);
+            return TaskResult.True;
         }
 
         public override Task<IEnumerable<PackageReference>> GetInstalledPackagesAsync(CancellationToken token)

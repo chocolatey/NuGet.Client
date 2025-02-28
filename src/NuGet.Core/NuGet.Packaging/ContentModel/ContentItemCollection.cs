@@ -1,20 +1,28 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable enable
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using NuGet.Packaging;
+using NuGet.Client;
+using NuGet.Shared;
 
 namespace NuGet.ContentModel
 {
     public class ContentItemCollection
     {
-        private List<Asset> _assets;
-        private ConcurrentDictionary<string, string> _assemblyRelatedExtensions;
+        private static readonly ReadOnlyMemory<char> Dll = ".dll".AsMemory();
+        private static readonly ReadOnlyMemory<char> Exe = ".exe".AsMemory();
+        private static readonly ReadOnlyMemory<char> Winmd = ".winmd".AsMemory();
 
+        private static readonly SimplePool<List<Asset>> ListAssetPool = new(() => new List<Asset>());
+        private static readonly SimplePool<Dictionary<ContentItem, List<Asset>>> GroupAssetsPool = new(() => new(GroupComparer.DefaultComparer));
+
+        private List<Asset>? _assets;
+        private ConcurrentDictionary<ReadOnlyMemory<char>, string?>? _assemblyRelatedExtensions;
         /// <summary>
         /// True if lib/contract exists
         /// </summary>
@@ -22,13 +30,17 @@ namespace NuGet.ContentModel
 
         public void Load(IEnumerable<string> paths)
         {
+            if (paths == null)
+            {
+                throw new ArgumentNullException(nameof(paths));
+            }
             // Cache for assembly and it's related file extensions.
-            _assemblyRelatedExtensions = new ConcurrentDictionary<string, string>();
+            _assemblyRelatedExtensions = new();
 
             // Read already loaded assets
             _assets = new List<Asset>();
 
-            foreach (var path in paths)
+            foreach (var path in paths.NoAllocEnumerate())
             {
                 // Skip files in the root of the directory
                 if (IsValidAsset(path))
@@ -53,17 +65,29 @@ namespace NuGet.ContentModel
 
         public IEnumerable<ContentItem> FindItems(PatternSet definition)
         {
-            return FindItemsImplementation(definition, _assets);
+            if (definition == null)
+            {
+                throw new ArgumentNullException(nameof(definition));
+            }
+            if (_assets != null)
+            {
+                return FindItemsImplementation(definition, _assets);
+            }
+            return Enumerable.Empty<ContentItem>();
         }
 
         [Obsolete("This method causes excessive memory allocation with yield return. Use ContentItemCollection.PopulateItemGroups instead.")]
         public IEnumerable<ContentItemGroup> FindItemGroups(PatternSet definition)
         {
-            if (_assets.Count > 0)
+            if (definition == null)
+            {
+                throw new ArgumentNullException(nameof(definition));
+            }
+            if (_assets != null && _assets.Count > 0)
             {
                 var groupPatterns = definition.GroupExpressions;
 
-                List<Tuple<ContentItem, Asset>> groupAssets = null;
+                Dictionary<ContentItem, List<Asset>>? groupAssets = null;
                 foreach (var asset in _assets)
                 {
                     foreach (var groupPattern in groupPatterns)
@@ -71,38 +95,35 @@ namespace NuGet.ContentModel
                         var item = groupPattern.Match(asset.Path, definition.PropertyDefinitions);
                         if (item != null)
                         {
-                            if (groupAssets == null)
+                            groupAssets ??= GroupAssetsPool.Allocate();
+                            if (!groupAssets.TryGetValue(item, out var assets))
                             {
-                                groupAssets = new List<Tuple<ContentItem, Asset>>(1);
+                                assets = ListAssetPool.Allocate();
+                                groupAssets[item] = assets;
                             }
 
-                            groupAssets.Add(Tuple.Create(item, asset));
+                            assets.Add(asset);
                         }
                     }
                 }
 
-                if (groupAssets?.Count > 0)
+                if (groupAssets != null)
                 {
-                    foreach (var grouping in groupAssets.GroupBy(key => key.Item1, GroupComparer.DefaultComparer))
+                    foreach (var (item, assets) in groupAssets)
                     {
-                        var group = new ContentItemGroup();
+                        yield return new ContentItemGroup(
+                            properties: item.Properties,
+                            items: FindItemsImplementation(definition, assets));
 
-                        foreach (var property in grouping.Key.Properties)
-                        {
-                            group.Properties.Add(property.Key, property.Value);
-                        }
-
-                        foreach (var item in FindItemsImplementation(definition, grouping.Select(match => match.Item2)))
-                        {
-                            group.Items.Add(item);
-                        }
-
-                        yield return group;
+                        assets.Clear();
+                        ListAssetPool.Free(assets);
                     }
+
+                    groupAssets.Clear();
+                    GroupAssetsPool.Free(groupAssets);
                 }
             }
         }
-
         /// <summary>
         /// Populate the provided list with ContentItemGroups based on a provided pattern set.
         /// </summary>
@@ -110,11 +131,19 @@ namespace NuGet.ContentModel
         /// <param name="contentItemGroupList">The list that will be mutated and populated with the item groups</param>
         public void PopulateItemGroups(PatternSet definition, IList<ContentItemGroup> contentItemGroupList)
         {
-            if (_assets.Count > 0)
+            if (definition == null)
+            {
+                throw new ArgumentNullException(nameof(definition));
+            }
+            if (contentItemGroupList == null)
+            {
+                throw new ArgumentNullException(nameof(contentItemGroupList));
+            }
+            if (_assets != null && _assets.Count > 0)
             {
                 var groupPatterns = definition.GroupExpressions;
 
-                List<Tuple<ContentItem, Asset>> groupAssets = null;
+                Dictionary<ContentItem, List<Asset>>? groupAssets = null;
                 foreach (var asset in _assets)
                 {
                     foreach (var groupPattern in groupPatterns)
@@ -122,43 +151,48 @@ namespace NuGet.ContentModel
                         var item = groupPattern.Match(asset.Path, definition.PropertyDefinitions);
                         if (item != null)
                         {
-                            if (groupAssets == null)
+                            groupAssets ??= GroupAssetsPool.Allocate();
+                            if (!groupAssets.TryGetValue(item, out var assets))
                             {
-                                groupAssets = new List<Tuple<ContentItem, Asset>>(1);
+                                assets = ListAssetPool.Allocate();
+                                groupAssets[item] = assets;
                             }
 
-                            groupAssets.Add(Tuple.Create(item, asset));
+                            assets.Add(asset);
                         }
                     }
                 }
 
-                IList<ContentItem> groupItems = new List<ContentItem>();
-                if (groupAssets?.Count > 0)
+                if (groupAssets != null)
                 {
-                    foreach (var grouping in groupAssets.GroupBy(key => key.Item1, GroupComparer.DefaultComparer))
+                    foreach (var (item, assets) in groupAssets)
                     {
-                        var group = new ContentItemGroup();
+                        contentItemGroupList.Add(new ContentItemGroup(
+                            properties: item.Properties,
+                            items: FindItemsImplementation(definition, assets)));
 
-                        foreach (var property in grouping.Key.Properties)
-                        {
-                            group.Properties.Add(property.Key, property.Value);
-                        }
-
-                        groupItems = FindItemsImplementation(definition, grouping.Select(match => match.Item2));
-                        group.Items.AddRange(groupItems);
-                        contentItemGroupList.Add(group);
+                        assets.Clear();
+                        ListAssetPool.Free(assets);
                     }
+
+                    groupAssets.Clear();
+                    GroupAssetsPool.Free(groupAssets);
                 }
             }
         }
 
+        [Obsolete("Unused and will be removed in a future version.")]
         public bool HasItemGroup(SelectionCriteria criteria, params PatternSet[] definitions)
         {
             return FindBestItemGroup(criteria, definitions) != null;
         }
 
-        public ContentItemGroup FindBestItemGroup(SelectionCriteria criteria, params PatternSet[] definitions)
+        public ContentItemGroup? FindBestItemGroup(SelectionCriteria criteria, params PatternSet[] definitions)
         {
+            if (criteria is null)
+            {
+                throw new ArgumentNullException(nameof(criteria));
+            }
             if (definitions.Length == 0)
             {
                 return null;
@@ -169,15 +203,15 @@ namespace NuGet.ContentModel
             {
                 itemGroups.Clear();
                 PopulateItemGroups(definition, itemGroups);
-                foreach (var criteriaEntry in criteria.Entries)
+                foreach (var criteriaEntry in criteria.Entries.NoAllocEnumerate())
                 {
-                    ContentItemGroup bestGroup = null;
+                    ContentItemGroup? bestGroup = null;
                     var bestAmbiguity = false;
 
                     foreach (var itemGroup in itemGroups)
                     {
                         var groupIsValid = true;
-                        foreach (var criteriaProperty in criteriaEntry.Properties)
+                        foreach (var criteriaProperty in criteriaEntry.Properties.NoAllocEnumerate())
                         {
                             if (criteriaProperty.Value == null)
                             {
@@ -189,13 +223,13 @@ namespace NuGet.ContentModel
                             }
                             else
                             {
-                                object itemProperty;
+                                object? itemProperty;
                                 if (!itemGroup.Properties.TryGetValue(criteriaProperty.Key, out itemProperty))
                                 {
                                     groupIsValid = false;
                                     break;
                                 }
-                                ContentPropertyDefinition propertyDefinition;
+                                ContentPropertyDefinition? propertyDefinition;
                                 if (!definition.PropertyDefinitions.TryGetValue(criteriaProperty.Key, out propertyDefinition))
                                 {
                                     groupIsValid = false;
@@ -217,7 +251,7 @@ namespace NuGet.ContentModel
                             else
                             {
                                 var groupComparison = 0;
-                                foreach (var criteriaProperty in criteriaEntry.Properties)
+                                foreach (var criteriaProperty in criteriaEntry.Properties.NoAllocEnumerate())
                                 {
                                     if (criteriaProperty.Value == null)
                                     {
@@ -260,12 +294,13 @@ namespace NuGet.ContentModel
             return null;
         }
 
-        private IList<ContentItem> FindItemsImplementation(PatternSet definition, IEnumerable<Asset> assets)
+        private List<ContentItem> FindItemsImplementation(PatternSet definition, IEnumerable<Asset> assets)
         {
             var pathPatterns = definition.PathExpressions;
-            IList<ContentItem> itemsList = new List<ContentItem>();
 
-            foreach (var asset in assets)
+            List<ContentItem> items = new();
+
+            foreach (var asset in assets.NoAllocEnumerate())
             {
                 var path = asset.Path;
 
@@ -274,49 +309,50 @@ namespace NuGet.ContentModel
                     var contentItem = pathPattern.Match(path, definition.PropertyDefinitions);
                     if (contentItem != null)
                     {
-                        //If the item is assembly, populate the "related files extentions property".
-                        if (contentItem.Properties.ContainsKey("assembly"))
+                        //If the item is assembly, populate the "related files extensions property".
+                        if (contentItem.TryGetValue(ManagedCodeConventions.PropertyNames.ManagedAssembly, out _))
                         {
-                            string relatedFileExtensionsProperty = GetRelatedFileExtensionProperty(contentItem.Path, assets);
+                            string? relatedFileExtensionsProperty = GetRelatedFileExtensionProperty(contentItem.Path, assets);
                             if (relatedFileExtensionsProperty is not null)
                             {
-                                contentItem.Properties.Add("related", relatedFileExtensionsProperty);
+                                contentItem.Add("related", relatedFileExtensionsProperty);
                             }
                         }
-                        itemsList.Add(contentItem);
+                        items.Add(contentItem);
                         break;
                     }
                 }
             }
 
-            return itemsList;
+            return items;
         }
 
-        internal string GetRelatedFileExtensionProperty(string assemblyPath, IEnumerable<Asset> assets)
+        internal string? GetRelatedFileExtensionProperty(string assemblyPath, IEnumerable<Asset> assets)
         {
             //E.g. if path is "lib/net472/A.B.C.dll", the prefix will be "lib/net472/A.B.C."
-            string assemblyPrefix = assemblyPath.Substring(0, assemblyPath.LastIndexOf('.') + 1);
+            ReadOnlyMemory<char> assemblyPrefix = assemblyPath.AsMemory(0, assemblyPath.LastIndexOf('.') + 1);
 
-            if (_assemblyRelatedExtensions.TryGetValue(assemblyPrefix, out string relatedProperty))
+            if (_assemblyRelatedExtensions != null && _assemblyRelatedExtensions.TryGetValue(assemblyPrefix, out string? relatedProperty))
             {
                 return relatedProperty;
             }
 
-            List<string> relatedFileExtensionList = null;
-            foreach (Asset asset in assets)
+            List<string>? relatedFileExtensionList = null;
+            foreach (Asset asset in assets.NoAllocEnumerate())
             {
                 if (asset.Path is not null)
                 {
-                    string extension = Path.GetExtension(asset.Path);
-                    if (extension != string.Empty &&
+                    var extension = GetExtension(asset);
+
+                    if (extension.Length > 0 &&
                         //Assembly properties are files with extensions ".dll", ".winmd", ".exe", see ManagedCodeConventions.
-                        !extension.Equals(".dll", StringComparison.OrdinalIgnoreCase) &&
-                        !extension.Equals(".exe", StringComparison.OrdinalIgnoreCase) &&
-                        !extension.Equals(".winmd", StringComparison.OrdinalIgnoreCase) &&
+                        !ReadOnlyMemoryEquals(extension, Dll) &&
+                        !ReadOnlyMemoryEquals(extension, Exe) &&
+                        !ReadOnlyMemoryEquals(extension, Winmd) &&
                         !asset.Path.Equals(assemblyPath, StringComparison.OrdinalIgnoreCase) &&
                         //The prefix should match exactly (case sensitive), as file names are case sensitive on certain OSes.
-                        //E.g. for lib/net472/A.B.C.dll and lib/net472/a.b.c.xml, if we generate related property '.xml', the related file path is not predicatble on case sensitive OSes.
-                        asset.Path.StartsWith(assemblyPrefix, StringComparison.Ordinal))
+                        //E.g. for lib/net472/A.B.C.dll and lib/net472/a.b.c.xml, if we generate related property '.xml', the related file path is not predictable on case sensitive OSes.
+                        asset.Path.AsMemory().Span.StartsWith(assemblyPrefix.Span, StringComparison.Ordinal))
                     {
                         if (relatedFileExtensionList is null)
                         {
@@ -328,17 +364,38 @@ namespace NuGet.ContentModel
             }
 
             // If no related files found.
-            if (relatedFileExtensionList is null || !relatedFileExtensionList.Any())
+            if (relatedFileExtensionList is null || relatedFileExtensionList.Count == 0)
             {
-                _assemblyRelatedExtensions.TryAdd(assemblyPrefix, null);
+                if (_assemblyRelatedExtensions != null)
+                {
+                    _assemblyRelatedExtensions.TryAdd(assemblyPrefix, null);
+                }
                 return null;
             }
             else
             {
                 relatedFileExtensionList.Sort();
                 string relatedFileExtensionsProperty = string.Join(";", relatedFileExtensionList);
-                _assemblyRelatedExtensions.TryAdd(assemblyPrefix, relatedFileExtensionsProperty);
+                if (_assemblyRelatedExtensions != null)
+                {
+                    _assemblyRelatedExtensions.TryAdd(assemblyPrefix, relatedFileExtensionsProperty);
+                }
                 return relatedFileExtensionsProperty;
+            }
+
+            static bool ReadOnlyMemoryEquals(ReadOnlyMemory<char> x, ReadOnlyMemory<char> y)
+            {
+                return x.Span.Equals(y.Span, StringComparison.OrdinalIgnoreCase);
+            }
+
+            static ReadOnlyMemory<char> GetExtension(Asset asset)
+            {
+                int lastIndexOfDot = asset.Path.LastIndexOf('.');
+                if (lastIndexOfDot != -1)
+                {
+                    return asset.Path.AsMemory(lastIndexOfDot);
+                }
+                return default;
             }
         }
 
@@ -359,69 +416,155 @@ namespace NuGet.ContentModel
             return false;
         }
 
-        private class GroupComparer : IEqualityComparer<ContentItem>
+        internal class GroupComparer : IEqualityComparer<ContentItem>
         {
             public static readonly GroupComparer DefaultComparer = new GroupComparer();
 
             public int GetHashCode(ContentItem obj)
             {
                 var hashCode = 0;
-                foreach (var property in obj.Properties)
+                if (obj._properties != null)
                 {
-                    if (property.Key.Equals("tfm_raw", StringComparison.Ordinal))
+                    foreach (var property in obj._properties)
                     {
-                        // We store the raw version of the TFM, but we don't want it to affect the result.
-                        continue;
-                    }
 #if NETFRAMEWORK || NETSTANDARD
-                    hashCode ^= property.Key.GetHashCode();
+                        hashCode ^= property.Key.GetHashCode();
 #else
-                    hashCode ^= property.Key.GetHashCode(StringComparison.Ordinal);
+                        hashCode ^= property.Key.GetHashCode(StringComparison.Ordinal);
 #endif
-                    hashCode ^= property.Value.GetHashCode();
+                        hashCode ^= property.Value.GetHashCode();
+                    }
+                }
+                else
+                {
+                    if (obj._assembly != null)
+                    {
+                        hashCode ^= obj._assembly.GetHashCode();
+                    }
+                    if (obj._locale != null)
+                    {
+                        hashCode ^= obj._locale.GetHashCode();
+                    }
+                    if (obj._related != null)
+                    {
+                        hashCode ^= obj._related.GetHashCode();
+                    }
+                    if (obj._msbuild != null)
+                    {
+                        hashCode ^= obj._msbuild.GetHashCode();
+                    }
+                    if (obj._tfm != null)
+                    {
+                        hashCode ^= obj._tfm.GetHashCode();
+                    }
+                    if (obj._rid != null)
+                    {
+                        hashCode ^= obj._rid.GetHashCode();
+                    }
+                    if (obj._any != null)
+                    {
+                        hashCode ^= obj._any.GetHashCode();
+                    }
+                    if (obj._satelliteAssembly != null)
+                    {
+                        hashCode ^= obj._satelliteAssembly.GetHashCode();
+                    }
+                    if (obj._codeLanguage != null)
+                    {
+                        hashCode ^= obj._codeLanguage.GetHashCode();
+                    }
                 }
                 return hashCode;
             }
 
-            public bool Equals(ContentItem x, ContentItem y)
+            public bool Equals(ContentItem? x, ContentItem? y)
             {
                 if (ReferenceEquals(x, y))
                 {
                     return true;
                 }
-
-                if (x.Properties.Count != y.Properties.Count)
+                if (x is null || y is null)
                 {
                     return false;
                 }
 
-                foreach (var xProperty in x.Properties)
+                if (x._properties == null && y._properties != null)
                 {
-                    if (xProperty.Key.Equals("tfm_raw", StringComparison.Ordinal))
+                    return false;
+                }
+
+                if (x._properties != null && y._properties == null)
+                {
+                    return false;
+                }
+
+                if (x._properties?.Count != y._properties?.Count)
+                {
+                    return false;
+                }
+
+                if (x._properties != null && y._properties != null)
+                {
+                    foreach (var xProperty in x._properties)
                     {
-                        // We store the raw version of the TFM, but we don't want it to affect the result.
-                        continue;
+                        object? yValue;
+                        if (!y._properties.TryGetValue(xProperty.Key, out yValue))
+                        {
+                            return false;
+                        }
+                        if (!Equals(xProperty.Value, yValue))
+                        {
+                            return false;
+                        }
                     }
-                    object yValue;
-                    if (!y.Properties.TryGetValue(xProperty.Key, out yValue))
+                    foreach (var yProperty in y._properties)
+                    {
+                        object? xValue;
+                        if (!x._properties.TryGetValue(yProperty.Key, out xValue))
+                        {
+                            return false;
+                        }
+                    }
+                }
+                else
+                {
+                    if (!EqualityUtility.EqualsWithNullCheck(x._assembly, y._assembly))
                     {
                         return false;
                     }
-                    if (!Equals(xProperty.Value, yValue))
+                    if (!EqualityUtility.EqualsWithNullCheck(x._locale, y._locale))
+                    {
+                        return false;
+                    }
+                    if (!EqualityUtility.EqualsWithNullCheck(x._related, y._related))
+                    {
+                        return false;
+                    }
+                    if (!EqualityUtility.EqualsWithNullCheck(x._msbuild, y._msbuild))
+                    {
+                        return false;
+                    }
+                    if (!EqualityUtility.EqualsWithNullCheck(x._tfm, y._tfm))
+                    {
+                        return false;
+                    }
+                    if (!EqualityUtility.EqualsWithNullCheck(x._rid, y._rid))
+                    {
+                        return false;
+                    }
+                    if (!EqualityUtility.EqualsWithNullCheck(x._any, y._any))
+                    {
+                        return false;
+                    }
+                    if (!EqualityUtility.EqualsWithNullCheck(x._satelliteAssembly, y._satelliteAssembly))
+                    {
+                        return false;
+                    }
+                    if (!EqualityUtility.EqualsWithNullCheck(x._codeLanguage, y._codeLanguage))
                     {
                         return false;
                     }
                 }
-
-                foreach (var yProperty in y.Properties)
-                {
-                    object xValue;
-                    if (!x.Properties.TryGetValue(yProperty.Key, out xValue))
-                    {
-                        return false;
-                    }
-                }
-
                 return true;
             }
         }

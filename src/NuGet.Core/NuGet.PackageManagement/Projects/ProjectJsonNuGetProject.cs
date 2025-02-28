@@ -11,7 +11,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-using NuGet.Commands;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Frameworks;
@@ -131,7 +130,7 @@ namespace NuGet.ProjectManagement.Projects
         protected virtual Task UpdateInternalTargetFrameworkAsync()
         {
             // Extending class will implement the functionality
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         public override async Task<IEnumerable<PackageReference>> GetInstalledPackagesAsync(CancellationToken token)
@@ -159,7 +158,7 @@ namespace NuGet.ProjectManagement.Projects
         protected virtual Task<string> GetMSBuildProjectExtensionsPathAsync()
         {
             // Extending class will implement the functionality.
-            return Task.FromResult((string)null);
+            return TaskResult.Null<string>();
         }
 
         public override async Task<IReadOnlyList<PackageSpec>> GetPackageSpecsAsync(DependencyGraphCacheContext context)
@@ -201,8 +200,8 @@ namespace NuGet.ProjectManagement.Projects
                         // Ensure the project json has only one target framework
                         if (packageSpec.TargetFrameworks != null && packageSpec.TargetFrameworks.Count == 1)
                         {
-                            var tfi = packageSpec.TargetFrameworks.First();
-                            if (tfi.Imports.Count > 0)
+                            var tfi = packageSpec.TargetFrameworks[0];
+                            if (tfi.Imports.Length > 0)
                             {
                                 if (tfi.AssetTargetFallback)
                                 {
@@ -213,7 +212,7 @@ namespace NuGet.ProjectManagement.Projects
                                     nuGetFramework = new FallbackFramework(nuGetFramework, tfi.Imports.AsList());
                                 }
                             }
-                            tfi.FrameworkName = nuGetFramework;
+                            packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(tfi) { FrameworkName = nuGetFramework };
                         }
                     }
                 }
@@ -370,7 +369,7 @@ namespace NuGet.ProjectManagement.Projects
                 {
                     // project.json can have only one target framework
                     JsonConfigUtility.ClearFrameworks(json);
-                    JsonConfigUtility.AddFramework(json, newTargetFramework as NuGetFramework);
+                    JsonConfigUtility.AddFramework(json, newTargetFramework);
                 }
             }
         }
@@ -383,7 +382,12 @@ namespace NuGet.ProjectManagement.Projects
         // Overriding class wil implement the method
         public override Task<string> GetCacheFilePathAsync()
         {
-            return Task.FromResult((string)null);
+            return TaskResult.Null<string>();
+        }
+
+        public override Task<bool> UninstallPackageAsync(string packageId, BuildIntegratedInstallationContext installationContext, CancellationToken token)
+        {
+            return RemoveDependencyAsync(packageId, null, token);
         }
     }
 }

@@ -5,6 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
+using Moq;
 using Newtonsoft.Json.Linq;
 using NuGet.Common;
 using NuGet.Frameworks;
@@ -19,8 +21,10 @@ namespace NuGet.ProjectModel.Test
     public class LockFileFormatTests
     {
         // Verify the value of locked has no impact on the parsed lock file
-        [Fact]
-        public void LockFileFormat_LockedPropertyIsIgnored()
+        [Theory]
+        [MemberData(nameof(LockFileParsingEnvironmentVariable.TestEnvironmentVariableReader), MemberType = typeof(LockFileParsingEnvironmentVariable))]
+
+        public void LockFileFormat_LockedPropertyIsIgnored(IEnvironmentVariableReader environmentVariableReader)
         {
             // Arrange
             var lockFileContentTrue = @"{
@@ -148,9 +152,11 @@ namespace NuGet.ProjectModel.Test
             var lockFileFormat = new LockFileFormat();
 
             // Act
-            var lockFileTrue = lockFileFormat.Parse(lockFileContentTrue, "In Memory");
-            var lockFileFalse = lockFileFormat.Parse(lockFileContentFalse, "In Memory");
-            var lockFileMissing = lockFileFormat.Parse(lockFileContentMissing, "In Memory");
+#pragma warning disable CS0612 // Type or member is obsolete
+            var lockFileTrue = Parse(lockFileContentTrue, "In Memory", environmentVariableReader);
+            var lockFileFalse = Parse(lockFileContentFalse, "In Memory", environmentVariableReader);
+            var lockFileMissing = Parse(lockFileContentMissing, "In Memory", environmentVariableReader);
+#pragma warning restore CS0612 // Type or member is obsolete
 
             var lockFileTrueString = lockFileFormat.Render(lockFileTrue);
             var lockFileFalseString = lockFileFormat.Render(lockFileFalse);
@@ -164,8 +170,9 @@ namespace NuGet.ProjectModel.Test
             Assert.Equal(lockFileTrueString, lockFileMissingString);
         }
 
-        [Fact]
-        public void LockFileFormat_ReadsLockFileWithNoTools()
+        [Theory]
+        [MemberData(nameof(LockFileParsingEnvironmentVariable.TestEnvironmentVariableReader), MemberType = typeof(LockFileParsingEnvironmentVariable))]
+        public void LockFileFormat_ReadsLockFileWithNoTools(IEnvironmentVariableReader environmentVariableReader)
         {
             var lockFileContent = @"{
   ""version"": 1,
@@ -206,14 +213,12 @@ namespace NuGet.ProjectModel.Test
     "".NETPlatform,Version=v5.0"": []
   }
 }";
-            var lockFileFormat = new LockFileFormat();
-            var lockFile = lockFileFormat.Parse(lockFileContent, "In Memory");
+            var lockFile = Parse(lockFileContent, "In Memory", environmentVariableReader);
 
             Assert.Equal(1, lockFile.Version);
 
             var target = lockFile.Targets.Single();
             Assert.Equal(NuGetFramework.Parse("dotnet"), target.TargetFramework);
-
             var runtimeTargetLibrary = target.Libraries.Single();
             Assert.Equal("System.Runtime", runtimeTargetLibrary.Name);
             Assert.Equal(NuGetVersion.Parse("4.0.20-beta-22927"), runtimeTargetLibrary.Version);
@@ -536,7 +541,7 @@ namespace NuGet.ProjectModel.Test
         ""buildMultiTargeting"": {
           ""buildMultiTargeting/Microsoft.Extensions.ApiDescription.Server.props"": {},
           ""buildMultiTargeting/Microsoft.Extensions.ApiDescription.Server.targets"": {}
-        }        
+        }
       },
        ""runtime.debian.8-x64.runtime.native.System.Security.Cryptography.OpenSsl/4.3.0"": {
         ""type"": ""package"",
@@ -679,6 +684,7 @@ namespace NuGet.ProjectModel.Test
       ""projectPath"": ""X:\\ProjectPath\\ProjectPath.csproj"",
       ""outputPath"": ""X:\\ProjectPath\\obj\\"",
       ""projectStyle"": ""PackageReference"",
+      ""UsingMicrosoftNETSdk"": false,
       ""originalTargetFrameworks"": [
         ""netcoreapp10""
       ],
@@ -717,8 +723,8 @@ namespace NuGet.ProjectModel.Test
                     {
                         FrameworkName = FrameworkConstants.CommonFrameworks.NetCoreApp10,
                         TargetAlias = "netcoreapp10",
-                        Dependencies = new[]
-                        {
+                        Dependencies =
+                        [
                             new LibraryDependency
                             {
                                 LibraryRange = new LibraryRange(
@@ -738,7 +744,7 @@ namespace NuGet.ProjectModel.Test
                                     LibraryDependencyTarget.Package),
                                 SuppressParent = LibraryIncludeFlags.All
                             }
-                        }
+                        ]
                     }
                 })
                 {
@@ -1139,7 +1145,8 @@ namespace NuGet.ProjectModel.Test
   },
   ""project"": {
     ""restore"": {
-      ""projectPath"": ""kung\\fu\\fighting.csproj""
+      ""projectPath"": ""kung\\fu\\fighting.csproj"",
+      ""UsingMicrosoftNETSdk"": false,
     }
   },
   ""logs"": [
@@ -1328,8 +1335,26 @@ namespace NuGet.ProjectModel.Test
             Assert.Equal(expected, output);
         }
 
-        [Fact]
-        public void LockFileFormat_ReadsMinimalErrorMessage()
+        [Theory]
+        [MemberData(nameof(LockFileParsingEnvironmentVariable.TestEnvironmentVariableReader), MemberType = typeof(LockFileParsingEnvironmentVariable))]
+        public void LockFileFormat_Read_WithMalformedJson_LogsErrorMesage(IEnvironmentVariableReader environmentVariableReader)
+        {
+            // Arrange
+            var lockFileContent = "{ corrupt_file: ";
+            var filePath = "a/file/path";
+            Mock<ILogger> logger = new Mock<ILogger>();
+            var lockFile = Parse(lockFileContent, filePath, environmentVariableReader, logger.Object);
+
+            Assert.NotNull(lockFile);
+            Assert.Equal(int.MinValue, lockFile.Version);
+            Assert.Equal(filePath, lockFile.Path);
+            logger.Verify(x => x.LogError(It.IsAny<string>()));
+        }
+
+
+        [Theory]
+        [MemberData(nameof(LockFileParsingEnvironmentVariable.TestEnvironmentVariableReader), MemberType = typeof(LockFileParsingEnvironmentVariable))]
+        public void LockFileFormat_ReadsMinimalErrorMessage(IEnvironmentVariableReader environmentVariableReader)
         {
             // Arrange
             var lockFileContent = @"{
@@ -1378,8 +1403,7 @@ namespace NuGet.ProjectModel.Test
                 File.WriteAllText(lockFile, lockFileContent);
 
                 // Act
-                var reader = new LockFileFormat();
-                lockFileObj = reader.Read(lockFile);
+                lockFileObj = Read(lockFile, environmentVariableReader);
                 logMessage = lockFileObj?.LogMessages?.First();
             }
 
@@ -1400,8 +1424,175 @@ namespace NuGet.ProjectModel.Test
             Assert.Equal("test log message", logMessage.Message);
         }
 
-        [Fact]
-        public void LockFileFormat_ReadsFullErrorMessage()
+
+        [Theory]
+        [InlineData(LockFileReadFlags.CentralTransitiveDependencyGroups)]
+        [InlineData(LockFileReadFlags.Libraries)]
+        [InlineData(LockFileReadFlags.PackageFolders)]
+        [InlineData(LockFileReadFlags.PackageSpec)]
+        [InlineData(LockFileReadFlags.ProjectFileDependencyGroups)]
+        [InlineData(LockFileReadFlags.Targets)]
+        [InlineData(LockFileReadFlags.PackageFolders | LockFileReadFlags.Targets)]
+        [InlineData(LockFileReadFlags.All)]
+        public void LockFileFormat_ReadUsesReadFlags_WithNewtonsoftEnvReader(LockFileReadFlags flags)
+        {
+            // Returns "NUGET_EXPERIMENTAL_USE_NJ_FOR_FILE_PARSING: true" which means Newtonsoft.Json code path is used to parse the file
+            var environmentVariableReader = LockFileParsingEnvironmentVariable.TestEnvironmentVariableReader().First()[0] as IEnvironmentVariableReader;
+
+            LockFileFormat_ReadUsesReadFlags_WithEnvReader(flags, environmentVariableReader);
+        }
+
+        [Theory]
+        [InlineData(LockFileReadFlags.CentralTransitiveDependencyGroups)]
+        [InlineData(LockFileReadFlags.Libraries)]
+        [InlineData(LockFileReadFlags.PackageFolders)]
+        [InlineData(LockFileReadFlags.PackageSpec)]
+        [InlineData(LockFileReadFlags.ProjectFileDependencyGroups)]
+        [InlineData(LockFileReadFlags.Targets)]
+        [InlineData(LockFileReadFlags.PackageFolders | LockFileReadFlags.Targets)]
+        [InlineData(LockFileReadFlags.All)]
+        public void LockFileFormat_ReadUsesReadFlags_WithSystemTextJsonEnvReader(LockFileReadFlags flags)
+        {
+            // Returns "NUGET_EXPERIMENTAL_USE_NJ_FOR_FILE_PARSING: false" which means System.Text.Json code path is used to parse the file
+            var environmentVariableReader = LockFileParsingEnvironmentVariable.TestEnvironmentVariableReader().Skip(1).First()[0] as IEnvironmentVariableReader;
+
+            LockFileFormat_ReadUsesReadFlags_WithEnvReader(flags, environmentVariableReader);
+        }
+
+        private void LockFileFormat_ReadUsesReadFlags_WithEnvReader(LockFileReadFlags flags, IEnvironmentVariableReader environmentVariableReader)
+        {
+            // Arrange
+            var lockFileContent = @"{
+  ""version"": 3,
+  ""targets"": {
+    "".NETPlatform,Version=v5.0"": {}
+  },
+  ""libraries"": {
+    ""System.Runtime/4.0.20-beta-22927"": {
+      ""type"": ""package"",
+      ""files"": []
+    }
+  },
+  ""projectFileDependencyGroups"": {
+    "".NETPlatform,Version=v5.0"": []
+  },
+  ""centralTransitiveDependencyGroups"": {
+    "".NETPlatform,Version=v5.0"": {
+      ""Newtonsoft.Json"": {
+        ""version"": ""1.0.0""
+      }
+    }
+  },
+  ""packageFolders"": {
+    ""a"": {}
+  },
+  ""project"":   {
+    ""restore"": {
+      ""projectName"": ""ProjectPath""
+    }
+  }
+}";
+
+            // Act
+            var lockFile = Parse(lockFileContent, "In Memory", environmentVariableReader, logger: null, flags);
+
+            // Assert
+            Assert.NotNull(lockFile);
+            Assert.Equal(3, lockFile.Version);
+            Assert.Equal(flags.HasFlag(LockFileReadFlags.CentralTransitiveDependencyGroups) ? 1 : 0, lockFile.CentralTransitiveDependencyGroups.Count);
+            Assert.Equal(flags.HasFlag(LockFileReadFlags.Libraries) ? 1 : 0, lockFile.Libraries.Count);
+            Assert.Equal(flags.HasFlag(LockFileReadFlags.PackageFolders) ? 1 : 0, lockFile.PackageFolders.Count);
+            Assert.Equal(flags.HasFlag(LockFileReadFlags.PackageSpec) ? "ProjectPath" : null, lockFile.PackageSpec.Name);
+            Assert.Equal(flags.HasFlag(LockFileReadFlags.ProjectFileDependencyGroups) ? 1 : 0, lockFile.ProjectFileDependencyGroups.Count);
+            Assert.Equal(flags.HasFlag(LockFileReadFlags.Targets) ? 1 : 0, lockFile.Targets.Count);
+        }
+
+
+        [Theory]
+        [MemberData(nameof(LockFileParsingEnvironmentVariable.TestEnvironmentVariableReader), MemberType = typeof(LockFileParsingEnvironmentVariable))]
+        public void LockFileFormat_SkipsInvalidErrorMessage(IEnvironmentVariableReader environmentVariableReader)
+        {
+            // Arrange
+            var lockFileContent = @"{
+  ""version"": 3,
+  ""targets"": {
+    "".NETPlatform,Version=v5.0"": {
+      ""System.Runtime/4.0.20-beta-22927"": {
+        ""type"": ""package"",
+        ""dependencies"": {
+          ""Frob"": ""4.0.20""
+        },
+        ""compile"": {
+          ""ref/dotnet/System.Runtime.dll"": {}
+        }
+      }
+    }
+  },
+  ""libraries"": {
+    ""System.Runtime/4.0.20-beta-22927"": {
+      ""sha512"": ""sup3rs3cur3"",
+      ""type"": ""package"",
+      ""files"": [
+        ""System.Runtime.nuspec""
+      ]
+    }
+  },
+  ""projectFileDependencyGroups"": {
+    """": [
+      ""System.Runtime [4.0.10-beta-*, )""
+    ],
+    "".NETPlatform,Version=v5.0"": []
+  },
+  ""logs"": [
+    {
+      ""code"": ""InvalidCode"",
+      ""level"": ""Error"",
+      ""message"": ""test log message""
+    },
+    {
+      ""code"": ""NU1000"",
+      ""level"": ""InvalidCode"",
+      ""message"": ""test log message""
+    },
+    {
+      ""code"": ""NU1000"",
+      ""level"": ""Error"",
+      ""message"": ""test log message""
+    }
+  ]
+}";
+            LockFile lockFileObj = null;
+            IAssetsLogMessage logMessage = null;
+            using (var lockFile = new TempFile())
+            {
+
+                File.WriteAllText(lockFile, lockFileContent);
+
+                // Act
+                lockFileObj = Read(lockFile, environmentVariableReader);
+                logMessage = lockFileObj?.LogMessages?.First();
+            }
+
+
+            // Assert
+            Assert.NotNull(lockFileObj);
+            Assert.NotNull(logMessage);
+            Assert.Equal(1, lockFileObj.LogMessages.Count());
+            Assert.Equal(LogLevel.Error, logMessage.Level);
+            Assert.Equal(NuGetLogCode.NU1000, logMessage.Code);
+            Assert.Null(logMessage.FilePath);
+            Assert.Equal(0, logMessage.StartLineNumber);
+            Assert.Equal(0, logMessage.EndLineNumber);
+            Assert.Equal(0, logMessage.StartColumnNumber);
+            Assert.Equal(0, logMessage.EndColumnNumber);
+            Assert.NotNull(logMessage.TargetGraphs);
+            Assert.Equal(0, logMessage.TargetGraphs.Count);
+            Assert.Equal("test log message", logMessage.Message);
+        }
+
+        [Theory]
+        [MemberData(nameof(LockFileParsingEnvironmentVariable.TestEnvironmentVariableReader), MemberType = typeof(LockFileParsingEnvironmentVariable))]
+        public void LockFileFormat_ReadsFullErrorMessage(IEnvironmentVariableReader environmentVariableReader)
         {
             // Arrange
             var lockFileContent = @"{
@@ -1460,8 +1651,7 @@ namespace NuGet.ProjectModel.Test
                 File.WriteAllText(lockFile, lockFileContent);
 
                 // Act
-                var reader = new LockFileFormat();
-                lockFileObj = reader.Read(lockFile);
+                lockFileObj = Read(lockFile, environmentVariableReader);
                 logMessage = lockFileObj?.LogMessages?.First();
             }
 
@@ -1482,8 +1672,9 @@ namespace NuGet.ProjectModel.Test
             Assert.Equal("test log message", logMessage.Message);
         }
 
-        [Fact]
-        public void LockFileFormat_SafeRead()
+        [Theory]
+        [MemberData(nameof(LockFileParsingEnvironmentVariable.TestEnvironmentVariableReader), MemberType = typeof(LockFileParsingEnvironmentVariable))]
+        public void LockFileFormat_SafeRead(IEnvironmentVariableReader environmentVariableReader)
         {
             // Arrange
             var lockFileContent = @"{
@@ -1544,7 +1735,7 @@ namespace NuGet.ProjectModel.Test
 
                 // Act
                 var reader = new LockFileFormat();
-                lockFileObj = FileUtility.SafeRead(lockFile, (stream, path) => reader.Read(stream, NullLogger.Instance, path));
+                lockFileObj = FileUtility.SafeRead(lockFile, (stream, path) => reader.Read(stream, NullLogger.Instance, path, environmentVariableReader, true));
                 logMessage = lockFileObj?.LogMessages?.First();
             }
 
@@ -1566,9 +1757,9 @@ namespace NuGet.ProjectModel.Test
             Assert.Equal("test log message", logMessage.Message);
         }
 
-
-        [Fact]
-        public void LockFileFormat_ReadsWarningMessage()
+        [Theory]
+        [MemberData(nameof(LockFileParsingEnvironmentVariable.TestEnvironmentVariableReader), MemberType = typeof(LockFileParsingEnvironmentVariable))]
+        public void LockFileFormat_ReadsWarningMessage(IEnvironmentVariableReader environmentVariableReader)
         {
 
             // Arrange
@@ -1629,8 +1820,7 @@ namespace NuGet.ProjectModel.Test
                 File.WriteAllText(lockFile, lockFileContent);
 
                 // Act
-                var reader = new LockFileFormat();
-                lockFileObj = reader.Read(lockFile);
+                lockFileObj = Read(lockFile, environmentVariableReader);
                 logMessage = lockFileObj?.LogMessages?.First();
             }
 
@@ -1652,8 +1842,9 @@ namespace NuGet.ProjectModel.Test
             Assert.Equal("test log message", logMessage.Message);
         }
 
-        [Fact]
-        public void LockFileFormat_ReadsWarningMessageWithoutWarningLevel()
+        [Theory]
+        [MemberData(nameof(LockFileParsingEnvironmentVariable.TestEnvironmentVariableReader), MemberType = typeof(LockFileParsingEnvironmentVariable))]
+        public void LockFileFormat_ReadsWarningMessageWithoutWarningLevel(IEnvironmentVariableReader environmentVariableReader)
         {
             // Arrange
             var lockFileContent = @"{
@@ -1712,8 +1903,7 @@ namespace NuGet.ProjectModel.Test
                 File.WriteAllText(lockFile, lockFileContent);
 
                 // Act
-                var reader = new LockFileFormat();
-                lockFileObj = reader.Read(lockFile);
+                lockFileObj = Read(lockFile, environmentVariableReader);
                 logMessage = lockFileObj?.LogMessages?.First();
             }
 
@@ -1736,8 +1926,9 @@ namespace NuGet.ProjectModel.Test
         }
 
 
-        [Fact]
-        public void LockFileFormat_ReadsMultipleMessages()
+        [Theory]
+        [MemberData(nameof(LockFileParsingEnvironmentVariable.TestEnvironmentVariableReader), MemberType = typeof(LockFileParsingEnvironmentVariable))]
+        public void LockFileFormat_ReadsMultipleMessages(IEnvironmentVariableReader environmentVariableReader)
         {
             // Arrange
             var lockFileContent = @"{
@@ -1807,26 +1998,26 @@ namespace NuGet.ProjectModel.Test
                 File.WriteAllText(lockFile, lockFileContent);
 
                 // Act
-                var reader = new LockFileFormat();
-                lockFileObj = reader.Read(lockFile);
+                lockFileObj = Read(lockFile, environmentVariableReader);
             }
 
 
             // Assert
             Assert.NotNull(lockFileObj);
             Assert.Equal(5, lockFileObj.LogMessages.Count());
-            Assert.Equal(3, lockFileObj.LogMessages.Where(m => m.Level == LogLevel.Error).Count());
-            Assert.Equal(2, lockFileObj.LogMessages.Where(m => m.Level == LogLevel.Warning).Count());
-            Assert.Equal(2, lockFileObj.LogMessages.Where(m => m.Message == "test log message").Count());
-            Assert.Equal(2, lockFileObj.LogMessages.Where(m => m.Message == "test warning message").Count());
-            Assert.Equal(1, lockFileObj.LogMessages.Where(m => m.Message == "test error message with type NU1001").Count());
-            Assert.Equal(2, lockFileObj.LogMessages.Where(m => m.Code == NuGetLogCode.NU1000).Count());
-            Assert.Equal(2, lockFileObj.LogMessages.Where(m => m.Code == NuGetLogCode.NU1500).Count());
-            Assert.Equal(1, lockFileObj.LogMessages.Where(m => m.Code == NuGetLogCode.NU1001).Count());
+            Assert.Equal(3, lockFileObj.LogMessages.Count(m => m.Level == LogLevel.Error));
+            Assert.Equal(2, lockFileObj.LogMessages.Count(m => m.Level == LogLevel.Warning));
+            Assert.Equal(2, lockFileObj.LogMessages.Count(m => m.Message == "test log message"));
+            Assert.Equal(2, lockFileObj.LogMessages.Count(m => m.Message == "test warning message"));
+            Assert.Equal(1, lockFileObj.LogMessages.Count(m => m.Message == "test error message with type NU1001"));
+            Assert.Equal(2, lockFileObj.LogMessages.Count(m => m.Code == NuGetLogCode.NU1000));
+            Assert.Equal(2, lockFileObj.LogMessages.Count(m => m.Code == NuGetLogCode.NU1500));
+            Assert.Equal(1, lockFileObj.LogMessages.Count(m => m.Code == NuGetLogCode.NU1001));
         }
 
-        [Fact]
-        public void LockFileFormat_ReadsLogMessageWithSameFilePathAndProjectPath()
+        [Theory]
+        [MemberData(nameof(LockFileParsingEnvironmentVariable.TestEnvironmentVariableReader), MemberType = typeof(LockFileParsingEnvironmentVariable))]
+        public void LockFileFormat_ReadsLogMessageWithSameFilePathAndProjectPath(IEnvironmentVariableReader environmentVariableReader)
         {
             // Arrange
             var lockFileContent = @"{
@@ -1881,8 +2072,7 @@ namespace NuGet.ProjectModel.Test
                 File.WriteAllText(lockFile, lockFileContent);
 
                 // Act
-                var reader = new LockFileFormat();
-                lockFileObj = reader.Read(lockFile);
+                lockFileObj = Read(lockFile, environmentVariableReader);
                 logMessage = lockFileObj?.LogMessages?.First();
             }
 
@@ -1904,8 +2094,9 @@ namespace NuGet.ProjectModel.Test
             Assert.Equal("test log message", logMessage.Message);
         }
 
-        [Fact]
-        public void LockFileFormat_ReadsLogMessageWithNoFilePath()
+        [Theory]
+        [MemberData(nameof(LockFileParsingEnvironmentVariable.TestEnvironmentVariableReader), MemberType = typeof(LockFileParsingEnvironmentVariable))]
+        public void LockFileFormat_ReadsLogMessageWithNoFilePath(IEnvironmentVariableReader environmentVariableReader)
         {
             // Arrange
             var lockFileContent = @"{
@@ -1959,8 +2150,7 @@ namespace NuGet.ProjectModel.Test
                 File.WriteAllText(lockFile, lockFileContent);
 
                 // Act
-                var reader = new LockFileFormat();
-                lockFileObj = reader.Read(lockFile);
+                lockFileObj = Read(lockFile, environmentVariableReader);
                 logMessage = lockFileObj?.LogMessages?.First();
             }
 
@@ -1982,8 +2172,9 @@ namespace NuGet.ProjectModel.Test
             Assert.Equal("test log message", logMessage.Message);
         }
 
-        [Fact]
-        public void LockFileFormat_ReadsLockFileWithTools()
+        [Theory]
+        [MemberData(nameof(LockFileParsingEnvironmentVariable.TestEnvironmentVariableReader), MemberType = typeof(LockFileParsingEnvironmentVariable))]
+        public void LockFileFormat_ReadsLockFileWithTools(IEnvironmentVariableReader environmentVariableReader)
         {
             var lockFileContent = @"{
               ""version"": 1,
@@ -2018,8 +2209,7 @@ namespace NuGet.ProjectModel.Test
                 "".NETPlatform,Version=v5.0"": []
               }
             }";
-            var lockFileFormat = new LockFileFormat();
-            var lockFile = lockFileFormat.Parse(lockFileContent, "In Memory");
+            var lockFile = Parse(lockFileContent, "In Memory", environmentVariableReader);
 
             Assert.Equal(1, lockFile.Version);
 
@@ -2052,8 +2242,9 @@ namespace NuGet.ProjectModel.Test
             Assert.Empty(netPlatDepGroup.Dependencies);
         }
 
-        [Fact]
-        public void LockFileFormat_ReadsLockFileWithEmbedAssemblies()
+        [Theory]
+        [MemberData(nameof(LockFileParsingEnvironmentVariable.TestEnvironmentVariableReader), MemberType = typeof(LockFileParsingEnvironmentVariable))]
+        public void LockFileFormat_ReadsLockFileWithEmbedAssemblies(IEnvironmentVariableReader environmentVariableReader)
         {
             var lockFileContent = @"{
               ""version"": 1,
@@ -2094,8 +2285,7 @@ namespace NuGet.ProjectModel.Test
               }
             }";
 
-            var lockFileFormat = new LockFileFormat();
-            var lockFile = lockFileFormat.Parse(lockFileContent, "In Memory");
+            var lockFile = Parse(lockFileContent, "In Memory", environmentVariableReader);
 
             Assert.Equal(1, lockFile.Version);
 
@@ -2214,7 +2404,7 @@ namespace NuGet.ProjectModel.Test
                 ""type"": ""package"",
                 ""files"": [
                     ""System.Runtime.nuspec""
-                    ]             
+                    ]
                 }
             },
             ""projectFileDependencyGroups"": {
@@ -2228,7 +2418,7 @@ namespace NuGet.ProjectModel.Test
                 ""Newtonsoft.Json"": {
                             ""include"": ""Compile, Native, BuildTransitive"",
                             ""suppressParent"": ""All"",
-                            ""version"": ""[12.0.3, )""           
+                            ""version"": ""[12.0.3, )""
                         }
                     }
                 }
@@ -2275,14 +2465,13 @@ namespace NuGet.ProjectModel.Test
                         libraryRange: new LibraryRange("Newtonsoft.Json", VersionRange.Parse("[12.0.3, )"), LibraryDependencyTarget.Package),
                         includeType: LibraryIncludeFlags.Compile | LibraryIncludeFlags.BuildTransitive | LibraryIncludeFlags.Native,
                         suppressParent: LibraryIncludeFlags.All,
-                        noWarn: new List<NuGetLogCode>(),
+                        noWarn: [],
                         autoReferenced: true,
                         generatePathProperty: false,
-                        versionCentrallyManaged: false,
+                        versionCentrallyManaged: true,
                         LibraryDependencyReferenceType.Direct,
                         aliases: null,
                         versionOverride: null);
-            newtonSoftDependency.VersionCentrallyManaged = true;
 
             lockFile.CentralTransitiveDependencyGroups
                 .Add(new CentralTransitiveDependencyGroup(framework, new List<LibraryDependency>() { newtonSoftDependency }));
@@ -2294,6 +2483,25 @@ namespace NuGet.ProjectModel.Test
 
             // Assert
             Assert.Equal(expected.ToString(), output.ToString());
+        }
+
+        private LockFile Read(string filePath, IEnvironmentVariableReader environmentVariableReader)
+        {
+            var reader = new LockFileFormat();
+            using (var stream = File.OpenRead(filePath))
+            {
+                return reader.Read(stream, NullLogger.Instance, filePath, environmentVariableReader, true);
+            }
+        }
+
+        private LockFile Parse(string lockFileContent, string path, IEnvironmentVariableReader environmentVariableReader, ILogger logger = null, LockFileReadFlags flags = LockFileReadFlags.All)
+        {
+            var reader = new LockFileFormat();
+            byte[] byteArray = Encoding.UTF8.GetBytes(lockFileContent);
+            using (var stream = new MemoryStream(byteArray))
+            {
+                return reader.Read(stream, logger ?? NullLogger.Instance, path, environmentVariableReader, true, flags);
+            }
         }
     }
 }

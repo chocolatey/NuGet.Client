@@ -139,11 +139,12 @@
     <value>Null or empty package id</value>
   </data>
   <data name="Log_InstalledPackage" xml:space="preserve">
-    <value>Installed {0} {1} from {2} with content hash {3}.</value>
+    <value>Installed {0} {1} from {2} to {3} with content hash {4}.</value>
     <comment>0 - package id
 1 - package version
 2 - package source
-3 - hex byte string, representing content hash</comment>
+3 - package installed path
+4 - hex byte string, representing content hash</comment>
   </data>
   <data name="FailToLoadPackagesConfig" xml:space="preserve">
     <value>Fail to load packages.config as XML file. Please check it. </value>
@@ -850,9 +851,6 @@ Valid from:</comment>
     <value>The {0}'s timestamping certificate is not trusted by the trust provider.</value>
     <comment>0 -Signature friendly name</comment>
   </data>
-  <data name="ChainBuilding_UsingDefaultTrustStore" xml:space="preserve">
-    <value>X.509 certificate chain validation will use the default trust store selected by .NET.</value>
-  </data>
   <data name="ChainBuilding_UsingFallbackCertificateBundle" xml:space="preserve">
     <value>X.509 certificate chain validation will use the fallback certificate bundle at '{0}'.</value>
     <comment>{0} is the file path</comment>
@@ -866,5 +864,27 @@ Valid from:</comment>
   </data>
   <data name="InvalidX509StorePurpose" xml:space="preserve">
     <value>Invalid X.509 store purpose.</value>
+  </data>
+  <data name="ChainBuilding_UsingDefaultTrustStoreForCodeSigning" xml:space="preserve">
+    <value>X.509 certificate chain validation will use the default trust store selected by .NET for code signing.</value>
+  </data>
+  <data name="ChainBuilding_UsingDefaultTrustStoreForTimestamping" xml:space="preserve">
+    <value>X.509 certificate chain validation will use the default trust store selected by .NET for timestamping.</value>
+  </data>
+  <data name="UntrustedRoot_WithCertificateBundle" xml:space="preserve">
+    <value>The following X.509 root certificate is untrusted because it is not present in the certificate bundle at {0}.  For more information, see documentation for NU3042.
+    Subject:  {1}
+    Fingerprint (SHA-256):  {2}
+    Certificate (PEM):
+{3}</value>
+    <comment>0 is a file path, 1 is a certificate subject, 2 is a certificate fingerprint, and 3 is a PEM-encoded certificate.</comment>
+  </data>
+  <data name="UntrustedRoot_WithoutCertificateBundle" xml:space="preserve">
+    <value>The following X.509 root certificate is untrusted because no certificate bundle was found.  For more information, see documentation for NU3042.
+    Subject:  {0}
+    Fingerprint (SHA-256):  {1}
+    Certificate (PEM):
+{2}</value>
+    <comment>0 is a certificate subject, 1 is a certificate fingerprint, and 2 is a PEM-encoded certificate.</comment>
   </data>
 </root>

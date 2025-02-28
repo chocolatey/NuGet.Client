@@ -8,10 +8,10 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using FluentAssertions;
 using NuGet.Packaging;
 using NuGet.Packaging.Core;
 using NuGet.Protocol.Core.Types;
-using NuGet.Test.Utility;
 using NuGet.Versioning;
 using Test.Utility;
 using Xunit;
@@ -31,7 +31,7 @@ namespace NuGet.Protocol.Tests
 
             var repo = StaticHttpHandler.CreateSource("http://testsource.com/v3/index.json", Repository.Provider.GetCoreV3(), responses);
 
-            var resource = await repo.GetResourceAsync<PackageMetadataResource>();
+            var resource = await repo.GetResourceAsync<PackageMetadataResource>(CancellationToken.None);
 
             var package = new PackageIdentity("deepequal", NuGetVersion.Parse("0.9.0"));
 
@@ -68,7 +68,7 @@ namespace NuGet.Protocol.Tests
 
             var repo = StaticHttpHandler.CreateSource("http://testsource.com/v3/index.json", Repository.Provider.GetCoreV3(), responses);
 
-            var resource = await repo.GetResourceAsync<PackageMetadataResource>();
+            var resource = await repo.GetResourceAsync<PackageMetadataResource>(CancellationToken.None);
 
             var package = new PackageIdentity("unlistedpackagea", NuGetVersion.Parse("1.0.0"));
 
@@ -92,7 +92,7 @@ namespace NuGet.Protocol.Tests
 
             var repo = StaticHttpHandler.CreateSource("http://testsource.com/v3/index.json", Repository.Provider.GetCoreV3(), responses);
 
-            var resource = await repo.GetResourceAsync<PackageMetadataResource>();
+            var resource = await repo.GetResourceAsync<PackageMetadataResource>(CancellationToken.None);
 
             // Act
             using (var sourceCacheContext = new SourceCacheContext())
@@ -117,7 +117,7 @@ namespace NuGet.Protocol.Tests
 
             var repo = StaticHttpHandler.CreateSource("http://testsource.com/v3/index.json", Repository.Provider.GetCoreV3(), responses);
 
-            var resource = await repo.GetResourceAsync<PackageMetadataResource>();
+            var resource = await repo.GetResourceAsync<PackageMetadataResource>(CancellationToken.None);
 
             var package = new PackageIdentity("deepequal", NuGetVersion.Parse("0.0.0"));
 
@@ -153,7 +153,7 @@ namespace NuGet.Protocol.Tests
 
             var repo = StaticHttpHandler.CreateSource(sourceName, Repository.Provider.GetCoreV3(), responses);
 
-            var resource = await repo.GetResourceAsync<PackageMetadataResource>();
+            var resource = await repo.GetResourceAsync<PackageMetadataResource>(CancellationToken.None);
 
             var package = new PackageIdentity("PackageA", NuGetVersion.Parse("1.0.0"));
 
@@ -202,7 +202,7 @@ namespace NuGet.Protocol.Tests
 
             var repo = StaticHttpHandler.CreateSource(sourceName, Repository.Provider.GetCoreV3(), responses);
 
-            var resource = await repo.GetResourceAsync<PackageMetadataResource>();
+            var resource = await repo.GetResourceAsync<PackageMetadataResource>(CancellationToken.None);
 
             var package = new PackageIdentity("PackageA", NuGetVersion.Parse("1.0.0"));
 
@@ -256,7 +256,7 @@ namespace NuGet.Protocol.Tests
             };
 
             var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-            var resource = await repo.GetResourceAsync<PackageMetadataResource>();
+            var resource = await repo.GetResourceAsync<PackageMetadataResource>(CancellationToken.None);
 
             //Act
             using (var sourceCacheContext = new SourceCacheContext())
@@ -292,7 +292,7 @@ namespace NuGet.Protocol.Tests
             };
 
             var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-            var resource = await repo.GetResourceAsync<PackageMetadataResource>();
+            var resource = await repo.GetResourceAsync<PackageMetadataResource>(CancellationToken.None);
 
             //Act
             using (var sourceCacheContext = new SourceCacheContext())
@@ -301,6 +301,34 @@ namespace NuGet.Protocol.Tests
 
                 //Assert
                 Assert.Null(metadata);
+            }
+        }
+
+        [Fact]
+        public async Task PackageMetadataResourceV3_GetMetadataAsync_DependencyRangeNull()
+        {
+            // Arrange
+            var responses = new Dictionary<string, string>();
+            responses.Add("http://testsource.com/v3/index.json", JsonData.IndexWithoutFlatContainer);
+            responses.Add("https://api.nuget.org/v3/registration0/dependencyedgecases/index.json", JsonData.PackageDependencyWithNullAndEmptyRange);
+
+            var repo = StaticHttpHandler.CreateSource("http://testsource.com/v3/index.json", Repository.Provider.GetCoreV3(), responses);
+
+            var resource = await repo.GetResourceAsync<PackageMetadataResource>(CancellationToken.None);
+
+            var package = new PackageIdentity("dependencyedgecases", NuGetVersion.Parse("0.1.0"));
+
+            // Act
+            using (var sourceCacheContext = new SourceCacheContext())
+            {
+                var result = await resource.GetMetadataAsync(package, sourceCacheContext, Common.NullLogger.Instance, CancellationToken.None);
+
+                // Assert
+                result.Should().NotBeNull();
+                result.DependencySets.Should().HaveCount(1);
+                var dependencySets = result.DependencySets.ToList();
+                dependencySets[0].Packages.Should().HaveCount(3);
+                dependencySets[0].Packages.All(p => p.VersionRange == VersionRange.All).Should().BeTrue();
             }
         }
     }

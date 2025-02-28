@@ -11,6 +11,7 @@ using NuGet.Packaging;
 using NuGet.Packaging.Core;
 using NuGet.ProjectModel;
 using NuGet.Protocol;
+using NuGet.Shared;
 using NuGet.Versioning;
 
 namespace NuGet.Commands
@@ -155,15 +156,18 @@ namespace NuGet.Commands
 
             }
 
-            if (cacheFile.HasAnyMissingPackageFiles)
+            foreach (var path in cacheFile.ExpectedPackageFilePaths.AsList())
             {
-                request.Log.LogVerbose(string.Format(CultureInfo.CurrentCulture, Strings.Log_MissingPackagesOnDisk, request.Project.Name));
-                return false;
+                if (!request.DependencyProviders.PackageFileCache.Sha512Exists(path))
+                {
+                    request.Log.LogVerbose(string.Format(CultureInfo.CurrentCulture, Strings.Log_MissingPackagesOnDisk, request.Project.Name));
+                    return false;
+                }
             }
 
             if (request.UpdatePackageLastAccessTime)
             {
-                foreach (var package in cacheFile.ExpectedPackageFilePaths)
+                foreach (var package in cacheFile.ExpectedPackageFilePaths.AsList())
                 {
                     if (!package.StartsWith(request.PackagesDirectory, StringComparison.OrdinalIgnoreCase)) { continue; }
 
@@ -269,7 +273,7 @@ namespace NuGet.Commands
                 pathResolvers.Add(new VersionFolderPathResolver(restoreMetadataFallbackFolder));
             }
 
-            var packageFiles = new List<string>(lockFile.Libraries.Count + request.Project.TargetFrameworks.Sum(i => i.DownloadDependencies.Count));
+            var packageFiles = new List<string>(lockFile.Libraries.Count + request.Project.TargetFrameworks.Sum(i => i.DownloadDependencies.Length));
 
             foreach (var library in lockFile.Libraries)
             {
@@ -288,7 +292,7 @@ namespace NuGet.Commands
             return packageFiles;
         }
 
-        private static IEnumerable<string> GetPackageFiles(LocalPackageFileCache packageFileCache, string packageId, NuGetVersion version, IEnumerable<VersionFolderPathResolver> resolvers)
+        private static IEnumerable<string> GetPackageFiles(LocalPackageFileCache packageFileCache, string packageId, NuGetVersion version, List<VersionFolderPathResolver> resolvers)
         {
             foreach (var resolver in resolvers)
             {

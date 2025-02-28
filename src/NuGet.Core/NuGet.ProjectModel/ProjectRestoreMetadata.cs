@@ -7,6 +7,7 @@ using System.Linq;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Shared;
+using NuGet.Versioning;
 
 namespace NuGet.ProjectModel
 {
@@ -123,53 +124,47 @@ namespace NuGet.ProjectModel
         /// </summary>
         public bool CentralPackageVersionOverrideDisabled { get; set; }
 
+        /// <summary>
+        /// Gets or sets a value indicating whether or not floating versions are allowed when using central package management (CPM).
+        /// </summary>
+        public bool CentralPackageFloatingVersionsEnabled { get; set; }
+
         public bool CentralPackageTransitivePinningEnabled { get; set; }
+
+        public RestoreAuditProperties RestoreAuditProperties { get; set; }
+
+        /// <summary>
+        /// A unified flag to help users manage their SDK warning levels. Example: 9.0.100.
+        /// When introducing a new warning or error use this property to
+        /// allow users to tell the sdk "treat me as if I were SDK x.y.z" and manage breaking changes
+        /// </summary>
+        public NuGetVersion SdkAnalysisLevel { get; set; }
+
+        /// <summary>
+        /// Indicates that Microsoft.NET.Sdk is being used.
+        /// </summary>
+        public bool UsingMicrosoftNETSdk { get; set; }
+
+        public bool UseLegacyDependencyResolver { get; set; }
 
         public override int GetHashCode()
         {
+            StringComparer osStringComparer = PathUtility.GetStringComparerBasedOnOS();
+
             var hashCode = new HashCodeCombiner();
 
             hashCode.AddStruct(ProjectStyle);
-
-            StringComparer osStringComparer = PathUtility.GetStringComparerBasedOnOS();
-            if (ProjectPath != null)
-            {
-                hashCode.AddObject(osStringComparer.GetHashCode(ProjectPath));
-            }
-            if (ProjectJsonPath != null)
-            {
-                hashCode.AddObject(osStringComparer.GetHashCode(ProjectJsonPath));
-            }
-            if (OutputPath != null)
-            {
-                hashCode.AddObject(osStringComparer.GetHashCode(OutputPath));
-            }
-            if (ProjectName != null)
-            {
-                hashCode.AddObject(osStringComparer.GetHashCode(ProjectName));
-            }
-            if (ProjectUniqueName != null)
-            {
-                hashCode.AddObject(osStringComparer.GetHashCode(ProjectUniqueName));
-            }
-            hashCode.AddSequence(Sources.OrderBy(e => e.Source, StringComparer.OrdinalIgnoreCase));
-            if (PackagesPath != null)
-            {
-                hashCode.AddObject(osStringComparer.GetHashCode(PackagesPath));
-            }
-            foreach (var reference in ConfigFilePaths.OrderBy(s => s, osStringComparer))
-            {
-                hashCode.AddObject(osStringComparer.GetHashCode(reference));
-            }
-            foreach (var reference in FallbackFolders.OrderBy(s => s, osStringComparer))
-            {
-                hashCode.AddObject(osStringComparer.GetHashCode(reference));
-            }
-            hashCode.AddSequence(TargetFrameworks.OrderBy(dep => dep.TargetAlias, StringComparer.OrdinalIgnoreCase));
-            foreach (var reference in OriginalTargetFrameworks.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
-            {
-                hashCode.AddObject(StringComparer.OrdinalIgnoreCase.GetHashCode(reference));
-            }
+            hashCode.AddObject(ProjectPath, osStringComparer);
+            hashCode.AddObject(ProjectJsonPath, osStringComparer);
+            hashCode.AddObject(OutputPath, osStringComparer);
+            hashCode.AddObject(ProjectName, osStringComparer);
+            hashCode.AddObject(ProjectUniqueName, osStringComparer);
+            hashCode.AddUnorderedSequence(Sources);
+            hashCode.AddObject(PackagesPath, osStringComparer);
+            hashCode.AddUnorderedSequence(ConfigFilePaths, osStringComparer);
+            hashCode.AddUnorderedSequence(FallbackFolders, osStringComparer);
+            hashCode.AddUnorderedSequence(TargetFrameworks);
+            hashCode.AddUnorderedSequence(OriginalTargetFrameworks, StringComparer.OrdinalIgnoreCase);
             hashCode.AddObject(CrossTargeting);
             hashCode.AddObject(LegacyPackagesDirectory);
             hashCode.AddSequence(Files);
@@ -178,8 +173,13 @@ namespace NuGet.ProjectModel
             hashCode.AddObject(ProjectWideWarningProperties);
             hashCode.AddObject(RestoreLockProperties);
             hashCode.AddObject(CentralPackageVersionsEnabled);
+            hashCode.AddObject(CentralPackageFloatingVersionsEnabled);
             hashCode.AddObject(CentralPackageVersionOverrideDisabled);
             hashCode.AddObject(CentralPackageTransitivePinningEnabled);
+            hashCode.AddObject(RestoreAuditProperties);
+            hashCode.AddObject(UsingMicrosoftNETSdk);
+            hashCode.AddObject(SdkAnalysisLevel);
+            hashCode.AddObject(UseLegacyDependencyResolver);
 
             return hashCode.CombinedHash;
         }
@@ -208,7 +208,7 @@ namespace NuGet.ProjectModel
                    osStringComparer.Equals(OutputPath, other.OutputPath) &&
                    osStringComparer.Equals(ProjectName, other.ProjectName) &&
                    osStringComparer.Equals(ProjectUniqueName, other.ProjectUniqueName) &&
-                   Sources.OrderedEquals(other.Sources.Distinct(), source => source.Source, StringComparer.OrdinalIgnoreCase) &&
+                   GetSources(Sources).SetEqualsWithNullCheck(GetSources(other.Sources), StringComparer.OrdinalIgnoreCase) &&
                    osStringComparer.Equals(PackagesPath, other.PackagesPath) &&
                    ConfigFilePaths.OrderedEquals(other.ConfigFilePaths, filePath => filePath, osStringComparer, osStringComparer) &&
                    FallbackFolders.OrderedEquals(other.FallbackFolders, fallbackFolder => fallbackFolder, osStringComparer, osStringComparer) &&
@@ -222,8 +222,27 @@ namespace NuGet.ProjectModel
                    EqualityUtility.EqualsWithNullCheck(ProjectWideWarningProperties, other.ProjectWideWarningProperties) &&
                    EqualityUtility.EqualsWithNullCheck(RestoreLockProperties, other.RestoreLockProperties) &&
                    EqualityUtility.EqualsWithNullCheck(CentralPackageVersionsEnabled, other.CentralPackageVersionsEnabled) &&
+                   EqualityUtility.EqualsWithNullCheck(CentralPackageFloatingVersionsEnabled, other.CentralPackageFloatingVersionsEnabled) &&
                    EqualityUtility.EqualsWithNullCheck(CentralPackageVersionOverrideDisabled, other.CentralPackageVersionOverrideDisabled) &&
-                   EqualityUtility.EqualsWithNullCheck(CentralPackageTransitivePinningEnabled, other.CentralPackageTransitivePinningEnabled);
+                   EqualityUtility.EqualsWithNullCheck(CentralPackageTransitivePinningEnabled, other.CentralPackageTransitivePinningEnabled) &&
+                   RestoreAuditProperties == other.RestoreAuditProperties &&
+                   UsingMicrosoftNETSdk == other.UsingMicrosoftNETSdk &&
+                   EqualityUtility.EqualsWithNullCheck(SdkAnalysisLevel, other.SdkAnalysisLevel) &&
+                   UseLegacyDependencyResolver == other.UseLegacyDependencyResolver;
+        }
+
+        private HashSet<string> GetSources(IList<PackageSource> sources)
+        {
+#if NETSTANDARD2_0
+            var setSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+#else
+            var setSources = new HashSet<string>(sources.Count, StringComparer.OrdinalIgnoreCase);
+#endif
+            for (var i = 0; i < sources.Count; i++)
+            {
+                setSources.Add(sources[i].Source);
+            }
+            return setSources;
         }
 
         public virtual ProjectRestoreMetadata Clone()
@@ -256,8 +275,13 @@ namespace NuGet.ProjectModel
             clone.ProjectWideWarningProperties = ProjectWideWarningProperties?.Clone();
             clone.RestoreLockProperties = RestoreLockProperties?.Clone();
             clone.CentralPackageVersionsEnabled = CentralPackageVersionsEnabled;
+            clone.CentralPackageFloatingVersionsEnabled = CentralPackageFloatingVersionsEnabled;
             clone.CentralPackageVersionOverrideDisabled = CentralPackageVersionOverrideDisabled;
             clone.CentralPackageTransitivePinningEnabled = CentralPackageTransitivePinningEnabled;
+            clone.RestoreAuditProperties = RestoreAuditProperties?.Clone();
+            clone.SdkAnalysisLevel = SdkAnalysisLevel;
+            clone.UsingMicrosoftNETSdk = UsingMicrosoftNETSdk;
+            clone.UseLegacyDependencyResolver = UseLegacyDependencyResolver;
         }
     }
 }

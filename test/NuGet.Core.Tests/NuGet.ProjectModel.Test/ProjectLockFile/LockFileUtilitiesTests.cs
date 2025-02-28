@@ -1,7 +1,9 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using NuGet.Commands.Test;
 using NuGet.LibraryModel;
@@ -166,7 +168,7 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
                 new LibraryRange("library1", versionRange: VersionRange.Parse("1.0.0"), LibraryDependencyTarget.Package),
                 LibraryIncludeFlags.All,
                 LibraryIncludeFlags.All,
-                new List<Common.NuGetLogCode>(),
+                noWarn: [],
                 autoReferenced: false,
                 generatePathProperty: true,
                 versionCentrallyManaged: false,
@@ -176,9 +178,9 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
 
             var tfm1 = new TargetFrameworkInformation
             {
+                Dependencies = [dependency1],
                 FrameworkName = framework
             };
-            tfm1.Dependencies.Add(dependency1);
 
             var tfm2 = new TargetFrameworkInformation
             {
@@ -224,7 +226,7 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
                 new LibraryRange("library1", versionRange: VersionRange.Parse("1.0.0"), LibraryDependencyTarget.Package),
                 LibraryIncludeFlags.All,
                 LibraryIncludeFlags.All,
-                new List<Common.NuGetLogCode>(),
+                noWarn: [],
                 autoReferenced: false,
                 generatePathProperty: true,
                 versionCentrallyManaged: false,
@@ -234,9 +236,9 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
 
             var tfm = new TargetFrameworkInformation
             {
+                Dependencies = [dependency1],
                 FrameworkName = framework
             };
-            tfm.Dependencies.Add(dependency1);
 
             var project = new PackageSpec(new List<TargetFrameworkInformation>() { tfm })
             {
@@ -274,23 +276,30 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             var cpvm1 = new CentralPackageVersion("cpvm1", VersionRange.Parse("1.0.0"));
             var cpvm2 = new CentralPackageVersion("cpvm2", VersionRange.Parse("1.0.0"));
             var dependency1 = new LibraryDependency(
-                new LibraryRange("cpvm1", versionRange: null, LibraryDependencyTarget.Package),
+                new LibraryRange("cpvm1", versionRange: cpvm1.VersionRange, LibraryDependencyTarget.Package),
                 LibraryIncludeFlags.All,
                 LibraryIncludeFlags.All,
-                new List<Common.NuGetLogCode>(),
+                noWarn: [],
                 autoReferenced: false,
                 generatePathProperty: true,
-                versionCentrallyManaged: false,
+                versionCentrallyManaged: true,
                 LibraryDependencyReferenceType.Direct,
                 aliases: "stuff",
                 versionOverride: null);
 
-            var tfm = new TargetFrameworkInformation();
-            tfm.FrameworkName = framework;
-            tfm.CentralPackageVersions.Add("cpvm1", cpvm1);
-            tfm.CentralPackageVersions.Add("cpvm2", cpvm2);
-            tfm.Dependencies.Add(dependency1);
-            LibraryDependency.ApplyCentralVersionInformation(tfm.Dependencies, tfm.CentralPackageVersions);
+            var centralPackageVersions = new Dictionary<string, CentralPackageVersion>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "cpvm1", cpvm1 },
+                { "cpvm2", cpvm2 },
+            };
+            ImmutableArray<LibraryDependency> dependencies = [dependency1];
+
+            var tfm = new TargetFrameworkInformation()
+            {
+                CentralPackageVersions = centralPackageVersions,
+                Dependencies = dependencies,
+                FrameworkName = framework
+            };
 
             var project = new PackageSpec(new List<TargetFrameworkInformation>() { tfm });
             project.RestoreMetadata = new ProjectRestoreMetadata() { ProjectUniqueName = projectName, CentralPackageVersionsEnabled = true };
@@ -332,23 +341,30 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             var cpvm1 = new CentralPackageVersion("cpvm1", VersionRange.Parse("1.0.0"));
             var cpvm2 = new CentralPackageVersion("cpvm2", VersionRange.Parse("2.0.0"));
             var dependency1 = new LibraryDependency(
-                new LibraryRange("cpvm1", versionRange: null, LibraryDependencyTarget.Package),
+                new LibraryRange("cpvm1", versionRange: cpvm1.VersionRange, LibraryDependencyTarget.Package),
                 LibraryIncludeFlags.All,
                 LibraryIncludeFlags.All,
-                new List<Common.NuGetLogCode>(),
+                noWarn: [],
                 autoReferenced: false,
                 generatePathProperty: true,
-                versionCentrallyManaged: false,
+                versionCentrallyManaged: true,
                 LibraryDependencyReferenceType.Direct,
                 aliases: "stuff",
                 versionOverride: null);
 
-            var tfm = new TargetFrameworkInformation();
-            tfm.FrameworkName = framework;
-            tfm.CentralPackageVersions.Add("cpvm1", cpvm1);
-            tfm.CentralPackageVersions.Add("cpvm2", cpvm2);
-            tfm.Dependencies.Add(dependency1);
-            LibraryDependency.ApplyCentralVersionInformation(tfm.Dependencies, tfm.CentralPackageVersions);
+            var centralPackageVersions = new Dictionary<string, CentralPackageVersion>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "cpvm1", cpvm1 },
+                { "cpvm2", cpvm2 },
+            };
+            ImmutableArray<LibraryDependency> dependencies = [dependency1];
+
+            var tfm = new TargetFrameworkInformation()
+            {
+                CentralPackageVersions = centralPackageVersions,
+                Dependencies = dependencies,
+                FrameworkName = framework,
+            };
 
             var project = new PackageSpec(new List<TargetFrameworkInformation>() { tfm });
             project.RestoreMetadata = new ProjectRestoreMetadata() { ProjectUniqueName = projectName, CentralPackageVersionsEnabled = true };
@@ -386,23 +402,30 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             var cpvm1 = new CentralPackageVersion("cpvm1", VersionRange.Parse("2.0.0"));
             var cpvm2 = new CentralPackageVersion("cpvm2", VersionRange.Parse("1.0.0"));
             var dependency1 = new LibraryDependency(
-                new LibraryRange("cpvm1", versionRange: null, LibraryDependencyTarget.Package),
+                new LibraryRange("cpvm1", versionRange: cpvm1.VersionRange, LibraryDependencyTarget.Package),
                 LibraryIncludeFlags.All,
                 LibraryIncludeFlags.All,
-                new List<Common.NuGetLogCode>(),
+                noWarn: [],
                 autoReferenced: false,
                 generatePathProperty: true,
-                versionCentrallyManaged: false,
+                versionCentrallyManaged: true,
                 LibraryDependencyReferenceType.Direct,
                 aliases: "stuff",
                 versionOverride: null);
 
-            var tfm = new TargetFrameworkInformation();
-            tfm.FrameworkName = framework;
-            tfm.CentralPackageVersions.Add("cpvm1", cpvm1);
-            tfm.CentralPackageVersions.Add("cpvm2", cpvm2);
-            tfm.Dependencies.Add(dependency1);
-            LibraryDependency.ApplyCentralVersionInformation(tfm.Dependencies, tfm.CentralPackageVersions);
+            var centralPackageVersions = new Dictionary<string, CentralPackageVersion>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "cpvm1", cpvm1 },
+                { "cpvm2", cpvm2 },
+            };
+            ImmutableArray<LibraryDependency> dependencies = [dependency1];
+
+            var tfm = new TargetFrameworkInformation()
+            {
+                CentralPackageVersions = centralPackageVersions,
+                Dependencies = dependencies,
+                FrameworkName = framework
+            };
 
             var project = new PackageSpec(new List<TargetFrameworkInformation>() { tfm });
             project.RestoreMetadata = new ProjectRestoreMetadata() { ProjectUniqueName = projectName, CentralPackageVersionsEnabled = true };
@@ -439,23 +462,30 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             var cpvm1 = new CentralPackageVersion("cpvm1", VersionRange.Parse("1.0.0"));
             var cpvm2 = new CentralPackageVersion("cpvm2", VersionRange.Parse("1.0.0"));
             var dependency1 = new LibraryDependency(
-                new LibraryRange("cpvm1", versionRange: null, LibraryDependencyTarget.Package),
+                new LibraryRange("cpvm1", versionRange: cpvm1.VersionRange, LibraryDependencyTarget.Package),
                 LibraryIncludeFlags.All,
                 LibraryIncludeFlags.All,
-                new List<Common.NuGetLogCode>(),
+                noWarn: [],
                 autoReferenced: false,
                 generatePathProperty: true,
-                versionCentrallyManaged: false,
+                versionCentrallyManaged: true,
                 LibraryDependencyReferenceType.Direct,
                 aliases: "stuff",
                 versionOverride: null);
 
-            var tfm = new TargetFrameworkInformation();
-            tfm.FrameworkName = framework;
-            tfm.CentralPackageVersions.Add("cpvm1", cpvm1);
-            tfm.CentralPackageVersions.Add("cpvm2", cpvm2);
-            tfm.Dependencies.Add(dependency1);
-            LibraryDependency.ApplyCentralVersionInformation(tfm.Dependencies, tfm.CentralPackageVersions);
+            var centralPackageVersions = new Dictionary<string, CentralPackageVersion>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "cpvm1", cpvm1 },
+                { "cpvm2", cpvm2 },
+            };
+            ImmutableArray<LibraryDependency> dependencies = [dependency1];
+
+            var tfm = new TargetFrameworkInformation()
+            {
+                CentralPackageVersions = centralPackageVersions,
+                Dependencies = dependencies,
+                FrameworkName = framework,
+            };
 
             var project = new PackageSpec(new List<TargetFrameworkInformation>() { tfm });
             project.RestoreMetadata = new ProjectRestoreMetadata() { ProjectUniqueName = projectName, CentralPackageVersionsEnabled = true };
@@ -492,23 +522,30 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             var cpvm1 = new CentralPackageVersion("cpvm1", VersionRange.Parse("1.0.0"));
             var cpvm2 = new CentralPackageVersion("cpvm2", VersionRange.Parse("1.0.0"));
             var dependency1 = new LibraryDependency(
-                new LibraryRange("cpvm1", versionRange: null, LibraryDependencyTarget.Package),
+                new LibraryRange("cpvm1", versionRange: cpvm1.VersionRange, LibraryDependencyTarget.Package),
                 LibraryIncludeFlags.All,
                 LibraryIncludeFlags.All,
-                new List<Common.NuGetLogCode>(),
+                noWarn: [],
                 autoReferenced: false,
                 generatePathProperty: true,
-                versionCentrallyManaged: false,
+                versionCentrallyManaged: true,
                 LibraryDependencyReferenceType.Direct,
                 aliases: "stuff",
                 versionOverride: null);
 
-            var tfm = new TargetFrameworkInformation();
-            tfm.FrameworkName = framework;
-            tfm.CentralPackageVersions.Add("cpvm1", cpvm1);
-            tfm.CentralPackageVersions.Add("cpvm2", cpvm2);
-            tfm.Dependencies.Add(dependency1);
-            LibraryDependency.ApplyCentralVersionInformation(tfm.Dependencies, tfm.CentralPackageVersions);
+            var centralPackageVersions = new Dictionary<string, CentralPackageVersion>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "cpvm1", cpvm1 },
+                { "cpvm2", cpvm2 },
+            };
+            ImmutableArray<LibraryDependency> dependencies = [dependency1];
+
+            var tfm = new TargetFrameworkInformation()
+            {
+                CentralPackageVersions = centralPackageVersions,
+                Dependencies = dependencies,
+                FrameworkName = framework
+            };
 
             var project = new PackageSpec(new List<TargetFrameworkInformation>() { tfm });
             project.RestoreMetadata = new ProjectRestoreMetadata() { ProjectUniqueName = projectName, CentralPackageVersionsEnabled = true };
@@ -549,23 +586,30 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             var cpvm1 = new CentralPackageVersion("cpvm1", VersionRange.Parse("1.0.0"));
             var cpvm2 = new CentralPackageVersion("cpvm2", VersionRange.Parse("1.0.0"));
             var dependency1 = new LibraryDependency(
-                new LibraryRange("cpvm1", versionRange: null, LibraryDependencyTarget.Package),
+                new LibraryRange("cpvm1", versionRange: cpvm1.VersionRange, LibraryDependencyTarget.Package),
                 LibraryIncludeFlags.All,
                 LibraryIncludeFlags.All,
-                new List<Common.NuGetLogCode>(),
+                noWarn: [],
                 autoReferenced: false,
                 generatePathProperty: true,
-                versionCentrallyManaged: false,
+                versionCentrallyManaged: true,
                 LibraryDependencyReferenceType.Direct,
                 aliases: "stuff",
                 versionOverride: null);
 
-            var tfm = new TargetFrameworkInformation();
-            tfm.FrameworkName = framework;
-            tfm.CentralPackageVersions.Add("cpvm1", cpvm1);
-            tfm.CentralPackageVersions.Add("cpvm2", cpvm2);
-            tfm.Dependencies.Add(dependency1);
-            LibraryDependency.ApplyCentralVersionInformation(tfm.Dependencies, tfm.CentralPackageVersions);
+            var centralPackageVersions = new Dictionary<string, CentralPackageVersion>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "cpvm1", cpvm1 },
+                { "cpvm2", cpvm2 },
+            };
+            ImmutableArray<LibraryDependency> dependencies = [dependency1];
+
+            var tfm = new TargetFrameworkInformation()
+            {
+                CentralPackageVersions = centralPackageVersions,
+                Dependencies = dependencies,
+                FrameworkName = framework
+            };
 
             var project = new PackageSpec(new List<TargetFrameworkInformation>() { tfm });
             project.RestoreMetadata = new ProjectRestoreMetadata() { ProjectUniqueName = projectName, CentralPackageVersionsEnabled = true };
@@ -624,7 +668,7 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
                 new LibraryRange("cpvm1", versionRange: VersionRange.Parse("1.0.0"), LibraryDependencyTarget.Package),
                 LibraryIncludeFlags.All,
                 LibraryIncludeFlags.All,
-                new List<Common.NuGetLogCode>(),
+                noWarn: [],
                 autoReferenced: false,
                 generatePathProperty: true,
                 versionCentrallyManaged: false,
@@ -632,9 +676,11 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
                 aliases: "stuff",
                 versionOverride: null);
 
-            var tfm = new TargetFrameworkInformation();
-            tfm.FrameworkName = framework;
-            tfm.Dependencies.Add(dependency1);
+            var tfm = new TargetFrameworkInformation()
+            {
+                Dependencies = [dependency1],
+                FrameworkName = framework
+            };
 
             var project = new PackageSpec(new List<TargetFrameworkInformation>() { tfm });
             project.RestoreMetadata = new ProjectRestoreMetadata() { ProjectUniqueName = projectName, CentralPackageVersionsEnabled = false };
@@ -674,7 +720,7 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
                 new LibraryRange("cpvm1", versionRange: VersionRange.Parse("1.0.0"), LibraryDependencyTarget.Package),
                 LibraryIncludeFlags.All,
                 LibraryIncludeFlags.All,
-                new List<Common.NuGetLogCode>(),
+                noWarn: [],
                 autoReferenced: false,
                 generatePathProperty: true,
                 versionCentrallyManaged: false,
@@ -682,9 +728,11 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
                 aliases: "stuff",
                 versionOverride: null);
 
-            var tfm = new TargetFrameworkInformation();
-            tfm.FrameworkName = framework;
-            tfm.Dependencies.Add(dependency1);
+            var tfm = new TargetFrameworkInformation()
+            {
+                Dependencies = [dependency1],
+                FrameworkName = framework
+            };
 
             var project = new PackageSpec(new List<TargetFrameworkInformation>() { tfm });
             project.RestoreMetadata = new ProjectRestoreMetadata() { ProjectUniqueName = projectName, CentralPackageVersionsEnabled = false };
@@ -721,9 +769,9 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             // Arrange
             var framework = CommonFrameworks.Net50;
             var frameworkShortName = framework.GetShortFolderName();
-            var projectA = ProjectTestHelpers.GetPackageSpec("A", framework: frameworkShortName);
-            var projectB = ProjectTestHelpers.GetPackageSpec("B", framework: frameworkShortName);
-            var projectC = ProjectTestHelpers.GetPackageSpec("C", framework: frameworkShortName);
+            var projectA = ProjectTestHelpers.GetPackageSpec("A", framework: frameworkShortName).WithTestRestoreMetadata();
+            var projectB = ProjectTestHelpers.GetPackageSpec("B", framework: frameworkShortName).WithTestRestoreMetadata();
+            var projectC = ProjectTestHelpers.GetPackageSpec("C", framework: frameworkShortName).WithTestRestoreMetadata();
 
             // A -> B
             projectA = projectA.WithTestProjectReference(projectB);
@@ -731,7 +779,7 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             // A -> C
             projectA = projectA.WithTestProjectReference(projectC);
 
-            var dgSpec = ProjectTestHelpers.GetDGSpec(projectA, projectB, projectC);
+            var dgSpec = ProjectTestHelpers.GetDGSpecForFirstProject(projectA, projectB, projectC);
 
             var lockFile = new PackagesLockFileBuilder()
                         .WithTarget(target => target
@@ -754,9 +802,9 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             // Arrange
             var framework = CommonFrameworks.Net50;
             var frameworkShortName = framework.GetShortFolderName();
-            var projectA = ProjectTestHelpers.GetPackageSpec("A", framework: frameworkShortName);
-            var projectB = ProjectTestHelpers.GetPackageSpec("B", framework: frameworkShortName);
-            var projectC = ProjectTestHelpers.GetPackageSpec("C", framework: frameworkShortName);
+            var projectA = ProjectTestHelpers.GetPackageSpec("A", framework: frameworkShortName).WithTestRestoreMetadata();
+            var projectB = ProjectTestHelpers.GetPackageSpec("B", framework: frameworkShortName).WithTestRestoreMetadata();
+            var projectC = ProjectTestHelpers.GetPackageSpec("C", framework: frameworkShortName).WithTestRestoreMetadata();
 
             // B -> C
             projectB = projectB.WithTestProjectReference(projectC);
@@ -764,7 +812,7 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             // A -> B
             projectA = projectA.WithTestProjectReference(projectB);
 
-            var dgSpec = ProjectTestHelpers.GetDGSpec(projectA, projectB, projectC);
+            var dgSpec = ProjectTestHelpers.GetDGSpecForFirstProject(projectA, projectB, projectC);
 
             var lockFile = new PackagesLockFileBuilder()
                         .WithTarget(target => target
@@ -787,9 +835,9 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             // Arrange
             var framework = CommonFrameworks.Net50;
             var frameworkShortName = framework.GetShortFolderName();
-            var projectA = ProjectTestHelpers.GetPackageSpec("A", framework: frameworkShortName);
-            var projectB = ProjectTestHelpers.GetPackageSpec("B", framework: frameworkShortName);
-            var projectD = ProjectTestHelpers.GetPackageSpec("D", framework: frameworkShortName);
+            var projectA = ProjectTestHelpers.GetPackageSpec("A", framework: frameworkShortName).WithTestRestoreMetadata();
+            var projectB = ProjectTestHelpers.GetPackageSpec("B", framework: frameworkShortName).WithTestRestoreMetadata();
+            var projectD = ProjectTestHelpers.GetPackageSpec("D", framework: frameworkShortName).WithTestRestoreMetadata();
 
             // B -> D
             projectB = projectB.WithTestProjectReference(projectD);
@@ -797,7 +845,7 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             // A -> B
             projectA = projectA.WithTestProjectReference(projectB);
 
-            var dgSpec = ProjectTestHelpers.GetDGSpec(projectA, projectB, projectD);
+            var dgSpec = ProjectTestHelpers.GetDGSpecForFirstProject(projectA, projectB, projectD);
 
             var lockFile = new PackagesLockFileBuilder()
                         .WithTarget(target => target
@@ -824,8 +872,8 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             // Arrange
             var framework = CommonFrameworks.Net50;
             var frameworkShortName = framework.GetShortFolderName();
-            var projectA = ProjectTestHelpers.GetPackageSpec("A", framework: frameworkShortName);
-            var projectB = ProjectTestHelpers.GetPackageSpec("B", framework: frameworkShortName);
+            var projectA = ProjectTestHelpers.GetPackageSpec("A", framework: frameworkShortName).WithTestRestoreMetadata();
+            var projectB = ProjectTestHelpers.GetPackageSpec("B", framework: frameworkShortName).WithTestRestoreMetadata();
 
             // A -> B
             projectA = projectA.WithTestProjectReference(projectB);
@@ -834,7 +882,7 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
                 new LibraryRange("packageC", versionRange: VersionRange.Parse("1.0.0"), LibraryDependencyTarget.Package),
                 includeType: LibraryIncludeFlags.All,
                 suppressParent: LibraryIncludeFlagUtils.DefaultSuppressParent,
-                noWarn: new List<Common.NuGetLogCode>(),
+                noWarn: [],
                 autoReferenced: false,
                 generatePathProperty: true,
                 versionCentrallyManaged: false,
@@ -842,9 +890,12 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
                 aliases: null,
                 versionOverride: null);
 
-            projectB.TargetFrameworks.First().Dependencies.Add(packageC);
+            var projectBFirstTargetFramework = projectB.TargetFrameworks.First();
+            var projectBFirstTargetFrameworkDependencies = projectBFirstTargetFramework.Dependencies.Add(packageC);
+            projectBFirstTargetFramework = new TargetFrameworkInformation(projectBFirstTargetFramework) { Dependencies = projectBFirstTargetFrameworkDependencies };
+            projectB.TargetFrameworks[0] = projectBFirstTargetFramework;
 
-            var dgSpec = ProjectTestHelpers.GetDGSpec(projectA, projectB);
+            var dgSpec = ProjectTestHelpers.GetDGSpecForFirstProject(projectA, projectB);
 
             var lockFile = new PackagesLockFileBuilder()
                         .WithTarget(target => target
@@ -876,9 +927,9 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             // Arrange
             var framework = CommonFrameworks.Net50;
             var frameworkShortName = framework.GetShortFolderName();
-            var projectA = ProjectTestHelpers.GetPackageSpec("A", framework: frameworkShortName);
-            var projectB = ProjectTestHelpers.GetPackageSpec("B", framework: frameworkShortName);
-            var projectC = ProjectTestHelpers.GetPackageSpec("C", framework: frameworkShortName);
+            var projectA = ProjectTestHelpers.GetPackageSpec("A", framework: frameworkShortName).WithTestRestoreMetadata();
+            var projectB = ProjectTestHelpers.GetPackageSpec("B", framework: frameworkShortName).WithTestRestoreMetadata();
+            var projectC = ProjectTestHelpers.GetPackageSpec("C", framework: frameworkShortName).WithTestRestoreMetadata();
 
             // B (PrivateAssets.All) -> C 
             projectB = projectB.WithTestProjectReference(projectC, privateAssets: LibraryIncludeFlags.All);
@@ -886,7 +937,7 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             // A -> B
             projectA = projectA.WithTestProjectReference(projectB);
 
-            var dgSpec = ProjectTestHelpers.GetDGSpec(projectA, projectB, projectC);
+            var dgSpec = ProjectTestHelpers.GetDGSpecForFirstProject(projectA, projectB, projectC);
 
             var lockFile = new PackagesLockFileBuilder()
                         .WithTarget(target => target
@@ -913,16 +964,16 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             // Arrange
             var framework = CommonFrameworks.Net50;
             var frameworkShortName = framework.GetShortFolderName();
-            var projectA = ProjectTestHelpers.GetPackageSpec("A", framework: frameworkShortName);
-            var projectB = ProjectTestHelpers.GetPackageSpec("B", framework: frameworkShortName);
-            var projectC = ProjectTestHelpers.GetPackageSpec("C", framework: frameworkShortName);
-            var projectD = ProjectTestHelpers.GetPackageSpec("D", framework: frameworkShortName);
+            var projectA = ProjectTestHelpers.GetPackageSpec("A", framework: frameworkShortName).WithTestRestoreMetadata();
+            var projectB = ProjectTestHelpers.GetPackageSpec("B", framework: frameworkShortName).WithTestRestoreMetadata();
+            var projectC = ProjectTestHelpers.GetPackageSpec("C", framework: frameworkShortName).WithTestRestoreMetadata();
+            var projectD = ProjectTestHelpers.GetPackageSpec("D", framework: frameworkShortName).WithTestRestoreMetadata();
 
             var packageC = new LibraryDependency(
                 new LibraryRange("packageC", versionRange: VersionRange.Parse("2.0.0"), LibraryDependencyTarget.Package),
                 includeType: LibraryIncludeFlags.All,
                 suppressParent: LibraryIncludeFlagUtils.DefaultSuppressParent,
-                noWarn: new List<Common.NuGetLogCode>(),
+                noWarn: [],
                 autoReferenced: false,
                 generatePathProperty: true,
                 versionCentrallyManaged: false,
@@ -943,9 +994,10 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             projectD = projectD.WithTestProjectReference(projectC);
 
             // C -> PackageC
-            projectC.TargetFrameworks.First().Dependencies.Add(packageC);
+            var projectCTargetFrameworkDependencies = projectC.TargetFrameworks.First().Dependencies.Add(packageC);
+            projectC.TargetFrameworks[0] = new TargetFrameworkInformation(projectC.TargetFrameworks[0]) { Dependencies = projectCTargetFrameworkDependencies };
 
-            var dgSpec = ProjectTestHelpers.GetDGSpec(projectA, projectB, projectC, projectD);
+            var dgSpec = ProjectTestHelpers.GetDGSpecForFirstProject(projectA, projectB, projectC, projectD);
 
             var lockFile = new PackagesLockFileBuilder()
                         .WithTarget(target => target
@@ -987,15 +1039,15 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             // Arrange
             var framework = CommonFrameworks.Net50;
             var frameworkShortName = framework.GetShortFolderName();
-            var projectA = ProjectTestHelpers.GetPackageSpec("A", framework: frameworkShortName);
+            var projectA = ProjectTestHelpers.GetPackageSpec("A", framework: frameworkShortName).WithTestRestoreMetadata();
             var projectB = ProjectTestHelpers.GetPackagesConfigPackageSpec("B");
-            var projectC = ProjectTestHelpers.GetPackageSpec("C", framework: frameworkShortName);
+            var projectC = ProjectTestHelpers.GetPackageSpec("C", framework: frameworkShortName).WithTestRestoreMetadata();
 
             var packageC = new LibraryDependency(
                 new LibraryRange("packageC", versionRange: VersionRange.Parse("2.0.0"), LibraryDependencyTarget.Package),
                 includeType: LibraryIncludeFlags.All,
                 suppressParent: LibraryIncludeFlagUtils.DefaultSuppressParent,
-                noWarn: new List<Common.NuGetLogCode>(),
+                noWarn: [],
                 autoReferenced: false,
                 generatePathProperty: true,
                 versionCentrallyManaged: false,
@@ -1010,9 +1062,10 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             projectA = projectA.WithTestProjectReference(projectB);
 
             // C -> PackageC
-            projectC.TargetFrameworks.First().Dependencies.Add(packageC);
+            var projectCTargetFrameworkDependencies = projectC.TargetFrameworks.First().Dependencies.Add(packageC);
+            projectC.TargetFrameworks[0] = new TargetFrameworkInformation(projectC.TargetFrameworks[0]) { Dependencies = projectCTargetFrameworkDependencies };
 
-            var dgSpec = ProjectTestHelpers.GetDGSpec(projectA, projectB, projectC);
+            var dgSpec = ProjectTestHelpers.GetDGSpecForFirstProject(projectA, projectB, projectC);
 
             var lockFile = new PackagesLockFileBuilder()
                         .WithTarget(target => target
@@ -1051,13 +1104,13 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
             var framework = CommonFrameworks.NetStandard;
             var frameworkShortName = framework.GetShortFolderName();
             var incompatibleFramework = CommonFrameworks.Net46;
-            var projectA = ProjectTestHelpers.GetPackageSpec("A", framework: frameworkShortName);
+            var projectA = ProjectTestHelpers.GetPackageSpec("A", framework: frameworkShortName).WithTestRestoreMetadata();
             var projectB = ProjectTestHelpers.GetPackagesConfigPackageSpec("B", framework: incompatibleFramework.GetShortFolderName());
 
             // A -> B
             projectA = projectA.WithTestProjectReference(projectB);
 
-            var dgSpec = ProjectTestHelpers.GetDGSpec(projectA, projectB);
+            var dgSpec = ProjectTestHelpers.GetDGSpecForFirstProject(projectA, projectB);
 
             var lockFile = new PackagesLockFileBuilder()
                         .WithTarget(target => target

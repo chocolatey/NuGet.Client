@@ -2,9 +2,8 @@
   <PropertyGroup>
     <SkipShared>true</SkipShared>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <AssemblyName>GenerateLicenseList</AssemblyName>
-    <NoWarn>$(NoWarn);NU1505</NoWarn> <!-- Remove NoWarn when https://github.com/dotnet/sdk/issues/24747 is fixed -->
     <Description>A utility for updating the NuGet license list from the SPDX source.</Description>
   </PropertyGroup>
 

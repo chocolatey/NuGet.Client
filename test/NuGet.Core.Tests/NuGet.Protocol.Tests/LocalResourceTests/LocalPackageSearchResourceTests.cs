@@ -7,7 +7,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
-using Moq;
 using NuGet.Common;
 using NuGet.Protocol.Core.Types;
 using NuGet.Protocol.Tests.Plugins.Helpers;
@@ -727,7 +726,7 @@ namespace NuGet.Protocol.Tests
                         .ToList();
 
                 // Assert
-                Assert.Equal(true, matchingPackages.All(p => p.Identity.Id == packageId));
+                Assert.True(matchingPackages.All(p => p.Identity.Id == packageId));
                 Assert.Equal(expected, matchingPackages.Select(p => p.Identity.Version.ToFullString()).ToArray());
                 Assert.Equal(0, testLogger.Warnings);
                 Assert.Equal(0, testLogger.Errors);

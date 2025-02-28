@@ -131,7 +131,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             var _target = new InstalledPackageFeed(feedCollection, _metadataProvider);
 
             // Act
-            IPackageSearchMetadata[] result = await _target.GetMetadataForPackagesAndSortAsync(feedCollection, includePrerelease: It.IsAny<bool>(), CancellationToken.None);
+            IPackageSearchMetadata[] result = await _target.GetMetadataForPackagesAsync(feedCollection, includePrerelease: It.IsAny<bool>(), CancellationToken.None);
 
             // Assert
             var idComparer = Comparer<IPackageSearchMetadata>.Create((a, b) => a.Identity.Id.CompareTo(b.Identity.Id));
@@ -190,7 +190,9 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             // Assert
             Assert.Equal(result, meta);
             Assert.NotNull(result.SourceSearchStatus);
+#pragma warning disable xUnit2002 // Do not use null check on value type - The analyzer is raising a false positive
             Assert.NotNull(result.SourceSearchStatus["Installed"]);
+#pragma warning restore xUnit2002 // Do not use null check on value type
         }
 
         private void SetupRemotePackageMetadata(string id, params string[] versions)

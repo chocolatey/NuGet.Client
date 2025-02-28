@@ -8,7 +8,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Packaging.Core;
+using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
+using NuGet.Protocol.Model;
 using NuGet.Versioning;
 using NuGet.VisualStudio.Internal.Contracts;
 
@@ -40,7 +42,7 @@ namespace NuGet.PackageManagement.VisualStudio
 
             var searchResource = await sourceRepository.GetResourceAsync<PackageSearchResource>(cancellationToken);
 
-            var searchResults = await searchResource?.SearchAsync(
+            IEnumerable<IPackageSearchMetadata> searchResults = await searchResource?.SearchAsync(
                 searchToken.SearchString,
                 searchToken.SearchFilter,
                 searchToken.StartIndex,
@@ -224,6 +226,21 @@ namespace NuGet.PackageManagement.VisualStudio
                     cancellationToken);
 
                 return packages;
+            }
+        }
+
+        public static async Task<GetVulnerabilityInfoResult> GetVulnerabilityInfoAsync(this SourceRepository sourceRepository, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var vulnerabilityResource = await sourceRepository.GetResourceAsync<IVulnerabilityInfoResource>(cancellationToken);
+            if (vulnerabilityResource is null)
+            {
+                return null;
+            }
+
+            using (var sourceCacheContext = new SourceCacheContext())
+            {
+                return await vulnerabilityResource.GetVulnerabilityInfoAsync(sourceCacheContext, Common.NullLogger.Instance, cancellationToken);
             }
         }
 

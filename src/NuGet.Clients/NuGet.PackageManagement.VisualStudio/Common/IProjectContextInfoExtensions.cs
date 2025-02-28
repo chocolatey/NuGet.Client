@@ -123,6 +123,21 @@ namespace NuGet.PackageManagement.VisualStudio
             }
         }
 
+        public static async ValueTask<bool> IsCentralPackageManagementEnabledAsync(this IProjectContextInfo projectContextInfo,
+            IServiceBroker serviceBroker,
+            CancellationToken cancellationToken)
+        {
+            Assumes.NotNull(projectContextInfo);
+            Assumes.NotNull(serviceBroker);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            using (INuGetProjectManagerService projectManager = await GetProjectManagerAsync(serviceBroker, cancellationToken))
+            {
+                return await projectManager.IsCentralPackageManagementEnabledAsync(projectContextInfo.ProjectId, cancellationToken);
+            }
+        }
+
         public static async ValueTask<IProjectMetadataContextInfo> GetMetadataAsync(
             this IProjectContextInfo projectContextInfo,
             IServiceBroker serviceBroker,

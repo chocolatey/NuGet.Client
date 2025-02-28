@@ -4,6 +4,7 @@
 using MessagePack;
 using MessagePack.Formatters;
 using Microsoft;
+using NuGet.Configuration;
 
 namespace NuGet.VisualStudio.Internal.Contracts
 {
@@ -11,6 +12,9 @@ namespace NuGet.VisualStudio.Internal.Contracts
     {
         private const string SourcePropertyName = "source";
         private const string IsEnabledPropertyName = "isenabled";
+        private const string ProtocolVersionPropertyName = "protocolversion";
+        private const string AllowInsecureConnectionsPropertyName = "allowInsecureConnections";
+        private const string DisableTLSCertificateValidationPropertyName = "disableTLSCertificateValidation";
         private const string IsMachineWidePropertyName = "ismachinewide";
         private const string NamePropertyName = "name";
         private const string DescriptionPropertyName = "description";
@@ -30,6 +34,9 @@ namespace NuGet.VisualStudio.Internal.Contracts
             bool isEnabled = true;
             string? description = null;
             int originalHashCode = 0;
+            int protocolVersion = PackageSource.DefaultProtocolVersion;
+            bool allowInsecureConnections = false;
+            bool disableTLSCertificateValidation = false;
 
             int propertyCount = reader.ReadMapHeader();
             for (int propertyIndex = 0; propertyIndex < propertyCount; propertyIndex++)
@@ -54,6 +61,15 @@ namespace NuGet.VisualStudio.Internal.Contracts
                     case OriginalHashCodePropertyName:
                         originalHashCode = reader.ReadInt32();
                         break;
+                    case ProtocolVersionPropertyName:
+                        protocolVersion = reader.ReadInt32();
+                        break;
+                    case AllowInsecureConnectionsPropertyName:
+                        allowInsecureConnections = reader.ReadBoolean();
+                        break;
+                    case DisableTLSCertificateValidationPropertyName:
+                        disableTLSCertificateValidation = reader.ReadBoolean();
+                        break;
                     default:
                         reader.Skip();
                         break;
@@ -63,7 +79,7 @@ namespace NuGet.VisualStudio.Internal.Contracts
             Assumes.NotNullOrEmpty(source);
             Assumes.NotNullOrEmpty(name);
 
-            return new PackageSourceContextInfo(source, name, isEnabled)
+            return new PackageSourceContextInfo(source, name, isEnabled, protocolVersion, allowInsecureConnections, disableTLSCertificateValidation)
             {
                 IsMachineWide = isMachineWide,
                 Description = description,
@@ -73,9 +89,15 @@ namespace NuGet.VisualStudio.Internal.Contracts
 
         protected override void SerializeCore(ref MessagePackWriter writer, PackageSourceContextInfo value, MessagePackSerializerOptions options)
         {
-            writer.WriteMapHeader(count: 6);
+            writer.WriteMapHeader(count: 9);
             writer.Write(SourcePropertyName);
             writer.Write(value.Source);
+            writer.Write(ProtocolVersionPropertyName);
+            writer.Write(value.ProtocolVersion);
+            writer.Write(AllowInsecureConnectionsPropertyName);
+            writer.Write(value.AllowInsecureConnections);
+            writer.Write(DisableTLSCertificateValidationPropertyName);
+            writer.Write(value.DisableTLSCertificateValidation);
             writer.Write(IsEnabledPropertyName);
             writer.Write(value.IsEnabled);
             writer.Write(IsMachineWidePropertyName);

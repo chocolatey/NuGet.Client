@@ -50,8 +50,10 @@ namespace NuGet.PackageManagement
         /// <param name="solutionDirectory">Current solution directory</param>
         /// <param name="packageReferencesDict">Dictionary of package reference with project names</param>
         /// <returns>List of packages restore data with missing package details.</returns>
-	    IEnumerable<PackageRestoreData> GetPackagesRestoreData(string solutionDirectory,
+#pragma warning disable IDE0055
+        IEnumerable<PackageRestoreData> GetPackagesRestoreData(string solutionDirectory,
             Dictionary<PackageReference, List<string>> packageReferencesDict);
+#pragma warning restore IDE0055
 
         /// <summary>
         /// Checks the current solution if there is any package missing.
@@ -85,6 +87,7 @@ namespace NuGet.PackageManagement
         /// are missing
         /// </remarks>
         /// <returns>Returns true if atleast one package was restored.</returns>
+        [Obsolete("This method is deprecated to reduce complexity, please use one of the other RestoreMissingPackagesAsync methods.")]
         Task<PackageRestoreResult> RestoreMissingPackagesInSolutionAsync(string solutionDirectory,
             INuGetProjectContext nuGetProjectContext,
             CancellationToken token);
@@ -128,6 +131,7 @@ namespace NuGet.PackageManagement
         /// Returns true if at least one package is restored. Raised package restored failed event with the
         /// list of project names.
         /// </returns>
+        [Obsolete("This method is deprecated to reduce complexity, please use one of the other RestoreMissingPackagesAsync methods.")]
         Task<PackageRestoreResult> RestoreMissingPackagesAsync(string solutionDirectory,
             IEnumerable<PackageRestoreData> packages,
             INuGetProjectContext nuGetProjectContext,

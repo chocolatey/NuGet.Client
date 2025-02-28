@@ -24,12 +24,16 @@ NuGet.Commands.AddClientCertArgs.StorePasswordInClearText.set -> void
 NuGet.Commands.AddClientCertRunner
 NuGet.Commands.AddSourceArgs
 NuGet.Commands.AddSourceArgs.AddSourceArgs() -> void
+NuGet.Commands.AddSourceArgs.AllowInsecureConnections.get -> bool
+NuGet.Commands.AddSourceArgs.AllowInsecureConnections.set -> void
 ~NuGet.Commands.AddSourceArgs.Configfile.get -> string
 ~NuGet.Commands.AddSourceArgs.Configfile.set -> void
 ~NuGet.Commands.AddSourceArgs.Name.get -> string
 ~NuGet.Commands.AddSourceArgs.Name.set -> void
 ~NuGet.Commands.AddSourceArgs.Password.get -> string
 ~NuGet.Commands.AddSourceArgs.Password.set -> void
+~NuGet.Commands.AddSourceArgs.ProtocolVersion.get -> string
+~NuGet.Commands.AddSourceArgs.ProtocolVersion.set -> void
 ~NuGet.Commands.AddSourceArgs.Source.get -> string
 ~NuGet.Commands.AddSourceArgs.Source.set -> void
 NuGet.Commands.AddSourceArgs.StorePasswordInClearText.get -> bool
@@ -90,6 +94,7 @@ NuGet.Commands.DependencyGraphFileRequestProvider
 NuGet.Commands.DependencyGraphSpecRequestProvider
 ~NuGet.Commands.DependencyGraphSpecRequestProvider.CreateRequests(NuGet.Commands.RestoreArgs restoreContext) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<NuGet.Commands.RestoreSummaryRequest>>
 ~NuGet.Commands.DependencyGraphSpecRequestProvider.DependencyGraphSpecRequestProvider(NuGet.Commands.RestoreCommandProvidersCache providerCache, NuGet.ProjectModel.DependencyGraphSpec dgFile) -> void
+~NuGet.Commands.DependencyGraphSpecRequestProvider.DependencyGraphSpecRequestProvider(NuGet.Commands.RestoreCommandProvidersCache providerCache, NuGet.ProjectModel.DependencyGraphSpec dgFile, NuGet.Configuration.ISettings settings) -> void
 NuGet.Commands.DiagnosticUtility
 NuGet.Commands.DisableSourceArgs
 ~NuGet.Commands.DisableSourceArgs.Configfile.get -> string
@@ -154,8 +159,8 @@ NuGet.Commands.IProjectFactory
 ~NuGet.Commands.IProjectFactory.Logger.set -> void
 NuGet.Commands.IProjectFactory.SetIncludeSymbols(bool includeSymbols) -> void
 NuGet.Commands.IRestoreProgressReporter
-~NuGet.Commands.IRestoreProgressReporter.EndProjectUpdate(string projectPath, System.Collections.Generic.IReadOnlyList<string> updatedFiles) -> void
-~NuGet.Commands.IRestoreProgressReporter.StartProjectUpdate(string projectPath, System.Collections.Generic.IReadOnlyList<string> updatedFiles) -> void
+NuGet.Commands.IRestoreProgressReporter.EndProjectUpdate(string! projectPath, System.Collections.Generic.IReadOnlyList<string!>! updatedFiles) -> void
+NuGet.Commands.IRestoreProgressReporter.StartProjectUpdate(string! projectPath, System.Collections.Generic.IReadOnlyList<string!>! updatedFiles) -> void
 NuGet.Commands.IRestoreRequestProvider
 ~NuGet.Commands.IRestoreRequestProvider.CreateRequests(string inputPath, NuGet.Commands.RestoreArgs restoreContext) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<NuGet.Commands.RestoreSummaryRequest>>
 ~NuGet.Commands.IRestoreRequestProvider.Supports(string path) -> System.Threading.Tasks.Task<bool>
@@ -437,9 +442,10 @@ NuGet.Commands.RemoveSourceRunner
 NuGet.Commands.RequestRuntimeUtility
 NuGet.Commands.ResolvedDependencyKey
 ~NuGet.Commands.ResolvedDependencyKey.Child.get -> NuGet.LibraryModel.LibraryIdentity
-~NuGet.Commands.ResolvedDependencyKey.Equals(NuGet.Commands.ResolvedDependencyKey other) -> bool
+NuGet.Commands.ResolvedDependencyKey.Equals(NuGet.Commands.ResolvedDependencyKey other) -> bool
 ~NuGet.Commands.ResolvedDependencyKey.Parent.get -> NuGet.LibraryModel.LibraryIdentity
 ~NuGet.Commands.ResolvedDependencyKey.Range.get -> NuGet.Versioning.VersionRange
+NuGet.Commands.ResolvedDependencyKey.ResolvedDependencyKey() -> void
 ~NuGet.Commands.ResolvedDependencyKey.ResolvedDependencyKey(NuGet.LibraryModel.LibraryIdentity parent, NuGet.Versioning.VersionRange range, NuGet.LibraryModel.LibraryIdentity child) -> void
 NuGet.Commands.ResolverConflict
 ~NuGet.Commands.ResolverConflict.Name.get -> string
@@ -535,8 +541,9 @@ NuGet.Commands.RestoreCommandProviders
 ~NuGet.Commands.RestoreCommandProviders.RemoteProviders.get -> System.Collections.Generic.IReadOnlyList<NuGet.DependencyResolver.IRemoteDependencyProvider>
 ~NuGet.Commands.RestoreCommandProviders.RestoreCommandProviders(NuGet.Repositories.NuGetv3LocalRepository globalPackages, System.Collections.Generic.IReadOnlyList<NuGet.Repositories.NuGetv3LocalRepository> fallbackPackageFolders, System.Collections.Generic.IReadOnlyList<NuGet.DependencyResolver.IRemoteDependencyProvider> localProviders, System.Collections.Generic.IReadOnlyList<NuGet.DependencyResolver.IRemoteDependencyProvider> remoteProviders, NuGet.Protocol.LocalPackageFileCache packageFileCache) -> void
 NuGet.Commands.RestoreCommandProvidersCache
-~NuGet.Commands.RestoreCommandProvidersCache.GetOrCreate(string globalPackagesPath, System.Collections.Generic.IReadOnlyList<string> fallbackPackagesPaths, System.Collections.Generic.IReadOnlyList<NuGet.Protocol.Core.Types.SourceRepository> sources, NuGet.Protocol.Core.Types.SourceCacheContext cacheContext, NuGet.Common.ILogger log) -> NuGet.Commands.RestoreCommandProviders
-~NuGet.Commands.RestoreCommandProvidersCache.GetOrCreate(string globalPackagesPath, System.Collections.Generic.IReadOnlyList<string> fallbackPackagesPaths, System.Collections.Generic.IReadOnlyList<NuGet.Protocol.Core.Types.SourceRepository> sources, NuGet.Protocol.Core.Types.SourceCacheContext cacheContext, NuGet.Common.ILogger log, bool updateLastAccess) -> NuGet.Commands.RestoreCommandProviders
+NuGet.Commands.RestoreCommandProvidersCache.GetOrCreate(string! globalPackagesPath, System.Collections.Generic.IReadOnlyList<string!>! fallbackPackagesPaths, System.Collections.Generic.IReadOnlyList<NuGet.Protocol.Core.Types.SourceRepository!>! packageSources, System.Collections.Generic.IReadOnlyList<NuGet.Protocol.Core.Types.SourceRepository!>! auditSources, NuGet.Protocol.Core.Types.SourceCacheContext! cacheContext, NuGet.Common.ILogger! log, bool updateLastAccess) -> NuGet.Commands.RestoreCommandProviders!
+NuGet.Commands.RestoreCommandProvidersCache.GetOrCreate(string! globalPackagesPath, System.Collections.Generic.IReadOnlyList<string!>! fallbackPackagesPaths, System.Collections.Generic.IReadOnlyList<NuGet.Protocol.Core.Types.SourceRepository!>! sources, NuGet.Protocol.Core.Types.SourceCacheContext! cacheContext, NuGet.Common.ILogger! log) -> NuGet.Commands.RestoreCommandProviders!
+NuGet.Commands.RestoreCommandProvidersCache.GetOrCreate(string! globalPackagesPath, System.Collections.Generic.IReadOnlyList<string!>! fallbackPackagesPaths, System.Collections.Generic.IReadOnlyList<NuGet.Protocol.Core.Types.SourceRepository!>! sources, NuGet.Protocol.Core.Types.SourceCacheContext! cacheContext, NuGet.Common.ILogger! log, bool updateLastAccess) -> NuGet.Commands.RestoreCommandProviders!
 NuGet.Commands.RestoreCommandProvidersCache.RestoreCommandProvidersCache() -> void
 NuGet.Commands.RestoreRequest
 ~NuGet.Commands.RestoreRequest.AdditionalMessages.get -> System.Collections.Generic.IReadOnlyList<NuGet.ProjectModel.IAssetsLogMessage>
@@ -614,6 +621,7 @@ NuGet.Commands.RestoreRunner
 NuGet.Commands.RestoreSpecException
 ~NuGet.Commands.RestoreSpecException.Files.get -> System.Collections.Generic.IEnumerable<string>
 NuGet.Commands.RestoreSummary
+NuGet.Commands.RestoreSummary.AuditRan.get -> bool
 ~NuGet.Commands.RestoreSummary.ConfigFiles.get -> System.Collections.Generic.IReadOnlyList<string>
 ~NuGet.Commands.RestoreSummary.Errors.get -> System.Collections.Generic.IReadOnlyList<NuGet.Common.IRestoreLogMessage>
 ~NuGet.Commands.RestoreSummary.FeedsUsed.get -> System.Collections.Generic.IReadOnlyList<string>
@@ -696,6 +704,7 @@ NuGet.Commands.SourceRepositoryDependencyProvider
 ~NuGet.Commands.SourceRepositoryDependencyProvider.GetPackageDownloaderAsync(NuGet.Packaging.Core.PackageIdentity packageIdentity, NuGet.Protocol.Core.Types.SourceCacheContext cacheContext, NuGet.Common.ILogger logger, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<NuGet.Packaging.IPackageDownloader>
 NuGet.Commands.SourceRepositoryDependencyProvider.IsHttp.get -> bool
 ~NuGet.Commands.SourceRepositoryDependencyProvider.Source.get -> NuGet.Configuration.PackageSource
+~NuGet.Commands.SourceRepositoryDependencyProvider.SourceRepository.get -> NuGet.Protocol.Core.Types.SourceRepository
 ~NuGet.Commands.SourceRepositoryDependencyProvider.SourceRepositoryDependencyProvider(NuGet.Protocol.Core.Types.SourceRepository sourceRepository, NuGet.Common.ILogger logger, NuGet.Protocol.Core.Types.SourceCacheContext cacheContext, bool ignoreFailedSources, bool ignoreWarning) -> void
 ~NuGet.Commands.SourceRepositoryDependencyProvider.SourceRepositoryDependencyProvider(NuGet.Protocol.Core.Types.SourceRepository sourceRepository, NuGet.Common.ILogger logger, NuGet.Protocol.Core.Types.SourceCacheContext cacheContext, bool ignoreFailedSources, bool ignoreWarning, NuGet.Protocol.LocalPackageFileCache fileCache, bool isFallbackFolderSource) -> void
 NuGet.Commands.SourcesAction
@@ -736,8 +745,8 @@ NuGet.Commands.TrustedSignerActionsProvider
 ~NuGet.Commands.TrustedSignerActionsProvider.SyncTrustedRepositoryAsync(string name, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task
 ~NuGet.Commands.TrustedSignerActionsProvider.TrustedSignerActionsProvider(NuGet.Packaging.Signing.ITrustedSignersProvider trustedSignersProvider, NuGet.Common.ILogger logger) -> void
 NuGet.Commands.TrustedSignersArgs
-~NuGet.Commands.TrustedSignersArgs.Action.get -> NuGet.Commands.TrustedSignersArgs.TrustedSignersAction
-~NuGet.Commands.TrustedSignersArgs.Action.set -> void
+NuGet.Commands.TrustedSignersArgs.Action.get -> NuGet.Commands.TrustedSignersArgs.TrustedSignersAction
+NuGet.Commands.TrustedSignersArgs.Action.set -> void
 NuGet.Commands.TrustedSignersArgs.AllowUntrustedRoot.get -> bool
 NuGet.Commands.TrustedSignersArgs.AllowUntrustedRoot.set -> void
 NuGet.Commands.TrustedSignersArgs.Author.get -> bool
@@ -759,15 +768,14 @@ NuGet.Commands.TrustedSignersArgs.Repository.set -> void
 ~NuGet.Commands.TrustedSignersArgs.ServiceIndex.get -> string
 ~NuGet.Commands.TrustedSignersArgs.ServiceIndex.set -> void
 NuGet.Commands.TrustedSignersArgs.TrustedSignersAction
-~NuGet.Commands.TrustedSignersArgs.TrustedSignersAction.Add = 0 -> NuGet.Commands.TrustedSignersArgs.TrustedSignersAction
-~NuGet.Commands.TrustedSignersArgs.TrustedSignersAction.List = 1 -> NuGet.Commands.TrustedSignersArgs.TrustedSignersAction
-~NuGet.Commands.TrustedSignersArgs.TrustedSignersAction.Remove = 2 -> NuGet.Commands.TrustedSignersArgs.TrustedSignersAction
-~NuGet.Commands.TrustedSignersArgs.TrustedSignersAction.Sync = 3 -> NuGet.Commands.TrustedSignersArgs.TrustedSignersAction
+NuGet.Commands.TrustedSignersArgs.TrustedSignersAction.Add = 0 -> NuGet.Commands.TrustedSignersArgs.TrustedSignersAction
+NuGet.Commands.TrustedSignersArgs.TrustedSignersAction.List = 1 -> NuGet.Commands.TrustedSignersArgs.TrustedSignersAction
+NuGet.Commands.TrustedSignersArgs.TrustedSignersAction.Remove = 2 -> NuGet.Commands.TrustedSignersArgs.TrustedSignersAction
+NuGet.Commands.TrustedSignersArgs.TrustedSignersAction.Sync = 3 -> NuGet.Commands.TrustedSignersArgs.TrustedSignersAction
 NuGet.Commands.TrustedSignersArgs.TrustedSignersArgs() -> void
 NuGet.Commands.TrustedSignersCommandRunner
 ~NuGet.Commands.TrustedSignersCommandRunner.ExecuteCommandAsync(NuGet.Commands.TrustedSignersArgs trustedSignersArgs) -> System.Threading.Tasks.Task<int>
 ~NuGet.Commands.TrustedSignersCommandRunner.TrustedSignersCommandRunner(NuGet.Packaging.Signing.ITrustedSignersProvider trustedSignersProvider, NuGet.Configuration.IPackageSourceProvider packageSourceProvider) -> void
-NuGet.Commands.UnexpectedDependencyMessages
 NuGet.Commands.UpdateClientCertArgs
 ~NuGet.Commands.UpdateClientCertArgs.Configfile.get -> string
 ~NuGet.Commands.UpdateClientCertArgs.Configfile.set -> void
@@ -792,12 +800,16 @@ NuGet.Commands.UpdateClientCertArgs.StorePasswordInClearText.set -> void
 NuGet.Commands.UpdateClientCertArgs.UpdateClientCertArgs() -> void
 NuGet.Commands.UpdateClientCertRunner
 NuGet.Commands.UpdateSourceArgs
+NuGet.Commands.UpdateSourceArgs.AllowInsecureConnections.get -> bool
+NuGet.Commands.UpdateSourceArgs.AllowInsecureConnections.set -> void
 ~NuGet.Commands.UpdateSourceArgs.Configfile.get -> string
 ~NuGet.Commands.UpdateSourceArgs.Configfile.set -> void
 ~NuGet.Commands.UpdateSourceArgs.Name.get -> string
 ~NuGet.Commands.UpdateSourceArgs.Name.set -> void
 ~NuGet.Commands.UpdateSourceArgs.Password.get -> string
 ~NuGet.Commands.UpdateSourceArgs.Password.set -> void
+~NuGet.Commands.UpdateSourceArgs.ProtocolVersion.get -> string
+~NuGet.Commands.UpdateSourceArgs.ProtocolVersion.set -> void
 ~NuGet.Commands.UpdateSourceArgs.Source.get -> string
 ~NuGet.Commands.UpdateSourceArgs.Source.set -> void
 NuGet.Commands.UpdateSourceArgs.StorePasswordInClearText.get -> bool
@@ -822,9 +834,9 @@ NuGet.Commands.VerifyArgs.LogLevel.set -> void
 ~NuGet.Commands.VerifyArgs.Settings.get -> NuGet.Configuration.ISettings
 ~NuGet.Commands.VerifyArgs.Settings.set -> void
 NuGet.Commands.VerifyArgs.Verification
-~NuGet.Commands.VerifyArgs.Verification.All = 1 -> NuGet.Commands.VerifyArgs.Verification
-~NuGet.Commands.VerifyArgs.Verification.Signatures = 2 -> NuGet.Commands.VerifyArgs.Verification
-~NuGet.Commands.VerifyArgs.Verification.Unknown = 0 -> NuGet.Commands.VerifyArgs.Verification
+NuGet.Commands.VerifyArgs.Verification.All = 1 -> NuGet.Commands.VerifyArgs.Verification
+NuGet.Commands.VerifyArgs.Verification.Signatures = 2 -> NuGet.Commands.VerifyArgs.Verification
+NuGet.Commands.VerifyArgs.Verification.Unknown = 0 -> NuGet.Commands.VerifyArgs.Verification
 ~NuGet.Commands.VerifyArgs.Verifications.get -> System.Collections.Generic.IList<NuGet.Commands.VerifyArgs.Verification>
 ~NuGet.Commands.VerifyArgs.Verifications.set -> void
 NuGet.Commands.VerifyArgs.VerifyArgs() -> void
@@ -866,9 +878,9 @@ override NuGet.Commands.TransitiveNoWarnUtils.NodeWarningProperties.GetHashCode(
 override NuGet.Commands.WarningPropertiesCollection.GetHashCode() -> int
 ~static NuGet.Commands.AddClientCertRunner.Run(NuGet.Commands.AddClientCertArgs args, System.Func<NuGet.Common.ILogger> getLogger) -> void
 ~static NuGet.Commands.AddSourceRunner.Run(NuGet.Commands.AddSourceArgs args, System.Func<NuGet.Common.ILogger> getLogger) -> void
-~static NuGet.Commands.AssetTargetFallbackUtility.ApplyFramework(NuGet.ProjectModel.TargetFrameworkInformation targetFrameworkInfo, System.Collections.Generic.IEnumerable<NuGet.Frameworks.NuGetFramework> packageTargetFallback, System.Collections.Generic.IEnumerable<NuGet.Frameworks.NuGetFramework> assetTargetFallback) -> void
 ~static NuGet.Commands.AssetTargetFallbackUtility.EnsureValidFallback(System.Collections.Generic.IEnumerable<NuGet.Frameworks.NuGetFramework> packageTargetFallback, System.Collections.Generic.IEnumerable<NuGet.Frameworks.NuGetFramework> assetTargetFallback, string filePath) -> void
 ~static NuGet.Commands.AssetTargetFallbackUtility.GetFallbackFramework(NuGet.Frameworks.NuGetFramework projectFramework, System.Collections.Generic.IEnumerable<NuGet.Frameworks.NuGetFramework> packageTargetFallback, System.Collections.Generic.IEnumerable<NuGet.Frameworks.NuGetFramework> assetTargetFallback) -> NuGet.Frameworks.NuGetFramework
+~static NuGet.Commands.AssetTargetFallbackUtility.GetFallbackFrameworkInformation(NuGet.Frameworks.NuGetFramework originalFrameworkName, System.Collections.Generic.IEnumerable<NuGet.Frameworks.NuGetFramework> packageTargetFallback, System.Collections.Generic.IEnumerable<NuGet.Frameworks.NuGetFramework> assetTargetFallbackEnum) -> (NuGet.Frameworks.NuGetFramework frameworkName, System.Collections.Immutable.ImmutableArray<NuGet.Frameworks.NuGetFramework> imports, bool assetTargetFallback, bool warn)
 ~static NuGet.Commands.AssetTargetFallbackUtility.GetInvalidFallbackCombinationMessage(string path) -> NuGet.Common.RestoreLogMessage
 ~static NuGet.Commands.BuildAssetsUtils.AddNuGetProperties(System.Xml.Linq.XDocument doc, System.Collections.Generic.IEnumerable<string> packageFolders, string repositoryRoot, NuGet.ProjectModel.ProjectStyle projectStyle, string assetsFilePath, bool success) -> void
 ~static NuGet.Commands.BuildAssetsUtils.AddNuGetPropertiesToFirstImport(System.Collections.Generic.IEnumerable<NuGet.Commands.MSBuildOutputFile> files, System.Collections.Generic.IEnumerable<string> packageFolders, string repositoryRoot, NuGet.ProjectModel.ProjectStyle projectStyle, string assetsFilePath, bool success) -> void
@@ -926,19 +938,26 @@ override NuGet.Commands.WarningPropertiesCollection.GetHashCode() -> int
 ~static NuGet.Commands.MSBuildProjectFactory.ProjectCreator(NuGet.Commands.PackArgs packArgs, string path) -> NuGet.Commands.IProjectFactory
 ~static NuGet.Commands.MSBuildProjectFrameworkUtility.GetProjectFramework(string projectFilePath, string targetFrameworkMoniker, string targetPlatformMoniker, string targetPlatformMinVersion) -> NuGet.Frameworks.NuGetFramework
 ~static NuGet.Commands.MSBuildProjectFrameworkUtility.GetProjectFramework(string projectFilePath, string targetFrameworkMoniker, string targetPlatformMoniker, string targetPlatformMinVersion, string clrSupport) -> NuGet.Frameworks.NuGetFramework
+~static NuGet.Commands.MSBuildProjectFrameworkUtility.GetProjectFramework(string projectFilePath, string targetFrameworkMoniker, string targetPlatformMoniker, string targetPlatformMinVersion, string clrSupport, string windowsTargetPlatformMinVersion) -> NuGet.Frameworks.NuGetFramework
 ~static NuGet.Commands.MSBuildProjectFrameworkUtility.GetProjectFrameworkReplacement(NuGet.Frameworks.NuGetFramework framework) -> NuGet.Frameworks.NuGetFramework
 ~static NuGet.Commands.MSBuildProjectFrameworkUtility.GetProjectFrameworkStrings(string projectFilePath, string targetFrameworks, string targetFramework, string targetFrameworkMoniker, string targetPlatformIdentifier, string targetPlatformVersion, string targetPlatformMinVersion) -> System.Collections.Generic.IEnumerable<string>
 ~static NuGet.Commands.MSBuildProjectFrameworkUtility.GetProjectFrameworkStrings(string projectFilePath, string targetFrameworks, string targetFramework, string targetFrameworkMoniker, string targetPlatformIdentifier, string targetPlatformVersion, string targetPlatformMinVersion, bool isXnaWindowsPhoneProject, bool isManagementPackProject) -> System.Collections.Generic.IEnumerable<string>
 ~static NuGet.Commands.MSBuildProjectFrameworkUtility.GetProjectFrameworks(System.Collections.Generic.IEnumerable<string> frameworkStrings) -> System.Collections.Generic.IEnumerable<NuGet.Frameworks.NuGetFramework>
 ~static NuGet.Commands.MSBuildRestoreItemGroup.Create(string rootName, System.Collections.Generic.IEnumerable<System.Xml.Linq.XElement> items, int position, System.Collections.Generic.IEnumerable<string> conditions) -> NuGet.Commands.MSBuildRestoreItemGroup
 ~static NuGet.Commands.MSBuildRestoreUtility.AggregateSources(System.Collections.Generic.IEnumerable<string> values, System.Collections.Generic.IEnumerable<string> excludeValues) -> System.Collections.Generic.IEnumerable<string>
-~static NuGet.Commands.MSBuildRestoreUtility.ApplyIncludeFlags(NuGet.LibraryModel.LibraryDependency dependency, string includeAssets, string excludeAssets, string privateAssets) -> void
 ~static NuGet.Commands.MSBuildRestoreUtility.ApplyIncludeFlags(NuGet.ProjectModel.ProjectRestoreReference dependency, string includeAssets, string excludeAssets, string privateAssets) -> void
 ~static NuGet.Commands.MSBuildRestoreUtility.ContainsClearKeyword(System.Collections.Generic.IEnumerable<string> values) -> bool
 ~static NuGet.Commands.MSBuildRestoreUtility.Dump(System.Collections.Generic.IEnumerable<NuGet.Commands.IMSBuildItem> items, NuGet.Common.ILogger log) -> void
 ~static NuGet.Commands.MSBuildRestoreUtility.FixSourcePath(string s) -> string
+~static NuGet.Commands.MSBuildRestoreUtility.GetCentralPackageManagementSettings(NuGet.Commands.IMSBuildItem projectSpecItem, NuGet.ProjectModel.ProjectStyle projectStyle) -> (bool IsEnabled, bool IsVersionOverrideDisabled, bool IsCentralPackageTransitivePinningEnabled, bool isCentralPackageFloatingVersionsEnabled)
 ~static NuGet.Commands.MSBuildRestoreUtility.GetDependencySpec(System.Collections.Generic.IEnumerable<NuGet.Commands.IMSBuildItem> items) -> NuGet.ProjectModel.DependencyGraphSpec
+~static NuGet.Commands.MSBuildRestoreUtility.GetDependencySpec(System.Collections.Generic.IEnumerable<NuGet.Commands.IMSBuildItem> items, bool readOnly) -> NuGet.ProjectModel.DependencyGraphSpec
+~static NuGet.Commands.MSBuildRestoreUtility.GetLibraryDependencyIncludeFlags(string includeAssets, string excludeAssets, string privateAssets) -> (NuGet.LibraryModel.LibraryIncludeFlags includeType, NuGet.LibraryModel.LibraryIncludeFlags suppressParent)
+~static NuGet.Commands.MSBuildRestoreUtility.GetMessageForUnsupportedProject(string path) -> NuGet.Common.RestoreLogMessage
 ~static NuGet.Commands.MSBuildRestoreUtility.GetPackageSpec(System.Collections.Generic.IEnumerable<NuGet.Commands.IMSBuildItem> items) -> NuGet.ProjectModel.PackageSpec
+~static NuGet.Commands.MSBuildRestoreUtility.GetRestoreAuditProperties(NuGet.Commands.IMSBuildItem specItem, System.Collections.Generic.HashSet<string> suppressionItems) -> NuGet.ProjectModel.RestoreAuditProperties
+~static NuGet.Commands.MSBuildRestoreUtility.GetSdkAnalysisLevel(string sdkAnalysisLevel) -> NuGet.Versioning.NuGetVersion
+~static NuGet.Commands.MSBuildRestoreUtility.GetUsingMicrosoftNETSdk(string usingMicrosoftNETSdk) -> bool
 ~static NuGet.Commands.MSBuildRestoreUtility.GetWarningForUnsupportedProject(string path) -> NuGet.Common.RestoreLogMessage
 ~static NuGet.Commands.MSBuildRestoreUtility.HasInvalidClear(System.Collections.Generic.IEnumerable<string> values) -> bool
 ~static NuGet.Commands.MSBuildRestoreUtility.LogErrorForClearIfInvalid(System.Collections.Generic.IEnumerable<string> values, string projectPath, NuGet.Common.ILogger logger) -> bool
@@ -967,6 +986,8 @@ override NuGet.Commands.WarningPropertiesCollection.GetHashCode() -> int
 ~static NuGet.Commands.RemoveClientCertRunner.Run(NuGet.Commands.RemoveClientCertArgs args, System.Func<NuGet.Common.ILogger> getLogger) -> void
 ~static NuGet.Commands.RemoveSourceRunner.Run(NuGet.Commands.RemoveSourceArgs args, System.Func<NuGet.Common.ILogger> getLogger) -> void
 ~static NuGet.Commands.RequestRuntimeUtility.GetDefaultRestoreRuntimes(string os, string runtimeOsName) -> System.Collections.Generic.IEnumerable<string>
+static NuGet.Commands.ResolvedDependencyKey.operator !=(NuGet.Commands.ResolvedDependencyKey left, NuGet.Commands.ResolvedDependencyKey right) -> bool
+static NuGet.Commands.ResolvedDependencyKey.operator ==(NuGet.Commands.ResolvedDependencyKey left, NuGet.Commands.ResolvedDependencyKey right) -> bool
 ~static NuGet.Commands.RestoreCommandProviders.Create(string globalFolderPath, System.Collections.Generic.IEnumerable<string> fallbackPackageFolderPaths, System.Collections.Generic.IEnumerable<NuGet.Protocol.Core.Types.SourceRepository> sources, NuGet.Protocol.Core.Types.SourceCacheContext cacheContext, NuGet.Protocol.LocalPackageFileCache packageFileCache, NuGet.Common.ILogger log) -> NuGet.Commands.RestoreCommandProviders
 ~static NuGet.Commands.RestoreRunner.CommitAsync(NuGet.Commands.RestoreResultPair restoreResult, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<NuGet.Commands.RestoreSummary>
 ~static NuGet.Commands.RestoreRunner.GetInvalidInputErrorMessage(string input) -> string
@@ -997,14 +1018,6 @@ override NuGet.Commands.WarningPropertiesCollection.GetHashCode() -> int
 ~static NuGet.Commands.TransitiveNoWarnUtils.MergePackageSpecificNoWarn(System.Collections.Generic.Dictionary<string, System.Collections.Generic.HashSet<NuGet.Common.NuGetLogCode>> first, System.Collections.Generic.Dictionary<string, System.Collections.Generic.HashSet<NuGet.Common.NuGetLogCode>> second) -> System.Collections.Generic.Dictionary<string, System.Collections.Generic.HashSet<NuGet.Common.NuGetLogCode>>
 ~static NuGet.Commands.TransitiveNoWarnUtils.MergePackageSpecificWarningProperties(NuGet.Commands.PackageSpecificWarningProperties first, NuGet.Commands.PackageSpecificWarningProperties second) -> NuGet.Commands.PackageSpecificWarningProperties
 ~static NuGet.Commands.TransitiveNoWarnUtils.TryMergeNullObjects<T>(T first, T second, out T merged) -> bool
-~static NuGet.Commands.UnexpectedDependencyMessages.DependencyRangeHasMissingExactMatch(NuGet.Commands.ResolvedDependencyKey dependency) -> bool
-~static NuGet.Commands.UnexpectedDependencyMessages.GetBumpedUpDependencies(System.Collections.Generic.List<NuGet.Commands.IndexedRestoreTargetGraph> graphs, NuGet.ProjectModel.PackageSpec project, System.Collections.Generic.ISet<string> ignoreIds) -> System.Collections.Generic.IEnumerable<NuGet.Common.RestoreLogMessage>
-~static NuGet.Commands.UnexpectedDependencyMessages.GetDependenciesAboveUpperBounds(System.Collections.Generic.List<NuGet.Commands.IndexedRestoreTargetGraph> graphs, NuGet.Common.ILogger logger) -> System.Collections.Generic.IEnumerable<NuGet.Common.RestoreLogMessage>
-~static NuGet.Commands.UnexpectedDependencyMessages.GetMissingLowerBoundMessage(NuGet.Commands.ResolvedDependencyKey dependency, params string[] targetGraphs) -> NuGet.Common.RestoreLogMessage
-~static NuGet.Commands.UnexpectedDependencyMessages.GetMissingLowerBounds(System.Collections.Generic.IEnumerable<NuGet.Commands.IRestoreTargetGraph> graphs, System.Collections.Generic.ISet<string> ignoreIds) -> System.Collections.Generic.IEnumerable<NuGet.Common.RestoreLogMessage>
-~static NuGet.Commands.UnexpectedDependencyMessages.GetProjectDependenciesMissingLowerBounds(NuGet.ProjectModel.PackageSpec project) -> System.Collections.Generic.IEnumerable<NuGet.Common.RestoreLogMessage>
-~static NuGet.Commands.UnexpectedDependencyMessages.HasMissingLowerBound(NuGet.Versioning.VersionRange range) -> bool
-~static NuGet.Commands.UnexpectedDependencyMessages.LogAsync(System.Collections.Generic.IEnumerable<NuGet.Commands.IRestoreTargetGraph> graphs, NuGet.ProjectModel.PackageSpec project, NuGet.Common.ILogger logger) -> System.Threading.Tasks.Task
 ~static NuGet.Commands.UpdateClientCertRunner.Run(NuGet.Commands.UpdateClientCertArgs args, System.Func<NuGet.Common.ILogger> getLogger) -> void
 ~static NuGet.Commands.UpdateSourceRunner.Run(NuGet.Commands.UpdateSourceArgs args, System.Func<NuGet.Common.ILogger> getLogger) -> void
 ~static NuGet.Commands.WarningPropertiesCollection.ApplyProjectWideNoWarnProperties(NuGet.Common.ILogMessage message, NuGet.ProjectModel.WarningProperties warningProperties) -> bool

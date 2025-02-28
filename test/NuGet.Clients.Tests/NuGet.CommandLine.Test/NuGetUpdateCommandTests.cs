@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using NuGet.Common;
 using NuGet.Frameworks;
 using NuGet.Packaging;
@@ -20,11 +21,19 @@ using NuGet.Test.Utility;
 using NuGet.Versioning;
 using Test.Utility;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace NuGet.CommandLine.Test
 {
     public class NuGetUpdateCommandTests
     {
+        private readonly ITestOutputHelper _testOutputHelper;
+
+        public NuGetUpdateCommandTests(ITestOutputHelper testOutputHelper)
+        {
+            _testOutputHelper = testOutputHelper;
+        }
+
         [Fact]
         public async Task UpdateCommand_Success_Update_DeletedFile()
         {
@@ -125,7 +134,7 @@ namespace NuGet.CommandLine.Test
                     Util.GetNuGetExePath(),
                     workingPath,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Assert.True(r.ExitCode == 0, "Output is " + r.Output + ". Error is " + r.Errors);
 
@@ -208,7 +217,7 @@ namespace NuGet.CommandLine.Test
                     Util.GetNuGetExePath(),
                     workingPath,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Assert.True(r.ExitCode == 0, "Output is " + r.Output + ". Error is " + r.Errors);
 
@@ -331,7 +340,7 @@ namespace NuGet.CommandLine.Test
                     Util.GetNuGetExePath(),
                     workingPath,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Assert.True(r.ExitCode == 0, "Output is " + r.Output + ". Error is " + r.Errors);
 
@@ -426,13 +435,13 @@ namespace NuGet.CommandLine.Test
                     Util.GetNuGetExePath(),
                     workingPath,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 Assert.True(r.ExitCode == 0, "Output is " + r.Output + ". Error is " + r.Errors);
 
                 Assert.Contains("Scanning for projects...", r.Output);
-                Assert.Contains($"WARNING: Found multiple project files for '{packagesConfigFile}'.", r.Output);
+                Assert.Contains($"Found multiple project files for '{packagesConfigFile}'.", r.Output);
                 Assert.Contains("No projects found with packages.config.", r.Output);
 
                 var content1 = File.ReadAllText(projectFile1);
@@ -514,7 +523,7 @@ namespace NuGet.CommandLine.Test
                     Util.GetNuGetExePath(),
                     workingPath,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Assert.True(r.ExitCode == 0, "Output is " + r.Output + ". Error is " + r.Errors);
 
@@ -596,7 +605,7 @@ namespace NuGet.CommandLine.Test
                     Util.GetNuGetExePath(),
                     workingPath,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Assert.True(r.ExitCode == 0, "Output is " + r.Output + ". Error is " + r.Errors);
 
@@ -685,7 +694,7 @@ namespace NuGet.CommandLine.Test
                     Util.GetNuGetExePath(),
                     workingPath,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Assert.True(r.ExitCode == 0, "Output is " + r.Output + ". Error is " + r.Errors);
 
@@ -778,7 +787,7 @@ namespace NuGet.CommandLine.Test
                     Util.GetNuGetExePath(),
                     workingPath,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Assert.True(r.ExitCode == 0, "Output is " + r.Output + ". Error is " + r.Errors);
 
@@ -871,7 +880,7 @@ namespace NuGet.CommandLine.Test
                     Util.GetNuGetExePath(),
                     workingPath,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Assert.True(r.ExitCode == 0, "Output is " + r.Output + ". Error is " + r.Errors);
 
@@ -954,7 +963,7 @@ namespace NuGet.CommandLine.Test
                     Util.GetNuGetExePath(),
                     workingPath,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Assert.True(r.ExitCode == 0, "Output is " + r.Output + ". Error is " + r.Errors);
 
@@ -1037,7 +1046,7 @@ namespace NuGet.CommandLine.Test
                     Util.GetNuGetExePath(),
                     workingPath,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Assert.True(r.ExitCode == 0, "Output is " + r.Output + ". Error is " + r.Errors);
                 System.Console.WriteLine(r.Output);
@@ -1147,7 +1156,7 @@ namespace NuGet.CommandLine.Test
                     Util.GetNuGetExePath(),
                     workingPath,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 Assert.True(r.ExitCode == 0, "Output is " + r.Output + ". Error is " + r.Errors);
@@ -1244,7 +1253,7 @@ namespace NuGet.CommandLine.Test
                     Util.GetNuGetExePath(),
                     solutionDirectory,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Should be no errors returned - used to fail as update command assumed folder was <solutiondir>\packages.
                 Assert.Empty(r.Errors);
@@ -1335,7 +1344,7 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     solutionDirectory,
                     string.Join(" ", restoreArgs),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Act
                 var args = new[]
@@ -1349,8 +1358,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                 nugetexe,
                 solutionDirectory,
-                string.Join(" ", args),
-                waitForExit: true);
+                string.Join(" ", args));
 
                 // Assert
                 Assert.True(r.Success, r.Output + " " + r.Errors);
@@ -1431,7 +1439,7 @@ namespace NuGet.CommandLine.Test
                     Util.GetNuGetExePath(),
                     solutionDirectory,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Should be no errors returned - used to fail as update command assumed folder was <solutiondir>\packages.
                 Assert.Empty(r.Errors);
@@ -1560,7 +1568,7 @@ namespace NuGet.CommandLine.Test
                     Util.GetNuGetExePath(),
                     workingPath,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Assert.True(r.ExitCode == 0, "Output is " + r.Output + ". Error is " + r.Errors);
             }
@@ -1653,7 +1661,7 @@ namespace NuGet.CommandLine.Test
                     Util.GetNuGetExePath(),
                     workingPath,
                     string.Join(" ", args),
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 //Assert
                 Assert.True(commandRunResult.ExitCode == 0, "Output is " + commandRunResult.Output + ". Error is " + commandRunResult.Errors);
@@ -1688,7 +1696,7 @@ namespace NuGet.CommandLine.Test
                 var nugetExe = Path.Combine(pathContext.WorkingDirectory, "NuGet.exe");
                 File.Copy(Util.GetNuGetExePath(), nugetExe);
 
-                Util.RunCommand(pathContext, nugetExe, 0, "update", "-self", "-source", pathContext.PackageSource);
+                Util.RunCommand(pathContext, nugetExe, 0, testOutputHelper: _testOutputHelper, "update", "-self", "-source", pathContext.PackageSource);
 
                 Assert.Equal(expectedFileContent, File.ReadAllBytes(nugetExe));
             }
@@ -1703,7 +1711,7 @@ namespace NuGet.CommandLine.Test
                 var nugetExe = Path.Combine(pathContext.WorkingDirectory, "NuGet.exe");
                 File.Copy(Util.GetNuGetExePath(), nugetExe);
 
-                CommandRunnerResult result = Util.RunCommand(pathContext, nugetExe, 1, "update", "-self", "-source", pathContext.PackageSource, "-source", pathContext.HttpCacheFolder);
+                CommandRunnerResult result = Util.RunCommand(pathContext, nugetExe, 1, testOutputHelper: _testOutputHelper, "update", "-self", "-source", pathContext.PackageSource, "-source", pathContext.HttpCacheFolder);
                 result.ExitCode.Equals(1);
                 result.AllOutput.Contains(NuGetResources.Error_UpdateSelf_Source);
             }
@@ -1856,8 +1864,7 @@ namespace NuGet.CommandLine.Test
                 CommandRunnerResult r = CommandRunner.Run(
                     Util.GetNuGetExePath(),
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 Assert.True(r.ExitCode == 0, "Output is " + r.AllOutput + ". Error is " + r.Errors);
                 Assert.Contains($"Successfully installed '{a2.Id} {a2.Version}'", r.AllOutput);
@@ -1882,7 +1889,8 @@ namespace NuGet.CommandLine.Test
             server.Start();
 
             var sourceUri = $"{server.Uri}nuget";
-
+            // Allow Insecure connections for restore
+            pathContext.Settings.AddSource("http-source", sourceUri, allowInsecureConnectionsValue: "True");
             var projectA = new SimpleTestProjectContext(
                   "a",
                   ProjectStyle.PackagesConfig,
@@ -1907,8 +1915,7 @@ namespace NuGet.CommandLine.Test
             var restoreResult = CommandRunner.Run(
                 Util.GetNuGetExePath(),
                 pathContext.WorkingDirectory,
-                string.Join(" ", args),
-                waitForExit: true);
+                string.Join(" ", args));
             restoreResult.Success.Should().BeTrue(restoreResult.AllOutput);
             args = new[]
             {
@@ -1918,17 +1925,96 @@ namespace NuGet.CommandLine.Test
                     sourceUri
             };
 
+            pathContext.Settings.RemoveSource("http-source");
             // Act
             var r = CommandRunner.Run(
                 Util.GetNuGetExePath(),
                 pathContext.WorkingDirectory,
-                string.Join(" ", args),
-                waitForExit: true);
+                string.Join(" ", args));
             server.Stop();
 
             // Assert
             r.Success.Should().BeTrue(r.AllOutput);
-            r.AllOutput.Should().Contain("You are running the 'update' operation with an 'http' source");
+            r.AllOutput.Should().Contain("You are running the 'update' operation with an 'HTTP' source");
         }
+
+        [Theory]
+        [InlineData("false", true)]
+        [InlineData("FALSE", true)]
+        [InlineData("invalidString", true)]
+        [InlineData("", true)]
+        [InlineData("true", false)]
+        [InlineData("TRUE", false)]
+        public async Task UpdateCommand_WithHttpSourceAndAllowInsecureConnections_WarnsCorrectly(string allowInsecureConnections, bool hasHttpWarning)
+        {
+            //Arrange
+            using var pathContext = new SimpleTestPathContext();
+            var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+            var httpSourceDirectory = Path.Combine(pathContext.WorkingDirectory, "http-source");
+            var packageA100 = new SimpleTestPackageContext("a", "1.0.0");
+            var packageA200 = new SimpleTestPackageContext("a", "2.0.0");
+            await SimpleTestPackageUtility.CreatePackagesAsync(httpSourceDirectory, packageA100, packageA200);
+            var packageA100FileInfo = new FileInfo(Path.Combine(httpSourceDirectory, packageA100.PackageName));
+            var packageA200FileInfo = new FileInfo(Path.Combine(httpSourceDirectory, packageA200.PackageName));
+
+            using var server = Util.CreateMockServer(new[] { packageA100FileInfo, packageA200FileInfo });
+            server.Start();
+
+            var sourceUri = $"{server.Uri}nuget";
+            // allow Insecure connections for restore
+            pathContext.Settings.AddSource("http-feed", $"{server.Uri}nuget", allowInsecureConnectionsValue: "True");
+
+            var projectB = new SimpleTestProjectContext(
+                  "b",
+                  ProjectStyle.PackagesConfig,
+                  pathContext.SolutionRoot);
+
+            Util.CreateFile(Path.GetDirectoryName(projectB.ProjectPath), "packages.config",
+@"<packages>
+  <package id=""A"" version=""1.0.0"" targetFramework=""net461"" />
+</packages>");
+
+            solution.Projects.Add(projectB);
+            solution.Create(pathContext.SolutionRoot);
+
+            var args = new[]
+            {
+                    "restore",
+                    solution.SolutionPath
+            };
+
+            CommandRunnerResult restoreResult = CommandRunner.Run(
+                Util.GetNuGetExePath(),
+                pathContext.WorkingDirectory,
+                string.Join(" ", args));
+            restoreResult.Success.Should().BeTrue(restoreResult.AllOutput);
+            args = new[]
+            {
+                    "update",
+                    solution.SolutionPath,
+            };
+
+            pathContext.Settings.RemoveSource("http-feed");
+            pathContext.Settings.AddSource("http-feed", $"{server.Uri}nuget", allowInsecureConnectionsValue: allowInsecureConnections);
+
+            // Act
+            CommandRunnerResult r = CommandRunner.Run(
+                Util.GetNuGetExePath(),
+                pathContext.WorkingDirectory,
+                string.Join(" ", args));
+            server.Stop();
+
+            // Assert
+            r.Success.Should().BeTrue(r.AllOutput);
+            if (hasHttpWarning)
+            {
+                r.AllOutput.Should().Contain("You are running the 'update' operation with an 'HTTP' source", because: r.AllOutput);
+            }
+            else
+            {
+                r.AllOutput.Should().NotContain("You are running the 'update' operation with an 'HTTP' source", because: r.AllOutput);
+            }
+        }
+
     }
 }

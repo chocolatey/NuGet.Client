@@ -33,11 +33,15 @@ namespace NuGet.VisualStudio.Internal.Contracts
 
         public Uri ReadmeUrl => _packageSearchMetadata.ReadmeUrl;
 
+        public string ReadmeFileUrl => _packageSearchMetadata.ReadmeFileUrl;
+
         public Uri ReportAbuseUrl => _packageSearchMetadata.ReportAbuseUrl;
 
         public Uri PackageDetailsUrl => _packageSearchMetadata.PackageDetailsUrl;
 
         public DateTimeOffset? Published => _packageSearchMetadata.Published;
+
+        public IReadOnlyList<string> OwnersList => _packageSearchMetadata.OwnersList;
 
         public string Owners => _packageSearchMetadata.Owners;
 

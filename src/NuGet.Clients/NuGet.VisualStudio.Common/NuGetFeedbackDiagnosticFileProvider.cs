@@ -7,7 +7,10 @@ using System.ComponentModel.Composition;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Internal.VisualStudio.Shell.Embeddable.Feedback;
 using NuGet.Common;
@@ -153,6 +156,7 @@ namespace NuGet.VisualStudio.Common
 
                 var context = new DependencyGraphCacheContext(NullLogger.Instance, Settings);
                 DependencyGraphSpec dgspec = await DependencyGraphRestoreUtility.GetSolutionRestoreSpec(SolutionManager, context);
+                HashSourceData(dgspec);
 
                 ZipArchiveEntry file = zip.CreateEntry("dgspec.json");
                 using (Stream fileStream = file.Open())
@@ -188,6 +192,73 @@ namespace NuGet.VisualStudio.Common
             {
                 await TelemetryUtility.PostFaultAsync(exception, nameof(NuGetFeedbackDiagnosticFileProvider), callerMemberName);
             }
+        }
+
+        private void HashSourceData(DependencyGraphSpec dgspec)
+        {
+            foreach (PackageSpec Project in dgspec.Projects)
+            {
+                if (Project?.RestoreMetadata?.Sources == null)
+                    continue;
+
+                bool anyNonMSFeed = Project.RestoreMetadata.Sources.Any(source => string.IsNullOrWhiteSpace(PackageSourceTelemetry.GetMsFeed(source)));
+
+                if (anyNonMSFeed)
+                {
+                    List<PackageSource> sources = new();
+                    using HMACSHA256 hmac = CreateHMACSHA256();
+
+                    foreach (PackageSource source in Project.RestoreMetadata.Sources)
+                    {
+                        PackageSource newSource = source;
+                        if (string.IsNullOrWhiteSpace(PackageSourceTelemetry.GetMsFeed(source)))
+                        {
+                            string sourceString = ComputeHash(hmac, source.Source);
+                            newSource = new PackageSource(sourceString);
+                        }
+                        sources.Add(newSource);
+                    }
+
+                    Project.RestoreMetadata.Sources = sources;
+                }
+            }
+        }
+
+        internal static HMACSHA256 CreateHMACSHA256()
+        {
+            const string key = "959069c9-9e93-4fa1-bf16-3f8120d7db0c";
+            return new HMACSHA256(Encoding.UTF8.GetBytes(key));
+        }
+
+        internal static string ComputeHash(HMACSHA256 hmac, string input)
+        {
+            byte[] bytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(input));
+#if NET5_0_OR_GREATER
+            string hexString = Convert.ToHexString(bytes);
+#else
+            string hexString = ToHexString(bytes);
+#endif
+
+            return hexString;
+
+#if !NET5_0_OR_GREATER
+            string ToHexString(byte[] bytes)
+            {
+                char[] chars = new char[bytes.Length * 2];
+                for (int i = 0; i < bytes.Length; i++)
+                {
+                    int b = bytes[i];
+                    chars[i * 2] = (char)HexChar(b >> 4);
+                    chars[i * 2 + 1] = (char)HexChar(b & 0xF);
+                }
+                return new string(chars);
+
+                int HexChar(int c)
+                {
+                    return c < 10 ? '0' + c : 'A' + c - 10;
+                }
+            }
+#endif
         }
     }
 }

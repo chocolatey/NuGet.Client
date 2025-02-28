@@ -3,13 +3,15 @@
 
 using System;
 using System.IO;
+#if IS_SIGNING_SUPPORTED
 using System.IO.Compression;
+#endif
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
 using NuGet.Common;
 using NuGet.Test.Utility;
-using Test.Utility.Signing;
 using Xunit;
 
 namespace NuGet.Commands.Test
@@ -23,7 +25,7 @@ namespace NuGet.Commands.Test
             _fixture = fixture;
         }
 
-        [Fact]
+        [PlatformFact(Platform.Windows)]
         public async Task ExecuteCommandAsync_WithCertificateFileNotFound_RaisesErrorsOnceAsync()
         {
             using (TestContext testContext = await TestContext.CreateAsync(_fixture.GetDefaultCertificate()))
@@ -58,12 +60,13 @@ namespace NuGet.Commands.Test
 
                 testContext.Args.CertificatePath = certificateFilePath;
 
-                await testContext.Runner.ExecuteCommandAsync(testContext.Args);
+                int result = await testContext.Runner.ExecuteCommandAsync(testContext.Args);
 
                 var expectedMessage = $"Certificate file '{certificateFilePath}' is invalid. For a list of accepted ways to provide a certificate, visit https://docs.nuget.org/docs/reference/command-line-reference";
-
-                Assert.Equal(1, testContext.Logger.LogMessages.Count(
-                    message => message.Level == LogLevel.Error && message.Code == NuGetLogCode.NU3001 && message.Message.Equals(expectedMessage)));
+                Assert.Equal(1, result);
+                Assert.True(1 == testContext.Logger.LogMessages.Count(
+                    message => message.Level == LogLevel.Error && message.Code == NuGetLogCode.NU3001 && message.Message.Equals(expectedMessage)),
+                    string.Join(Environment.NewLine, testContext.Logger.LogMessages));
             }
         }
 
@@ -104,7 +107,7 @@ namespace NuGet.Commands.Test
                 testContext.Args.SignatureHashAlgorithm = HashAlgorithmName.SHA256;
                 testContext.Args.TimestampHashAlgorithm = HashAlgorithmName.SHA256;
 
-                var returncode = testContext.Runner.ExecuteCommandAsync(testContext.Args).Result;
+                var returncode = await testContext.Runner.ExecuteCommandAsync(testContext.Args);
                 Assert.Equal(returncode, 0);
 
                 var packagePaths = testContext.Args.PackagePaths;
@@ -140,7 +143,7 @@ namespace NuGet.Commands.Test
                 testContext.Args.SignatureHashAlgorithm = HashAlgorithmName.SHA256;
                 testContext.Args.TimestampHashAlgorithm = HashAlgorithmName.SHA256;
 
-                var returncode = testContext.Runner.ExecuteCommandAsync(testContext.Args).Result;
+                var returncode = await testContext.Runner.ExecuteCommandAsync(testContext.Args);
                 Assert.Equal(returncode, 0);
 
                 var packagePaths = testContext.Args.PackagePaths;
@@ -197,7 +200,7 @@ namespace NuGet.Commands.Test
                 testContext.Args.SignatureHashAlgorithm = HashAlgorithmName.SHA256;
                 testContext.Args.TimestampHashAlgorithm = HashAlgorithmName.SHA256;
 
-                var returncode = testContext.Runner.ExecuteCommandAsync(testContext.Args).Result;
+                var returncode = await testContext.Runner.ExecuteCommandAsync(testContext.Args);
                 Assert.Equal(returncode, 0);
 
                 var packagePaths = testContext.Args.PackagePaths;

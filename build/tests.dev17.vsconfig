@@ -97,12 +97,17 @@
     "Microsoft.VisualStudio.Component.VSSDK",
     "Microsoft.VisualStudio.ComponentGroup.VisualStudioExtension.Prerequisites",
     "Microsoft.VisualStudio.Workload.VisualStudioExtension",
-    "Microsoft.NetCore.Component.Runtime.3.1",
     "Microsoft.Component.ClickOnce",
     "Microsoft.VisualStudio.Component.VisualStudioData",
     "Microsoft.Net.Component.4.6.1.SDK",
     "Microsoft.Net.Component.4.7.2.SDK",
     "Microsoft.VisualStudio.Component.Wcf.Tooling",
-    "Microsoft.VisualStudio.ComponentGroup.AdditionalWebProjectTemplates"
+    "Microsoft.VisualStudio.ComponentGroup.AdditionalWebProjectTemplates",
+    "Microsoft.VisualStudio.ComponentGroup.Maui.iOS",
+    "Component.xamarin",
+    "runtimes.ios",
+    "Microsoft.VisualStudio.Workload.NetCrossPlat",
+    "Component.Android.SDK.MAUI",
+    "Microsoft.VisualStudio.Component.FSharp.Desktop"
   ]
 }

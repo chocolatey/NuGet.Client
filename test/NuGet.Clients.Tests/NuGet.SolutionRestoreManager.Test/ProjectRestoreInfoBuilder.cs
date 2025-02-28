@@ -196,20 +196,38 @@ namespace NuGet.SolutionRestoreManager.Test
                 originalTargetFramework: tfm.TargetAlias);
         }
 
-        public static IEnumerable<IVsProjectProperty> GetTargetFrameworkProperties(NuGetFramework framework, string originalString = null, string clrSupport = null)
+        public static Dictionary<string, string> GetTargetFrameworkProperties(NuGetFramework framework, string originalString = null, string clrSupport = null)
         {
-            return new IVsProjectProperty[]
+            string platformVersion = framework.PlatformVersion.ToString();
+            string platformMoniker = GetTargetPlatformMoniker(framework);
+            string windowsTargetPlatformMinVersion = string.Empty;
+            if (!string.IsNullOrEmpty(clrSupport))
             {
-                new VsProjectProperty(ProjectBuildProperties.TargetFrameworkMoniker, GetTargetFrameworkMoniker(framework)),
-                new VsProjectProperty(ProjectBuildProperties.TargetPlatformMoniker, GetTargetPlatformMoniker(framework)),
-                new VsProjectProperty(ProjectBuildProperties.TargetFrameworkIdentifier, framework.Framework),
-                new VsProjectProperty(ProjectBuildProperties.TargetFrameworkVersion, "v" + framework.Version),
-                new VsProjectProperty(ProjectBuildProperties.TargetFrameworkProfile, framework.Profile),
-                new VsProjectProperty(ProjectBuildProperties.TargetPlatformIdentifier, framework.Platform),
-                new VsProjectProperty(ProjectBuildProperties.TargetPlatformVersion, framework.PlatformVersion.ToString()),
-                new VsProjectProperty(ProjectBuildProperties.TargetFramework, originalString ?? framework.GetShortFolderName()),
-                new VsProjectProperty(ProjectBuildProperties.CLRSupport, clrSupport ?? string.Empty)
+                windowsTargetPlatformMinVersion = framework.PlatformVersion.ToString();
+                var lowerPlatformVersionFramework = new NuGetFramework(
+                    framework.Framework,
+                    framework.Version,
+                    framework.Platform,
+                    new Version(framework.PlatformVersion.Major - 1, 0, 0));
+                platformMoniker = lowerPlatformVersionFramework.DotNetPlatformName;
+                platformVersion = lowerPlatformVersionFramework.PlatformVersion.ToString();
+            }
+
+            var properties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [ProjectBuildProperties.TargetFrameworkMoniker] = GetTargetFrameworkMoniker(framework),
+                [ProjectBuildProperties.TargetPlatformMoniker] = platformMoniker,
+                [ProjectBuildProperties.TargetFrameworkIdentifier] = framework.Framework,
+                [ProjectBuildProperties.TargetFrameworkVersion] = "v" + framework.Version,
+                [ProjectBuildProperties.TargetFrameworkProfile] = framework.Profile,
+                [ProjectBuildProperties.TargetPlatformIdentifier] = framework.Platform,
+                [ProjectBuildProperties.TargetPlatformVersion] = platformVersion,
+                [ProjectBuildProperties.TargetFramework] = originalString ?? framework.GetShortFolderName(),
+                [ProjectBuildProperties.CLRSupport] = clrSupport ?? string.Empty,
+                [ProjectBuildProperties.WindowsTargetPlatformMinVersion] = windowsTargetPlatformMinVersion
             };
+
+            return properties;
         }
 
         private static string GetTargetPlatformMoniker(NuGetFramework framework)
@@ -253,7 +271,7 @@ namespace NuGet.SolutionRestoreManager.Test
             return sb.ToString();
         }
 
-        public static IEnumerable<IVsProjectProperty> GetTargetFrameworkProperties(string targetFrameworkMoniker, string originalFrameworkName = null)
+        public static Dictionary<string, string> GetTargetFrameworkProperties(string targetFrameworkMoniker, string originalFrameworkName = null)
         {
             var framework = NuGetFramework.Parse(targetFrameworkMoniker);
             var originalTFM = !string.IsNullOrEmpty(originalFrameworkName) ?

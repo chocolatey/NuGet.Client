@@ -75,6 +75,7 @@ namespace NuGet.PackageManagement
             GatherContext context,
             CancellationToken token)
         {
+            if (context == null) throw new ArgumentNullException(nameof(context));
             var engine = new ResolverGather(context);
             return await engine.GatherAsync(token);
         }
@@ -233,10 +234,10 @@ namespace NuGet.PackageManagement
             _context.Log.LogMinimal(
                 string.Format(CultureInfo.CurrentCulture, Strings.GatherTotalTime, DatetimeUtility.ToReadableTimeFormat(stopWatch.Elapsed)));
             _context.Log.LogDebug("Summary of time taken to gather dependencies per source :");
-            foreach (var key in _timeTaken.Keys)
+            foreach ((var key, var time) in _timeTaken)
             {
                 _context.Log.LogDebug(
-                    string.Format(CultureInfo.CurrentCulture, "{0}\t-\t{1}", key, DatetimeUtility.ToReadableTimeFormat(_timeTaken[key])));
+                    string.Format(CultureInfo.CurrentCulture, "{0}\t-\t{1}", key, DatetimeUtility.ToReadableTimeFormat(time)));
             }
             return combinedResults;
         }
@@ -542,7 +543,7 @@ namespace NuGet.PackageManagement
 
                 configuredPackageSources = _context.PackageSourceMapping.GetConfiguredPackageSources(package.Id);
 
-                if (configuredPackageSources != null)
+                if (configuredPackageSources.Count > 0)
                 {
                     var packageSourcesAtPrefix = string.Join(", ", configuredPackageSources);
                     _context.Log.LogDebug(StringFormatter.Log_PackageSourceMappingMatchFound((package.Id), packageSourcesAtPrefix));

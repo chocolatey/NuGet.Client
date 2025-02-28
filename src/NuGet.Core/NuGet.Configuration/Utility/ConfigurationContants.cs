@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System.Collections.Generic;
+
 namespace NuGet.Configuration
 {
     public static class ConfigurationConstants
@@ -11,7 +13,11 @@ namespace NuGet.Configuration
 
         public static readonly string AllowUntrustedRoot = "allowUntrustedRoot";
 
+        public static readonly string AllowInsecureConnections = "allowInsecureConnections";
+
         public static readonly string ApiKeys = "apikeys";
+
+        public static readonly string AuditSources = "auditSources";
 
         public static readonly string Author = "author";
 
@@ -46,6 +52,8 @@ namespace NuGet.Configuration
         public static readonly string DependencyVersion = "dependencyversion";
 
         public static readonly string DisabledPackageSources = "disabledPackageSources";
+
+        public static readonly string DisableTLSCertificateValidation = "disableTLSCertificateValidation";
 
         public static readonly string DoNotShowPackageManagementSelectionKey = "disabled";
 
@@ -132,5 +140,22 @@ namespace NuGet.Configuration
         public static readonly string ValueAttribute = "value";
 
         public static readonly string PatternAttribute = "pattern";
+
+        public static IReadOnlyList<string> GetConfigKeys()
+        {
+            return new List<string>
+            {
+                DependencyVersion,
+                GlobalPackagesFolder,
+                RepositoryPath,
+                DefaultPushSource,
+                HostKey,
+                UserKey,
+                PasswordKey,
+                NoProxy,
+                MaxHttpRequestsPerSource,
+                SignatureValidationMode
+            };
+        }
     }
 }

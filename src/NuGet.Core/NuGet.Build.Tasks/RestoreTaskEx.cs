@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using NuGet.Common;
 
 namespace NuGet.Build.Tasks
 {
@@ -11,6 +12,20 @@ namespace NuGet.Build.Tasks
     /// </summary>
     public sealed class RestoreTaskEx : StaticGraphRestoreTaskBase
     {
+        public RestoreTaskEx()
+            : this(EnvironmentVariableWrapper.Instance)
+        {
+        }
+
+        internal RestoreTaskEx(IEnvironmentVariableReader environmentVariableReader)
+            : base(environmentVariableReader)
+        {
+        }
+        /// <summary>
+        /// Gets or sets a value representing the parameters to use for the MSBuild binary logger.
+        /// </summary>
+        public string BinaryLoggerParameters { get; set; }
+
         /// <summary>
         /// Gets or sets a value indicating whether or not assets should be deleted for projects that don't support PackageReference.
         /// </summary>
@@ -21,6 +36,11 @@ namespace NuGet.Build.Tasks
         /// Defaults to <code>false</code> if the current machine only has a single processor.
         /// </summary>
         public bool DisableParallel { get; set; } = Environment.ProcessorCount == 1;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether or not the MSBuild binary logger should be enabled.
+        /// </summary>
+        public string EnableBinaryLogger { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether or not, in PackageReference based projects, all dependencies should be resolved
@@ -55,15 +75,42 @@ namespace NuGet.Build.Tasks
         public bool NoCache { get; set; }
 
         /// <summary>
+        /// Gets or sets a value indicating whether or not to avoid using http caching.
+        /// </summary>
+        public bool NoHttpCache { get; set; }
+
+        /// <summary>
         /// Gets or sets a value indicating whether or not to restore projects using packages.config.
         /// </summary>
         public bool RestorePackagesConfig { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to embed files produced by restore in the MSBuild binary logger.
+        /// </summary>
+        public string EmbedFilesInBinlog { get; set; }
 
         protected override string DebugEnvironmentVariableName => "DEBUG_RESTORE_TASK_EX";
 
         protected override Dictionary<string, string> GetOptions()
         {
             Dictionary<string, string> options = base.GetOptions();
+
+            // If the user specified a valid value for EnableBinaryLogger, use it. Otherwise, treat it as "unspecified"
+            bool? enableBinaryLogger = !string.IsNullOrWhiteSpace(EnableBinaryLogger) && bool.TryParse(EnableBinaryLogger, out bool result)
+                ? result
+                : null;
+
+            // If the user has not explicitly disabled the binary logger but has provided parameters, enable the binary logger with their parameters
+            if (enableBinaryLogger != false && !string.IsNullOrWhiteSpace(BinaryLoggerParameters))
+            {
+                options[nameof(EnableBinaryLogger)] = bool.TrueString;
+                options[nameof(BinaryLoggerParameters)] = Uri.EscapeDataString(BinaryLoggerParameters);
+            }
+            // If the user has explicitly enabled the binary logger, enable it
+            else if (enableBinaryLogger == true)
+            {
+                options[nameof(EnableBinaryLogger)] = bool.TrueString;
+            }
 
             options[nameof(CleanupAssetsForUnsupportedProjects)] = CleanupAssetsForUnsupportedProjects.ToString();
             options[nameof(DisableParallel)] = DisableParallel.ToString();
@@ -73,7 +120,12 @@ namespace NuGet.Build.Tasks
             options[nameof(IgnoreFailedSources)] = IgnoreFailedSources.ToString();
             options[nameof(Interactive)] = Interactive.ToString();
             options[nameof(NoCache)] = NoCache.ToString();
+            options[nameof(NoHttpCache)] = NoHttpCache.ToString();
             options[nameof(RestorePackagesConfig)] = RestorePackagesConfig.ToString();
+            if (!string.IsNullOrWhiteSpace(EmbedFilesInBinlog))
+            {
+                options[nameof(EmbedFilesInBinlog)] = EmbedFilesInBinlog;
+            }
 
             return options;
         }

@@ -3,7 +3,6 @@
 
 using System;
 using System.ComponentModel.Composition;
-using System.Threading.Tasks;
 using Microsoft;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Utilities;
@@ -51,14 +50,14 @@ namespace NuGet.PackageManagement.VisualStudio
             _scriptExecutor = scriptExecutor;
         }
 
-        public async Task<NuGetProject> TryCreateNuGetProjectAsync(
+        public NuGetProject TryCreateNuGetProject(
             IVsProjectAdapter vsProjectAdapter,
             ProjectProviderContext context,
             bool forceProjectType)
         {
             Assumes.Present(vsProjectAdapter);
-
-            var projectServices = await TryCreateProjectServicesAsync(
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var projectServices = TryCreateProjectServices(
                 vsProjectAdapter,
                 forceCreate: forceProjectType);
 
@@ -67,7 +66,7 @@ namespace NuGet.PackageManagement.VisualStudio
                 return null;
             }
 
-            NuGetFramework targetFramework = await vsProjectAdapter.GetTargetFrameworkAsync();
+            NuGetFramework targetFramework = vsProjectAdapter.GetTargetFramework();
 
             return new LegacyPackageReferenceProject(
                 vsProjectAdapter,
@@ -80,11 +79,10 @@ namespace NuGet.PackageManagement.VisualStudio
         /// <summary>
         /// Is this project a non-CPS package reference based csproj?
         /// </summary>
-        private async Task<INuGetProjectServices> TryCreateProjectServicesAsync(
+        private INuGetProjectServices TryCreateProjectServices(
             IVsProjectAdapter vsProjectAdapter, bool forceCreate)
         {
-            await _threadingService.JoinableTaskFactory.SwitchToMainThreadAsync();
-
+            ThreadHelper.ThrowIfNotOnUIThread();
             var vsProject4 = vsProjectAdapter.Project.Object as VSProject4;
 
             // A legacy CSProj must cast to VSProject4 to manipulate package references
@@ -94,8 +92,11 @@ namespace NuGet.PackageManagement.VisualStudio
             }
 
             // Check for RestoreProjectStyle property
-            var restoreProjectStyle = vsProjectAdapter.BuildProperties.GetPropertyValue(
+#pragma warning disable CS0618 // Type or member is obsolete
+            // Need to validate no project systems get this property via DTE, and if so, switch to GetPropertyValue
+            var restoreProjectStyle = vsProjectAdapter.BuildProperties.GetPropertyValueWithDteFallback(
                 ProjectBuildProperties.RestoreProjectStyle);
+#pragma warning restore CS0618 // Type or member is obsolete
 
             // For legacy csproj, either the RestoreProjectStyle must be set to PackageReference or
             // project has atleast one package dependency defined as PackageReference
@@ -103,7 +104,7 @@ namespace NuGet.PackageManagement.VisualStudio
                 || PackageReference.Equals(restoreProjectStyle, StringComparison.OrdinalIgnoreCase)
                 || (vsProject4.PackageReferences?.InstalledPackages?.Length ?? 0) > 0)
             {
-                var nominatesOnSolutionLoad = await vsProjectAdapter.IsCapabilityMatchAsync(NuGet.VisualStudio.IDE.ProjectCapabilities.PackageReferences);
+                var nominatesOnSolutionLoad = vsProjectAdapter.IsCapabilityMatch(NuGet.VisualStudio.IDE.ProjectCapabilities.PackageReferences);
                 return new VsManagedLanguagesProjectSystemServices(vsProjectAdapter, _threadingService, vsProject4, nominatesOnSolutionLoad, _scriptExecutor);
             }
 

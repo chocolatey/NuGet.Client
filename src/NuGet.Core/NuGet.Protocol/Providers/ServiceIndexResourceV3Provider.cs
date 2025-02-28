@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using NuGet.Common;
+using NuGet.Configuration;
 using NuGet.Protocol.Core.Types;
 using NuGet.Versioning;
 
@@ -20,7 +21,7 @@ namespace NuGet.Protocol
     /// </summary>
     public class ServiceIndexResourceV3Provider : ResourceProvider
     {
-        private static readonly TimeSpan _defaultCacheDuration = TimeSpan.FromMinutes(40);
+        private static readonly TimeSpan DefaultCacheDuration = TimeSpan.FromMinutes(40);
         private readonly ConcurrentDictionary<string, ServiceIndexCacheInfo> _cache;
         private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
         private readonly EnhancedHttpRetryHelper _enhancedHttpRetryHelper;
@@ -39,7 +40,7 @@ namespace NuGet.Protocol
                   NuGetResourceProviderPositions.Last)
         {
             _cache = new ConcurrentDictionary<string, ServiceIndexCacheInfo>(StringComparer.OrdinalIgnoreCase);
-            MaxCacheDuration = _defaultCacheDuration;
+            MaxCacheDuration = DefaultCacheDuration;
             _enhancedHttpRetryHelper = new EnhancedHttpRetryHelper(environmentVariableReader);
         }
 
@@ -61,15 +62,10 @@ namespace NuGet.Protocol
                 if (!_cache.TryGetValue(url, out cacheInfo) ||
                     entryValidCutoff > cacheInfo.CachedTime)
                 {
-                    // Track if the semaphore needs to be released
-                    var release = false;
+                    await _semaphore.WaitAsync(token);
+
                     try
                     {
-                        await _semaphore.WaitAsync(token);
-                        release = true;
-
-                        token.ThrowIfCancellationRequested();
-
                         // check the cache again, another thread may have finished this one waited for the lock
                         if (!_cache.TryGetValue(url, out cacheInfo) ||
                             entryValidCutoff > cacheInfo.CachedTime)
@@ -89,10 +85,7 @@ namespace NuGet.Protocol
                     }
                     finally
                     {
-                        if (release)
-                        {
-                            _semaphore.Release();
-                        }
+                        _semaphore.Release();
                     }
                 }
             }
@@ -149,7 +142,7 @@ namespace NuGet.Protocol
                             },
                             async httpSourceResult =>
                             {
-                                var result = await ConsumeServiceIndexStreamAsync(httpSourceResult.Stream, utcNow, token);
+                                var result = await ConsumeServiceIndexStreamAsync(httpSourceResult.Stream, utcNow, source.PackageSource, token);
 
                                 return result;
                             },
@@ -194,7 +187,7 @@ namespace NuGet.Protocol
             return null;
         }
 
-        private async Task<ServiceIndexResourceV3> ConsumeServiceIndexStreamAsync(Stream stream, DateTime utcNow, CancellationToken token)
+        private static async Task<ServiceIndexResourceV3> ConsumeServiceIndexStreamAsync(Stream stream, DateTime utcNow, PackageSource source, CancellationToken token)
         {
             // Parse the JSON
             JObject json = await stream.AsJObjectAsync(token);
@@ -209,7 +202,7 @@ namespace NuGet.Protocol
                 if (SemanticVersion.TryParse((string)versionToken, out version) &&
                     version.Major == 3)
                 {
-                    return new ServiceIndexResourceV3(json, utcNow);
+                    return new ServiceIndexResourceV3(json, utcNow, source);
                 }
                 else
                 {

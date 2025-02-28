@@ -21,7 +21,7 @@ Indicates the build script is invoked from CI
 Indicates whether to create the end to end package.
 
 .PARAMETER SkipDelaySigning
-Indicates whether to skip delay signing.  By default assemblies will be delay signed.
+Indicates whether to skip strong name signing.  By default assemblies will be delay signed and require strong name validation exclusions.
 
 .EXAMPLE
 .\build.ps1
@@ -135,8 +135,7 @@ Invoke-BuildStep $VSMessage {
 
     If ($SkipDelaySigning)
     {
-        $buildArgs += "/p:MS_PFX_PATH="
-        $buildArgs += "/p:NUGET_PFX_PATH="
+        $buildArgs += "/p:SkipSigning=true"
     }
 
     if ($Binlog)
@@ -157,10 +156,15 @@ Invoke-BuildStep $VSMessage {
 -ev +BuildErrors
 
 Invoke-BuildStep 'Creating the EndToEnd test package' {
-        param($Configuration)
-        $EndToEndScript = Join-Path $PSScriptRoot scripts\cibuild\CreateEndToEndTestPackage.ps1 -Resolve
-        $OutDir = Join-Path $Artifacts VS15
-        & $EndToEndScript -c $Configuration -out $OutDir
+        $msbuildArgs = "test\TestUtilities\CreateEndToEndTestPackage\CreateEndToEndTestPackage.proj", "/p:Configuration=$Configuration", "/restore:false", "/property:BuildProjectReferences=false"
+
+        if ($Binlog)
+        {
+            $restoreArgs += "-bl:msbuild.createendtoendtestpackage.binlog"
+        }
+
+        Trace-Log ". `"$MSBuildExe`" $msbuildArgs"
+        & $MSBuildExe @msbuildArgs
     } `
     -args $Configuration `
     -skip:(-not $PackageEndToEnd) `

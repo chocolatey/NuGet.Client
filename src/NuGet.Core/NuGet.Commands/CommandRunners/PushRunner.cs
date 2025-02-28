@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Common;
 using NuGet.Configuration;
@@ -39,13 +40,12 @@ namespace NuGet.Commands
                 timeoutSeconds = 5 * 60;
             }
             PackageSource packageSource = CommandRunnerUtility.GetOrCreatePackageSource(sourceProvider, source);
-            var packageUpdateResource = await CommandRunnerUtility.GetPackageUpdateResource(sourceProvider, packageSource);
+            var packageUpdateResource = await CommandRunnerUtility.GetPackageUpdateResource(sourceProvider, packageSource, CancellationToken.None);
 
-            // Only warn for V3 style sources because they have a service index which is different from the final push url.
-            if (packageSource.IsHttp && !packageSource.IsHttps &&
-                (packageSource.ProtocolVersion == 3 || packageSource.Source.EndsWith("json", StringComparison.OrdinalIgnoreCase)))
+            // Throw an error if an http source is used without setting AllowInsecureConnections
+            if (packageSource.IsHttp && !packageSource.IsHttps && !packageSource.AllowInsecureConnections)
             {
-                logger.LogWarning(string.Format(CultureInfo.CurrentCulture, Strings.Warning_HttpServerUsage, "push", packageSource.Source));
+                throw new ArgumentException(string.Format(CultureInfo.CurrentCulture, Strings.Error_HttpSource_Single, "push", packageSource.Source));
             }
 
             packageUpdateResource.Settings = settings;
@@ -58,11 +58,25 @@ namespace NuGet.Commands
                 && !sourceUri.IsFile
                 && sourceUri.IsAbsoluteUri)
             {
-                symbolPackageUpdateResource = await CommandRunnerUtility.GetSymbolPackageUpdateResource(sourceProvider, source);
+                symbolPackageUpdateResource = await CommandRunnerUtility.GetSymbolPackageUpdateResource(sourceProvider, source, CancellationToken.None);
                 if (symbolPackageUpdateResource != null)
                 {
                     symbolSource = symbolPackageUpdateResource.SourceUri.AbsoluteUri;
-                    symbolApiKey = apiKey;
+                }
+            }
+
+            // Precedence for package API key: -ApiKey param, config
+            apiKey ??= CommandRunnerUtility.GetApiKey(settings, packageUpdateResource.SourceUri.AbsoluteUri, source);
+
+            // Precedence for symbol package API key: -SymbolApiKey param, config, package API key (Only for symbol source from SymbolPackagePublish service)
+            if (!string.IsNullOrEmpty(symbolSource))
+            {
+                symbolApiKey ??= CommandRunnerUtility.GetApiKey(settings, symbolSource, symbolSource);
+
+                // Only allow falling back to API key when the symbol source was obtained from SymbolPackagePublish service
+                if (symbolPackageUpdateResource != null)
+                {
+                    symbolApiKey ??= apiKey;
                 }
             }
 
@@ -71,11 +85,12 @@ namespace NuGet.Commands
                 symbolSource,
                 timeoutSeconds,
                 disableBuffering,
-                endpoint => apiKey ?? CommandRunnerUtility.GetApiKey(settings, endpoint, source),
-                symbolsEndpoint => symbolApiKey ?? CommandRunnerUtility.GetApiKey(settings, symbolsEndpoint, symbolSource),
+                _ => apiKey,
+                _ => symbolApiKey,
                 noServiceEndpoint,
                 skipDuplicate,
                 symbolPackageUpdateResource,
+                packageSource.AllowInsecureConnections,
                 logger);
         }
 

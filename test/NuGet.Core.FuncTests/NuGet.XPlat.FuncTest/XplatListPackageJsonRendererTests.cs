@@ -51,6 +51,7 @@ namespace NuGet.XPlat.FuncTest
                                 prerelease: false,
                                 highestPatch: false,
                                 highestMinor: false,
+                                auditSources: null,
                                 NullLogger.Instance,
                                 CancellationToken.None);
 
@@ -68,7 +69,7 @@ namespace NuGet.XPlat.FuncTest
                                             requestedVersion : "2.0.0",
                                             resolvedVersion : "2.0.0")
                                     },
-                                    // Below transitive packages shouldn't be in json output because this report doesn't have --include-transive option.
+                                    // Below transitive packages shouldn't be in json output because this report doesn't have --include-transitive option.
                                     TransitivePackages = new List<ListReportPackage>()
                                     {
                                         new ListReportPackage(
@@ -197,6 +198,7 @@ namespace NuGet.XPlat.FuncTest
                                 prerelease: false,
                                 highestPatch: false,
                                 highestMinor: false,
+                                auditSources: null,
                                 NullLogger.Instance,
                                 CancellationToken.None);
 
@@ -295,6 +297,7 @@ namespace NuGet.XPlat.FuncTest
                                 prerelease: false,
                                 highestPatch: false,
                                 highestMinor: false,
+                                auditSources: null,
                                 NullLogger.Instance,
                                 CancellationToken.None);
 
@@ -384,6 +387,7 @@ namespace NuGet.XPlat.FuncTest
                                 prerelease: false,
                                 highestPatch: false,
                                 highestMinor: false,
+                                auditSources: null,
                                 NullLogger.Instance,
                                 CancellationToken.None);
 
@@ -487,6 +491,7 @@ namespace NuGet.XPlat.FuncTest
                                 prerelease: false,
                                 highestPatch: false,
                                 highestMinor: false,
+                                auditSources: null,
                                 NullLogger.Instance,
                                 CancellationToken.None);
 
@@ -598,6 +603,7 @@ namespace NuGet.XPlat.FuncTest
                                 prerelease: false,
                                 highestPatch: false,
                                 highestMinor: false,
+                                auditSources: null,
                                 NullLogger.Instance,
                                 CancellationToken.None);
 
@@ -678,6 +684,7 @@ namespace NuGet.XPlat.FuncTest
                                 prerelease: false,
                                 highestPatch: false,
                                 highestMinor: false,
+                                auditSources: null,
                                 NullLogger.Instance,
                                 CancellationToken.None);
 
@@ -695,7 +702,7 @@ namespace NuGet.XPlat.FuncTest
                                             requestedVersion : "2.0.0",
                                             resolvedVersion : "2.0.0")
                                     },
-                                    // Below transitive packages should be in json output because this report has --include-transive option.
+                                    // Below transitive packages should be in json output because this report has --include-transitive option.
                                     TransitivePackages = new List<ListReportPackage>()
                                     {
                                         new ListReportPackage(
@@ -848,6 +855,7 @@ namespace NuGet.XPlat.FuncTest
                                 prerelease: false,
                                 highestPatch: false,
                                 highestMinor: false,
+                                auditSources: null,
                                 NullLogger.Instance,
                                 CancellationToken.None);
 
@@ -978,6 +986,7 @@ namespace NuGet.XPlat.FuncTest
                                 prerelease: false,
                                 highestPatch: false,
                                 highestMinor: false,
+                                auditSources: null,
                                 NullLogger.Instance,
                                 CancellationToken.None);
 
@@ -1120,6 +1129,7 @@ namespace NuGet.XPlat.FuncTest
                                 prerelease: false,
                                 highestPatch: false,
                                 highestMinor: false,
+                                auditSources: null,
                                 NullLogger.Instance,
                                 CancellationToken.None);
 
@@ -1186,6 +1196,193 @@ namespace NuGet.XPlat.FuncTest
                         }}
                       ]
                     }}
+                ".Replace("'", "\""));
+
+                var actual = SettingsTestUtils.RemoveWhitespace(File.ReadAllText(consoleOutputFileName));
+                actual.Should().Be(PathUtility.GetPathWithForwardSlashes(expected));
+            }
+        }
+
+        [Fact]
+        public void JsonRenderer_VulnerableReprotTypeWithSourcesUsed_WritesSourcesUsedList()
+        {
+            // Arrange
+            var reportType = ReportType.Vulnerable;
+            using (var pathContext = new SimpleTestPathContext())
+            {
+                PackageSource source = new PackageSource("https://test");
+                string consoleOutputFileName = Path.Combine(pathContext.SolutionRoot, "consoleOutput.txt");
+                string frameWork31 = "netcoreapp3.1";
+                var projectAPath = Path.Combine(pathContext.SolutionRoot, "projectA.csproj");
+
+                using (FileStream stream = new FileStream(consoleOutputFileName, FileMode.Create))
+                {
+                    using StreamWriter writer = new StreamWriter(stream);
+                    writer.AutoFlush = true;
+
+                    ListPackageJsonRenderer jsonRenderer = new ListPackageJsonRenderer(writer);
+                    var packageRefArgs = new ListPackageArgs(
+                                path: pathContext.SolutionRoot,
+                                packageSources: new List<PackageSource>(),
+                                frameworks: new List<string>() { },
+                                reportType: reportType,
+                                renderer: jsonRenderer,
+                                includeTransitive: false,
+                                prerelease: false,
+                                highestPatch: false,
+                                highestMinor: false,
+                                auditSources: null,
+                                NullLogger.Instance,
+                                CancellationToken.None);
+
+                    ListPackageReportModel listPackageReportModel = CreateListReportModel(packageRefArgs,
+                        (
+                            projectAPath,
+                            new List<ListPackageReportFrameworkPackage>()
+                            {
+                                new ListPackageReportFrameworkPackage(frameWork31)
+                                {
+                                    TopLevelPackages =  new List<ListReportPackage>()
+                                    {
+                                        new ListReportPackage(
+                                            packageId : "A",
+                                            version : "1.0.0",
+                                            vulnerabilities : new List<PackageVulnerabilityMetadata>(){ new PackageVulnerabilityMetadata() }
+                                            )
+                                    }
+                                }
+                            },
+                            projectProblems: null
+                      )
+                    );
+                    listPackageReportModel.AuditSourcesUsed.Add(source);
+
+                    // Act
+                    jsonRenderer.Render(listPackageReportModel);
+                }
+
+                // Assert
+                var expected = SettingsTestUtils.RemoveWhitespace($@"
+                {{
+                  'version': 1,
+                  'parameters': '--vulnerable',
+                  'sources': [
+                    '{source.Name}'
+                  ],
+                  'projects': [
+                    {{
+                      'path': '{projectAPath}',
+                      'frameworks': [
+                        {{
+                          'framework': 'netcoreapp3.1',
+                          'topLevelPackages': [
+                            {{
+                              'id': 'A',
+                              'requestedVersion': '1.0.0',
+                              'resolvedVersion': null,
+                              'vulnerabilities': [
+                                {{
+                                  'severity': 'Low',
+                                  'advisoryurl': null
+                                }}
+                                ]
+                            }}
+                          ]
+                        }}
+                      ]
+                    }}
+                  ]
+                }}
+                ".Replace("'", "\""));
+
+                var actual = SettingsTestUtils.RemoveWhitespace(File.ReadAllText(consoleOutputFileName));
+                actual.Should().Be(PathUtility.GetPathWithForwardSlashes(expected));
+            }
+        }
+
+        [Fact]
+        public void JsonRenderer_NotVulnerableReprotTypeAndSourcesUsed_DoesNotWritesSourcesUsedList()
+        {
+            // Arrange
+            var reportType = ReportType.Outdated;
+            using (var pathContext = new SimpleTestPathContext())
+            {
+                PackageSource source = new PackageSource("https://test");
+                string consoleOutputFileName = Path.Combine(pathContext.SolutionRoot, "consoleOutput.txt");
+                string frameWork31 = "netcoreapp3.1";
+                var projectAPath = Path.Combine(pathContext.SolutionRoot, "projectA.csproj");
+
+                using (FileStream stream = new FileStream(consoleOutputFileName, FileMode.Create))
+                {
+                    using StreamWriter writer = new StreamWriter(stream);
+                    writer.AutoFlush = true;
+
+                    ListPackageJsonRenderer jsonRenderer = new ListPackageJsonRenderer(writer);
+                    var packageRefArgs = new ListPackageArgs(
+                                path: pathContext.SolutionRoot,
+                                packageSources: new List<PackageSource>(),
+                                frameworks: new List<string>() { },
+                                reportType: reportType,
+                                renderer: jsonRenderer,
+                                includeTransitive: false,
+                                prerelease: false,
+                                highestPatch: false,
+                                highestMinor: false,
+                                auditSources: null,
+                                NullLogger.Instance,
+                                CancellationToken.None);
+
+                    ListPackageReportModel listPackageReportModel = CreateListReportModel(packageRefArgs,
+                        (
+                            projectAPath,
+                            new List<ListPackageReportFrameworkPackage>()
+                            {
+                                new ListPackageReportFrameworkPackage(frameWork31)
+                                {
+                                    TopLevelPackages =  new List<ListReportPackage>()
+                                    {
+                                        new ListReportPackage(
+                                            packageId : "A",
+                                            version : "1.0.0",
+                                            vulnerabilities : new List<PackageVulnerabilityMetadata>(){ new PackageVulnerabilityMetadata() }
+                                            )
+                                    }
+                                }
+                            },
+                            projectProblems: null
+                      )
+                    );
+                    listPackageReportModel.AuditSourcesUsed.Add(source);
+
+                    // Act
+                    jsonRenderer.Render(listPackageReportModel);
+                }
+
+                // Assert
+                var expected = SettingsTestUtils.RemoveWhitespace($@"
+                {{
+                  'version': 1,
+                  'parameters': '--outdated',
+                  'sources': [],
+                  'projects': [
+                    {{
+                      'path': '{projectAPath}',
+                      'frameworks': [
+                        {{
+                          'framework': 'netcoreapp3.1',
+                          'topLevelPackages': [
+                            {{
+                              'id': 'A',
+                              'requestedVersion': '1.0.0',
+                              'resolvedVersion': null,
+                              'latestVersion': null
+                            }}
+                          ]
+                        }}
+                      ]
+                    }}
+                  ]
+                }}
                 ".Replace("'", "\""));
 
                 var actual = SettingsTestUtils.RemoveWhitespace(File.ReadAllText(consoleOutputFileName));

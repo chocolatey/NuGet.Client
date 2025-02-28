@@ -21,7 +21,7 @@ namespace NuGet.CommandLine.XPlat
             //Setup the Credential Service - This allows the msbuild sdk resolver to auth if needed.
             DefaultCredentialServiceUtility.SetupDefaultCredentialService(packageReferenceArgs.Logger, !packageReferenceArgs.Interactive);
 
-            var libraryDependency = new LibraryDependency
+            var libraryDependency = new LibraryDependency()
             {
                 LibraryRange = new LibraryRange(
                     name: packageReferenceArgs.PackageId,
@@ -32,7 +32,7 @@ namespace NuGet.CommandLine.XPlat
             // Remove reference from the project
             var result = msBuild.RemovePackageReference(packageReferenceArgs.ProjectPath, libraryDependency);
 
-            return Task.FromResult(result);
+            return TaskResult.Integer(result);
         }
     }
 }

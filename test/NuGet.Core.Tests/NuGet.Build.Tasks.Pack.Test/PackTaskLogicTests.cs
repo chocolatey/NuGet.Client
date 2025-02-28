@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using NuGet.Commands;
 using NuGet.Frameworks;
 using NuGet.Packaging;
@@ -54,8 +53,7 @@ namespace NuGet.Build.Tasks.Pack.Test
                     var dependencyGroupFramework = dependencyGroup.TargetFramework.Framework;
                     var dependentPackages = dependencyGroup.Packages.ToList();
                     var centralTransitiveDependentPackage = dependentPackages
-                        .Where(p => p.Id.Equals("Newtonsoft.Json", StringComparison.OrdinalIgnoreCase))
-                        .FirstOrDefault();
+                        .FirstOrDefault(p => p.Id.Equals("Newtonsoft.Json", StringComparison.OrdinalIgnoreCase));
                     Assert.Equal(1, dependencyGroups.Count);
                     Assert.Equal(".NETStandard", dependencyGroupFramework);
                     Assert.NotNull(centralTransitiveDependentPackage);
@@ -196,7 +194,7 @@ namespace NuGet.Build.Tasks.Pack.Test
                     var contentItems = nupkgReader.GetFiles().ToList();
                     foreach (var expectedPackagePath in expectedPackagePaths.Split(';'))
                     {
-                        Assert.True(contentItems.Contains(expectedPackagePath));
+                        Assert.Contains(expectedPackagePath, contentItems);
                     }
                 }
             }
@@ -240,7 +238,7 @@ namespace NuGet.Build.Tasks.Pack.Test
                     var contentItems = nupkgReader.GetFiles().ToList();
                     foreach (var expectedPackagePath in expectedPackagePaths.Split(';'))
                     {
-                        Assert.True(contentItems.Contains(expectedPackagePath));
+                        Assert.Contains(expectedPackagePath, contentItems);
                     }
                 }
             }
@@ -284,7 +282,7 @@ namespace NuGet.Build.Tasks.Pack.Test
                     var contentItems = nupkgReader.GetFiles().ToList();
                     foreach (var expectedPackagePath in expectedPackagePaths.Split(';'))
                     {
-                        Assert.True(contentItems.Contains(expectedPackagePath));
+                        Assert.Contains(expectedPackagePath, contentItems);
                     }
                 }
             }
@@ -783,7 +781,7 @@ namespace NuGet.Build.Tasks.Pack.Test
                 Directory.CreateDirectory(Path.Combine(testDir, "obj"));
                 File.WriteAllBytes(dllPath, new byte[0]);
                 var path = string.Join(".", typeof(PackTaskLogicTests).Namespace, "compiler.resources", "project.assets.json");
-                using (var reader = new StreamReader(GetType().GetTypeInfo().Assembly.GetManifestResourceStream(path)))
+                using (var reader = new StreamReader(GetType().Assembly.GetManifestResourceStream(path)))
                 {
                     var contents = reader.ReadToEnd();
                     File.WriteAllText(Path.Combine(testDir, "obj", "project.assets.json"), contents);

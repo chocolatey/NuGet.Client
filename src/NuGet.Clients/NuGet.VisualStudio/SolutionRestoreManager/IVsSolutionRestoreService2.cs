@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable enable
+
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -19,7 +21,7 @@ namespace NuGet.SolutionRestoreManager
         /// An entry point which allows non-NETCore SDK based projects to indicate given project needs to be restored.
         /// </summary>
         /// <param name="projectUniqueName">
-        /// Unique identificator of the project. Should be a full path to project file.
+        /// Unique identifier of the project. Should be a full path to project file.
         /// </param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>

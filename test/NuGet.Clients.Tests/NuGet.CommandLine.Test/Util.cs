@@ -7,9 +7,10 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Reflection;
 using System.Text;
 using System.Xml.Linq;
+using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using Moq;
 using Newtonsoft.Json.Linq;
 using NuGet.Configuration;
@@ -20,9 +21,12 @@ using NuGet.Test.Utility;
 using NuGet.Versioning;
 using Test.Utility;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace NuGet.CommandLine.Test
 {
+    using IPackageFile = NuGet.Packaging.IPackageFile;
+
     public static class Util
     {
         private static readonly string NupkgFileFormat = "{0}.{1}.nupkg";
@@ -34,7 +38,7 @@ namespace NuGet.CommandLine.Test
 
         public static string GetResource(string name)
         {
-            using (var reader = new StreamReader(typeof(Util).GetTypeInfo().Assembly.GetManifestResourceStream(name)))
+            using (var reader = new StreamReader(typeof(Util).Assembly.GetManifestResourceStream(name)))
             {
                 return reader.ReadToEnd();
             }
@@ -43,15 +47,15 @@ namespace NuGet.CommandLine.Test
         /// <summary>
         /// Restore a solution.
         /// </summary>
-        public static CommandRunnerResult RestoreSolution(SimpleTestPathContext pathContext, int expectedExitCode = 0, params string[] additionalArgs)
+        public static CommandRunnerResult RestoreSolution(SimpleTestPathContext pathContext, int expectedExitCode = 0, ITestOutputHelper testOutputHelper = null, params string[] additionalArgs)
         {
-            return Restore(pathContext, pathContext.SolutionRoot, expectedExitCode, additionalArgs);
+            return Restore(pathContext, pathContext.SolutionRoot, expectedExitCode, testOutputHelper, additionalArgs);
         }
 
         /// <summary>
         /// Run nuget.exe restore {inputPath}
         /// </summary>
-        public static CommandRunnerResult Restore(SimpleTestPathContext pathContext, string inputPath, int expectedExitCode = 0, params string[] additionalArgs)
+        public static CommandRunnerResult Restore(SimpleTestPathContext pathContext, string inputPath, int expectedExitCode = 0, ITestOutputHelper testOutputHelper = null, params string[] additionalArgs)
         {
             var nugetExe = GetNuGetExePath();
 
@@ -65,27 +69,26 @@ namespace NuGet.CommandLine.Test
 
             args = args.Concat(additionalArgs).ToArray();
 
-            return RunCommand(pathContext, nugetExe, expectedExitCode, args);
+            return RunCommand(pathContext, nugetExe, expectedExitCode, testOutputHelper, args);
         }
 
-        public static CommandRunnerResult RunCommand(SimpleTestPathContext pathContext, string nugetExe, int expectedExitCode = 0, params string[] arguments)
+        public static CommandRunnerResult RunCommand(SimpleTestPathContext pathContext, string nugetExe, int expectedExitCode = 0, ITestOutputHelper testOutputHelper = null, params string[] arguments)
         {
             // Store the dg file for debugging
             var dgPath = Path.Combine(pathContext.WorkingDirectory, "out.dg");
-            var envVars = new Dictionary<string, string>()
-                {
-                    { "NUGET_PERSIST_DG", "true" },
-                    { "NUGET_PERSIST_DG_PATH", dgPath },
-                    { "NUGET_HTTP_CACHE_PATH", pathContext.HttpCacheFolder }
-                };
+            var envVars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["NUGET_HTTP_CACHE_PATH"] = pathContext.HttpCacheFolder,
+
+            };
 
             // Act
             var r = CommandRunner.Run(
                 nugetExe,
                 pathContext.WorkingDirectory.Path,
                 string.Join(" ", arguments),
-                waitForExit: true,
-                environmentVariables: envVars);
+                environmentVariables: envVars,
+                testOutputHelper: testOutputHelper);
 
             // Assert
             Assert.True(expectedExitCode == r.ExitCode, r.Errors + "\n\n" + r.Output);
@@ -316,15 +319,15 @@ namespace NuGet.CommandLine.Test
         /// <param name="directory">The directory of the created file.</param>
         /// <param name="fileName">The name of the created file.</param>
         /// <param name="fileContent">The content of the created file.</param>
-        public static void CreateFile(string directory, string fileName, string fileContent)
+        public static string CreateFile(string directory, string fileName, string fileContent)
         {
-            if (!Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
+            var fileInfo = new FileInfo(Path.Combine(directory, fileName));
 
-            var fileFullName = Path.Combine(directory, fileName);
-            CreateFile(fileFullName, fileContent);
+            fileInfo.Directory.Create();
+
+            CreateFile(fileInfo.FullName, fileContent);
+
+            return fileInfo.FullName;
         }
 
         public static void CreateFile(string fileFullName, string fileContent)
@@ -639,17 +642,13 @@ Project(""{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""proj1"",
 EndProject";
         }
 
-        public static void VerifyResultSuccess(CommandRunnerResult result, string expectedOutputMessage = null)
+        public static void VerifyResultSuccess(CommandRunnerResult result, string expectedOutputMessage = null, string extraDebugInfo = null)
         {
-            Assert.True(
-                result.ExitCode == 0,
-                "nuget.exe DID NOT SUCCEED: Ouput is " + result.Output + ". Error is " + result.Errors);
+            result.ExitCode.Should().Be(0, $"nuget.exe should have succeeded with exit code 0 but returned exit code {result.ExitCode}{Environment.NewLine}Output:{Environment.NewLine}{result.Output}{Environment.NewLine}Errors:{Environment.NewLine}{result.Errors}{extraDebugInfo}");
 
             if (!string.IsNullOrEmpty(expectedOutputMessage))
             {
-                Assert.Contains(
-                    expectedOutputMessage,
-                    result.Output);
+                result.Output.Should().Contain(expectedOutputMessage);
             }
         }
 
@@ -663,13 +662,9 @@ EndProject";
         public static void VerifyResultFailure(CommandRunnerResult result,
                                                string expectedErrorMessage)
         {
-            Assert.True(
-                result.ExitCode != 0,
-                "nuget.exe DID NOT FAIL: Ouput is " + result.Output + ". Error is " + result.Errors);
+            result.ExitCode.Should().NotBe(0, $"nuget.exe should have failed with a non zero exit code but returned exit code {result.ExitCode}{Environment.NewLine}Output:{Environment.NewLine}{result.Output}{Environment.NewLine}Errors:{Environment.NewLine}{result.Errors}");
 
-            Assert.True(
-                result.Errors.Contains(expectedErrorMessage),
-                "Expected error is " + expectedErrorMessage + ". Actual error is " + result.Errors);
+            result.Errors.Should().Contain(expectedErrorMessage);
         }
 
         public static void VerifyPackageExists(
@@ -954,6 +949,9 @@ EndProject");
         public static string CreateBasicTwoProjectSolutionWithSolutionFilters(TestDirectory workingPath, string proj1ConfigFileName, string proj2ConfigFileName, bool redirectGlobalPackagesFolder = true)
         {
             var repositoryPath = CreateBasicTwoProjectSolution(workingPath, proj1ConfigFileName, proj2ConfigFileName, redirectGlobalPackagesFolder);
+            var filterInSubfolderPath = Path.Combine(workingPath, "filter");
+
+            Directory.CreateDirectory(filterInSubfolderPath);
 
             CreateFile(workingPath, "a.proj1.slnf", @"{
   ""solution"": {
@@ -973,6 +971,18 @@ EndProject");
   }
 }");
 
+
+            CreateFile(filterInSubfolderPath, "filterinsubfolder.slnf", @"{
+  ""solution"": {
+    ""path"": ""..\\a.sln"",
+    ""projects"": [
+      ""proj1\\proj1.csproj"",
+      ""proj2\\proj2.csproj"",
+    ]
+  }
+}");
+
+
             return repositoryPath;
         }
 
@@ -987,14 +997,14 @@ EndProject");
 
         public static string GetProjectJsonFileContents(string targetFramework, IEnumerable<PackageIdentity> packages)
         {
-            var dependencies = string.Join(", ", packages.Select(package => $"'{package.Id}': '{package.Version}'"));
+            var dependencies = string.Join(", ", packages.Select(package => $"\"{package.Id}\": \"{package.Version}\""));
             return $@"
 {{
-  'dependencies': {{
+  ""dependencies"": {{
     {dependencies}
   }},
-  'frameworks': {{
-    '{targetFramework}': {{ }}
+  ""frameworks"": {{
+    ""{targetFramework}"": {{ }}
   }}
 }}";
         }
@@ -1036,14 +1046,13 @@ EndProject");
             var result = CommandRunner.Run(
                 Util.GetNuGetExePath(),
                 Directory.GetCurrentDirectory(),
-                command,
-                waitForExit: true);
+                command);
 
             var commandSplit = command.Split(' ');
 
             // Break the test if no proper command is found
             if (commandSplit.Length < 1 || string.IsNullOrEmpty(commandSplit[0]))
-                Assert.True(false, "command not found");
+                Assert.Fail("command not found");
 
             var mainCommand = commandSplit[0];
 

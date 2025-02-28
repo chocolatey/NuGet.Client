@@ -23,44 +23,12 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
   </ItemGroup>
-  <ItemGroup>
-    <Compile Include="Apex\ApexBaseTestClass.cs" />
-    <Compile Include="Apex\ApexTestContext.cs" />
-    <Compile Include="Apex\NuGetConsoleTestExtension.cs" />
-    <Compile Include="Apex\NuGetTestOperationConfiguration.cs" />
-    <Compile Include="Apex\SharedVisualStudioHostTestClass.cs" />
-    <Compile Include="Apex\NuGetApexTestService.cs" />
-    <Compile Include="Apex\NuGetApexVerifier.cs" />
-    <Compile Include="Fixtures\ApexTestRequirementsFixture.cs" />
-    <Compile Include="Fixtures\IVisualStudioHostFixtureFactory.cs" />
-    <Compile Include="Fixtures\SignedPackagesTestsApexFixture.cs" />
-    <Compile Include="Fixtures\VisualStudioHostFixture.cs" />
-    <Compile Include="Fixtures\VisualStudioHostFixtureFactory.cs" />
-    <Compile Include="Fixtures\VisualStudioOperationsFixture.cs" />
-    <Compile Include="NuGetEndToEndTests\IVsServicesTestCase.cs" />
-    <Compile Include="NuGetPackageSigningTests\AuthorSignedPackageTestCase.cs" />
-    <Compile Include="NuGetEndToEndTests\NuGetConsoleTestCase.cs" />
-    <Compile Include="NuGetEndToEndTests\NetCoreProjectTestCase.cs" />
-    <Compile Include="NuGetEndToEndTests\NuGetUITestCase.cs" />
-    <Compile Include="NuGetPackageSigningTests\RepositoryCountersignedPackageTestCase.cs" />
-    <Compile Include="Utility\CommonUtility.cs" />
-    <Compile Include="Apex\NuGetTypeConstraint.cs" />
-    <Compile Include="Apex\NuGetUIProjectTestExtensionVerifier.cs" />
-    <Compile Include="Apex\NuGetUIProjectTestExtension.cs" />
-    <Compile Include="Apex\NuGetBaseTestExtension.cs" />
-    <Compile Include="Utility\SigningUtility.cs" />
-    <Compile Include="VisualStudioHostExtension.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="Apex\NuGetConsoleTestExtensionVerifier.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="NuGetPackageSigningTests\RepositorySignedPackageTestCase.cs" />
-  </ItemGroup>
+ 
   <ItemGroup>
     <PackageReference Include="Microsoft.Test.Apex.VisualStudio" ExcludeAssets="Compile" GeneratePathProperty="true" />
     <PackageReference Include="Microsoft.VisualStudio.Sdk" />
-    <PackageReference Include="Xunit.StaFact" />
+    <PackageReference Include="MSTest.TestAdapter" />
+    <PackageReference Include="MSTest.TestFramework" />
   </ItemGroup>
   <ItemGroup>
     <!-- Manually consuming compile-time assets from Microsoft.Test.Apex.VisualStudio and excluding ones that cause compile warnings -->
@@ -71,24 +39,15 @@
                Name="%(Filename)" />
   </ItemGroup>
   <ItemGroup>
-    <Service Include="{82A7F48D-3B50-4B1E-B82E-3ADA8210C358}" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\..\..\src\NuGet.Clients\NuGet.VisualStudio\NuGet.VisualStudio.csproj" />
     <ProjectReference Include="..\..\..\src\NuGet.Clients\NuGet.VisualStudio.Contracts\NuGet.VisualStudio.Contracts.csproj" />
     <ProjectReference Include="..\..\TestUtilities\Test.Utility\Test.Utility.csproj" />
-    <ProjectReference Include="..\..\TestExtensions\NuGet.StaFact\NuGet.StaFact.csproj" />
     <ProjectReference Include="..\NuGet.Console.TestContract\NuGet.Console.TestContract.csproj" />
     <ProjectReference Include="..\NuGet.PackageManagement.UI.TestContract\NuGet.PackageManagement.UI.TestContract.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Make sure VSIX is deployed to experimental instance -->
     <ProjectReference Include="..\..\..\src\NuGet.Clients\NuGet.VisualStudio.Client\NuGet.VisualStudio.Client.csproj" ReferenceOutputAssembly="false" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Update="xunit.runner.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
   </ItemGroup>
 
   <PropertyGroup>

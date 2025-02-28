@@ -7,7 +7,6 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.VisualStudio.Services.Common;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Threading;
 using NuGet.Common;
@@ -20,6 +19,8 @@ using NuGet.Packaging.Core;
 using NuGet.ProjectManagement;
 using NuGet.ProjectManagement.Projects;
 using NuGet.ProjectModel;
+using NuGet.Shared;
+using NuGet.Versioning;
 using NuGet.VisualStudio.Internal.Contracts;
 using TransitiveEntry = System.Collections.Generic.IDictionary<NuGet.Frameworks.FrameworkRuntimePair, System.Collections.Generic.IList<NuGet.Packaging.PackageReference>>;
 
@@ -34,7 +35,7 @@ namespace NuGet.PackageManagement.VisualStudio
     /// <typeparam name="U">Type of the collection elements for Installed and Transitive packages</typeparam>
     public abstract class PackageReferenceProject<T, U> : BuildIntegratedNuGetProject, IPackageReferenceProject where T : ICollection<U>, new()
     {
-        private static readonly NuGetFrameworkSorter FrameworkSorter = new();
+        private static readonly NuGetFrameworkSorter FrameworkSorter = NuGetFrameworkSorter.Instance;
 
         private static readonly ProjectPackages EmptyProjectPackages = new(Array.Empty<PackageReference>(), Array.Empty<TransitivePackageReference>());
 
@@ -116,9 +117,9 @@ namespace NuGet.PackageManagement.VisualStudio
             return (packageSpec, assetsPath);
         }
 
-        public async Task<ProjectPackages> GetInstalledAndTransitivePackagesAsync(bool includeTransitiveOrigins, CancellationToken token) => await GetInstalledAndTransitivePackagesAsync(includeTransitivePackages: true, includeTransitiveOrigins, token);
+        public virtual async Task<ProjectPackages> GetInstalledAndTransitivePackagesAsync(bool includeTransitiveOrigins, CancellationToken token) => await GetInstalledAndTransitivePackagesAsync(includeTransitivePackages: true, includeTransitiveOrigins, token);
 
-        public async Task<ProjectPackages> GetInstalledAndTransitivePackagesAsync(bool includeTransitivePackages, bool includeTransitiveOrigins, CancellationToken token)
+        internal async Task<ProjectPackages> GetInstalledAndTransitivePackagesAsync(bool includeTransitivePackages, bool includeTransitiveOrigins, CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
 
@@ -134,14 +135,13 @@ namespace NuGet.PackageManagement.VisualStudio
             IList<LockFileTarget> targetsList = null;
             T installedPackages;
             T transitivePackages = default;
+            Dictionary<string, TransitiveEntry> transitiveOrigins = default;
             if (IsInstalledAndTransitiveComputationNeeded)
             {
                 // clear the transitive packages cache, since we don't know when a dependency has been removed
                 installedPackages = new T();
-                if (includeTransitivePackages)
-                {
-                    transitivePackages = new T();
-                }
+                transitivePackages = new T();
+                transitiveOrigins = new Dictionary<string, TransitiveEntry>();
                 targetsList = await GetTargetsListAsync(assetsFilePath, token);
             }
             else
@@ -164,6 +164,7 @@ namespace NuGet.PackageManagement.VisualStudio
                     if (TransitivePackages == null)
                     {
                         transitivePackages = new T();
+                        transitiveOrigins = new Dictionary<string, TransitiveEntry>();
                     }
                     else
                     {
@@ -188,6 +189,11 @@ namespace NuGet.PackageManagement.VisualStudio
             IEnumerable<PackageReference> calculatedTransitivePackages = Enumerable.Empty<PackageReference>();
             if (includeTransitivePackages)
             {
+                if (targetsList == null)
+                {
+                    targetsList = await GetTargetsListAsync(assetsFilePath, token);
+                }
+
                 calculatedTransitivePackages = packageSpec
                     .TargetFrameworks
                     .SelectMany(f => ResolvedTransitivePackagesList(f.FrameworkName, targetsList, installedPackages, transitivePackages))
@@ -195,14 +201,12 @@ namespace NuGet.PackageManagement.VisualStudio
                     .Select(g => g.OrderBy(p => p.TargetFramework, FrameworkSorter).First());
             }
 
-            CounterfactualLoggers.TransitiveDependencies.EmitIfNeeded(); // Emit only one event per VS session
             IEnumerable<TransitivePackageReference> transitivePackagesWithOrigins = Enumerable.Empty<TransitivePackageReference>();
             if (includeTransitivePackages)
             {
-                if (includeTransitiveOrigins && await ExperimentUtility.IsTransitiveOriginExpEnabled.GetValueAsync(token))
+                if (includeTransitiveOrigins)
                 {
                     // Compute Transitive Origins
-                    Dictionary<string, TransitiveEntry> transitiveOrigins;
                     if (IsInstalledAndTransitiveComputationNeeded // Cache invalidation
                         || TransitiveOriginsCache == null // If any data race left the cache as null
                         || (!TransitiveOriginsCache.Any() && calculatedTransitivePackages.Any())) // We have transitive packages, but no transitive origins and the call is requesting transitive origins
@@ -215,7 +219,19 @@ namespace NuGet.PackageManagement.VisualStudio
                             targetsList = await GetTargetsListAsync(assetsFilePath, token);
                         }
 
-                        transitiveOrigins = calculatedTransitivePackages.Any() ? ComputeTransitivePackageOrigins(calculatedInstalledPackages, targetsList, token) : new Dictionary<string, TransitiveEntry>();
+                        // If the project has project references, we need to compute transitive origins for their packages
+                        List<PackageReference> projectReferences = packageSpec
+                            .TargetFrameworks
+                            .SelectMany(f => GetProjectPackageReferences(f.FrameworkName, targetsList))
+                            .GroupBy(p => p.PackageIdentity)
+                            .Select(g => g.OrderBy(p => p.TargetFramework, FrameworkSorter).First())
+                            .ToList();
+
+                        List<PackageReference> calculatedLibraryReferences = new List<PackageReference>(projectReferences);
+                        calculatedLibraryReferences.AddRange(calculatedInstalledPackages);
+
+                        // Compute Transitive Origins
+                        transitiveOrigins = calculatedTransitivePackages.Any() ? ComputeTransitivePackageOrigins(calculatedLibraryReferences, targetsList, token) : new Dictionary<string, TransitiveEntry>();
                     }
                     else
                     {
@@ -254,8 +270,14 @@ namespace NuGet.PackageManagement.VisualStudio
             {
                 InstalledPackages = installedPackages;
             }
-            if (includeTransitivePackages)
+            // if includeTransitivePackages, update the cache with the new transitive packages information
+            // or if IsInstalledAndTransitiveComputationNeeded, clear the transitive packages cache, since we don't know when a dependency has been removed
+            if (includeTransitivePackages || IsInstalledAndTransitiveComputationNeeded)
             {
+                lock (_transitiveOriginsLock)
+                {
+                    TransitiveOriginsCache = transitiveOrigins;
+                }
                 lock (_installedAndTransitivePackagesLock)
                 {
                     TransitivePackages = transitivePackages;
@@ -267,8 +289,28 @@ namespace NuGet.PackageManagement.VisualStudio
             return new ProjectPackages(calculatedInstalledPackages, transitivePkgsResult);
         }
 
-        /// <inheritdoc/>
-        public virtual async Task<ProjectPackages> GetInstalledAndTransitivePackagesAsync(CancellationToken token) => await GetInstalledAndTransitivePackagesAsync(includeTransitivePackages: true, includeTransitiveOrigins: false, token);
+
+        private static IEnumerable<PackageReference> GetProjectPackageReferences(NuGetFramework nuGetFramework, IList<LockFileTarget> targetsList)
+        {
+            if (targetsList is null)
+            {
+                return Enumerable.Empty<PackageReference>();
+            }
+
+            var packageReferences = targetsList
+                .Where(t => t.TargetFramework.Equals(nuGetFramework))
+                .SelectMany(lib => lib.Libraries)
+                .Where(l => l.Type == "project")
+                .Select(package => new PackageReference(
+                    new PackageIdentity(package.Name, package.Version),
+                    targetFramework: nuGetFramework,
+                    userInstalled: false,
+                    developmentDependency: false,
+                    requireReinstallation: false,
+                    allowedVersions: new VersionRange(package.Version)));
+
+            return packageReferences;
+        }
 
         protected abstract IEnumerable<PackageReference> ResolvedInstalledPackagesList(IEnumerable<LibraryDependency> libraries, NuGetFramework targetFramework, IList<LockFileTarget> targets, T installedPackages);
 
@@ -316,9 +358,8 @@ namespace NuGet.PackageManagement.VisualStudio
             else
             {
                 return targets
-                    .SelectMany(target => target.Libraries)
-                    .Where(library => library.Type == LibraryType.Package)
-                    .SelectMany(library => GetPackageReferenceUtility.UpdateTransitiveDependencies(library, targetFramework, targets, installedPackages, transitivePackages))
+                    .Where(target => target.TargetFramework.Equals(targetFramework))
+                    .SelectMany(target => GetPackageReferenceUtility.UpdateTransitiveDependencies(target.Libraries, installedPackages, transitivePackages))
                     .Select(packageIdentity => new PackageReference(packageIdentity, targetFramework))
                     .ToList();
             }
@@ -332,7 +373,7 @@ namespace NuGet.PackageManagement.VisualStudio
         /// <param name="ct">Cancellation Token</param>
         /// <returns>A dictionary, indexed by Framework/Runtime-ID with all top (installed)
         /// packages that depends on given transitive package</returns>
-        /// <remarks>Computes all transitive origins for each Framework/Runtime-ID combiation. Runtime-ID can be <c>null</c>.
+        /// <remarks>Computes all transitive origins for each Framework/Runtime-ID combiation. Runtime-ID can be <see langword="null" />.
         /// Transitive origins are calculated using a Depth First Search algorithm on all direct dependencies exhaustively</remarks>
         internal static Dictionary<string, TransitiveEntry> ComputeTransitivePackageOrigins(List<PackageReference> installedPackages, IList<LockFileTarget> targetsList, CancellationToken ct)
         {
@@ -405,7 +446,7 @@ namespace NuGet.PackageManagement.VisualStudio
 
             await TaskScheduler.Default;
 
-            LockFile lockFile = LockFileUtilities.GetLockFile(assetsFilePath, NullLogger.Instance);
+            LockFile lockFile = LockFileUtilities.GetLockFile(assetsFilePath, NullLogger.Instance, LockFileReadFlags.PackageFolders | LockFileReadFlags.Targets);
             _packageFolders = lockFile?.PackageFolders ?? Array.Empty<LockFileItem>();
 
             return lockFile?.Targets;
@@ -428,7 +469,7 @@ namespace NuGet.PackageManagement.VisualStudio
             // Find first target node that matches current
             foreach (LockFileTargetLibrary lib in graph.Libraries)
             {
-                if (lib.Type == LibraryType.Package.Value
+                if ((lib.Type == LibraryType.Package.Value || lib.Type == LibraryType.Project.Value)
                     && string.Equals(lib.Name, current.PackageIdentity.Id, StringComparison.OrdinalIgnoreCase)
                     && ((current.HasAllowedVersions && current.AllowedVersions.Satisfies(lib.Version)) ||
                         (current.PackageIdentity.HasVersion && current.PackageIdentity.Version.Equals(lib.Version))))

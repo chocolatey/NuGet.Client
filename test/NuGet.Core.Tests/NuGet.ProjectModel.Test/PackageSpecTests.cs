@@ -109,7 +109,7 @@ namespace NuGet.ProjectModel.Test
             Assert.NotEqual(originalPackOptions, clone);
             Assert.Equal(originalPackageName, clone.PackageType[0].Name);
 
-            // Set Up again
+            // Arrange again
             originalPackOptions.Mappings.Add("randomString", files);
 
             // Act again
@@ -132,7 +132,7 @@ namespace NuGet.ProjectModel.Test
                 libraryRange: new LibraryRange(Guid.NewGuid().ToString(), LibraryDependencyTarget.Package),
                 includeType: LibraryIncludeFlags.None,
                 suppressParent: LibraryIncludeFlags.ContentFiles,
-                noWarn: new List<NuGetLogCode>() { NuGetLogCode.NU1000, NuGetLogCode.NU1001, NuGetLogCode.NU1002 },
+                noWarn: [NuGetLogCode.NU1000, NuGetLogCode.NU1001, NuGetLogCode.NU1002],
                 autoReferenced: false,
                 generatePathProperty: false,
                 versionCentrallyManaged: false,
@@ -229,7 +229,7 @@ namespace NuGet.ProjectModel.Test
         //[InlineData("ModifyRestoreSettings", true)] = Not really included in the equals and hash code comparisons
         public void PackageSpecCloneTest(string methodName, bool validateJson)
         {
-            // Set up
+            // Arrange
             var packageSpec = CreatePackageSpec();
             var clonedPackageSpec = packageSpec.Clone();
 
@@ -275,12 +275,14 @@ namespace NuGet.ProjectModel.Test
 
             public static void ModifyOriginalTargetFrameworkInformationEdit(PackageSpec packageSpec)
             {
-                packageSpec.TargetFrameworks[0].Imports.Add(NuGetFramework.Parse("net461"));
+                var newImports = packageSpec.TargetFrameworks[0].Imports.Add(NuGetFramework.Parse("net461"));
+                packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Imports = newImports };
             }
 
             public static void ModifyRestoreMetadata(PackageSpec packageSpec)
             {
-                packageSpec.TargetFrameworks[0].Imports.Add(NuGetFramework.Parse("net461"));
+                var newImports = packageSpec.TargetFrameworks[0].Imports.Add(NuGetFramework.Parse("net461"));
+                packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Imports = newImports };
             }
 
             public static void ModifyVersion(PackageSpec packageSpec)
@@ -385,6 +387,8 @@ namespace NuGet.ProjectModel.Test
             originalProjectRestoreMetadata.OriginalTargetFrameworks = new List<string>() { "net45" };
             originalProjectRestoreMetadata.Files = new List<ProjectRestoreMetadataFile>() { new ProjectRestoreMetadataFile("packagePath", "absolutePath") };
             originalProjectRestoreMetadata.ProjectWideWarningProperties = warningProperties;
+            originalProjectRestoreMetadata.SdkAnalysisLevel = new NuGetVersion("9.0.100");
+            originalProjectRestoreMetadata.UsingMicrosoftNETSdk = false;
 
             return originalProjectRestoreMetadata;
         }
@@ -407,7 +411,7 @@ namespace NuGet.ProjectModel.Test
         [Fact]
         public void ProjectRestoreMetadataCloneTest()
         {
-            // Set up
+            // Arrange
             var originalProjectRestoreMetadata = CreateProjectRestoreMetadata();
             // Act
 
@@ -421,7 +425,7 @@ namespace NuGet.ProjectModel.Test
         [Fact]
         public void ProjectRestoreMetadataCloneChangeSourcesTest()
         {
-            // Set up
+            // Arrange
             var originalProjectRestoreMetadata = CreateProjectRestoreMetadata();
 
             // Preconditions
@@ -438,9 +442,98 @@ namespace NuGet.ProjectModel.Test
         }
 
         [Fact]
+        public void ProjectRestoreMetadataEqualityAccountsForDuplicates()
+        {
+            // Arrange
+            var left = CreateProjectRestoreMetadata();
+            var right = CreateProjectRestoreMetadata();
+            left.Sources = new List<PackageSource>() { new PackageSource("http://api.nuget.org/v3/index.json"), new PackageSource("C:\\source"), new PackageSource("http://api.nuget.org/v3/index.json") };
+            right.Sources = new List<PackageSource>() { new PackageSource("C:\\source"), new PackageSource("http://api.nuget.org/v3/index.json"), new PackageSource("http://api.nuget.org/v3/index.json") };
+
+            // Act & Assert
+            Assert.Equal(left, right);
+        }
+
+        [Fact]
+        public void ProjectRestoreMetadataCloneChangeCentralPackageVersionsEnabledTest()
+        {
+            // Arrange
+            var originalProjectRestoreMetadata = CreateProjectRestoreMetadata();
+
+            // Preconditions
+            var happyClone = originalProjectRestoreMetadata.Clone();
+            Assert.Equal(originalProjectRestoreMetadata, happyClone);
+            Assert.False(object.ReferenceEquals(originalProjectRestoreMetadata, happyClone));
+
+            // Act
+            originalProjectRestoreMetadata.CentralPackageVersionsEnabled = !originalProjectRestoreMetadata.CentralPackageVersionsEnabled;
+
+            // Assert
+            Assert.NotEqual(originalProjectRestoreMetadata, happyClone);
+            Assert.Equal(originalProjectRestoreMetadata.CentralPackageVersionsEnabled, !happyClone.CentralPackageVersionsEnabled);
+        }
+
+        [Fact]
+        public void ProjectRestoreMetadataCloneChangeCentralPackageFloatingVersionsEnabledTest()
+        {
+            // Arrange
+            var originalProjectRestoreMetadata = CreateProjectRestoreMetadata();
+
+            // Preconditions
+            var happyClone = originalProjectRestoreMetadata.Clone();
+            Assert.Equal(originalProjectRestoreMetadata, happyClone);
+            Assert.False(object.ReferenceEquals(originalProjectRestoreMetadata, happyClone));
+
+            // Act
+            originalProjectRestoreMetadata.CentralPackageFloatingVersionsEnabled = !originalProjectRestoreMetadata.CentralPackageFloatingVersionsEnabled;
+
+            // Assert
+            Assert.NotEqual(originalProjectRestoreMetadata, happyClone);
+            Assert.Equal(originalProjectRestoreMetadata.CentralPackageFloatingVersionsEnabled, !happyClone.CentralPackageFloatingVersionsEnabled);
+        }
+
+        [Fact]
+        public void ProjectRestoreMetadataCloneChangeCentralPackageVersionOverrideDisabledTest()
+        {
+            // Arrange
+            var originalProjectRestoreMetadata = CreateProjectRestoreMetadata();
+
+            // Preconditions
+            var happyClone = originalProjectRestoreMetadata.Clone();
+            Assert.Equal(originalProjectRestoreMetadata, happyClone);
+            Assert.False(object.ReferenceEquals(originalProjectRestoreMetadata, happyClone));
+
+            // Act
+            originalProjectRestoreMetadata.CentralPackageVersionOverrideDisabled = !originalProjectRestoreMetadata.CentralPackageVersionOverrideDisabled;
+
+            // Assert
+            Assert.NotEqual(originalProjectRestoreMetadata, happyClone);
+            Assert.Equal(originalProjectRestoreMetadata.CentralPackageVersionOverrideDisabled, !happyClone.CentralPackageVersionOverrideDisabled);
+        }
+
+        [Fact]
+        public void ProjectRestoreMetadataCloneChangeCentralPackageTransitivePinningEnabledTest()
+        {
+            // Arrange
+            var originalProjectRestoreMetadata = CreateProjectRestoreMetadata();
+
+            // Preconditions
+            var happyClone = originalProjectRestoreMetadata.Clone();
+            Assert.Equal(originalProjectRestoreMetadata, happyClone);
+            Assert.False(object.ReferenceEquals(originalProjectRestoreMetadata, happyClone));
+
+            // Act
+            originalProjectRestoreMetadata.CentralPackageTransitivePinningEnabled = !originalProjectRestoreMetadata.CentralPackageTransitivePinningEnabled;
+
+            // Assert
+            Assert.NotEqual(originalProjectRestoreMetadata, happyClone);
+            Assert.Equal(originalProjectRestoreMetadata.CentralPackageTransitivePinningEnabled, !happyClone.CentralPackageTransitivePinningEnabled);
+        }
+
+        [Fact]
         public void ProjectRestoreMetadataCloneChangeFallbackFoldersTest()
         {
-            // Set up
+            // Arrange
             var originalProjectRestoreMetadata = CreateProjectRestoreMetadata();
 
             // Preconditions
@@ -459,7 +552,7 @@ namespace NuGet.ProjectModel.Test
         [Fact]
         public void ProjectRestoreMetadataCloneChangeConfigFilePathsTest()
         {
-            // Set up
+            // Arrange
             var originalProjectRestoreMetadata = CreateProjectRestoreMetadata();
 
             // Preconditions
@@ -478,7 +571,7 @@ namespace NuGet.ProjectModel.Test
         [Fact]
         public void ProjectRestoreMetadataCloneChangeOriginalTargetFrameworksTest()
         {
-            // Set up
+            // Arrange
             var originalProjectRestoreMetadata = CreateProjectRestoreMetadata();
 
             // Preconditions
@@ -497,7 +590,7 @@ namespace NuGet.ProjectModel.Test
         [Fact]
         public void ProjectRestoreMetadataCloneChangeFilesTest()
         {
-            // Set up
+            // Arrange
             var originalProjectRestoreMetadata = CreateProjectRestoreMetadata();
 
             // Preconditions
@@ -516,7 +609,7 @@ namespace NuGet.ProjectModel.Test
         [Fact]
         public void ProjectRestoreMetadataCloneChangeProjectWideWarningPropertiesTest()
         {
-            // Set up
+            // Arrange
             var originalProjectRestoreMetadata = CreateProjectRestoreMetadata();
 
             // Preconditions
@@ -525,17 +618,17 @@ namespace NuGet.ProjectModel.Test
             Assert.False(object.ReferenceEquals(originalProjectRestoreMetadata, happyClone));
 
             // Act
-            originalProjectRestoreMetadata.ProjectWideWarningProperties.AllWarningsAsErrors = false; ;
+            originalProjectRestoreMetadata.ProjectWideWarningProperties.AllWarningsAsErrors = false;
 
             // Assert
             Assert.NotEqual(originalProjectRestoreMetadata, happyClone);
-            Assert.Equal(true, happyClone.ProjectWideWarningProperties.AllWarningsAsErrors);
+            Assert.True(happyClone.ProjectWideWarningProperties.AllWarningsAsErrors);
         }
 
         [Fact]
         public void ProjectRestoreMetadataFileCloneTest()
         {
-            // Set up
+            // Arrange
             var originalProjectRestoreMetadataFile = new ProjectRestoreMetadataFile("packagePath", "absolutePath");
 
             // Act
@@ -579,7 +672,7 @@ namespace NuGet.ProjectModel.Test
         [Fact]
         public void ProjectRestoreReferenceCloneTest()
         {
-            // Set up
+            // Arrange
             var originalProjectRestoreReference = new ProjectRestoreReference();
             originalProjectRestoreReference.ProjectPath = "Path";
             originalProjectRestoreReference.ProjectUniqueName = "ProjectUniqueName";
@@ -599,13 +692,14 @@ namespace NuGet.ProjectModel.Test
         {
             var prs = new ProjectRestoreSettings();
             prs.HideWarningsAndErrors = true;
+            prs.SdkVersion = new NuGetVersion(10, 0, 100);
             return prs;
         }
 
         [Fact]
         public void ProjectRestoreSettingsCloneTest()
         {
-            // Set up
+            // Arrange
             var originalProjectRestoreSettings = CreateProjectRestoreSettings();
 
             // Act
@@ -623,7 +717,7 @@ namespace NuGet.ProjectModel.Test
                 libraryRange: new LibraryRange("Dependency", LibraryDependencyTarget.Package),
                 includeType: LibraryIncludeFlags.None,
                 suppressParent: LibraryIncludeFlags.ContentFiles,
-                noWarn: new List<NuGetLogCode>() { NuGetLogCode.NU1000, NuGetLogCode.NU1001 },
+                noWarn: [NuGetLogCode.NU1000, NuGetLogCode.NU1001],
                 autoReferenced: false,
                 generatePathProperty: false,
                 versionCentrallyManaged: false,
@@ -632,28 +726,36 @@ namespace NuGet.ProjectModel.Test
                 versionOverride: null);
             var imports = NuGetFramework.Parse("net45"); // This makes no sense in the context of fallback, just for testing :)
 
-            var originalTargetFrameworkInformation = new TargetFrameworkInformation();
-            originalTargetFrameworkInformation.TargetAlias = alias ?? Guid.NewGuid().ToString();
-            originalTargetFrameworkInformation.FrameworkName = framework;
-            originalTargetFrameworkInformation.Dependencies = new List<LibraryDependency>() { dependency };
-            originalTargetFrameworkInformation.AssetTargetFallback = false;
-            originalTargetFrameworkInformation.Imports = new List<NuGetFramework>() { imports };
-            originalTargetFrameworkInformation.DownloadDependencies.Add(new DownloadDependency("X", VersionRange.Parse("1.0.0")));
-            originalTargetFrameworkInformation.FrameworkReferences.Add(new FrameworkDependency("frameworkRef", FrameworkDependencyFlags.All));
-            originalTargetFrameworkInformation.FrameworkReferences.Add(new FrameworkDependency("FrameworkReference", FrameworkDependencyFlags.None));
-            originalTargetFrameworkInformation.RuntimeIdentifierGraphPath = @"path/to/dotnet/sdk/3.0.100/runtime.json";
-            originalTargetFrameworkInformation.CentralPackageVersions.Add("CVD", new CentralPackageVersion("CVD", VersionRange.Parse("1.0.0")));
+            var originalTargetFrameworkInformation = new TargetFrameworkInformation()
+            {
+                AssetTargetFallback = false,
+                CentralPackageVersions = new Dictionary<string, CentralPackageVersion>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "CVD", new CentralPackageVersion("CVD", VersionRange.Parse("1.0.0")) },
+                },
+                Dependencies = [dependency],
+                DownloadDependencies = [new DownloadDependency("X", VersionRange.Parse("1.0.0"))],
+                FrameworkName = framework,
+                FrameworkReferences = [
+                    new FrameworkDependency("frameworkRef", FrameworkDependencyFlags.All),
+                    new FrameworkDependency("FrameworkReference", FrameworkDependencyFlags.None)
+                ],
+                Imports = [imports],
+                RuntimeIdentifierGraphPath = @"path/to/dotnet/sdk/3.0.100/runtime.json",
+                TargetAlias = alias ?? Guid.NewGuid().ToString()
+            };
+
             return originalTargetFrameworkInformation;
         }
 
         [Fact]
         public void TargetFrameworkInformationCloneTest()
         {
-            // Set up
+            // Arrange
             var originalTargetFrameworkInformation = CreateTargetFrameworkInformation();
 
             // Act
-            var clone = originalTargetFrameworkInformation.Clone();
+            var clone = new TargetFrameworkInformation(originalTargetFrameworkInformation);
 
             // Assert
             Assert.Equal(originalTargetFrameworkInformation, clone);
@@ -661,68 +763,71 @@ namespace NuGet.ProjectModel.Test
             Assert.Equal(originalTargetFrameworkInformation.GetHashCode(), clone.GetHashCode());
 
             // Act
-            originalTargetFrameworkInformation.Imports.Clear();
+            originalTargetFrameworkInformation = new TargetFrameworkInformation(originalTargetFrameworkInformation) { Imports = [] };
 
             // Assert
             Assert.NotEqual(originalTargetFrameworkInformation, clone);
-            Assert.Equal(1, clone.Imports.Count);
+            Assert.Equal(1, clone.Imports.Length);
 
             //Act
-            var cloneToTestDependencies = originalTargetFrameworkInformation.Clone();
+            var cloneToTestDependencies = new TargetFrameworkInformation(originalTargetFrameworkInformation);
 
             // Assert
             Assert.Equal(originalTargetFrameworkInformation, cloneToTestDependencies);
             Assert.False(ReferenceEquals(originalTargetFrameworkInformation, cloneToTestDependencies));
 
             // Act
-            originalTargetFrameworkInformation.Dependencies.Clear();
+            originalTargetFrameworkInformation = new TargetFrameworkInformation(originalTargetFrameworkInformation) { Dependencies = [] };
 
             // Assert
             Assert.NotEqual(originalTargetFrameworkInformation, cloneToTestDependencies);
-            Assert.Equal(1, cloneToTestDependencies.Dependencies.Count);
+            Assert.Equal(1, cloneToTestDependencies.Dependencies.Length);
 
             //Act
-            var cloneToTestDownloadDependencies = originalTargetFrameworkInformation.Clone();
+            var cloneToTestDownloadDependencies = new TargetFrameworkInformation(originalTargetFrameworkInformation);
 
             // Assert
             Assert.Equal(originalTargetFrameworkInformation, cloneToTestDownloadDependencies);
             Assert.False(ReferenceEquals(originalTargetFrameworkInformation, cloneToTestDownloadDependencies));
 
             // Act
-            originalTargetFrameworkInformation.DownloadDependencies.Clear();
+            originalTargetFrameworkInformation = new TargetFrameworkInformation(originalTargetFrameworkInformation) { DownloadDependencies = [] };
 
             //Assert
             Assert.NotEqual(originalTargetFrameworkInformation, cloneToTestDownloadDependencies);
-            Assert.Equal(1, cloneToTestDownloadDependencies.DownloadDependencies.Count);
+            Assert.Equal(1, cloneToTestDownloadDependencies.DownloadDependencies.Length);
 
             //Setup
-            var cloneToTestFrameworkReferenceEquality = originalTargetFrameworkInformation.Clone();
-            cloneToTestFrameworkReferenceEquality.FrameworkReferences.Clear();
-            cloneToTestFrameworkReferenceEquality.FrameworkReferences.Add(new FrameworkDependency("frameworkRef", FrameworkDependencyFlags.All));
-            cloneToTestFrameworkReferenceEquality.FrameworkReferences.Add(new FrameworkDependency("frameworkReference", FrameworkDependencyFlags.None));
+            var cloneToTestFrameworkReferenceEquality = new TargetFrameworkInformation(originalTargetFrameworkInformation)
+            {
+                FrameworkReferences = [
+                    new FrameworkDependency("frameworkRef", FrameworkDependencyFlags.All),
+                    new FrameworkDependency("frameworkReference", FrameworkDependencyFlags.None)
+                ]
+            };
 
             // Assert
             Assert.Equal(originalTargetFrameworkInformation, cloneToTestFrameworkReferenceEquality);
             Assert.False(ReferenceEquals(originalTargetFrameworkInformation, cloneToTestFrameworkReferenceEquality));
 
             //Act
-            var cloneToTestFrameworkReferences = originalTargetFrameworkInformation.Clone();
+            var cloneToTestFrameworkReferences = new TargetFrameworkInformation(originalTargetFrameworkInformation);
 
             // Assert
             Assert.Equal(originalTargetFrameworkInformation, cloneToTestFrameworkReferences);
             Assert.False(ReferenceEquals(originalTargetFrameworkInformation, cloneToTestFrameworkReferences));
 
             // Act
-            originalTargetFrameworkInformation.FrameworkReferences.Clear();
+            originalTargetFrameworkInformation = new TargetFrameworkInformation(originalTargetFrameworkInformation) { FrameworkReferences = [] };
 
             //Assert
             Assert.NotEqual(originalTargetFrameworkInformation, cloneToTestFrameworkReferences);
             Assert.Equal(2, cloneToTestFrameworkReferences.FrameworkReferences.Count);
 
-            var cloneToTestRuntimeIdentifierGraphPath = originalTargetFrameworkInformation.Clone();
+            var cloneToTestRuntimeIdentifierGraphPath = new TargetFrameworkInformation(originalTargetFrameworkInformation);
 
             // Act
-            originalTargetFrameworkInformation.RuntimeIdentifierGraphPath = "new/path/to/runtime.json";
+            originalTargetFrameworkInformation = new TargetFrameworkInformation(originalTargetFrameworkInformation) { RuntimeIdentifierGraphPath = "new/path/to/runtime.json" };
 
             //Assert
             Assert.NotEqual(originalTargetFrameworkInformation, cloneToTestRuntimeIdentifierGraphPath);
@@ -731,7 +836,7 @@ namespace NuGet.ProjectModel.Test
         [Fact]
         public void WarningPropertiesCloneTest()
         {
-            // Set up
+            // Arrange
             var allWarningsAsErrors = false;
             var noWarn = new HashSet<NuGetLogCode>() { NuGetLogCode.NU1000, NuGetLogCode.NU1500 };
             var warningsAsErrors = new HashSet<NuGetLogCode>() { NuGetLogCode.NU1001, NuGetLogCode.NU1501 };
@@ -760,6 +865,7 @@ namespace NuGet.ProjectModel.Test
         }
 
         [Fact]
+        [Obsolete]
         public void FrameworkRuntimePairCloneTest()
         {
             //Setup
@@ -767,8 +873,7 @@ namespace NuGet.ProjectModel.Test
             //Act
             var clone = frp.Clone();
             //Assert
-            Assert.Equal(frp, clone);
-            Assert.False(object.ReferenceEquals(frp, clone));
+            Assert.Same(frp, clone);
         }
 
         private static CompatibilityProfile CreateCompatibilityProfile(string name, string tfm = "net461")
@@ -786,7 +891,7 @@ namespace NuGet.ProjectModel.Test
             //Assert
             Assert.Equal(compat, clone);
             Assert.False(object.ReferenceEquals(compat, clone));
-            Assert.False(object.ReferenceEquals(compat.RestoreContexts[0], clone.RestoreContexts[0]));
+            Assert.Same(compat.RestoreContexts[0], clone.RestoreContexts[0]); // FRP is immutable so the instance is reused
 
             // Act - Change the list of compat
             compat.RestoreContexts.Add(CreateFrameworkRuntimePair(rid: "win10-x64"));

@@ -12,11 +12,22 @@ namespace NuGet.CommandLine.XPlat
     /// <summary>
     /// Logger to print formatted command output.
     /// </summary>
-    internal class CommandOutputLogger : LoggerBase, ILogger
+    internal class CommandOutputLogger : LoggerBase, ILoggerWithColor
     {
         public CommandOutputLogger(LogLevel logLevel)
         {
             VerbosityLevel = logLevel;
+        }
+
+        /// <summary>
+        /// Create a CommandOutputLogger for commands invoked by the .NET CLI
+        /// </summary>
+        /// <returns></returns>
+        public static CommandOutputLogger Create()
+        {
+            var logger = new CommandOutputLogger(LogLevel.Information);
+            logger.HidePrefixForInfoAndMinimal = true;
+            return logger;
         }
 
         public override void LogDebug(string data)
@@ -125,7 +136,15 @@ namespace NuGet.CommandLine.XPlat
         {
             Log(message);
 
-            return Task.FromResult(0);
+            return Task.CompletedTask;
+        }
+
+        public virtual void LogMinimal(string data, ConsoleColor color)
+        {
+            var currentColor = Console.ForegroundColor;
+            Console.ForegroundColor = color;
+            Console.Write(data);
+            Console.ForegroundColor = currentColor;
         }
     }
 }

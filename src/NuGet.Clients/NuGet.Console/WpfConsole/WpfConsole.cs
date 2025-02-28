@@ -637,7 +637,7 @@ namespace NuGetConsole.Implementation.Console
                     1 /* in progress */,
                     operation,
                     (uint)percentComplete,
-                    (uint)100);
+                    100);
             }
         }
 
@@ -648,8 +648,8 @@ namespace NuGetConsole.Implementation.Console
                 ref _pdwCookieForStatusBar,
                 0 /* completed */,
                 string.Empty,
-                (uint)100,
-                (uint)100);
+                100,
+                100);
         }
 
         private async Task HideProgressAsync()
@@ -660,8 +660,8 @@ namespace NuGetConsole.Implementation.Console
                 ref _pdwCookieForStatusBar,
                 0 /* completed */,
                 string.Empty,
-                (uint)100,
-                (uint)100);
+                100,
+                100);
         }
 
         public void SetExecutionMode(bool isExecuting)
@@ -745,6 +745,12 @@ namespace NuGetConsole.Implementation.Console
                 if (disposable != null)
                 {
                     disposable.Dispose();
+                }
+
+                if (_view is not null)
+                {
+                    _view.CloseView();
+                    _view = null;
                 }
             }
         }

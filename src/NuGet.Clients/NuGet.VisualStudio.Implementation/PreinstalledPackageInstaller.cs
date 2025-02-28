@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -373,13 +372,13 @@ namespace NuGet.VisualStudio
 
                 var groups = reader.GetReferenceItems();
 
-                var fwComparer = new NuGetFrameworkFullComparer();
+                var fwComparer = NuGetFrameworkFullComparer.Instance;
                 FrameworkReducer reducer = new FrameworkReducer();
                 NuGetFramework targetGroupFramework = reducer.GetNearest(projectSystem.TargetFramework, groups.Select(e => e.TargetFramework));
 
                 if (targetGroupFramework != null)
                 {
-                    var refGroup = groups.Where(e => fwComparer.Equals(targetGroupFramework, e.TargetFramework)).FirstOrDefault();
+                    var refGroup = groups.FirstOrDefault(e => fwComparer.Equals(targetGroupFramework, e.TargetFramework));
 
                     foreach (string refItem in refGroup.Items)
                     {
@@ -421,7 +420,7 @@ namespace NuGet.VisualStudio
             }
         }
 
-        private void CopyNativeBinaries(VsMSBuildProjectSystem projectSystem, string packagePath)
+        private static void CopyNativeBinaries(VsMSBuildProjectSystem projectSystem, string packagePath)
         {
             const string nativeBinariesFolder = "NativeBinaries";
             const string binFolder = "bin";

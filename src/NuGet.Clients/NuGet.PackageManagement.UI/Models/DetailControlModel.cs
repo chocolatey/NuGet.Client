@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using Microsoft.ServiceHub.Framework;
+using NuGet.PackageManagement.UI.ViewModels;
 using NuGet.PackageManagement.VisualStudio;
 using NuGet.Packaging.Core;
 using NuGet.Versioning;
@@ -23,7 +24,7 @@ namespace NuGet.PackageManagement.UI
     /// The base class of PackageDetailControlModel and PackageSolutionDetailControlModel.
     /// When user selects an action, this triggers version list update.
     /// </summary>
-    public abstract class DetailControlModel : INotifyPropertyChanged, IDisposable
+    public abstract class DetailControlModel : TitledPageViewModelBase, IDisposable
     {
         private static readonly string StarAll = VersionRangeFormatter.Instance.Format("p", VersionRange.Parse("*"), VersionRangeFormatter.Instance);
         private static readonly string StarAllFloating = VersionRangeFormatter.Instance.Format("p", VersionRange.Parse("*-*"), VersionRangeFormatter.Instance);
@@ -35,7 +36,7 @@ namespace NuGet.PackageManagement.UI
 
         // all versions of the _searchResultPackage
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1051:DoNotDeclareVisibleInstanceFields")]
-        protected List<(NuGetVersion version, bool isDeprecated)> _allPackageVersions;
+        protected List<(NuGetVersion version, bool isDeprecated, bool isVulnerable)> _allPackageVersions;
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1051:DoNotDeclareVisibleInstanceFields")]
         protected PackageItemViewModel _searchResultPackage;
@@ -48,13 +49,19 @@ namespace NuGet.PackageManagement.UI
 
         private Dictionary<NuGetVersion, DetailedPackageMetadata> _metadataDict = new Dictionary<NuGetVersion, DetailedPackageMetadata>();
 
+        private INuGetUI _uiController;
+
         protected DetailControlModel(
             IServiceBroker serviceBroker,
-            IEnumerable<IProjectContextInfo> projects)
+            IEnumerable<IProjectContextInfo> projects,
+            INuGetUI uiController)
         {
             _nugetProjects = projects;
             ServiceBroker = serviceBroker;
+            _uiController = uiController;
+
             _options = new OptionsViewModel();
+            PackageSourceMappingViewModel = PackageSourceMappingActionViewModel.Create(uiController);
 
             // Show dependency behavior and file conflict options if any of the projects are non-build integrated
             _options.ShowClassicOptions = projects.Any(project => project.ProjectKind == NuGetProjectKind.PackagesConfig);
@@ -63,6 +70,9 @@ namespace NuGet.PackageManagement.UI
             _options.SelectedChanged += DependencyBehavior_SelectedChanged;
 
             _versions = new ItemsChangeObservableCollection<DisplayVersion>();
+
+            Title = Resources.Label_PackageDetails;
+            IsVisible = true;
         }
 
         /// <summary>
@@ -117,6 +127,8 @@ namespace NuGet.PackageManagement.UI
             RecommenderVersion = recommenderVersion;
         }
 
+        public abstract void SetInstalledOrUpdateButtonIsEnabled();
+
         /// <summary>
         /// Sets the package to be displayed in the detail control.
         /// </summary>
@@ -134,6 +146,7 @@ namespace NuGet.PackageManagement.UI
 
             _searchResultPackage = searchResultPackage;
             _filter = filter;
+            PackageSourceMappingViewModel.PackageId = searchResultPackage.Id;
             OnPropertyChanged(nameof(Id));
             OnPropertyChanged(nameof(PackagePath));
             OnPropertyChanged(nameof(IconUrl));
@@ -214,9 +227,9 @@ namespace NuGet.PackageManagement.UI
             }
 
             // Show the current package version as the only package in the list at first just in case fetching the versions takes a while.
-            _allPackageVersions = new List<(NuGetVersion version, bool isDeprecated)>()
+            _allPackageVersions = new List<(NuGetVersion version, bool isDeprecated, bool isVulnerable)>()
             {
-                (searchResultPackage.Version, false)
+                (searchResultPackage.Version, false, false)
             };
 
             await CreateVersionsAsync(CancellationToken.None);
@@ -233,7 +246,7 @@ namespace NuGet.PackageManagement.UI
             }
 
             // Get the list of available versions, ignoring null versions
-            _allPackageVersions = versions
+            _allPackageVersions = versions?
                 .Where(v => v?.Version != null)
                 .Select(GetVersion)
                 .ToList();
@@ -256,7 +269,8 @@ namespace NuGet.PackageManagement.UI
                 var detailedPackageMetadata = new DetailedPackageMetadata(
                     packageSearchMetadata,
                     packageDeprecationMetadata,
-                    packageSearchMetadata.DownloadCount);
+                    searchResultPackage.KnownOwnerViewModels,
+                    searchResultPackage.DownloadCount);
 
                 _metadataDict[detailedPackageMetadata.Version] = detailedPackageMetadata;
 
@@ -264,15 +278,17 @@ namespace NuGet.PackageManagement.UI
             }
         }
 
-        private (NuGetVersion version, bool isDeprecated) GetVersion(VersionInfoContextInfo versionInfo)
+        private (NuGetVersion version, bool isDeprecated, bool isVulnerable) GetVersion(VersionInfoContextInfo versionInfo)
         {
             var isDeprecated = false;
+            var isVulnerable = false;
             if (versionInfo.PackageSearchMetadata != null)
             {
                 isDeprecated = versionInfo.PackageDeprecationMetadata != null;
+                isVulnerable = versionInfo.PackageSearchMetadata.Vulnerabilities != null;
             }
 
-            return (versionInfo.Version, isDeprecated);
+            return (versionInfo.Version, isDeprecated, isVulnerable);
         }
 
         protected virtual void DependencyBehavior_SelectedChanged(object sender, EventArgs e)
@@ -372,11 +388,9 @@ namespace NuGet.PackageManagement.UI
         // Called after package install/uninstall.
         public abstract Task RefreshAsync(CancellationToken cancellationToken);
 
-        public event PropertyChangedEventHandler PropertyChanged;
-
         protected void OnPropertyChanged(string propertyName)
         {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            RaisePropertyChanged(propertyName);
         }
 
         public string Id => _searchResultPackage?.Id;
@@ -442,6 +456,11 @@ namespace NuGet.PackageManagement.UI
         public bool IsPackageVulnerable
         {
             get => PackageVulnerabilities?.Count > 0;
+        }
+
+        public bool IsPackageVulnerableOrDeprecated
+        {
+            get => IsPackageVulnerable || IsPackageDeprecated;
         }
 
         public int PackageVulnerabilityCount
@@ -514,15 +533,12 @@ namespace NuGet.PackageManagement.UI
 
                     OnPropertyChanged(nameof(PackageMetadata));
                     OnPropertyChanged(nameof(IsPackageDeprecated));
-                    OnPropertyChanged(nameof(IsPackageVulnerable));
-                    OnPropertyChanged(nameof(PackageVulnerabilityCount));
-                    OnPropertyChanged(nameof(PackageVulnerabilities));
-                    OnPropertyChanged(nameof(PackageVulnerabilityMaxSeverity));
+                    OnPropertyChanged(nameof(IsPackageVulnerableOrDeprecated));
                 }
             }
         }
 
-        private string GetPackageDeprecationAlternatePackageText(AlternatePackageMetadataContextInfo alternatePackageMetadata)
+        private static string GetPackageDeprecationAlternatePackageText(AlternatePackageMetadataContextInfo alternatePackageMetadata)
         {
             if (alternatePackageMetadata == null)
             {
@@ -590,7 +606,7 @@ namespace NuGet.PackageManagement.UI
                     // Clear detailed view
                     PackageMetadata = null;
 
-                    if (_selectedVersion != null)
+                    if (_selectedVersion != null && _searchResultPackage != null)
                     {
                         var loadCts = new CancellationTokenSource();
                         var oldCts = Interlocked.Exchange(ref _selectedVersionCancellationTokenSource, loadCts);
@@ -637,6 +653,7 @@ namespace NuGet.PackageManagement.UI
                 PackageMetadata = new DetailedPackageMetadata(
                     packageSearchMetadata,
                     packageDeprecationMetadata,
+                    packageItemViewModel.KnownOwnerViewModels,
                     packageItemViewModel.DownloadCount);
             }
             else
@@ -656,6 +673,7 @@ namespace NuGet.PackageManagement.UI
                     var detailedPackageMetadata = new DetailedPackageMetadata(
                         searchMetadata,
                         deprecationData,
+                        knownOwnerViewModels: null,
                         searchMetadata.DownloadCount);
 
                     _metadataDict[detailedPackageMetadata.Version] = detailedPackageMetadata;
@@ -723,7 +741,7 @@ namespace NuGet.PackageManagement.UI
             }
             else
             {
-                var installedVersion = _searchResultPackage?.AllowedVersions?.OriginalString ?? _searchResultPackage?.InstalledVersion.ToString();
+                var installedVersion = _searchResultPackage?.AllowedVersions?.OriginalString ?? _searchResultPackage?.InstalledVersion.ToNormalizedString();
                 SelectedVersion =
                     possibleVersions.FirstOrDefault(v => StringComparer.OrdinalIgnoreCase.Equals(v.Range?.OriginalString, installedVersion))
                     ?? possibleVersions.FirstOrDefault(v => v.IsValidVersion);
@@ -814,9 +832,30 @@ namespace NuGet.PackageManagement.UI
             }
         }
 
+        public PackageSourceMappingActionViewModel PackageSourceMappingViewModel { get; }
+
+        public bool CanInstallWithPackageSourceMapping
+        {
+            get
+            {
+                // Don't allow install if package source mapping is enabled, with the selected package unmapped, and the 'All' package source selected.
+                if (PackageSourceMappingViewModel.IsPackageSourceMappingEnabled
+                    && !PackageSourceMappingViewModel.IsPackageMapped
+                    && PackageSourceMappingViewModel.ProjectsSupportAutomaticSourceMapping
+                    && !PackageSourceMappingViewModel.CanAutomaticallyCreateSourceMapping)
+                {
+                    return false;
+                }
+
+                return true;
+            }
+        }
+
         public IEnumerable<IProjectContextInfo> NuGetProjects => _nugetProjects;
 
         public string PackagePath => _searchResultPackage?.PackagePath;
+
+        public bool IsCentralPackageManagementEnabled { get; set; }
 
         protected void AddBlockedVersions(List<NuGetVersion> blockedVersions)
         {

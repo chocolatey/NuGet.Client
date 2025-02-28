@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Globalization;
 using System.Text;
+using NuGet.Shared;
 
 namespace NuGet.Versioning
 {
@@ -20,41 +20,46 @@ namespace NuGet.Versioning
         /// <summary>
         /// Format a version string.
         /// </summary>
-        public string Format(string format, object arg, IFormatProvider formatProvider)
+        public string Format(string? format, object? arg, IFormatProvider? formatProvider)
         {
             if (arg == null)
             {
                 throw new ArgumentNullException(nameof(arg));
             }
 
-            if (string.IsNullOrEmpty(format) || arg is not SemanticVersion version)
+            if (arg is string stringValue)
             {
-                return null;
+                return stringValue;
             }
 
-            StringBuilder builder = StringBuilderPool.Shared.Rent(256);
+            if (arg is not SemanticVersion version)
+            {
+                throw ResourcesFormatter.TypeNotSupported(arg.GetType(), nameof(arg));
+            }
 
-            foreach (char c in format)
+            if (string.IsNullOrEmpty(format))
+            {
+                format = "N";
+            }
+
+            StringBuilder builder = SharedStringBuilder.Instance.Rent(256);
+
+            foreach (char c in format!)
             {
                 Format(builder, c, version);
             }
 
-            string formattedString = builder.ToString();
-
-            StringBuilderPool.Shared.Return(builder);
-
-            return formattedString;
-
+            return SharedStringBuilder.Instance.ToStringAndReturn(builder);
         }
 
         /// <summary>
         /// Get version format type.
         /// </summary>
-        public object GetFormat(Type formatType)
+        public object? GetFormat(Type? formatType)
         {
             if (formatType == typeof(ICustomFormatter)
                 || formatType == typeof(NuGetVersion)
-                || formatType == typeof(SemanticVersion))
+                || typeof(SemanticVersion).IsAssignableFrom(formatType))
             {
                 return this;
             }
@@ -82,16 +87,16 @@ namespace NuGet.Versioning
                     builder.Append(version.Metadata);
                     return;
                 case 'x':
-                    builder.Append(version.Major);
+                    builder.AppendInt(version.Major);
                     return;
                 case 'y':
-                    builder.Append(version.Minor);
+                    builder.AppendInt(version.Minor);
                     return;
                 case 'z':
-                    builder.Append(version.Patch);
+                    builder.AppendInt(version.Patch);
                     return;
                 case 'r':
-                    builder.Append(version is NuGetVersion nuGetVersion && nuGetVersion.IsLegacyVersion ? nuGetVersion.Version.Revision : 0);
+                    builder.AppendInt(version is NuGetVersion nuGetVersion && nuGetVersion.IsLegacyVersion ? nuGetVersion.Version.Revision : 0);
                     return;
 
                 default:
@@ -118,7 +123,7 @@ namespace NuGet.Versioning
         /// Appends a normalized version string. This string is unique for each version 'identity' 
         /// and does not include leading zeros or metadata.
         /// </summary>
-        private static void AppendNormalized(StringBuilder builder, SemanticVersion version)
+        internal static void AppendNormalized(StringBuilder builder, SemanticVersion version)
         {
             AppendVersion(builder, version);
 
@@ -131,16 +136,16 @@ namespace NuGet.Versioning
 
         private static void AppendVersion(StringBuilder builder, SemanticVersion version)
         {
-            builder.Append(version.Major);
+            builder.AppendInt(version.Major);
             builder.Append('.');
-            builder.Append(version.Minor);
+            builder.AppendInt(version.Minor);
             builder.Append('.');
-            builder.Append(version.Patch);
+            builder.AppendInt(version.Patch);
 
             if (version is NuGetVersion nuGetVersion && nuGetVersion.IsLegacyVersion)
             {
                 builder.Append('.');
-                builder.Append(nuGetVersion.Version.Revision);
+                builder.AppendInt(nuGetVersion.Version.Revision);
             }
         }
     }

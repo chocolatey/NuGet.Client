@@ -16,7 +16,6 @@ namespace NuGet.PackageManagement.VisualStudio
         IProjectSystemCapabilities
     {
         private readonly IVsProjectAdapter _vsProjectAdapter;
-        private readonly IVsProjectThreadingService _threadingService;
 
         public bool SupportsPackageReferences => false;
 
@@ -24,7 +23,8 @@ namespace NuGet.PackageManagement.VisualStudio
 
         #region INuGetProjectServices
 
-        public IProjectBuildProperties BuildProperties => _vsProjectAdapter.BuildProperties;
+        [Obsolete]
+        public IProjectBuildProperties BuildProperties => throw new NotImplementedException();
 
         public IProjectSystemCapabilities Capabilities => this;
 
@@ -47,8 +47,6 @@ namespace NuGet.PackageManagement.VisualStudio
             Assumes.Present(threadingService);
 
             _vsProjectAdapter = vsProjectAdapter;
-            _threadingService = threadingService;
-
             ProjectSystem = new VsCoreProjectSystem(_vsProjectAdapter);
             ReferencesReader = new VsCoreProjectSystemReferenceReader(vsProjectAdapter, threadingService);
             ScriptService = new VsProjectScriptHostService(vsProjectAdapter, _scriptExecutor);

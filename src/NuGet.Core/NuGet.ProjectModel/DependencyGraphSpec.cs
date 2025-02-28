@@ -7,7 +7,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using NuGet.Common;
 using NuGet.Packaging;
 
@@ -15,6 +14,11 @@ namespace NuGet.ProjectModel
 {
     public class DependencyGraphSpec
     {
+        /// <summary>
+        /// Allows a user to enable the legacy SHA512 hash function for dgSpec files which is used by no-op.
+        /// </summary>
+        private static bool? UseLegacyHashFunction;
+
         private const string DGSpecFileNameExtension = "{0}.nuget.dgspec.json";
 
         private readonly SortedSet<string> _restore = new(PathUtility.GetStringComparerBasedOnOS());
@@ -35,8 +39,14 @@ namespace NuGet.ProjectModel
         }
 
         public DependencyGraphSpec(bool isReadOnly)
+            : this(isReadOnly, EnvironmentVariableWrapper.Instance)
+        {
+        }
+
+        internal DependencyGraphSpec(bool isReadOnly, IEnvironmentVariableReader environmentVariableReader)
         {
             _isReadOnly = isReadOnly;
+            UseLegacyHashFunction ??= string.Equals(environmentVariableReader.GetEnvironmentVariable("NUGET_ENABLE_LEGACY_DGSPEC_HASH_FUNCTION"), bool.TrueString, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -113,8 +123,8 @@ namespace NuGet.ProjectModel
         /// <param name="closure">The project's closure</param>
         /// <returns>A <see cref="DependencyGraphSpec" />.</returns>
         /// <exception cref="ArgumentException">Thrown if <paramref name="projectUniqueName" />
-        /// is <c>null</c> or an empty string.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="closure" /> is <c>null</c>.</exception>
+        /// is <see langword="null" /> or an empty string.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="closure" /> is <see langword="null" />.</exception>
         public DependencyGraphSpec CreateFromClosure(string projectUniqueName, IReadOnlyList<PackageSpec> closure)
         {
             if (string.IsNullOrEmpty(projectUniqueName))
@@ -253,8 +263,9 @@ namespace NuGet.ProjectModel
                         case "projects":
                             jsonReader.ReadObject(projectsPropertyName =>
                             {
-                                PackageSpec packageSpec = JsonPackageSpecReader.GetPackageSpec(jsonReader, path);
-
+#pragma warning disable CS0612 // Type or member is obsolete
+                                PackageSpec packageSpec = JsonPackageSpecReader.GetPackageSpec(jsonReader, name: null, path, EnvironmentVariableWrapper.Instance);
+#pragma warning restore CS0612 // Type or member is obsolete
                                 dgspec._projects.Add(projectsPropertyName, packageSpec);
                             });
                             break;
@@ -288,7 +299,11 @@ namespace NuGet.ProjectModel
 
         public void Save(Stream stream)
         {
+#if NET5_0_OR_GREATER
             using (var textWriter = new StreamWriter(stream))
+#else
+            using (var textWriter = new NoAllocNewLineStreamWriter(stream))
+#endif
             using (var jsonWriter = new JsonTextWriter(textWriter))
             using (var writer = new RuntimeModel.JsonObjectWriter(jsonWriter))
             {
@@ -300,7 +315,8 @@ namespace NuGet.ProjectModel
 
         public string GetHash()
         {
-            using (var hashFunc = new Sha512HashFunction())
+            // Use the faster FNV hash function for hashing unless the user has specified to use the legacy SHA512 hash function
+            using (IHashFunction hashFunc = UseLegacyHashFunction == true ? new Sha512HashFunction() : new FnvHash64Function())
             using (var writer = new HashObjectWriter(hashFunc))
             {
                 Write(writer, hashing: true, PackageSpecWriter.Write);
@@ -308,7 +324,7 @@ namespace NuGet.ProjectModel
             }
         }
 
-        private void Write(RuntimeModel.IObjectWriter writer, bool hashing, Action<PackageSpec, RuntimeModel.IObjectWriter, bool> writeAction)
+        private void Write(RuntimeModel.IObjectWriter writer, bool hashing, Action<PackageSpec, RuntimeModel.IObjectWriter, bool, IEnvironmentVariableReader> writeAction)
         {
             writer.WriteObjectStart();
             writer.WriteNameValue("format", Version);
@@ -332,7 +348,7 @@ namespace NuGet.ProjectModel
                 var project = pair.Value;
 
                 writer.WriteObjectStart(project.RestoreMetadata.ProjectUniqueName);
-                writeAction.Invoke(project, writer, hashing);
+                writeAction.Invoke(project, writer, hashing, EnvironmentVariableWrapper.Instance);
                 writer.WriteObjectEnd();
             }
 

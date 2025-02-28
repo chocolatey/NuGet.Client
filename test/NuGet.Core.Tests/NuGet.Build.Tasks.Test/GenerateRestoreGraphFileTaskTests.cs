@@ -3,8 +3,6 @@
 
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 using FluentAssertions;
 using NuGet.Test.Utility;
 using Xunit;
@@ -50,37 +48,25 @@ namespace NuGet.Build.Tasks.Test
                     RestoreGraphOutputPath = restoreGraphOutputPath,
                 })
                 {
-                    using var stream = new MemoryStream();
+                    string arguments = task.GetCommandLineArguments(globalProperties);
 
-                    task.WriteArguments(stream);
+                    arguments.Should().Be($"\"{string.Join("\" \"", GetExpectedArguments(msbuildBinPath, projectPath))}\"");
+                }
 
-                    string actualArguments = task.GetCommandLineArguments(msbuildBinPath);
-
-                    string[] expectedArguments = new[]
-                    {
+                IEnumerable<string> GetExpectedArguments(string msbuildBinPath, string projectPath)
+                {
 #if IS_CORECLR
-                        Path.ChangeExtension(typeof(RestoreTaskEx).Assembly.Location, ".Console.dll"),
-                        Path.Combine(msbuildBinPath, "MSBuild.dll"),
-#else
-                        Path.Combine(msbuildBinPath, "MSBuild.exe"),
+                    yield return Path.ChangeExtension(typeof(RestoreTaskEx).Assembly.Location, ".Console.dll");
 #endif
-                        projectPath
-                    };
+                    yield return $"Recursive=True;GenerateRestoreGraphFile=True;RestoreGraphOutputPath={restoreGraphOutputPath}";
+#if IS_CORECLR
+                    yield return Path.Combine(msbuildBinPath, "MSBuild.dll");
+#else
+                    yield return Path.Combine(msbuildBinPath, "MSBuild.exe");
+#endif
+                    yield return projectPath;
 
-                    actualArguments.Should().Be($"\"{string.Join("\" \"", expectedArguments)}\"");
-
-                    stream.Position = 0;
-
-                    var arguments = StaticGraphRestoreArguments.Read(stream);
-
-                    arguments.Options.Should().BeEquivalentTo(new Dictionary<string, string>()
-                    {
-                        [nameof(RestoreTaskEx.Recursive)] = task.Recursive.ToString(),
-                        [nameof(GenerateRestoreGraphFileTask.RestoreGraphOutputPath)] = task.RestoreGraphOutputPath.ToString(),
-                        ["GenerateRestoreGraphFile"] = bool.TrueString
-                    });
-
-                    arguments.GlobalProperties.Should().Contain(globalProperties);
+                    yield return $"Property1=Value1;Property2=  Value2  ";
                 }
             }
         }

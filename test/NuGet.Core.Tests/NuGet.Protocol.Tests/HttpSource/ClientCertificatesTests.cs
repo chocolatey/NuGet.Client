@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using NuGet.Configuration;
 using NuGet.Protocol.Core.Types;
 using NuGet.Test.Utility;
@@ -25,7 +26,7 @@ namespace NuGet.Protocol.Tests
             var sourceRepository = new SourceRepository(packageSource, new[] { new HttpHandlerResourceV3Provider() });
 
             // Act
-            var httpHandlerResourceV3 = sourceRepository.GetResource<HttpHandlerResource>();
+            var httpHandlerResourceV3 = sourceRepository.GetResource<HttpHandlerResource>(CancellationToken.None);
 
             // Assert
             Assert.NotNull(httpHandlerResourceV3);
@@ -40,7 +41,11 @@ namespace NuGet.Protocol.Tests
             var end = start.AddYears(1);
             var cert = request.CreateSelfSigned(start, end);
             var data = cert.Export(X509ContentType.Pfx);
+#if NET9_0_OR_GREATER
+            return X509CertificateLoader.LoadPkcs12(data, null);
+#else
             return new X509Certificate2(data);
+#endif
         }
     }
 }

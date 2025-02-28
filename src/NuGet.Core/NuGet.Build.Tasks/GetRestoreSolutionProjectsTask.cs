@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 
@@ -37,11 +36,6 @@ namespace NuGet.Build.Tasks
 
         public override bool Execute()
         {
-            // Log inputs
-            var log = new MSBuildLogger(Log);
-            log.LogDebug($"(in) ProjectReferences '{string.Join(";", ProjectReferences.Select(p => p.ItemSpec))}'");
-            log.LogDebug($"(in) SolutionFilePath '{SolutionFilePath}'");
-
             var entries = new List<ITaskItem>();
             var parentDirectory = Path.GetDirectoryName(SolutionFilePath);
 

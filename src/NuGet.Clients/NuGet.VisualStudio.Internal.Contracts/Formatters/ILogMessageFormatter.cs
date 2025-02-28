@@ -63,7 +63,7 @@ namespace NuGet.VisualStudio.Internal.Contracts
                 bool? shouldDisplay = null;
                 int? startColumnNumber = null;
                 int? startLineNumber = null;
-                List<string>? targetGraphs = null;
+                IReadOnlyList<string> targetGraphs = Array.Empty<string>();
                 DateTimeOffset? time = null;
                 string? typeName = null;
                 WarningLevel? warningLevel = null;
@@ -75,7 +75,7 @@ namespace NuGet.VisualStudio.Internal.Contracts
                     switch (reader.ReadString())
                     {
                         case CodePropertyName:
-                            code = options.Resolver.GetFormatter<NuGetLogCode>().Deserialize(ref reader, options);
+                            code = options.Resolver.GetFormatter<NuGetLogCode>()!.Deserialize(ref reader, options);
                             break;
 
                         case EndColumnNumberPropertyName:
@@ -91,7 +91,7 @@ namespace NuGet.VisualStudio.Internal.Contracts
                             break;
 
                         case LevelPropertyName:
-                            logLevel = options.Resolver.GetFormatter<LogLevel>().Deserialize(ref reader, options);
+                            logLevel = options.Resolver.GetFormatter<LogLevel>()!.Deserialize(ref reader, options);
                             break;
 
                         case LibraryIdPropertyName:
@@ -121,21 +121,25 @@ namespace NuGet.VisualStudio.Internal.Contracts
                         case TargetGraphsPropertyName:
                             if (!reader.TryReadNil())
                             {
-                                targetGraphs = new List<string>();
+                                var list = new List<string>();
 
                                 int targetGraphsCount = reader.ReadArrayHeader();
 
                                 for (var i = 0; i < targetGraphsCount; ++i)
                                 {
-                                    string targetGraph = reader.ReadString();
-
-                                    targetGraphs.Add(targetGraph);
+                                    string? targetGraph = reader.ReadString();
+                                    if (targetGraph != null)
+                                    {
+                                        list.Add(targetGraph);
+                                    }
                                 }
+
+                                targetGraphs = list;
                             }
                             break;
 
                         case TimePropertyName:
-                            time = options.Resolver.GetFormatter<DateTimeOffset>().Deserialize(ref reader, options);
+                            time = options.Resolver.GetFormatter<DateTimeOffset>()!.Deserialize(ref reader, options);
                             break;
 
                         case TypeNamePropertyName:
@@ -143,7 +147,7 @@ namespace NuGet.VisualStudio.Internal.Contracts
                             break;
 
                         case WarningLevelPropertyName:
-                            warningLevel = options.Resolver.GetFormatter<WarningLevel>().Deserialize(ref reader, options);
+                            warningLevel = options.Resolver.GetFormatter<WarningLevel>()!.Deserialize(ref reader, options);
                             break;
 
                         default:
@@ -276,32 +280,32 @@ namespace NuGet.VisualStudio.Internal.Contracts
             }
         }
 
-        private void SerializeCommonProperties(ref MessagePackWriter writer, ILogMessage value, MessagePackSerializerOptions options)
+        private static void SerializeCommonProperties(ref MessagePackWriter writer, ILogMessage value, MessagePackSerializerOptions options)
         {
             writer.Write(TypeNamePropertyName);
             writer.Write(value.GetType().Name);
             writer.Write(CodePropertyName);
-            options.Resolver.GetFormatter<NuGetLogCode>().Serialize(ref writer, value.Code, options);
+            options.Resolver.GetFormatter<NuGetLogCode>()!.Serialize(ref writer, value.Code, options);
             writer.Write(LevelPropertyName);
-            options.Resolver.GetFormatter<LogLevel>().Serialize(ref writer, value.Level, options);
+            options.Resolver.GetFormatter<LogLevel>()!.Serialize(ref writer, value.Level, options);
             writer.Write(MessagePropertyName);
             writer.Write(value.Message);
             writer.Write(ProjectPathPropertyName);
             writer.Write(value.ProjectPath);
             writer.Write(TimePropertyName);
-            options.Resolver.GetFormatter<DateTimeOffset>().Serialize(ref writer, value.Time, options);
+            options.Resolver.GetFormatter<DateTimeOffset>()!.Serialize(ref writer, value.Time, options);
             writer.Write(WarningLevelPropertyName);
-            options.Resolver.GetFormatter<WarningLevel>().Serialize(ref writer, value.WarningLevel, options);
+            options.Resolver.GetFormatter<WarningLevel>()!.Serialize(ref writer, value.WarningLevel, options);
         }
 
-        private void Serialize(ref MessagePackWriter writer, LogMessage logMessage, MessagePackSerializerOptions options)
+        private static void Serialize(ref MessagePackWriter writer, LogMessage logMessage, MessagePackSerializerOptions options)
         {
             writer.WriteMapHeader(count: 7);
 
             SerializeCommonProperties(ref writer, logMessage, options);
         }
 
-        private void Serialize(ref MessagePackWriter writer, PackagingLogMessage logMessage, MessagePackSerializerOptions options)
+        private static void Serialize(ref MessagePackWriter writer, PackagingLogMessage logMessage, MessagePackSerializerOptions options)
         {
             writer.WriteMapHeader(count: 12);
 
@@ -319,7 +323,7 @@ namespace NuGet.VisualStudio.Internal.Contracts
             writer.Write(logMessage.StartLineNumber);
         }
 
-        private void Serialize(ref MessagePackWriter writer, RestoreLogMessage logMessage, MessagePackSerializerOptions options)
+        private static void Serialize(ref MessagePackWriter writer, RestoreLogMessage logMessage, MessagePackSerializerOptions options)
         {
             writer.WriteMapHeader(count: 15);
 
@@ -356,7 +360,7 @@ namespace NuGet.VisualStudio.Internal.Contracts
             }
         }
 
-        private void Serialize(ref MessagePackWriter writer, SignatureLog logMessage, MessagePackSerializerOptions options)
+        private static void Serialize(ref MessagePackWriter writer, SignatureLog logMessage, MessagePackSerializerOptions options)
         {
             writer.WriteMapHeader(count: 8);
 

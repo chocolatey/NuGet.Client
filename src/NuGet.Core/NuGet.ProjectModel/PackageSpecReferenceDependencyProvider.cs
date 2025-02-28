@@ -25,35 +25,38 @@ namespace NuGet.ProjectModel
         private readonly Dictionary<string, ExternalProjectReference> _externalProjectsByUniqueName
             = new Dictionary<string, ExternalProjectReference>(StringComparer.OrdinalIgnoreCase);
 
-        private readonly ILogger _logger;
-
         private readonly bool _useLegacyAssetTargetFallbackBehavior;
+
+        private readonly bool _useLegacyDependencyGraphResolution = false;
 
         public PackageSpecReferenceDependencyProvider(
             IEnumerable<ExternalProjectReference> externalProjects,
             ILogger logger) :
             this(externalProjects,
-                logger,
-                environmentVariableReader: EnvironmentVariableWrapper.Instance)
+                environmentVariableReader: EnvironmentVariableWrapper.Instance,
+                useLegacyDependencyGraphResolution: false)
+        {
+        }
+
+        public PackageSpecReferenceDependencyProvider(
+            IEnumerable<ExternalProjectReference> externalProjects,
+            ILogger logger,
+            bool useLegacyDependencyGraphResolution) :
+            this(externalProjects,
+                environmentVariableReader: EnvironmentVariableWrapper.Instance,
+                useLegacyDependencyGraphResolution)
         {
         }
 
         internal PackageSpecReferenceDependencyProvider(
             IEnumerable<ExternalProjectReference> externalProjects,
-            ILogger logger,
-            IEnvironmentVariableReader environmentVariableReader)
+            IEnvironmentVariableReader environmentVariableReader,
+            bool useLegacyDependencyGraphResolution = false)
         {
             if (externalProjects == null)
             {
                 throw new ArgumentNullException(nameof(externalProjects));
             }
-
-            if (logger == null)
-            {
-                throw new ArgumentNullException(nameof(logger));
-            }
-
-            _logger = logger;
 
             foreach (var project in externalProjects)
             {
@@ -81,6 +84,7 @@ namespace NuGet.ProjectModel
                 }
             }
             _useLegacyAssetTargetFallbackBehavior = MSBuildStringUtility.IsTrue(environmentVariableReader.GetEnvironmentVariable("NUGET_USE_LEGACY_ASSET_TARGET_FALLBACK_DEPENDENCY_RESOLUTION"));
+            _useLegacyDependencyGraphResolution = useLegacyDependencyGraphResolution;
         }
 
         public bool SupportsType(LibraryDependencyTarget libraryType)
@@ -90,14 +94,12 @@ namespace NuGet.ProjectModel
 
         public Library GetLibrary(LibraryRange libraryRange, NuGetFramework targetFramework)
         {
-            Library library = null;
             var name = libraryRange.Name;
 
-            ExternalProjectReference externalReference = null;
             PackageSpec packageSpec = null;
 
             // This must exist in the external references
-            if (_externalProjectsByUniqueName.TryGetValue(name, out externalReference))
+            if (_externalProjectsByUniqueName.TryGetValue(name, out ExternalProjectReference externalReference))
             {
                 packageSpec = externalReference.PackageSpec;
             }
@@ -108,8 +110,7 @@ namespace NuGet.ProjectModel
                 return null;
             }
 
-            // create a dictionary of dependencies to make sure that no duplicates exist
-            var dependencies = new List<LibraryDependency>();
+            List<LibraryDependency> dependencies;
 
             var projectStyle = packageSpec?.RestoreMetadata?.ProjectStyle ?? ProjectStyle.Unknown;
 
@@ -117,12 +118,12 @@ namespace NuGet.ProjectModel
             if (projectStyle == ProjectStyle.PackageReference)
             {
                 // NETCore
-                dependencies.AddRange(GetDependenciesFromSpecRestoreMetadata(packageSpec, targetFramework));
+                dependencies = GetDependenciesFromSpecRestoreMetadata(packageSpec, targetFramework);
             }
             else
             {
                 // UWP
-                dependencies.AddRange(GetDependenciesFromExternalReference(externalReference, packageSpec, targetFramework));
+                dependencies = GetDependenciesFromExternalReference(externalReference, packageSpec, targetFramework);
             }
 
             // Remove duplicate dependencies. A reference can exist both in csproj and project.json
@@ -138,7 +139,7 @@ namespace NuGet.ProjectModel
                 }
             }
 
-            library = new Library
+            Library library = new Library
             {
                 LibraryRange = libraryRange,
                 Identity = new LibraryIdentity
@@ -308,10 +309,17 @@ namespace NuGet.ProjectModel
                 // Set all dependencies from project.json to external if an external match was passed in
                 // This is viral and keeps p2ps from looking into directories when we are going down
                 // a path already resolved by msbuild.
-                foreach (var dependency in dependencies.Where(d => IsProject(d)
-                    && filteredExternalDependencies.Contains(d.Name)))
+                for (int i = 0; i < dependencies.Count; i++)
                 {
-                    dependency.LibraryRange.TypeConstraint = LibraryDependencyTarget.ExternalProject;
+                    var d = dependencies[i];
+                    if (IsProject(d) && filteredExternalDependencies.Contains(d.Name))
+                    {
+                        var libraryRange = new LibraryRange(d.LibraryRange) { TypeConstraint = LibraryDependencyTarget.ExternalProject };
+
+                        // Do not push the dependency changes here upwards, as the original package
+                        // spec should not be modified.
+                        dependencies[i] = new LibraryDependency(d) { LibraryRange = libraryRange };
+                    }
                 }
 
                 // Add dependencies passed in externally
@@ -320,7 +328,7 @@ namespace NuGet.ProjectModel
                 // Note: Only add in dependencies that are in the filtered list to avoid getting the wrong TxM
                 dependencies.AddRange(childReferences
                     .Where(reference => filteredExternalDependencies.Contains(reference.ProjectName))
-                    .Select(reference => new LibraryDependency
+                    .Select(reference => new LibraryDependency()
                     {
                         LibraryRange = new LibraryRange
                         {
@@ -358,7 +366,7 @@ namespace NuGet.ProjectModel
 
                 dependencies.AddRange(targetFrameworkInfo.Dependencies);
 
-                if (packageSpec.RestoreMetadata?.CentralPackageVersionsEnabled == true &&
+                if (_useLegacyDependencyGraphResolution && packageSpec.RestoreMetadata?.CentralPackageVersionsEnabled == true &&
                     packageSpec.RestoreMetadata?.CentralPackageTransitivePinningEnabled == true)
                 {
                     var dependencyNamesSet = new HashSet<string>(targetFrameworkInfo.Dependencies.Select(d => d.Name), StringComparer.OrdinalIgnoreCase);
@@ -377,33 +385,19 @@ namespace NuGet.ProjectModel
 
                 for (var i = 0; i < dependencies.Count; i++)
                 {
-                    // Clone the library dependency so we can safely modify it. The instance cloned here is from the
-                    // original package spec, which should not be modified.
-                    dependencies[i] = dependencies[i].Clone();
+                    // Do not push the dependency changes here upwards, as the original package
+                    // spec should not be modified.
+
                     // Remove "project" from the allowed types for this dependency
                     // This will require that projects referenced by an msbuild project
                     // must be external projects.
-                    dependencies[i].LibraryRange.TypeConstraint &= ~LibraryDependencyTarget.Project;
+                    var dependency = dependencies[i];
+                    var libraryRange = new LibraryRange(dependency.LibraryRange) { TypeConstraint = dependency.LibraryRange.TypeConstraint & ~LibraryDependencyTarget.Project };
+                    dependencies[i] = new LibraryDependency(dependency) { LibraryRange = libraryRange };
                 }
             }
 
             return dependencies;
-        }
-
-        /// <summary>
-        /// Filter dependencies down to only possible project references and return the names.
-        /// </summary>
-        private IEnumerable<string> GetProjectNames(IEnumerable<LibraryDependency> dependencies)
-        {
-            foreach (var dependency in dependencies)
-            {
-                if (IsProject(dependency))
-                {
-                    yield return dependency.Name;
-                }
-            }
-
-            yield break;
         }
 
         private bool IsProject(LibraryDependency dependency)

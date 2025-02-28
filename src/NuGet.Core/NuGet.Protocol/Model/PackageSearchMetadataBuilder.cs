@@ -35,10 +35,12 @@ namespace NuGet.Protocol.Core.Types
             public Uri IconUrl { get; set; }
             public PackageIdentity Identity { get; set; }
             public Uri LicenseUrl { get; set; }
+            public IReadOnlyList<string> OwnersList { get; set; }
             public string Owners { get; set; }
             public Uri ProjectUrl { get; set; }
             public DateTimeOffset? Published { get; set; }
             public Uri ReadmeUrl { get; set; }
+            public string ReadmeFileUrl { get; set; }
             public Uri ReportAbuseUrl { get; set; }
             public Uri PackageDetailsUrl { get; set; }
             public bool RequireLicenseAcceptance { get; set; }
@@ -92,10 +94,12 @@ namespace NuGet.Protocol.Core.Types
                 IconUrl = _metadata.IconUrl,
                 Identity = _metadata.Identity,
                 LicenseUrl = _metadata.LicenseUrl,
+                OwnersList = _metadata.OwnersList,
                 Owners = _metadata.Owners,
                 ProjectUrl = _metadata.ProjectUrl,
                 Published = _metadata.Published,
                 ReadmeUrl = _metadata.ReadmeUrl,
+                ReadmeFileUrl = _metadata.ReadmeFileUrl,
                 ReportAbuseUrl = _metadata.ReportAbuseUrl,
                 PackageDetailsUrl = _metadata.PackageDetailsUrl,
                 RequireLicenseAcceptance = _metadata.RequireLicenseAcceptance,

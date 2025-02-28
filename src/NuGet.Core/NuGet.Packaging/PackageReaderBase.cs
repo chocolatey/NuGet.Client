@@ -9,7 +9,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Common;
-using NuGet.Configuration;
 using NuGet.Frameworks;
 using NuGet.Packaging.Core;
 using NuGet.Packaging.Signing;
@@ -33,7 +32,7 @@ namespace NuGet.Packaging
         /// Instantiates a new <see cref="PackageReaderBase" /> class.
         /// </summary>
         /// <param name="frameworkProvider">A framework mapping provider.</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="frameworkProvider" /> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="frameworkProvider" /> is <see langword="null" />.</exception>
         public PackageReaderBase(IFrameworkNameProvider frameworkProvider)
             : this(frameworkProvider, new CompatibilityProvider(frameworkProvider))
         {
@@ -44,8 +43,8 @@ namespace NuGet.Packaging
         /// </summary>
         /// <param name="frameworkProvider">A framework mapping provider.</param>
         /// <param name="compatibilityProvider">A framework compatibility provider.</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="frameworkProvider" /> is <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="compatibilityProvider" /> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="frameworkProvider" /> is <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="compatibilityProvider" /> is <see langword="null" />.</exception>
         public PackageReaderBase(IFrameworkNameProvider frameworkProvider, IFrameworkCompatibilityProvider compatibilityProvider)
         {
             if (frameworkProvider == null)
@@ -265,7 +264,7 @@ namespace NuGet.Packaging
             if (referenceGroups.Any())
             {
                 // the 'any' group from references, for pre2.5 nuspecs this will be the only group
-                var fallbackGroup = referenceGroups.Where(g => g.TargetFramework.Equals(NuGetFramework.AnyFramework)).FirstOrDefault();
+                var fallbackGroup = referenceGroups.FirstOrDefault(g => g.TargetFramework.Equals(NuGetFramework.AnyFramework));
 
                 foreach (var fileGroup in fileGroups)
                 {
@@ -366,7 +365,7 @@ namespace NuGet.Packaging
         /// </remarks>
         public virtual IEnumerable<NuGetFramework> GetSupportedFrameworks()
         {
-            var frameworks = new HashSet<NuGetFramework>(new NuGetFrameworkFullComparer());
+            var frameworks = new HashSet<NuGetFramework>(NuGetFrameworkFullComparer.Instance);
 
             frameworks.UnionWith(GetLibItems().Select(g => g.TargetFramework));
 
@@ -378,7 +377,7 @@ namespace NuGet.Packaging
 
             frameworks.UnionWith(GetFrameworkItems().Select(g => g.TargetFramework));
 
-            return frameworks.Where(f => !f.IsUnsupported).OrderBy(f => f, new NuGetFrameworkSorter());
+            return frameworks.Where(f => !f.IsUnsupported).OrderBy(f => f, NuGetFrameworkSorter.Instance);
         }
 
         /// <summary>
@@ -425,7 +424,7 @@ namespace NuGet.Packaging
 
         protected IEnumerable<FrameworkSpecificGroup> GetFileGroups(string folder)
         {
-            var groups = new Dictionary<NuGetFramework, List<string>>(new NuGetFrameworkFullComparer());
+            var groups = new Dictionary<NuGetFramework, List<string>>(NuGetFrameworkFullComparer.Instance);
             var allowSubFolders = true;
 
             foreach (var path in GetFiles(folder))
@@ -444,9 +443,9 @@ namespace NuGet.Packaging
             }
 
             // Sort the groups by framework, and the items by ordinal string compare to keep things deterministic
-            foreach (var framework in groups.Keys.OrderBy(e => e, new NuGetFrameworkSorter()))
+            foreach ((var framework, var items) in groups.OrderBy(e => e.Key, NuGetFrameworkSorter.Instance))
             {
-                yield return new FrameworkSpecificGroup(framework, groups[framework].OrderBy(e => e, StringComparer.OrdinalIgnoreCase));
+                yield return new FrameworkSpecificGroup(framework, items.OrderBy(e => e, StringComparer.OrdinalIgnoreCase));
             }
         }
 

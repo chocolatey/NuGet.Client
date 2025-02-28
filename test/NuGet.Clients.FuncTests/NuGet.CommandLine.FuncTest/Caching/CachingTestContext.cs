@@ -7,6 +7,7 @@ using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using NuGet.Common;
 using NuGet.Frameworks;
 using NuGet.Packaging;
@@ -252,18 +253,18 @@ namespace NuGet.CommandLine.Test.Caching
             ProjectPath = Path.Combine(WorkingPath, "project.csproj");
 
             OutputPackagesPath = Path.Combine(WorkingPath, "packages");
-            CreateNuGetConfig(WorkingPath);
 
             Directory.CreateDirectory(OutputPackagesPath);
         }
 
-        private void CreateNuGetConfig(string workingDirectory)
+        internal void CreateNuGetConfig(string workingDirectory, string source)
         {
             string nugetConfigContent =
-                @"<?xml version='1.0' encoding='utf-8'?>
+                $@"<?xml version='1.0' encoding='utf-8'?>
 <configuration>
   <packageSources>
     <clear />
+    <add key=""http-feed"" value=""{source}"" allowInsecureConnections=""true""/>
   </packageSources>
   <packageSourceMapping>
     <clear />

@@ -4,7 +4,7 @@ $VSInstallerProcessName = "VSIXInstaller"
 
 function Get-VisualStudioVersionRangeFromConfig
 {
-    $VsVersion = & dotnet msbuild "$PSScriptRoot\..\..\build\config.props" /restore:false "/ConsoleLoggerParameters:Verbosity=Minimal;NoSummary;ForceNoAlign" /nologo /target:GetVSTargetMajorVersion
+    $VsVersion = ((& dotnet msbuild "$PSScriptRoot\..\..\build\config.props" /restore:false "/ConsoleLoggerParameters:Verbosity=Minimal;NoSummary;ForceNoAlign" /nologo /target:GetVSTargetMajorVersion) | Out-String).Trim()
     Write-Host "config.props targets VS version $vsVersion"
     $VsVersionRange = "["+$VsVersion+".0,"+(1+$VsVersion)+".0)"
     return $VsVersionRange
@@ -111,8 +111,7 @@ function LaunchVSAndWaitForDTE {
 
         $dte2 = GetDTE2 -dteName $dteName
         if ($dte2) {
-            Write-Host 'Obtained DTE. Wait for 5 seconds...'
-            start-sleep 5
+            Write-Host 'Obtained DTE.'
             return $dte2
         }
 

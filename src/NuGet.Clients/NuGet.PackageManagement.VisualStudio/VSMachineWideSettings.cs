@@ -3,7 +3,6 @@
 
 using System;
 using System.ComponentModel.Composition;
-using System.Globalization;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Threading;
@@ -36,7 +35,13 @@ namespace NuGet.PackageManagement.VisualStudio
                     var version = dte.Version;
                     var sku = dte.GetSKU();
 
-                    await TaskScheduler.Default;
+                    // If UI thread is currently blocked on us, just inline on the
+                    // same thread to avoid waiting for a free thread pool thread.
+                    if (!NuGetUIThreadHelper.JoinableTaskFactory.Context.IsMainThreadBlocked())
+                    {
+                        await TaskScheduler.Default;
+                    }
+
                     return Configuration.Settings.LoadMachineWideSettings(
                         baseDirectory,
                         "VisualStudio",

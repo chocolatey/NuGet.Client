@@ -122,7 +122,7 @@ namespace NuGet.CommandLine.XPlat.Utility
             // Include "Requested" version column for top level package list
             if (!printingTransitive)
             {
-                valueSelectors.Add(p => new FormattedCell((p as ListReportPackage)?.RequestedVersion));
+                valueSelectors.Add(p => new FormattedCell(p?.RequestedVersion));
             }
 
             // "Resolved" version
@@ -241,7 +241,7 @@ namespace NuGet.CommandLine.XPlat.Utility
         /// Print user-friendly representation of a NuGet version.
         /// </summary>
         /// <param name="package">The package reference having its version printed.</param>
-        /// <param name="useLatest"><c>True</c> if we're printing the latest version; otherwise <c>False</c>.</param>
+        /// <param name="useLatest"><see langword="true" /> if we're printing the latest version; otherwise <see langword="false" />.</param>
         private static string GetPackageVersion(
             InstalledPackageReference package,
             bool useLatest = false)

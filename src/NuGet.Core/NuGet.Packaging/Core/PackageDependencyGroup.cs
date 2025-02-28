@@ -4,7 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
+using Newtonsoft.Json;
 using NuGet.Frameworks;
 using NuGet.Packaging.Core;
 using NuGet.Shared;
@@ -18,6 +18,21 @@ namespace NuGet.Packaging
     {
         private readonly NuGetFramework _targetFramework;
         private readonly IEnumerable<PackageDependency> _packages;
+
+        [JsonConstructor]
+        private PackageDependencyGroup(NuGetFramework targetFramework)
+        {
+            if (targetFramework == null)
+            {
+                _targetFramework = NuGetFramework.AnyFramework;
+            }
+            else
+            {
+                _targetFramework = targetFramework;
+            }
+
+            _packages = new List<PackageDependency>();
+        }
 
         /// <summary>
         /// Dependency group
@@ -43,6 +58,7 @@ namespace NuGet.Packaging
         /// <summary>
         /// Dependency group target framework
         /// </summary>
+        [JsonProperty(PropertyName = "targetFramework")]
         public NuGetFramework TargetFramework
         {
             get { return _targetFramework; }
@@ -51,6 +67,7 @@ namespace NuGet.Packaging
         /// <summary>
         /// Package dependencies
         /// </summary>
+        [JsonProperty(PropertyName = "dependencies")]
         public IEnumerable<PackageDependency> Packages
         {
             get { return _packages; }
@@ -82,12 +99,7 @@ namespace NuGet.Packaging
             var combiner = new HashCodeCombiner();
 
             combiner.AddObject(TargetFramework.GetHashCode());
-
-            // order the dependencies by hash code to make this consistent
-            foreach (int hash in Packages.Select(p => p.GetHashCode()).OrderBy(h => h))
-            {
-                combiner.AddObject(hash);
-            }
+            combiner.AddUnorderedSequence(Packages);
 
             return combiner.CombinedHash;
         }

@@ -7,6 +7,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Common;
 using NuGet.Protocol.Core.Types;
@@ -16,6 +17,7 @@ using Xunit;
 
 namespace NuGet.Protocol.Tests
 {
+    [UseCulture("en-US")] // We are asserting exception messages in English
     public class PackageUpdateResourceTests
     {
         private const string ApiKeyHeader = "X-NuGet-ApiKey";
@@ -42,7 +44,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 var apiKey = "SomeApiKey";
 
                 // Act
@@ -90,7 +92,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 var apiKey = string.Empty;
 
                 // Act
@@ -137,7 +139,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 var apiKey = "SomeApiKey";
 
                 var packageInfo = await SimpleTestPackageUtility.CreateFullPackageAsync(workingDir, "test", "1.0.0");
@@ -191,7 +193,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 var apiKey = string.Empty;
 
                 var packageInfo = await SimpleTestPackageUtility.CreateFullPackageAsync(workingDir, "test", "1.0.0");
@@ -282,7 +284,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
 
                 // Act
@@ -348,7 +350,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
                 var logger = new TestLogger();
                 // Act
@@ -423,7 +425,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
 
                 // Act
@@ -499,7 +501,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
 
                 // Act
@@ -552,7 +554,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
 
                 // Act
@@ -602,7 +604,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
 
                 // Act
@@ -665,7 +667,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
 
                 // Act
@@ -734,7 +736,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
 
                 // Act
@@ -752,8 +754,7 @@ namespace NuGet.Protocol.Tests
                         log: NullLogger.Instance));
 
                 // Assert
-                Assert.True(ex.Message.Contains("Response status code does not indicate success: 500 (Internal Server Error)"));
-
+                Assert.Contains("Response status code does not indicate success: 500 (Internal Server Error)", ex.Message);
             }
         }
 
@@ -802,7 +803,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
 
                 // Act
@@ -832,8 +833,10 @@ namespace NuGet.Protocol.Tests
             }
         }
 
-        [Fact]
-        public async Task Push_WithAnHttpSource_NupkgOnly_Warns()
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        public async Task Push_WithAnHttpSourceAndAllowInsecureConnections_NupkgOnly_Warns(bool allowInsecureConnections, bool isHttpWarningExpected)
         {
             // Arrange
             using var workingDir = TestDirectory.Create();
@@ -852,7 +855,7 @@ namespace NuGet.Protocol.Tests
                         }
                     },
                 };
-            var resource = await StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses).GetResourceAsync<PackageUpdateResource>();
+            var resource = await StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses).GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
             var logger = new TestLogger();
 
             // Act
@@ -866,17 +869,27 @@ namespace NuGet.Protocol.Tests
                 noServiceEndpoint: false,
                 skipDuplicate: false,
                 symbolPackageUpdateResource: null,
+                allowInsecureConnections: allowInsecureConnections,
                 log: logger);
 
             // Assert
             Assert.NotNull(sourceRequest);
-            Assert.Equal(1, logger.WarningMessages.Count);
-            Assert.Contains("You are running the 'push' operation with an 'HTTP' source", logger.WarningMessages.First());
+            if (isHttpWarningExpected)
+            {
+                Assert.Equal(1, logger.WarningMessages.Count);
+                Assert.Contains("You are running the 'push' operation with an 'HTTP' source", logger.WarningMessages.Single());
+            }
+            else
+            {
+                Assert.Equal(0, logger.WarningMessages.Count);
+            }
 
         }
 
-        [Fact]
-        public async Task Push_WhenPushingToAnHttpSymbolSource_Warns()
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        public async Task Push_WhenPushingToAnHttpSymbolSourceAndAllowInsecureConnections_Warns(bool allowInsecureConnections, bool isHttpWarningExpected)
         {
             // Arrange
             using var workingDir = TestDirectory.Create();
@@ -909,7 +922,7 @@ namespace NuGet.Protocol.Tests
                     },
                 };
 
-            var resource = await StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses).GetResourceAsync<PackageUpdateResource>();
+            var resource = await StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses).GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
             UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
             var logger = new TestLogger();
 
@@ -924,17 +937,27 @@ namespace NuGet.Protocol.Tests
                 noServiceEndpoint: false,
                 skipDuplicate: false,
                 symbolPackageUpdateResource: null,
+                allowInsecureConnections: allowInsecureConnections,
                 log: logger);
 
             // Assert
             Assert.NotNull(sourceRequest);
             Assert.NotNull(symbolRequest);
-            Assert.Equal(1, logger.WarningMessages.Count);
-            Assert.Contains("You are running the 'push' operation with an 'HTTP' source", logger.WarningMessages.First());
+            if (isHttpWarningExpected)
+            {
+                Assert.Equal(1, logger.WarningMessages.Count);
+                Assert.Contains("You are running the 'push' operation with an 'HTTP' source", logger.WarningMessages.Single());
+            }
+            else
+            {
+                Assert.Equal(0, logger.WarningMessages.Count);
+            }
         }
 
-        [Fact]
-        public async Task Push_WhenPushingToAnHttpSourceAndSymbolSource_WarnsForBoth()
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        public async Task Push_WhenPushingToAnHttpSourceAndSymbolSourceWithAllowInsecureConnections_WarnsForBoth(bool allowInsecureConnections, bool isHttpWarningExpected)
         {
             // Arrange
             using var workingDir = TestDirectory.Create();
@@ -967,7 +990,7 @@ namespace NuGet.Protocol.Tests
                     },
                 };
 
-            var resource = await StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses).GetResourceAsync<PackageUpdateResource>();
+            var resource = await StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses).GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
             UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
             var logger = new TestLogger();
 
@@ -982,14 +1005,22 @@ namespace NuGet.Protocol.Tests
                 noServiceEndpoint: false,
                 skipDuplicate: false,
                 symbolPackageUpdateResource: null,
+                allowInsecureConnections: allowInsecureConnections,
                 log: logger);
 
             // Assert
             Assert.NotNull(sourceRequest);
             Assert.NotNull(symbolRequest);
-            Assert.Equal(2, logger.WarningMessages.Count);
-            Assert.Contains("You are running the 'push' operation with an 'HTTP' source, 'http://www.nuget.org/api/v2/'. Non-HTTPS access will be removed in a future version. Consider migrating to an 'HTTPS' source.", logger.WarningMessages.First());
-            Assert.Contains("You are running the 'push' operation with an 'HTTP' source, 'http://other.smbsrc.net/api/v2/package/'. Non-HTTPS access will be removed in a future version. Consider migrating to an 'HTTPS' source.", logger.WarningMessages.Last());
+            if (isHttpWarningExpected)
+            {
+                Assert.Equal(2, logger.WarningMessages.Count);
+                Assert.Contains("You are running the 'push' operation with an 'HTTP' source, 'http://www.nuget.org/api/v2/'. Non-HTTPS access will be removed in a future version. Consider migrating to an 'HTTPS' source.", logger.WarningMessages.First());
+                Assert.Contains("You are running the 'push' operation with an 'HTTP' source, 'http://other.smbsrc.net/api/v2/package/'. Non-HTTPS access will be removed in a future version. Consider migrating to an 'HTTPS' source.", logger.WarningMessages.Last());
+            }
+            else
+            {
+                Assert.Equal(0, logger.WarningMessages.Count);
+            }
         }
 
         [Fact]
@@ -1013,7 +1044,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 var apiKey = string.Empty;
                 var logger = new TestLogger();
 

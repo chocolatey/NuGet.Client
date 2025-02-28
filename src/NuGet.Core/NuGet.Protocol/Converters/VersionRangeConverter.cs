@@ -16,7 +16,7 @@ namespace NuGet.Protocol
         /// Gets a flag indicating whether or not a type is convertible.
         /// </summary>
         /// <param name="objectType">An object type to check.</param>
-        /// <returns><c>true</c> if <paramref name="objectType" /> is convertible; otherwise <c>false</c>.</returns>
+        /// <returns><see langword="true" /> if <paramref name="objectType" /> is convertible; otherwise <see langword="false" />.</returns>
         public override bool CanConvert(Type objectType) => objectType == typeof(VersionRange);
 
         /// <summary>
@@ -29,7 +29,8 @@ namespace NuGet.Protocol
         /// <returns>A <see cref="VersionRange" /> object.</returns>
         public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
         {
-            return reader.TokenType != JsonToken.Null ? VersionRange.Parse(serializer.Deserialize<string>(reader)) : null;
+            string value = serializer.Deserialize<string>(reader);
+            return !string.IsNullOrEmpty(value) ? VersionRange.Parse(value) : null;
         }
 
         /// <summary>

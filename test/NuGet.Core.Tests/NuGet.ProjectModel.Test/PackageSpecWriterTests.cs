@@ -3,6 +3,8 @@
 
 using System;
 using System.Collections.Generic;
+using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NuGet.Common;
@@ -10,8 +12,8 @@ using NuGet.Configuration;
 using NuGet.Frameworks;
 using NuGet.LibraryModel;
 using NuGet.RuntimeModel;
-using NuGet.Test.Utility;
 using NuGet.Versioning;
+using Test.Utility;
 using Xunit;
 
 namespace NuGet.ProjectModel.Test
@@ -177,7 +179,7 @@ namespace NuGet.ProjectModel.Test
         public void Write_ReadWriteWarningProperties()
         {
             // Arrange
-            var json = @"{  
+            var json = @"{
                             ""restore"": {
     ""projectUniqueName"": ""projectUniqueName"",
     ""projectName"": ""projectName"",
@@ -187,6 +189,7 @@ namespace NuGet.ProjectModel.Test
     ""outputPath"": ""outputPath"",
     ""projectStyle"": ""PackageReference"",
     ""crossTargeting"": true,
+    ""restoreUseLegacyDependencyResolver"": true,
     ""fallbackFolders"": [
       ""b"",
       ""a"",
@@ -561,7 +564,7 @@ namespace NuGet.ProjectModel.Test
                                 ""autoReferenced"": true
                             }
                         },
-                        ""runtimeIdentifierGraphPath"": ""path\\to\\sdk\\3.0.100\\runtime.json"" 
+                        ""runtimeIdentifierGraphPath"": ""path\\to\\sdk\\3.0.100\\runtime.json""
                     },
                     ""netcoreapp3.1"": {
                         ""dependencies"": {
@@ -570,7 +573,7 @@ namespace NuGet.ProjectModel.Test
                                 ""autoReferenced"": true
                             }
                         },
-                        ""runtimeIdentifierGraphPath"": ""path\\to\\sdk\\3.1.100\\runtime.json"" 
+                        ""runtimeIdentifierGraphPath"": ""path\\to\\sdk\\3.1.100\\runtime.json""
                     }
                   }
                 }";
@@ -645,7 +648,7 @@ namespace NuGet.ProjectModel.Test
         [Fact]
         public void RoundTripTargetFrameworkAliases()
         {
-            var json = @"{  
+            var json = @"{
                         ""restore"": {
                         ""projectUniqueName"": ""projectUniqueName"",
                         ""projectName"": ""projectName"",
@@ -706,6 +709,148 @@ namespace NuGet.ProjectModel.Test
             VerifyJsonPackageSpecRoundTrip(json);
         }
 
+        [Fact]
+        public void Write_RestoreAuditProperties_RoundTrips()
+        {
+            // Arrange
+            var json = @"{
+                  ""restore"": {
+                    ""projectUniqueName"": ""projectUniqueName"",
+                    ""restoreAuditProperties"": {
+                        ""enableAudit"": ""true"",
+                        ""auditLevel"": ""moderate"",
+                        ""auditMode"": ""all""
+                    }
+                  }
+                }";
+
+            // Act & Assert
+            VerifyJsonPackageSpecRoundTrip(json);
+        }
+
+        [Fact]
+        public void Write_RestoreSdkAnalysisLevel_RoundTrips()
+        {
+            // Arrange
+            var json = @"{
+                  ""restore"": {
+                    ""projectUniqueName"": ""projectUniqueName"",
+                    ""SdkAnalysisLevel"": ""9.0.100""
+                  }
+                }";
+
+            // Act & Assert
+            VerifyJsonPackageSpecRoundTrip(json);
+        }
+
+        [Fact]
+        public void Write_RestoreUsingMicrosoftNetSdk_RoundTrips()
+        {
+            // Arrange
+            var json = @"{
+                  ""restore"": {
+                    ""projectUniqueName"": ""projectUniqueName"",
+                    ""UsingMicrosoftNETSdk"": false
+                  }
+                }";
+
+            // Act & Assert
+            VerifyJsonPackageSpecRoundTrip(json);
+        }
+
+        [Fact]
+        public void Write_RestoreAuditPropertiesWithSuppressions_RoundTrips()
+        {
+            // Arrange
+            var json = @"{
+                  ""restore"": {
+                    ""projectUniqueName"": ""projectUniqueName"",
+                    ""restoreAuditProperties"": {
+                        ""enableAudit"": ""true"",
+                        ""auditLevel"": ""moderate"",
+                        ""auditMode"": ""all"",
+                        ""suppressedAdvisories"": {
+                            ""https://github.com/advisories/example-cve-1"": null,
+                            ""https://github.com/advisories/example-cve-2"": null
+                        },
+                    }
+                  }
+                }";
+
+            // Act & Assert
+            VerifyJsonPackageSpecRoundTrip(json);
+        }
+
+        [Fact]
+        public void RestoreMetadataWithMacros_RoundTrips()
+        {
+            // Arrange
+            var json = @"{
+                            ""restore"": {
+    ""projectUniqueName"": ""C:\\users\\me\\source\\code\\project.csproj"",
+    ""projectName"": ""project"",
+    ""projectPath"": ""C:\\users\\me\\source\\code\\project.csproj"",
+    ""projectJsonPath"": ""C:\\users\\me\\source\\code\\project.json"",
+    ""packagesPath"": ""$(User).nuget\\packages"",
+    ""outputPath"": ""C:\\users\\me\\source\\code\\obj"",
+    ""projectStyle"": ""PackageReference"",
+    ""crossTargeting"": true,
+    ""fallbackFolders"": [
+        ""C:\\Program Files\\dotnet\\sdk\\NuGetFallbackFolder"",
+        ""$(User)fallbackFolder""
+
+
+    ],
+    ""configFilePaths"": [
+        ""$(User)source\\code\\NuGet.Config"",
+        ""$(User)AppData\\Roaming\\NuGet\\NuGet.Config"",
+        ""C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config"",
+        ""C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config""
+    ]
+  }
+}";
+            var environmentReader = new TestEnvironmentVariableReader(new Dictionary<string, string>()
+                {
+                    { MacroStringsUtility.NUGET_ENABLE_EXPERIMENTAL_MACROS, "true" }
+            });
+
+            // Act
+            var actual = PackageSpecTestUtility.RoundTripJson(json, environmentReader);
+
+            // Assert
+            var metadata = actual.RestoreMetadata;
+            var userSettingsDirectory = NuGetEnvironment.GetFolderPath(NuGetFolderPath.UserSettingsDirectory);
+
+            Assert.NotNull(metadata);
+            metadata.PackagesPath.Should().Be(@$"{userSettingsDirectory}.nuget\packages");
+
+            metadata.ConfigFilePaths.Should().Contain(@$"{userSettingsDirectory}source\code\NuGet.Config");
+            metadata.ConfigFilePaths.Should().Contain(@"C:\Program Files (x86)\NuGet\Config\Microsoft.VisualStudio.FallbackLocation.config");
+            metadata.ConfigFilePaths.Should().Contain(@"C:\Program Files (x86)\NuGet\Config\Microsoft.VisualStudio.Offline.config");
+            metadata.ConfigFilePaths.Should().Contain(@$"{userSettingsDirectory}AppData\Roaming\NuGet\NuGet.Config");
+
+            metadata.FallbackFolders.Should().Contain(@"C:\Program Files\dotnet\sdk\NuGetFallbackFolder");
+            metadata.FallbackFolders.Should().Contain(@$"{userSettingsDirectory}fallbackFolder");
+        }
+
+        [Fact]
+        public void RoundTripPackagesToPrune()
+        {
+            // Arrange
+            var json = @"{
+                  ""frameworks"": {
+                    ""net46"": {
+                        ""packagesToPrune"": {
+                            ""a"": ""(, 2.1.3]""
+                        }
+                    }
+                  }
+                }";
+
+            // Act & Assert
+            VerifyJsonPackageSpecRoundTrip(json);
+        }
+
         private static string GetJsonString(PackageSpec packageSpec)
         {
             JObject jObject = packageSpec.ToJObject();
@@ -730,14 +875,14 @@ namespace NuGet.ProjectModel.Test
             {
                 IncludeType = LibraryIncludeFlags.Build,
                 LibraryRange = libraryRangeWithNoWarn,
-                NoWarn = new List<NuGetLogCode> { NuGetLogCode.NU1500, NuGetLogCode.NU1601 }
+                NoWarn = [NuGetLogCode.NU1500, NuGetLogCode.NU1601]
             };
 
             var libraryDependencyWithNoWarnGlobal = new LibraryDependency()
             {
                 IncludeType = LibraryIncludeFlags.Build,
                 LibraryRange = libraryRangeWithNoWarnGlobal,
-                NoWarn = new List<NuGetLogCode> { NuGetLogCode.NU1500, NuGetLogCode.NU1608 }
+                NoWarn = [NuGetLogCode.NU1500, NuGetLogCode.NU1608]
             };
 
             var nugetFramework = new NuGetFramework("frameworkIdentifier", new Version("1.2.3"), "frameworkProfile");
@@ -842,16 +987,16 @@ namespace NuGet.ProjectModel.Test
 
             packageSpec.TargetFrameworks.Add(new TargetFrameworkInformation()
             {
-                Dependencies = new List<LibraryDependency>(),
+                Dependencies = [],
                 FrameworkName = nugetFramework,
-                Imports = new List<NuGetFramework>() { nugetFramework },
+                Imports = [nugetFramework],
             });
 
             packageSpec.TargetFrameworks.Add(new TargetFrameworkInformation()
             {
-                Dependencies = new List<LibraryDependency>() { libraryDependencyWithNoWarn },
+                Dependencies = [libraryDependencyWithNoWarn],
                 FrameworkName = nugetFrameworkWithNoWarn,
-                Imports = new List<NuGetFramework>() { nugetFrameworkWithNoWarn },
+                Imports = [nugetFrameworkWithNoWarn],
                 Warn = true
             });
 

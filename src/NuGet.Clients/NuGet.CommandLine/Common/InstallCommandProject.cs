@@ -83,7 +83,7 @@ namespace NuGet.CommandLine
             }
 
             // For SxS scenarios PackageManagement should not read these references, this would cause uninstalls.
-            return Task.FromResult(Enumerable.Empty<PackageReference>());
+            return TaskResult.EmptyEnumerable<PackageReference>();
         }
 
         /// <summary>
@@ -101,7 +101,7 @@ namespace NuGet.CommandLine
             CancellationToken token)
         {
             var installedPackagesList = await GetInstalledPackagesAsync(token);
-            var packageReference = installedPackagesList.Where(p => p.PackageIdentity.Equals(packageIdentity)).FirstOrDefault();
+            var packageReference = installedPackagesList.FirstOrDefault(p => p.PackageIdentity.Equals(packageIdentity));
             if (packageReference == null)
             {
                 // Package does not exist

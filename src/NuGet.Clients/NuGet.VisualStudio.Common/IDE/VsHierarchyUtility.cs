@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using EnvDTE;
@@ -24,9 +23,22 @@ namespace NuGet.VisualStudio
 
         public static string GetProjectPath(IVsHierarchy project)
         {
+            Assumes.Present(project);
             ThreadHelper.ThrowIfNotOnUIThread();
             var format = (IPersistFileFormat)project;
             format.GetCurFile(out string projectPath, out uint _);
+            return projectPath;
+        }
+
+        /// <summary>
+        /// Handles the project path retrieval for website from both when the project is loaded from disk or from IIS,
+        /// <see cref="GetProjectPath(IVsHierarchy)"/> can only handle the project loaded from disk scenario correctly.
+        /// </summary>
+        public static string GetProjectPathForWebsiteProject(IVsHierarchy project)
+        {
+            Assumes.Present(project);
+            ThreadHelper.ThrowIfNotOnUIThread();
+            project.GetCanonicalName((uint)VSConstants.VSITEMID.Root, out string projectPath);
             return projectPath;
         }
 
@@ -93,7 +105,7 @@ namespace NuGet.VisualStudio
                 var hr = aggregatableProject.GetAggregateProjectTypeGuids(out projectTypeGuids);
                 ErrorHandler.ThrowOnFailure(hr);
 
-                return projectTypeGuids.Split(';');
+                return projectTypeGuids.Split([';'], StringSplitOptions.RemoveEmptyEntries);
             }
 
             if (ErrorHandler.Succeeded(hierarchy.GetGuidProperty(VSConstants.VSITEMID_ROOT, (int)__VSHPROPID.VSHPROPID_TypeGuid, out Guid pguid)))
@@ -178,7 +190,7 @@ namespace NuGet.VisualStudio
         /// <summary>
         /// Gets all the hierarchies of all the NuGet compatible projects
         /// </summary>
-        /// <param name="vsSolution">The VS Solution instance. Must not be <see cref="null"/>. </param>
+        /// <param name="vsSolution">The VS Solution instance. Must not be <c>null</c>. </param>
         /// <returns>Hierarchies of the NuGet compatible projects</returns>
         /// <remarks>This method assumes the solution is open.</remarks>
         public static List<IVsHierarchy> GetAllLoadedProjects(IVsSolution vsSolution)
