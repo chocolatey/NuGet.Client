@@ -63,6 +63,12 @@ namespace NuGet.VisualStudio.Internal.Contracts
 
         public bool PrefixReserved => _packageSearchMetadata.PrefixReserved;
 
+        public string AvailableVersionSource
+        {
+            get => _packageSearchMetadata.AvailableVersionSource;
+            set => _packageSearchMetadata.AvailableVersionSource = value;
+        }
+
         public LicenseMetadata LicenseMetadata => _packageSearchMetadata.LicenseMetadata;
 
         public IEnumerable<PackageVulnerabilityMetadata> Vulnerabilities => _packageSearchMetadata.Vulnerabilities;

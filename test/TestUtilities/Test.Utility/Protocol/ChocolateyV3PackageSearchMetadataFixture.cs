@@ -45,6 +45,7 @@ namespace NuGet.Test.Utility
             public string PackageScanStatus => null;
             public DateTime? PackageScanResultDate => null;
             public string PackageScanFlagResult => null;
+            public string AvailableVersionSource => null;
         }
     }
 }

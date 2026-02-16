@@ -85,6 +85,7 @@ namespace NuGet.Protocol
         public string PackageScanStatus { get; private set; }
         public DateTime? PackageScanResultDate { get; private set; }
         public string PackageScanFlagResult { get; private set; }
+        public string AvailableVersionSource { get; set; }
 
         private void FinishInitialization(V2FeedPackageInfo package)
         {
