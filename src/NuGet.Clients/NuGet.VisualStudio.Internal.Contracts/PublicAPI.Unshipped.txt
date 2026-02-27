@@ -1,1 +1,3 @@
 #nullable enable
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.AvailableVersionSource.get -> string!
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.AvailableVersionSource.set -> void

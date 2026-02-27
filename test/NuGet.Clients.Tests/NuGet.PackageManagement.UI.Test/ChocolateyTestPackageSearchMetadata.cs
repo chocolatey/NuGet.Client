@@ -43,5 +43,6 @@ namespace NuGet.PackageManagement.UI.Test
         public string PackageScanStatus { get; set; }
         public DateTime? PackageScanResultDate { get; set; }
         public string PackageScanFlagResult { get; set; }
+        public string AvailableVersionSource { get; set; }
     }
 }

@@ -1,0 +1,10 @@
+NuGet.Protocol.Core.Types.IPackageSearchMetadata.AvailableVersionSource.get -> string
+NuGet.Protocol.Core.Types.IPackageSearchMetadata.AvailableVersionSource.set -> void
+NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetadata.AvailableVersionSource.get -> string
+NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetadata.AvailableVersionSource.set -> void
+NuGet.Protocol.LocalPackageSearchMetadata.AvailableVersionSource.get -> string
+NuGet.Protocol.LocalPackageSearchMetadata.AvailableVersionSource.set -> void
+NuGet.Protocol.PackageSearchMetadata.AvailableVersionSource.get -> string
+NuGet.Protocol.PackageSearchMetadata.AvailableVersionSource.set -> void
+NuGet.Protocol.PackageSearchMetadataV2Feed.AvailableVersionSource.get -> string
+NuGet.Protocol.PackageSearchMetadataV2Feed.AvailableVersionSource.set -> void
