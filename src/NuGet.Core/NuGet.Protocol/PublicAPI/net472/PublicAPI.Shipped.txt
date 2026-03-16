@@ -105,6 +105,8 @@ NuGet.Protocol.Core.Types.INuGetResourceProvider.TryCreate(NuGet.Protocol.Core.T
 NuGet.Protocol.Core.Types.INuGetResourceProvider.TryCreate(NuGet.Protocol.Core.Types.SourceRepository source, System.Threading.CancellationToken token) -> System.Threading.Tasks.Task<System.Tuple<bool, NuGet.Protocol.Core.Types.INuGetResource>>
 NuGet.Protocol.Core.Types.IPackageSearchMetadata
 NuGet.Protocol.Core.Types.IPackageSearchMetadata.Authors.get -> string
+NuGet.Protocol.Core.Types.IPackageSearchMetadata.AvailableVersionSource.get -> string
+NuGet.Protocol.Core.Types.IPackageSearchMetadata.AvailableVersionSource.set -> void
 NuGet.Protocol.Core.Types.IPackageSearchMetadata.BugTrackerUrl.get -> System.Uri
 NuGet.Protocol.Core.Types.IPackageSearchMetadata.DependencySets.get -> System.Collections.Generic.IEnumerable<NuGet.Packaging.PackageDependencyGroup>
 NuGet.Protocol.Core.Types.IPackageSearchMetadata.Description.get -> string
@@ -216,6 +218,8 @@ NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.Build() -> NuGet.Protocol
 NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetadata
 NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetadata.Authors.get -> string
 NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetadata.Authors.set -> void
+NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetadata.AvailableVersionSource.get -> string
+NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetadata.AvailableVersionSource.set -> void
 NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetadata.BugTrackerUrl.get -> System.Uri
 NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetadata.BugTrackerUrl.set -> void
 NuGet.Protocol.Core.Types.PackageSearchMetadataBuilder.ClonedPackageSearchMetadata.ClonedPackageSearchMetadata() -> void
@@ -768,6 +772,8 @@ NuGet.Protocol.LocalPackageMetadataResourceProvider
 NuGet.Protocol.LocalPackageMetadataResourceProvider.LocalPackageMetadataResourceProvider() -> void
 NuGet.Protocol.LocalPackageSearchMetadata
 NuGet.Protocol.LocalPackageSearchMetadata.Authors.get -> string
+NuGet.Protocol.LocalPackageSearchMetadata.AvailableVersionSource.get -> string
+NuGet.Protocol.LocalPackageSearchMetadata.AvailableVersionSource.set -> void
 NuGet.Protocol.LocalPackageSearchMetadata.BugTrackerUrl.get -> System.Uri
 NuGet.Protocol.LocalPackageSearchMetadata.DependencySets.get -> System.Collections.Generic.IEnumerable<NuGet.Packaging.PackageDependencyGroup>
 NuGet.Protocol.LocalPackageSearchMetadata.Description.get -> string
@@ -900,6 +906,8 @@ NuGet.Protocol.PackageNotFoundProtocolException.PackageNotFoundProtocolException
 NuGet.Protocol.PackageNotFoundProtocolException.PackageNotFoundProtocolException(NuGet.Packaging.Core.PackageIdentity package, System.Exception innerException) -> void
 NuGet.Protocol.PackageSearchMetadata
 NuGet.Protocol.PackageSearchMetadata.Authors.get -> string
+NuGet.Protocol.PackageSearchMetadata.AvailableVersionSource.get -> string
+NuGet.Protocol.PackageSearchMetadata.AvailableVersionSource.set -> void
 NuGet.Protocol.PackageSearchMetadata.BugTrackerUrl.get -> System.Uri
 NuGet.Protocol.PackageSearchMetadata.BugTrackerUrl.set -> void
 NuGet.Protocol.PackageSearchMetadata.DependencySets.get -> System.Collections.Generic.IEnumerable<NuGet.Packaging.PackageDependencyGroup>
@@ -994,6 +1002,8 @@ NuGet.Protocol.PackageSearchMetadataRegistration.CatalogUri.get -> System.Uri
 NuGet.Protocol.PackageSearchMetadataRegistration.PackageSearchMetadataRegistration() -> void
 NuGet.Protocol.PackageSearchMetadataV2Feed
 NuGet.Protocol.PackageSearchMetadataV2Feed.Authors.get -> string
+NuGet.Protocol.PackageSearchMetadataV2Feed.AvailableVersionSource.get -> string
+NuGet.Protocol.PackageSearchMetadataV2Feed.AvailableVersionSource.set -> void
 NuGet.Protocol.PackageSearchMetadataV2Feed.BugTrackerUrl.get -> System.Uri
 NuGet.Protocol.PackageSearchMetadataV2Feed.Created.get -> System.DateTimeOffset?
 NuGet.Protocol.PackageSearchMetadataV2Feed.DependencySets.get -> System.Collections.Generic.IEnumerable<NuGet.Packaging.PackageDependencyGroup>
