@@ -235,6 +235,8 @@ NuGet.VisualStudio.Internal.Contracts.TransitivePackageReferenceContextInfo.Tran
 NuGet.VisualStudio.Internal.Contracts.TransitivePackageReferenceContextInfo.TransitivePackageReferenceContextInfo(NuGet.Packaging.Core.PackageIdentity! identity, Chocolatey.NuGet.Frameworks.NuGetFramework? framework) -> void
 NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata
 NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.Authors.get -> string!
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.AvailableVersionSource.get -> string!
+NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.AvailableVersionSource.set -> void
 NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.BugTrackerUrl.get -> System.Uri!
 NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.DependencySets.get -> System.Collections.Generic.IEnumerable<NuGet.Packaging.PackageDependencyGroup!>!
 NuGet.VisualStudio.Internal.Contracts.TransitivePackageSearchMetadata.Description.get -> string!

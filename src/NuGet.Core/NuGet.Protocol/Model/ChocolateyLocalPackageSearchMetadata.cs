@@ -187,5 +187,10 @@ namespace NuGet.Protocol
         /// Not applicable to local packages
         /// </remarks>
         public string PackageScanFlagResult => null;
+
+        /// <remarks>
+        /// Not applicable to local packages
+        /// </remarks>
+        public string AvailableVersionSource { get; set; }
     }
 }

@@ -77,6 +77,7 @@ namespace NuGet.Protocol.Core.Types
             [Obsolete("PackagePath is recommended in place of PackageReader")]
             public Func<PackageReaderBase> PackageReader { get; set; }
             public string PackagePath { get; set; }
+            public string AvailableVersionSource { get; set; }
         }
 
         private PackageSearchMetadataBuilder(IPackageSearchMetadata metadata)
@@ -168,6 +169,7 @@ namespace NuGet.Protocol.Core.Types
                 PackageScanStatus = _metadata.PackageScanStatus,
                 PackageScanResultDate = _metadata.PackageScanResultDate,
                 PackageScanFlagResult = _metadata.PackageScanFlagResult,
+                AvailableVersionSource = _metadata.AvailableVersionSource
 
                 //////////////////////////////////////////////////////////
                 // End - Chocolatey Specific Modification

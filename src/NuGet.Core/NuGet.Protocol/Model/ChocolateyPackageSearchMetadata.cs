@@ -76,5 +76,7 @@ namespace NuGet.Protocol
         public DateTime? PackageScanResultDate { get; set; }
         [JsonIgnore]
         public string PackageScanFlagResult { get; set; }
+        [JsonIgnore]
+        public string AvailableVersionSource { get; set; }
     }
 }

@@ -1,13 +1,14 @@
 <!--
 BEFORE YOU CREATE A PULL REQUEST:
 
-Ensure you have read over [CONTRIBUTING.md](./CONTRIBUTING.md). We provide VERY defined guidance (as such, we strongly adhere to it).
+Ensure you have read over [CONTRIBUTING.md](https://github.com/chocolatey/choco/blob/develop/CONTRIBUTING.md). We provide VERY defined guidance (as such, we strongly adhere to it).
 
 A summary of our expectations:
  - You are not submitting a pull request from your MASTER / MAIN branch.
  - You are able to sign the Contributor License Agreement (CLA).
  - YOUR GIT COMMIT MESSAGE FORMAT IS EXTREMELY IMPORTANT. We have a very defined expectation for this format and are sticklers about it. Really, READ the entire Contributing document. It will save you and us pain.
  - Do not reformat code, it makes it hard to see what has changed. Leave the formatting to us.
+ - You have read and can confirm the completion of the [Definition of Done](https://github.com/chocolatey/home/blob/main/definition-of-done.md).
 
 THANKS! We appreciate you reading the entire Contributing document and not just scanning through it.
 
@@ -36,8 +37,8 @@ Please remove all comments before submitting.
 -->
 ### Operating Systems Testing
 <!-- If this is a code change, list the operating systems this has been tested on
-- Windows Server 2008R2
-- Windows 8.1
+- Windows Server 2019
+- Windows 10
 ...
 -->
 
@@ -56,7 +57,8 @@ Please remove all comments before submitting.
 * [ ] Documentation has been updated.
 * [ ] Tests to cover my changes, have been added.
 * [ ] All new and existing tests passed?
-* [ ] PowerShell code changes: PowerShell v2 compatibility checked?
+* [ ] PowerShell code changes: PowerShell v3 compatibility checked?
+* [ ] All items are complete on the [Definition of Done](https://github.com/chocolatey/home/blob/main/definition-of-done.md).
 
 ## Related Issue
 <!-- Make sure you have raised an issue for this pull request before

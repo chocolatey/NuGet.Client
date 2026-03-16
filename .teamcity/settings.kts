@@ -11,6 +11,8 @@ project {
 object ChocolateyNugetClient : BuildType({
     name = "Build"
 
+    templates(AbsoluteId("SlackNotificationTemplate"))
+
     artifactRules = """
         +:artifacts/nupkgs/*.nupkg
         -:artifacts/nupkgs/*.symbols.nupkg
@@ -37,19 +39,21 @@ object ChocolateyNugetClient : BuildType({
                     if ((Get-WindowsFeature -Name NET-Framework-Features).InstallState -ne 'Installed') {
                         Install-WindowsFeature -Name NET-Framework-Features
                     }
-                    
+
                     choco install visualstudio2022-workload-manageddesktopbuildtools visualstudio2022-workload-visualstudioextensionbuildtools visualstudio2022-component-texttemplating-buildtools --confirm --no-progress
-                    
+
                     exit ${'$'}LastExitCode
                 """.trimIndent()
             }
         }
+
         powerShell {
             name = "Configure .NET and other dependencies"
             scriptMode = file {
                 path = "configure.ps1"
             }
         }
+
         powerShell {
             name = "Build"
             scriptMode = script {
@@ -64,11 +68,12 @@ object ChocolateyNugetClient : BuildType({
                     elseif ( ${'$'}branchName.StartsWith('proj') ) { ${'$'}releaseLabel = 'alpha' }
                     elseif ( ${'$'}branchName.StartsWith('bugfix') ) { ${'$'}releaseLabel = 'beta' }
                     elseif ( ${'$'}branchName.StartsWith('pull') ) { ${'$'}releaseLabel = 'pr' }
-        
+
                     .\build.ps1 -CI -SkipUnitTest -ChocolateyBuild -BuildNumber %build.counter% -ReleaseLabel ${'$'}releaseLabel -BuildDate (Get-Date -Format "yyyyMMdd")
                 """.trimIndent()
             }
         }
+
         powerShell {
             conditions {
                 doesNotContain("teamcity.build.branch", "pull")
