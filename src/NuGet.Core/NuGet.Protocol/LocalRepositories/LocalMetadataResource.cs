@@ -1,6 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -28,7 +29,7 @@ namespace NuGet.Protocol
             _localResource = localResource;
         }
 
-        public override async Task<IEnumerable<KeyValuePair<string, NuGetVersion>>> GetLatestVersions(
+        public override async Task<IEnumerable<KeyValuePair<string, NuGetVersion?>>> GetLatestVersions(
             IEnumerable<string> packageIds,
             bool includePrerelease,
             bool includeUnlisted,
@@ -36,7 +37,7 @@ namespace NuGet.Protocol
             ILogger log,
             CancellationToken token)
         {
-            var results = new List<KeyValuePair<string, NuGetVersion>>();
+            var results = new List<KeyValuePair<string, NuGetVersion?>>();
 
             var tasks = new Stack<KeyValuePair<string, Task<IEnumerable<NuGetVersion>>>>();
 
@@ -55,14 +56,14 @@ namespace NuGet.Protocol
                 if (versions == null
                     || !versions.Any())
                 {
-                    results.Add(new KeyValuePair<string, NuGetVersion>(pair.Key, null));
+                    results.Add(new KeyValuePair<string, NuGetVersion?>(pair.Key, null));
                 }
                 else
                 {
                     // sort and take only the highest version
                     var latestVersion = versions.OrderByDescending(p => p, VersionComparer.VersionRelease).FirstOrDefault();
 
-                    results.Add(new KeyValuePair<string, NuGetVersion>(pair.Key, latestVersion));
+                    results.Add(new KeyValuePair<string, NuGetVersion?>(pair.Key, latestVersion));
                 }
             }
 

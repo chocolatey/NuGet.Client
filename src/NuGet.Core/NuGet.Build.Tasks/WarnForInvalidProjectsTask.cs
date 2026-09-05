@@ -1,15 +1,17 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Linq;
 using Microsoft.Build.Framework;
-using Microsoft.Build.Utilities;
 using NuGet.Commands;
 using NuGet.Common;
 
 namespace NuGet.Build.Tasks
 {
+    [MSBuildMultiThreadableTask]
     public class WarnForInvalidProjectsTask : Microsoft.Build.Utilities.Task
     {
         /// <summary>
@@ -31,10 +33,6 @@ namespace NuGet.Build.Tasks
             // item -> string
             var all = AllProjects?.Select(e => e.ItemSpec).ToArray() ?? Array.Empty<string>();
             var valid = ValidProjects?.Select(e => e.ItemSpec).ToArray() ?? Array.Empty<string>();
-
-            // log inputs
-            BuildTasksUtility.LogInputParam(log, nameof(AllProjects), all);
-            BuildTasksUtility.LogInputParam(log, nameof(ValidProjects), valid);
 
             // Log warnings for invalid projects
             foreach (var path in all.Except(valid, PathUtility.GetStringComparerBasedOnOS()))

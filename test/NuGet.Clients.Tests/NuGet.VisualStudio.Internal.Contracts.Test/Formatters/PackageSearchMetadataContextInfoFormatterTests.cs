@@ -60,7 +60,7 @@ namespace NuGet.VisualStudio.Internal.Contracts.Test
             Assert.Equal(expectedResult.Vulnerabilities, actualResult.Vulnerabilities);
         }
 
-        public static TheoryData TestData => new TheoryData<PackageSearchMetadataContextInfo>
+        public static TheoryData<PackageSearchMetadataContextInfo> TestData => new()
             {
                 { PackageSearchMetadataContextInfo.Create(new PackageSearchMetadataBuilder.ClonedPackageSearchMetadata()
                     {
@@ -68,7 +68,7 @@ namespace NuGet.VisualStudio.Internal.Contracts.Test
                         PackageDetailsUrl = new Uri("http://nuget.org"),
                         Authors = "authors",
                         DependencySets = new List<PackageDependencyGroup>{ new PackageDependencyGroup(new NuGetFramework(".NETFramework", new Version(4,5)), new List<PackageDependency>() { new PackageDependency("a") }) },
-                        Vulnerabilities = new PackageVulnerabilityMetadata[] { JsonExtensions.FromJson<PackageVulnerabilityMetadata>("{ 'AdvisoryUrl': 'http://www.nuget.org', 'Severity': '2' }") },
+                        Vulnerabilities = new PackageVulnerabilityMetadata[] { JsonExtensions.FromJson<PackageVulnerabilityMetadata>("{ 'AdvisoryUrl': 'http://www.nuget.org', 'Severity': '2' }")! },
                         Description = "description",
                         DownloadCount = 1000,
                         IconUrl = new Uri("http://nuget.org"),

@@ -94,14 +94,14 @@ namespace NuGet.Configuration.Test
         }
 
         /// <summary>
-        /// Verifies that <see cref="SettingsLoadingContext.GetOrCreateSettingsFile(string, bool, bool)" /> throws an <see cref="ArgumentNullException"/> when passed a <c>null</c> value for the file path.
+        /// Verifies that <see cref="SettingsLoadingContext.GetOrCreateSettingsFile(string, bool, bool)" /> throws an <see cref="ArgumentNullException"/> when passed a <see langword="null" /> value for the file path.
         /// </summary>
         [Fact]
         public void GetOrCreateSettingsFile_ThrowsArgumentNullException_WhenFilePathIsNull()
         {
             var settingsLoadingContext = new SettingsLoadingContext();
 
-            Action action = () => settingsLoadingContext.GetOrCreateSettingsFile(filePath: null);
+            Action action = () => settingsLoadingContext.GetOrCreateSettingsFile(filePath: null!);
 
             action.Should()
                 .Throw<ArgumentNullException>()
@@ -121,7 +121,7 @@ namespace NuGet.Configuration.Test
 
             settingsLoadingContext.Dispose();
 
-            Action action = () => settingsLoadingContext.GetOrCreateSettingsFile(filePath: null);
+            Action action = () => settingsLoadingContext.GetOrCreateSettingsFile(filePath: null!);
 
             action.Should()
                 .Throw<ObjectDisposedException>()
@@ -129,6 +129,24 @@ namespace NuGet.Configuration.Test
                 .ObjectName
                 .Should()
                 .Be(nameof(SettingsLoadingContext));
+        }
+
+        /// <summary>
+        /// Verifies that <see cref="SettingsLoadingContext.GetOrCreateSettingsFile(string, bool, bool)" /> throws an <see cref="ArgumentException"/> when a non-rooted path is specified (ie just a filename).
+        /// </summary>
+        [Fact]
+        public void GetOrCreateSettingsFile_ThrowsArgumentException_WhenNonRootedPathSpecified()
+        {
+            var settingsLoadingContext = new SettingsLoadingContext();
+
+            Action action = () => settingsLoadingContext.GetOrCreateSettingsFile(filePath: "Something.config");
+
+            action.Should()
+                .Throw<ArgumentException>()
+                .Which
+                .ParamName
+                .Should()
+                .Be("filePath");
         }
     }
 }

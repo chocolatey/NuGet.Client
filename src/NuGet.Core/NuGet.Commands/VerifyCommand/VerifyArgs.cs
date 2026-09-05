@@ -1,9 +1,9 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
+#nullable disable
+
 using System.Collections.Generic;
-using System.Globalization;
 using NuGet.Common;
 using NuGet.Configuration;
 
@@ -25,31 +25,6 @@ namespace NuGet.Commands
         /// Types of verifications to be performed.
         /// </summary>
         public IList<Verification> Verifications { get; set; }
-
-        /// <summary>
-        /// Path to the package that has to be verified.
-        /// </summary>      
-        [Obsolete("Use PackagePaths instead")]
-        public string PackagePath
-        {
-            get
-            {
-                switch (PackagePaths.Count)
-                {
-                    case 0:
-                        return null;
-
-                    case 1:
-                        return PackagePaths[0];
-
-                    default:
-                        throw new NotSupportedException(string.Format(CultureInfo.CurrentCulture,
-                            Strings.Error_MultiplePackagePaths,
-                            nameof(PackagePaths)));
-                }
-            }
-            set => PackagePaths = new[] { value };
-        }
 
         /// <summary>
         /// Paths to the packages that has to be verified.

@@ -12,7 +12,7 @@ namespace NuGet.Packaging
 {
     public static class FrameworkNameUtility
     {
-        public static FrameworkName ParseFrameworkNameFromFilePath(string filePath, out string effectivePath)
+        public static FrameworkName? ParseFrameworkNameFromFilePath(string filePath, out string effectivePath)
         {
             foreach (string knownFolder in PackagingConstants.Folders.Known)
             {
@@ -48,10 +48,10 @@ namespace NuGet.Packaging
         /// Parses the specified string into FrameworkName object.
         /// </summary>
         /// <param name="path">The string to be parse.</param>
-        /// <param name="strictParsing">if set to <c>true</c>, parse the first folder of path even if it is unrecognized framework.</param>
+        /// <param name="strictParsing">if set to <see langword="true" />, parse the first folder of path even if it is unrecognized framework.</param>
         /// <param name="effectivePath">returns the path after the parsed target framework</param>
         /// <returns></returns>
-        public static FrameworkName ParseFrameworkFolderName(string path, bool strictParsing, out string effectivePath)
+        public static FrameworkName? ParseFrameworkFolderName(string path, bool strictParsing, out string effectivePath)
         {
             // The path for a reference might look like this for assembly foo.dll:
             // foo.dll
@@ -61,7 +61,7 @@ namespace NuGet.Packaging
             // {FrameworkName}{Version}\sub1\sub2\foo.dll
 
             // Get the target framework string if specified
-            string targetFrameworkString = Path.GetDirectoryName(path).Split(Path.DirectorySeparatorChar).First();
+            string targetFrameworkString = Path.GetDirectoryName(path)!.Split(Path.DirectorySeparatorChar).First();
 
             effectivePath = path;
 
@@ -82,7 +82,7 @@ namespace NuGet.Packaging
             return null;
         }
 
-        public static NuGetFramework ParseNuGetFrameworkFromFilePath(string filePath, out string effectivePath)
+        public static NuGetFramework? ParseNuGetFrameworkFromFilePath(string filePath, out string effectivePath)
         {
             foreach (string knownFolder in PackagingConstants.Folders.Known)
             {
@@ -118,10 +118,10 @@ namespace NuGet.Packaging
         /// Parses the specified string into FrameworkName object.
         /// </summary>
         /// <param name="path">The string to be parse.</param>
-        /// <param name="strictParsing">if set to <c>true</c>, parse the first folder of path even if it is unrecognized framework.</param>
+        /// <param name="strictParsing">if set to <see langword="true" />, parse the first folder of path even if it is unrecognized framework.</param>
         /// <param name="effectivePath">returns the path after the parsed target framework</param>
         /// <returns></returns>
-        public static NuGetFramework ParseNuGetFrameworkFolderName(string path, bool strictParsing, out string effectivePath)
+        public static NuGetFramework? ParseNuGetFrameworkFolderName(string path, bool strictParsing, out string effectivePath)
         {
             // The path for a reference might look like this for assembly foo.dll:
             // foo.dll
@@ -131,7 +131,7 @@ namespace NuGet.Packaging
             // {FrameworkName}{Version}\sub1\sub2\foo.dll
 
             // Get the target framework string if specified
-            string targetFrameworkString = Path.GetDirectoryName(path).Split(Path.DirectorySeparatorChar).First();
+            string targetFrameworkString = Path.GetDirectoryName(path)!.Split(Path.DirectorySeparatorChar).First();
 
             effectivePath = path;
 

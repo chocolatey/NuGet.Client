@@ -1,16 +1,19 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Packaging.Signing;
 using NuGet.ProjectModel;
+using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 using NuGet.Shared;
 
@@ -26,6 +29,7 @@ namespace NuGet.Commands
         private readonly DependencyGraphSpec _dgFile;
         private readonly RestoreCommandProvidersCache _providerCache;
         private readonly LockFileBuilderCache _lockFileBuilderCache;
+        private readonly ISettings _settings;
 
         public DependencyGraphSpecRequestProvider(
             RestoreCommandProvidersCache providerCache,
@@ -36,7 +40,17 @@ namespace NuGet.Commands
             _lockFileBuilderCache = new LockFileBuilderCache();
         }
 
-        public Task<IReadOnlyList<RestoreSummaryRequest>> CreateRequests(RestoreArgs restoreContext)
+        public DependencyGraphSpecRequestProvider(
+            RestoreCommandProvidersCache providerCache,
+            DependencyGraphSpec dgFile,
+            ISettings settings)
+            : this(providerCache, dgFile)
+        {
+            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        }
+
+        public Task<IReadOnlyList<RestoreSummaryRequest>> CreateRequests(
+            RestoreArgs restoreContext)
         {
             var requests = GetRequestsFromItems(restoreContext, _dgFile);
 
@@ -64,7 +78,7 @@ namespace NuGet.Commands
                     projectsWithErrors.Add(projectPath);
                 }
             }
-            SpecValidationUtility.ValidateDependencySpec(dgFile, projectsWithErrors);
+            SpecValidationUtility.ValidateDependencySpec(dgFile, projectsWithErrors, restoreContext.Log);
 
             // Create requests
             var requests = new ConcurrentBag<RestoreSummaryRequest>();
@@ -131,8 +145,6 @@ namespace NuGet.Commands
             var projectReferences = rootProject.RestoreMetadata?.TargetFrameworks.SelectMany(e => e.ProjectReferences)
                 ?? new List<ProjectRestoreReference>();
 
-            var type = rootProject.RestoreMetadata?.ProjectStyle ?? ProjectStyle.Unknown;
-
             var uniqueReferences = projectReferences
                 .Select(p => p.ProjectUniqueName)
                 .Distinct(StringComparer.OrdinalIgnoreCase);
@@ -156,8 +168,9 @@ namespace NuGet.Commands
             //fallback paths, global packages path and sources need to all be passed in the dg spec
             var fallbackPaths = projectPackageSpec.RestoreMetadata.FallbackFolders;
             var globalPath = GetPackagesPath(restoreArgs, projectPackageSpec);
-            var settings = Settings.LoadImmutableSettingsGivenConfigPaths(projectPackageSpec.RestoreMetadata.ConfigFilePaths, settingsLoadingContext);
-            var sources = restoreArgs.GetEffectiveSources(settings, projectPackageSpec.RestoreMetadata.Sources);
+            var settings = _settings ?? Settings.LoadImmutableSettingsGivenConfigPaths(projectPackageSpec.RestoreMetadata.ConfigFilePaths, settingsLoadingContext);
+            var packageSources = restoreArgs.GetEffectiveSources(settings, projectPackageSpec.RestoreMetadata.Sources);
+            var auditSources = GetAuditSources(restoreArgs.CachingSourceProvider);
             var clientPolicyContext = ClientPolicyContext.GetClientPolicy(settings, restoreArgs.Log);
             var packageSourceMapping = PackageSourceMapping.GetPackageSourceMapping(settings);
             var updateLastAccess = SettingsUtility.GetUpdatePackageLastAccessTimeEnabledStatus(settings);
@@ -165,10 +178,12 @@ namespace NuGet.Commands
             var sharedCache = _providerCache.GetOrCreate(
                 globalPath,
                 fallbackPaths.AsList(),
-                sources,
+                packageSources,
+                auditSources,
                 restoreArgs.CacheContext,
                 restoreArgs.Log,
-                updateLastAccess);
+                updateLastAccess,
+                EnvironmentVariableWrapper.Instance);
 
             var rootPath = Path.GetDirectoryName(project.PackageSpec.FilePath);
 
@@ -209,9 +224,31 @@ namespace NuGet.Commands
                 request,
                 project.MSBuildProjectPath,
                 settings.GetConfigFilePaths(),
-                sources);
+                packageSources);
 
             return summaryRequest;
+        }
+
+        private static IReadOnlyList<SourceRepository> GetAuditSources(CachingSourceProvider cachingSourceProvider)
+        {
+            IReadOnlyList<PackageSource> auditSources = cachingSourceProvider.PackageSourceProvider.LoadAuditSources();
+
+            if (auditSources is null || auditSources.Count == 0)
+            {
+                return Array.Empty<SourceRepository>();
+            }
+
+            var auditSourceRepositories = new List<SourceRepository>(auditSources.Count);
+            for (int i = 0; i < auditSources.Count; i++)
+            {
+                PackageSource source = auditSources[i];
+                if (source.IsEnabled)
+                {
+                    auditSourceRepositories.Add(cachingSourceProvider.CreateRepository(source));
+                }
+            }
+
+            return auditSourceRepositories;
         }
 
         private string GetPackagesPath(RestoreArgs restoreArgs, PackageSpec project)
@@ -221,33 +258,6 @@ namespace NuGet.Commands
                 project.RestoreMetadata.PackagesPath = restoreArgs.GlobalPackagesFolder;
             }
             return project.RestoreMetadata.PackagesPath;
-        }
-
-        /// <summary>
-        /// Return all references for a given project path.
-        /// References is modified by this method.
-        /// This includes the root project.
-        /// </summary>
-        private static void CollectReferences(
-            ExternalProjectReference root,
-            Dictionary<string, ExternalProjectReference> allProjects,
-            HashSet<ExternalProjectReference> references)
-        {
-            if (references.Add(root))
-            {
-                foreach (var child in root.ExternalProjectReferences)
-                {
-                    ExternalProjectReference childProject;
-                    if (!allProjects.TryGetValue(child, out childProject))
-                    {
-                        // Let the resolver handle this later
-                        Debug.Fail($"Missing project {childProject}");
-                    }
-
-                    // Recurse down
-                    CollectReferences(childProject, allProjects, references);
-                }
-            }
         }
 
         internal static IReadOnlyList<IAssetsLogMessage> GetMessagesForProject(IReadOnlyList<IAssetsLogMessage> allMessages, string projectPath)

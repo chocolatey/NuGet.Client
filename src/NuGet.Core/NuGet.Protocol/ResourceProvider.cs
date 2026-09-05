@@ -26,7 +26,7 @@ namespace NuGet.Protocol.Core.Types
         {
         }
 
-        public ResourceProvider(Type resourceType, string name, string before)
+        public ResourceProvider(Type resourceType, string name, string? before)
             : this(resourceType, name, ToArray(before), Enumerable.Empty<string>())
         {
         }
@@ -85,13 +85,14 @@ namespace NuGet.Protocol.Core.Types
             get { return _resourceType; }
         }
 
-        public abstract Task<Tuple<bool, INuGetResource>> TryCreate(SourceRepository source, CancellationToken token);
+        /// <inheritdoc cref="INuGetResourceProvider.TryCreate(SourceRepository, CancellationToken)"/>
+        public abstract Task<Tuple<bool, INuGetResource?>> TryCreate(SourceRepository source, CancellationToken token);
 
-        private static IEnumerable<string> ToArray(string s)
+        private static IEnumerable<string> ToArray(string? s)
         {
-            if (!String.IsNullOrEmpty(s))
+            if (!string.IsNullOrEmpty(s))
             {
-                return new string[] { s };
+                return new string[] { s! };
             }
 
             return Enumerable.Empty<string>();

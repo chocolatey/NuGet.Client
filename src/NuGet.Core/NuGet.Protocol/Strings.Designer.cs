@@ -19,7 +19,7 @@ namespace NuGet.Protocol {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "17.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class Strings {
@@ -165,6 +165,78 @@ namespace NuGet.Protocol {
         internal static string Error_DownloadTimeout {
             get {
                 return ResourceManager.GetString("Error_DownloadTimeout", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to You are running the &apos;{0}&apos; operation with an &apos;HTTP&apos; source, &apos;{1}&apos;. NuGet requires HTTPS sources. To use HTTP sources, you must explicitly set &apos;allowInsecureConnections&apos; to true in your NuGet.Config file. Refer to https://aka.ms/nuget-https-everywhere for more information..
+        /// </summary>
+        internal static string Error_HttpServerUsage {
+            get {
+                return ResourceManager.GetString("Error_HttpServerUsage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to You are using a NuGet source &apos;{0}&apos; that contains an &apos;HTTP&apos; service index resource endpoint: &apos;{1}&apos;. This is insecure and not recommended. To allow HTTP resources, you must explicitly set &apos;allowInsecureConnections&apos; to true in your NuGet.Config file. For more information, visit https://aka.ms/nuget-https-everywhere..
+        /// </summary>
+        internal static string Error_Insecure_HTTP {
+            get {
+                return ResourceManager.GetString("Error_Insecure_HTTP", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Invalid package id : `{0}`..
+        /// </summary>
+        internal static string Error_Invalid_package_id {
+            get {
+                return ResourceManager.GetString("Error_Invalid_package_id", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Expected package {0} {1}, but got package {2} {3}.
+        /// </summary>
+        internal static string Error_PackageIdentityDoesNotMatch {
+            get {
+                return ResourceManager.GetString("Error_PackageIdentityDoesNotMatch", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unexpected JSON token type &apos;{0}&apos;..
+        /// </summary>
+        internal static string Error_UnexpectedJsonToken {
+            get {
+                return ResourceManager.GetString("Error_UnexpectedJsonToken", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Required property &apos;{0}&apos; not found in JSON..
+        /// </summary>
+        internal static string Error_RequiredJsonPropertyMissing {
+            get {
+                return ResourceManager.GetString("Error_RequiredJsonPropertyMissing", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Expected payload to be a JSON object but was `{0}`..
+        /// </summary>
+        internal static string Error_UnexpectedPayloadTokenType {
+            get {
+                return ResourceManager.GetString("Error_UnexpectedPayloadTokenType", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unsupported payload type `{0}`..
+        /// </summary>
+        internal static string Error_UnsupportedPayloadType {
+            get {
+                return ResourceManager.GetString("Error_UnsupportedPayloadType", resourceCulture);
             }
         }
         
@@ -862,6 +934,24 @@ namespace NuGet.Protocol {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to The source does not support filtering search results by package type..
+        /// </summary>
+        internal static string Protocol_PackageTypeFilterNotSupported {
+            get {
+                return ResourceManager.GetString("Protocol_PackageTypeFilterNotSupported", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The source supports filtering by only one package type at a time..
+        /// </summary>
+        internal static string Protocol_PackageTypeFilterMultipleNotSupported {
+            get {
+                return ResourceManager.GetString("Protocol_PackageTypeFilterMultipleNotSupported", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The path &apos;{0}&apos; for the selected source could not be resolved..
         /// </summary>
         internal static string Protocol_Search_LocalSourceNotFound {
@@ -970,11 +1060,74 @@ namespace NuGet.Protocol {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to You are running the &apos;{0}&apos; operation with an &apos;HTTP&apos; source, &apos;{1}&apos;. Non-HTTPS access will be removed in a future version. Consider migrating to an &apos;HTTPS&apos; source..
+        ///   Looks up a localized string similar to Package source &apos;{0}&apos; has {1} vulnerability data pages. Using the first {2}..
         /// </summary>
-        internal static string Warning_HttpServerUsage {
+        internal static string Vulnerability_TooManyPages {
             get {
-                return ResourceManager.GetString("Warning_HttpServerUsage", resourceCulture);
+                return ResourceManager.GetString("Vulnerability_TooManyPages", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package source &apos;{0}&apos; vulnerability data index &apos;{1}&apos; could not be loaded. This indicates a problem with the JSON file contents returned from the server..
+        /// </summary>
+        internal static string VulnerabilityPage_CouldNotLoad {
+            get {
+                return ResourceManager.GetString("VulnerabilityPage_CouldNotLoad", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Vulnerability page index {0} does not contain a name (Source: &apos;{1}&apos;).
+        /// </summary>
+        internal static string VulnerabilityPage_HasNoName {
+            get {
+                return ResourceManager.GetString("VulnerabilityPage_HasNoName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Vulnerability page index {0} contains invalid characters (Source: &apos;{1}&apos;).
+        /// </summary>
+        internal static string VulnerabilityPage_NameHasInvalidCharacters {
+            get {
+                return ResourceManager.GetString("VulnerabilityPage_NameHasInvalidCharacters", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Vulnerability page name &apos;{0}&apos; is not unique. Only using the first (Source: &apos;{1}&apos;).
+        /// </summary>
+        internal static string VulnerabilityPage_NameNotUnique {
+            get {
+                return ResourceManager.GetString("VulnerabilityPage_NameNotUnique", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Vulnerability page index {0} name is longer than {1} characters (Source: &apos;{2}&apos;).
+        /// </summary>
+        internal static string VulnerabilityPage_NameTooLong {
+            get {
+                return ResourceManager.GetString("VulnerabilityPage_NameTooLong", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Vulnerability page &apos;{0}&apos; does not contain a URL (Source: &apos;{1}&apos;).
+        /// </summary>
+        internal static string VulnerabilityPage_NoUrl {
+            get {
+                return ResourceManager.GetString("VulnerabilityPage_NoUrl", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Vulnerability page &apos;{0}&apos; contains URL that is not http(s) (Source: &apos;{1}&apos;).
+        /// </summary>
+        internal static string VulnerabilityPage_UrlNotHttp {
+            get {
+                return ResourceManager.GetString("VulnerabilityPage_UrlNotHttp", resourceCulture);
             }
         }
         

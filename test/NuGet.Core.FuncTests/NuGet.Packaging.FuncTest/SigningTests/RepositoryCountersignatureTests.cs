@@ -1,7 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if IS_SIGNING_SUPPORTED
+
+#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -13,7 +14,6 @@ using System.Threading.Tasks;
 using NuGet.Common;
 using NuGet.Packaging.Signing;
 using NuGet.Test.Utility;
-using Org.BouncyCastle.Cms;
 using Test.Utility.Signing;
 using Xunit;
 
@@ -43,7 +43,7 @@ namespace NuGet.Packaging.FuncTest
             Assert.Equal("primarySignature", exception.ParamName);
         }
 
-        [Fact]
+        [NetFxCIOnlyFact]
         public async Task GetRepositoryCountersignature_WithNoCountersignatures_ReturnsNull()
         {
             using (var test = await Test.CreateWithoutRepositoryCountersignatureAsync(_fixture.TrustedTestCertificate.Source.Cert))
@@ -54,7 +54,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [Fact]
+        [NetFxCIOnlyFact]
         public async Task GetRepositoryCountersignature_WithRepositoryCountersignature_ReturnsInstance()
         {
             using (var test = await Test.CreateAsync(_fixture.TrustedTestCertificate.Source.Cert))
@@ -72,7 +72,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [Fact]
+        [NetFxCIOnlyFact]
         public async Task GetSignatureValue_WithSha256_ReturnsValue()
         {
             using (var test = await Test.CreateAsync(_fixture.TrustedTestCertificate.Source.Cert))
@@ -87,25 +87,10 @@ namespace NuGet.Packaging.FuncTest
 
         private static byte[] GetRepositoryCountersignatureSignatureValue(SignedCms signedCms)
         {
-            var cmsSignedData = new CmsSignedData(signedCms.Encode());
-            var signerInfoStore = cmsSignedData.GetSignerInfos();
-            var primarySignerInfo = GetFirstSignerInfo(signerInfoStore);
-
-            signerInfoStore = primarySignerInfo.GetCounterSignatures();
-
-            var counterSignerInfo = GetFirstSignerInfo(signerInfoStore);
+            SignerInfo primarySignerInfo = signedCms.SignerInfos[0];
+            SignerInfo counterSignerInfo = primarySignerInfo.CounterSignerInfos[0];
 
             return counterSignerInfo.GetSignature();
-        }
-
-        private static SignerInformation GetFirstSignerInfo(SignerInformationStore store)
-        {
-            var signers = store.GetSigners();
-            var enumerator = signers.GetEnumerator();
-
-            enumerator.MoveNext();
-
-            return (SignerInformation)enumerator.Current;
         }
 
         private sealed class Test : IDisposable
@@ -181,4 +166,3 @@ namespace NuGet.Packaging.FuncTest
         }
     }
 }
-#endif

@@ -1,8 +1,11 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,6 +15,7 @@ using NuGet.Commands;
 using NuGet.Common;
 using NuGet.Frameworks;
 using NuGet.LibraryModel;
+using NuGet.PackageManagement.VisualStudio.Projects;
 using NuGet.ProjectManagement;
 using NuGet.ProjectModel;
 using NuGet.Versioning;
@@ -29,20 +33,20 @@ namespace NuGet.PackageManagement.VisualStudio
         , IProjectSystemCapabilities
         , IProjectSystemReferencesReader
         , IProjectSystemReferencesService
+        , ILegacyPackageReferenceProjectServices
     {
-        private static readonly Array ReferenceMetadata;
+        private static readonly string[] ReferenceMetadata;
 
         private readonly IVsProjectAdapter _vsProjectAdapter;
         private readonly IVsProjectThreadingService _threadingService;
-        private readonly VSProject4 _vsProject4;
+
+        public VSProject4 Project4 { get; }
 
         public bool SupportsPackageReferences => true;
 
         public bool NominatesOnSolutionLoad { get; private set; } = false;
 
         #region INuGetProjectServices
-
-        public IProjectBuildProperties BuildProperties => _vsProjectAdapter.BuildProperties;
 
         public IProjectSystemCapabilities Capabilities => this;
 
@@ -58,14 +62,17 @@ namespace NuGet.PackageManagement.VisualStudio
 
         static VsManagedLanguagesProjectSystemServices()
         {
-            ReferenceMetadata = Array.CreateInstance(typeof(string), 7);
-            ReferenceMetadata.SetValue(ProjectItemProperties.IncludeAssets, 0);
-            ReferenceMetadata.SetValue(ProjectItemProperties.ExcludeAssets, 1);
-            ReferenceMetadata.SetValue(ProjectItemProperties.PrivateAssets, 2);
-            ReferenceMetadata.SetValue(ProjectItemProperties.NoWarn, 3);
-            ReferenceMetadata.SetValue(ProjectItemProperties.GeneratePathProperty, 4);
-            ReferenceMetadata.SetValue(ProjectItemProperties.Aliases, 5);
-            ReferenceMetadata.SetValue(ProjectItemProperties.VersionOverride, 6);
+            ReferenceMetadata = new string[]
+            {
+                ProjectItemProperties.IncludeAssets,
+                ProjectItemProperties.ExcludeAssets,
+                ProjectItemProperties.PrivateAssets,
+                ProjectItemProperties.NoWarn,
+                ProjectItemProperties.GeneratePathProperty,
+                ProjectItemProperties.Aliases,
+                ProjectItemProperties.VersionOverride,
+                ProjectItemProperties.IsImplicitlyDefined,
+            };
         }
 
         public VsManagedLanguagesProjectSystemServices(
@@ -81,7 +88,7 @@ namespace NuGet.PackageManagement.VisualStudio
 
             _vsProjectAdapter = vsProjectAdapter;
             _threadingService = threadingService;
-            _vsProject4 = vsProject4;
+            Project4 = vsProject4;
 
             ScriptService = new VsProjectScriptHostService(vsProjectAdapter, scriptExecutor);
 
@@ -95,21 +102,21 @@ namespace NuGet.PackageManagement.VisualStudio
 
             await _threadingService.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-            var installedPackages = _vsProject4.PackageReferences?.InstalledPackages;
+            var installedPackages = Project4.PackageReferences?.InstalledPackages;
 
             if (installedPackages == null)
             {
                 return Array.Empty<LibraryDependency>();
             }
 
-            bool isCpvmEnabled = await IsCentralPackageManagementVersionsEnabledAsync();
+            bool isCpvmEnabled = IsCentralPackageManagementVersionsEnabled();
 
             var references = installedPackages
                 .Cast<string>()
                 .Where(r => !string.IsNullOrEmpty(r))
                 .Select(installedPackage =>
                 {
-                    if (_vsProject4.PackageReferences.TryGetReference(
+                    if (Project4.PackageReferences.TryGetReference(
                         installedPackage,
                         ReferenceMetadata,
                         out var version,
@@ -137,13 +144,13 @@ namespace NuGet.PackageManagement.VisualStudio
         {
             await _threadingService.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-            if (_vsProject4.References == null)
+            if (Project4.References == null)
             {
                 return Array.Empty<ProjectRestoreReference>();
             }
 
             var references = new List<ProjectRestoreReference>();
-            foreach (Reference6 r in _vsProject4.References.Cast<Reference6>())
+            foreach (Reference6 r in Project4.References.Cast<Reference6>())
             {
                 if (r.SourceProject != null && await EnvDTEProjectUtility.IsSupportedAsync(r.SourceProject))
                 {
@@ -199,7 +206,15 @@ namespace NuGet.PackageManagement.VisualStudio
 
         private static LibraryDependency ToPackageLibraryDependency(PackageReference reference, bool isCpvmEnabled)
         {
-            var dependency = new LibraryDependency
+            // Get warning suppressions
+            ImmutableArray<NuGetLogCode> noWarn = MSBuildStringUtility.GetNuGetLogCodes(GetReferenceMetadataValue(reference, ProjectItemProperties.NoWarn));
+
+            (var includeType, var suppressParent) = MSBuildRestoreUtility.GetLibraryDependencyIncludeFlags(
+                GetReferenceMetadataValue(reference, ProjectItemProperties.IncludeAssets),
+                GetReferenceMetadataValue(reference, ProjectItemProperties.ExcludeAssets),
+                GetReferenceMetadataValue(reference, ProjectItemProperties.PrivateAssets));
+
+            var dependency = new LibraryDependency()
             {
                 AutoReferenced = MSBuildStringUtility.IsTrue(GetReferenceMetadataValue(reference, ProjectItemProperties.IsImplicitlyDefined)),
                 GeneratePathProperty = MSBuildStringUtility.IsTrue(GetReferenceMetadataValue(reference, ProjectItemProperties.GeneratePathProperty)),
@@ -208,21 +223,11 @@ namespace NuGet.PackageManagement.VisualStudio
                 LibraryRange = new LibraryRange(
                     name: reference.Name,
                     versionRange: ToVersionRange(reference.Version, isCpvmEnabled),
-                    typeConstraint: LibraryDependencyTarget.Package)
+                    typeConstraint: LibraryDependencyTarget.Package),
+                NoWarn = noWarn,
+                IncludeType = includeType,
+                SuppressParent = suppressParent,
             };
-
-            MSBuildRestoreUtility.ApplyIncludeFlags(
-                dependency,
-                GetReferenceMetadataValue(reference, ProjectItemProperties.IncludeAssets),
-                GetReferenceMetadataValue(reference, ProjectItemProperties.ExcludeAssets),
-                GetReferenceMetadataValue(reference, ProjectItemProperties.PrivateAssets));
-
-
-            // Add warning suppressions
-            foreach (var code in MSBuildStringUtility.GetNuGetLogCodes(GetReferenceMetadataValue(reference, ProjectItemProperties.NoWarn)))
-            {
-                dependency.NoWarn.Add(code);
-            }
 
             return dependency;
         }
@@ -315,7 +320,7 @@ namespace NuGet.PackageManagement.VisualStudio
             // - specify a metadata element name with a value => add/replace that metadata item on the package reference
             // - specify a metadata element name with no value => remove that metadata item from the project reference
             // - don't specify a particular metadata name => if it exists on the package reference, don't change it (e.g. for user defined metadata)
-            _vsProject4.PackageReferences.AddOrUpdate(
+            Project4.PackageReferences.AddOrUpdate(
                 packageName,
                 packageVersion.OriginalString ?? packageVersion.ToShortString(),
                 metadataElements,
@@ -328,12 +333,43 @@ namespace NuGet.PackageManagement.VisualStudio
 
             await _threadingService.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-            _vsProject4.PackageReferences.Remove(packageName);
+            Project4.PackageReferences.Remove(packageName);
         }
 
-        private async Task<bool> IsCentralPackageManagementVersionsEnabledAsync()
+        private bool IsCentralPackageManagementVersionsEnabled()
         {
-            return MSBuildStringUtility.IsTrue(await _vsProjectAdapter.BuildProperties.GetPropertyValueAsync(ProjectBuildProperties.ManagePackageVersionsCentrally));
+            ThreadHelper.ThrowIfNotOnUIThread();
+#pragma warning disable CS0618 // Type or member is obsolete
+            // Need to validate no project systems get this property via DTE, and if so, switch to GetPropertyValue
+            return MSBuildStringUtility.IsTrue(_vsProjectAdapter.BuildProperties.GetPropertyValueWithDteFallback(ProjectBuildProperties.ManagePackageVersionsCentrally));
+#pragma warning restore CS0618 // Type or member is obsolete
+        }
+
+        public async Task<IReadOnlyList<(string id, string[] metadata)>> GetItemsAsync(string itemTypeName, params string[] metadataNames)
+        {
+            await _threadingService.JoinableTaskFactory.SwitchToMainThreadAsync();
+            return GetItems(_vsProjectAdapter, itemTypeName, metadataNames);
+        }
+
+        internal static IReadOnlyList<(string id, string[] metadata)> GetItems(IVsProjectAdapter projectAdapter, string itemTypeName, params string[] metadataNames)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            IEnumerable<(string ItemId, string[] ItemMetadata)> items = projectAdapter.GetBuildItemInformation(itemTypeName, metadataNames);
+            var enumerator = items.GetEnumerator();
+            if (!enumerator.MoveNext())
+            {
+                return Array.Empty<(string, string[])>();
+            }
+
+            List<(string, string[])> result = items is ICollection<(string, string[])> itemCollection ? new(itemCollection.Count) : new();
+
+            do
+            {
+                result.Add(enumerator.Current);
+            } while (enumerator.MoveNext());
+
+            return result;
         }
 
         private class ProjectReference

@@ -1,9 +1,8 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using NuGet.Common;
 using Xunit;
 
 namespace NuGet.Test.Utility
@@ -37,6 +36,16 @@ namespace NuGet.Test.Utility
                     }
                 }
 
+#if !NET5_0_OR_GREATER
+                if (string.IsNullOrEmpty(skip))
+                {
+                    if (NetFxCIOnly && !XunitAttributeUtility.IsCI)
+                    {
+                        skip = "This test requires elevation on .NET Framework. It only runs on CI for this TFM. To run it locally, use a .NET 5+ TFM or set the env var CI=true";
+                    }
+                }
+#endif
+
                 // If this is null the test will run.
                 return skip;
             }
@@ -60,6 +69,12 @@ namespace NuGet.Test.Utility
         public bool SkipMono { get; set; }
 
         public bool CIOnly { get; set; }
+
+        /// <summary>
+        /// If true, skip on .NET Framework unless CI=true.
+        /// On .NET 5+, does not skip (in-memory trust stores don't require elevation).
+        /// </summary>
+        public bool NetFxCIOnly { get; set; }
 
         /// <summary>
         /// Provide property values to use this attribute.

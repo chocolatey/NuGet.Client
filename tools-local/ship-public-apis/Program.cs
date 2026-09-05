@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
-using System.CommandLine.Invocation;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -14,7 +13,7 @@ namespace NuGet.Internal.Tools.ShipPublicApis
             var nugetSlnDirectory = FindNuGetSlnDirectory();
             var pathArgument = nugetSlnDirectory == null
                 ? new Argument<DirectoryInfo>("path")
-                : new Argument<DirectoryInfo>("path", getDefaultValue: () => nugetSlnDirectory);
+                : new Argument<DirectoryInfo>("path") { DefaultValueFactory = _ => nugetSlnDirectory };
 
             var resortOption = new Option<bool>("--resort");
 
@@ -26,9 +25,17 @@ namespace NuGet.Internal.Tools.ShipPublicApis
 
             rootCommand.Description = "Copy and merge contents of PublicAPI.Unshipped.txt to PublicAPI.Shipped.txt. See https://github.com/NuGet/NuGet.Client/tree/dev/docs/nuget-sdk.md#Shipping_NuGet for more details.";
 
-            rootCommand.SetHandler<DirectoryInfo, bool>(MainAsync, pathArgument, resortOption);
+            rootCommand.SetAction(async (ParseResult, CancellationToken) =>
+            {
+                var path_Argument = ParseResult.GetValue<DirectoryInfo>(pathArgument);
+                var resort_Option = ParseResult.GetValue<bool>(resortOption);
+                if (path_Argument is not null)
+                {
+                    await MainAsync(path_Argument, resort_Option);
+                }
+            });
 
-            return await rootCommand.InvokeAsync(args);
+            return await rootCommand.Parse(args).InvokeAsync();
         }
 
         private static DirectoryInfo? FindNuGetSlnDirectory()
@@ -99,10 +106,17 @@ namespace NuGet.Internal.Tools.ShipPublicApis
             return 0;
         }
 
+        // The public API analyzer records an intentionally removed public API by adding a line to
+        // PublicAPI.Unshipped.txt with this prefix followed by the exact signature that currently
+        // exists in PublicAPI.Shipped.txt. Shipping such an entry means deleting the matching line
+        // from PublicAPI.Shipped.txt; the marker itself must not be written into either file.
+        private const string RemovedApiPrefix = "*REMOVED*";
+
         private static async Task<int> MoveUnshippedApisToShippedAsync(string shippedTxtPath, string unshippedTxtPath)
         {
             var shippedLines = new List<string>();
             var unshippedLines = new List<string>();
+            var removedApis = new List<string>();
             int unshippedApiCount = 0;
 
             using (var stream = File.OpenText(unshippedTxtPath))
@@ -115,6 +129,11 @@ namespace NuGet.Internal.Tools.ShipPublicApis
                         if (line.StartsWith("#"))
                         {
                             unshippedLines.Add(line);
+                        }
+                        else if (line.StartsWith(RemovedApiPrefix, StringComparison.Ordinal))
+                        {
+                            removedApis.Add(line.Substring(RemovedApiPrefix.Length));
+                            unshippedApiCount++;
                         }
                         else
                         {
@@ -134,6 +153,19 @@ namespace NuGet.Internal.Tools.ShipPublicApis
                     {
                         shippedLines.Add(line);
                     }
+                }
+            }
+
+            foreach (var removedApi in removedApis)
+            {
+                int index = shippedLines.FindIndex(shippedLine => PublicAPIAnalyzerLineComparer.Instance.Compare(shippedLine, removedApi) == 0);
+                if (index < 0)
+                {
+                    Console.Error.WriteLine($"warning: {shippedTxtPath}: '{RemovedApiPrefix}{removedApi}' has no matching entry in PublicAPI.Shipped.txt; nothing to remove.");
+                }
+                else
+                {
+                    shippedLines.RemoveAt(index);
                 }
             }
 

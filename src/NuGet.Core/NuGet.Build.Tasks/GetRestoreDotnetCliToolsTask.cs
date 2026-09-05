@@ -1,10 +1,11 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using Newtonsoft.Json;
@@ -14,6 +15,7 @@ using NuGet.Versioning;
 
 namespace NuGet.Build.Tasks
 {
+    [MSBuildMultiThreadableTask]
     public class GetRestoreDotnetCliToolsTask : Microsoft.Build.Utilities.Task
     {
         /// <summary>
@@ -59,26 +61,6 @@ namespace NuGet.Build.Tasks
 
         public override bool Execute()
         {
-            var log = new MSBuildLogger(Log);
-            log.LogDebug($"(in) ProjectPath '{ProjectPath}'");
-            log.LogDebug($"(in) DotnetCliToolReferences '{string.Join(";", DotnetCliToolReferences.Select(p => p.ItemSpec))}'");
-            if (RestoreSources != null)
-            {
-                log.LogDebug($"(in) RestoreSources '{string.Join(";", RestoreSources.Select(p => p))}'");
-            }
-            if (RestorePackagesPath != null)
-            {
-                log.LogDebug($"(in) RestorePackagesPath '{RestorePackagesPath}'");
-            }
-            if (RestoreFallbackFolders != null)
-            {
-                log.LogDebug($"(in) RestoreFallbackFolders '{string.Join(";", RestoreFallbackFolders.Select(p => p))}'");
-            }
-            if (RestoreConfigFilePaths != null)
-            {
-                log.LogDebug($"(in) RestoreConfigFilePaths '{string.Join(";", RestoreConfigFilePaths.Select(p => p))}'");
-            }
-
             var entries = new List<ITaskItem>();
 
             foreach (var msbuildItem in DotnetCliToolReferences)

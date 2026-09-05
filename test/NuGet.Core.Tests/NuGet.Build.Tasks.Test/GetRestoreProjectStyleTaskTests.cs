@@ -26,7 +26,6 @@ namespace NuGet.Build.Tasks.Test
             {
                 BuildEngine = buildEngine,
                 RestoreProjectStyle = restoreStyle,
-                ProjectJsonPath = string.Empty,
                 HasPackageReferenceItems = false,
                 MSBuildProjectName = "ProjectA",
                 MSBuildProjectDirectory = "SomeDirectory"
@@ -80,23 +79,6 @@ namespace NuGet.Build.Tasks.Test
             }
         }
 
-        [Fact]
-        public void Execute_WhenProjectJsonPathSpecified_ReturnsProjectJson()
-        {
-            var buildEngine = new TestBuildEngine();
-
-            var task = new GetRestoreProjectStyleTask
-            {
-                BuildEngine = buildEngine,
-                ProjectJsonPath = "SomePath"
-            };
-
-            task.Execute().Should().BeTrue();
-
-            task.ProjectStyle.Should().Be(ProjectStyle.ProjectJson);
-            task.IsPackageReferenceCompatibleProjectStyle.Should().BeFalse();
-        }
-
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
@@ -115,7 +97,7 @@ namespace NuGet.Build.Tasks.Test
                 task.Execute().Should().BeTrue();
 
                 task.ProjectStyle.Should().Be(projectStyle);
-                if (projectStyle == ProjectStyle.PackageReference || projectStyle == ProjectStyle.DotnetToolReference)
+                if (projectStyle == ProjectStyle.PackageReference)
                 {
                     task.IsPackageReferenceCompatibleProjectStyle.Should().BeTrue();
                 }
@@ -129,7 +111,7 @@ namespace NuGet.Build.Tasks.Test
         [Fact]
         public void Execute_WhenUserSuppliedValueOverridesDefault_ReturnsUserSuppliedProjectStyle()
         {
-            var expected = ProjectStyle.Standalone;
+            var expected = ProjectStyle.PackagesConfig;
 
             using (var testDirectory = TestDirectory.Create())
             {
@@ -141,7 +123,6 @@ namespace NuGet.Build.Tasks.Test
                 {
                     BuildEngine = buildEngine,
                     RestoreProjectStyle = expected.ToString(),
-                    ProjectJsonPath = "Some value",
                     HasPackageReferenceItems = true,
                     MSBuildProjectName = "ProjectA",
                     MSBuildProjectDirectory = "SomeDirectory"

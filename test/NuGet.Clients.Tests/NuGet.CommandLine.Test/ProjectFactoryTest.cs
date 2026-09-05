@@ -1,5 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -19,10 +21,19 @@ using Xunit;
 namespace NuGet.CommandLine
 {
     using global::Test.Utility;
+    using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
     using NuGet.Packaging;
+    using Xunit.Abstractions;
 
     public class ProjectFactoryTest
     {
+        private readonly ITestOutputHelper _testOutputHelper;
+
+        public ProjectFactoryTest(ITestOutputHelper testOutputHelper)
+        {
+            _testOutputHelper = testOutputHelper;
+        }
+
         [Fact]
         public void ProjectFactoryInitializesPropertiesForPreprocessorFromAssemblyMetadata()
         {
@@ -50,17 +61,17 @@ namespace NuGet.CommandLine
 	        <OutputType>Library</OutputType>
 	        <RootNamespace>NuGet.Test</RootNamespace>
 	        <AssemblyName>" + testAssembly.GetName().Name + @"</AssemblyName>
-	        <TargetFrameworkProfile Condition="" '$(TargetFrameworkVersion)' == 'v4.0' "">Client</TargetFrameworkProfile>    
+	        <TargetFrameworkProfile Condition="" '$(TargetFrameworkVersion)' == 'v4.0' "">Client</TargetFrameworkProfile>
 	        <OutputPath>.</OutputPath> <!-- Force it to look for the assembly in the base path -->
 	        <TargetPath>" + testAssembly.ManifestModule.FullyQualifiedName + @"</TargetPath>
 	    </PropertyGroup>
-	    
+
 	    <ItemGroup>
 	        <Compile Include=""..\..\Dummy.cs"">
 	          <Link>Dummy.cs</Link>
 	        </Compile>
 	    </ItemGroup>
-	 
+
 	    <Import Project=""$(MSBuildToolsPath)\Microsoft.CSharp.targets"" />
 	</Project>";
 
@@ -121,17 +132,17 @@ namespace NuGet.CommandLine
 	        <OutputType>Library</OutputType>
 	        <RootNamespace>NuGet.Test</RootNamespace>
 	        <AssemblyName>" + testAssembly.GetName().Name + @"</AssemblyName>
-	        <TargetFrameworkProfile Condition="" '$(TargetFrameworkVersion)' == 'v4.0' "">Client</TargetFrameworkProfile>    
+	        <TargetFrameworkProfile Condition="" '$(TargetFrameworkVersion)' == 'v4.0' "">Client</TargetFrameworkProfile>
 	        <OutputPath>.</OutputPath> <!-- Force it to look for the assembly in the base path -->
 	        <TargetPath>" + testAssembly.ManifestModule.FullyQualifiedName + @"</TargetPath>
 	    </PropertyGroup>
-	    
+
 	    <ItemGroup>
 	        <Compile Include=""..\..\Dummy.cs"">
 	          <Link>Dummy.cs</Link>
 	        </Compile>
 	    </ItemGroup>
-	 
+
 	    <Import Project=""$(MSBuildToolsPath)\Microsoft.CSharp.targets"" />
 	</Project>";
 
@@ -195,17 +206,17 @@ namespace NuGet.CommandLine
 	        <OutputType>Library</OutputType>
 	        <RootNamespace>NuGet.Test</RootNamespace>
 	        <AssemblyName>" + testAssembly.GetName().Name + @"</AssemblyName>
-	        <TargetFrameworkProfile Condition="" '$(TargetFrameworkVersion)' == 'v4.0' "">Client</TargetFrameworkProfile>    
+	        <TargetFrameworkProfile Condition="" '$(TargetFrameworkVersion)' == 'v4.0' "">Client</TargetFrameworkProfile>
 	        <OutputPath>.</OutputPath> <!-- Force it to look for the assembly in the base path -->
 	        <TargetPath>" + testAssembly.ManifestModule.FullyQualifiedName + @"</TargetPath>
 	    </PropertyGroup>
-	    
+
 	    <ItemGroup>
 	        <Compile Include=""..\..\Dummy.cs"">
 	          <Link>Dummy.cs</Link>
 	        </Compile>
 	    </ItemGroup>
-	 
+
 	    <Import Project=""$(MSBuildToolsPath)\Microsoft.CSharp.targets"" />
 	</Project>";
 
@@ -269,17 +280,17 @@ namespace NuGet.CommandLine
 	        <OutputType>Library</OutputType>
 	        <RootNamespace>NuGet.Test</RootNamespace>
 	        <AssemblyName>" + testAssembly.GetName().Name + @"</AssemblyName>
-	        <TargetFrameworkProfile Condition="" '$(TargetFrameworkVersion)' == 'v4.0' "">Client</TargetFrameworkProfile>    
+	        <TargetFrameworkProfile Condition="" '$(TargetFrameworkVersion)' == 'v4.0' "">Client</TargetFrameworkProfile>
 	        <OutputPath>.</OutputPath> <!-- Force it to look for the assembly in the base path -->
 	        <TargetPath>" + testAssembly.ManifestModule.FullyQualifiedName + @"</TargetPath>
 	    </PropertyGroup>
-	    
+
 	    <ItemGroup>
 	        <Compile Include=""..\..\Dummy.cs"">
 	          <Link>Dummy.cs</Link>
 	        </Compile>
 	    </ItemGroup>
-	 
+
 	    <Import Project=""$(MSBuildToolsPath)\Microsoft.CSharp.targets"" />
 	</Project>";
 
@@ -345,17 +356,17 @@ namespace NuGet.CommandLine
 	        <OutputType>Library</OutputType>
 	        <RootNamespace>NuGet.Test</RootNamespace>
 	        <AssemblyName>" + testAssembly.GetName().Name + @"</AssemblyName>
-	        <TargetFrameworkProfile Condition="" '$(TargetFrameworkVersion)' == 'v4.0' "">Client</TargetFrameworkProfile>    
+	        <TargetFrameworkProfile Condition="" '$(TargetFrameworkVersion)' == 'v4.0' "">Client</TargetFrameworkProfile>
 	        <OutputPath>.</OutputPath> <!-- Force it to look for the assembly in the base path -->
 	        <TargetPath>" + testAssembly.ManifestModule.FullyQualifiedName + @"</TargetPath>
 	    </PropertyGroup>
-	    
+
 	    <ItemGroup>
 	        <Compile Include=""..\..\Dummy.cs"">
 	          <Link>Dummy.cs</Link>
 	        </Compile>
 	    </ItemGroup>
-	 
+
 	    <Import Project=""$(MSBuildToolsPath)\Microsoft.CSharp.targets"" />
 	</Project>";
 
@@ -437,7 +448,7 @@ namespace NuGet.CommandLine
             {
                 var actual = ProjectFactory.ContentEquals(sourcePath, fullPath);
 
-                Assert.Equal(true, actual);
+                Assert.True(actual);
             }
             finally
             {
@@ -476,7 +487,7 @@ namespace NuGet.CommandLine
                     nugetexe,
                     workingDirectory,
                     "pack Assembly.csproj -build",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 Util.VerifyResultSuccess(r);
 
@@ -520,7 +531,7 @@ namespace NuGet.CommandLine
                     nugetexe,
                     workingDirectory,
                     $"pack Link{Path.DirectorySeparatorChar}Link.csproj -build -IncludeReferencedProjects -Version 1.0.0",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 Util.VerifyResultSuccess(r);
@@ -574,7 +585,7 @@ namespace NuGet.CommandLine
                     nugetexe,
                     workingDirectory,
                     $"pack Link{Path.DirectorySeparatorChar}Link.csproj -build -IncludeReferencedProjects -Version 1.0.0",
-                    waitForExit: true);
+                    testOutputHelper: _testOutputHelper);
 
                 // Assert
                 Util.VerifyResultSuccess(r);
@@ -736,7 +747,7 @@ namespace Assembly
                     itemGroup.Add(projectReferenceXElement);
                 }
 
-                var projectXElement = Util.CreateProjFileXmlContent(Name);
+                var projectXElement = Util.CreateProjFileXmlContent();
                 projectXElement.Add(itemGroup);
 
                 return projectXElement.ToString();

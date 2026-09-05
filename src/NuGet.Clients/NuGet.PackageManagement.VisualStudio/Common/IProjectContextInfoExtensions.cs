@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#nullable enable
-
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -17,26 +15,6 @@ namespace NuGet.PackageManagement.VisualStudio
 {
     public static class IProjectContextInfoExtensions
     {
-        public static async ValueTask<bool> IsUpgradeableAsync(
-            this IProjectContextInfo projectContextInfo,
-            IServiceBroker serviceBroker,
-            CancellationToken cancellationToken)
-        {
-            Assumes.NotNull(projectContextInfo);
-            Assumes.NotNull(serviceBroker);
-
-            cancellationToken.ThrowIfCancellationRequested();
-
-            using (INuGetProjectUpgraderService? projectUpgrader = await serviceBroker.GetProxyAsync<INuGetProjectUpgraderService>(
-                NuGetServices.ProjectUpgraderService,
-                cancellationToken: cancellationToken))
-            {
-                Assumes.NotNull(projectUpgrader);
-
-                return await projectUpgrader.IsProjectUpgradeableAsync(projectContextInfo.ProjectId, cancellationToken);
-            }
-        }
-
         public static async ValueTask<IReadOnlyCollection<IPackageReferenceContextInfo>> GetInstalledPackagesAsync(
             this IProjectContextInfo projectContextInfo,
             IServiceBroker serviceBroker,
@@ -120,6 +98,21 @@ namespace NuGet.PackageManagement.VisualStudio
             using (INuGetProjectManagerService projectManager = await GetProjectManagerAsync(serviceBroker, cancellationToken))
             {
                 return await projectManager.GetTargetFrameworksAsync(new string[] { projectContextInfo.ProjectId }, cancellationToken);
+            }
+        }
+
+        public static async ValueTask<bool> IsCentralPackageManagementEnabledAsync(this IProjectContextInfo projectContextInfo,
+            IServiceBroker serviceBroker,
+            CancellationToken cancellationToken)
+        {
+            Assumes.NotNull(projectContextInfo);
+            Assumes.NotNull(serviceBroker);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            using (INuGetProjectManagerService projectManager = await GetProjectManagerAsync(serviceBroker, cancellationToken))
+            {
+                return await projectManager.IsCentralPackageManagementEnabledAsync(projectContextInfo.ProjectId, cancellationToken);
             }
         }
 

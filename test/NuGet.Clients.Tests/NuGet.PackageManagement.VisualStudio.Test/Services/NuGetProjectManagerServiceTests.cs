@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -34,10 +36,11 @@ using NuGet.Resolver;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
 using NuGet.VisualStudio;
-using NuGet.VisualStudio.Common.Test;
 using NuGet.VisualStudio.Internal.Contracts;
+using NuGet.VisualStudio.Telemetry;
 using StreamJsonRpc;
 using Test.Utility;
+using Test.Utility.VisualStudio;
 using Xunit;
 using Xunit.Abstractions;
 using static NuGet.PackageManagement.VisualStudio.Test.ProjectFactories;
@@ -46,6 +49,7 @@ using Task = System.Threading.Tasks.Task;
 
 namespace NuGet.PackageManagement.VisualStudio.Test
 {
+    [UseCulture("en-US")] // We are asserting exception messages in English
     [Collection(MockedVS.Collection)]
     public sealed class NuGetProjectManagerServiceTests : MockedVSCollectionTests, IDisposable
     {
@@ -56,8 +60,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         private TestVsSolutionManager _solutionManager;
         private NuGetProjectManagerServiceState _state;
         private TestDirectory _testDirectory;
+        private ConcurrentQueue<TelemetryEvent> _telemetryEvents;
         private readonly IVsProjectThreadingService _threadingService;
         private readonly TestLogger _logger;
+        private readonly Mock<IOutputConsoleProvider> _outputConsoleProviderMock;
+        private readonly Lazy<IOutputConsoleProvider> _outputConsoleProvider;
 
         public NuGetProjectManagerServiceTests(GlobalServiceProvider globalServiceProvider, ITestOutputHelper output)
             : base(globalServiceProvider)
@@ -69,16 +76,9 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             componentModel.Setup(x => x.GetService<INuGetProjectContext>()).Returns(_projectContext);
             AddService<SComponentModel>(Task.FromResult((object)componentModel.Object));
 
-            // Force Enable Transitive Origin experiment tests
-            ExperimentationConstants constant = ExperimentationConstants.TransitiveDependenciesInPMUI;
-            var flightsEnabled = new Dictionary<string, bool>()
-            {
-                { constant.FlightFlag, true },
-            };
-            var service = new NuGetExperimentationService(new TestEnvironmentVariableReader(new Dictionary<string, string>()), new TestVisualStudioExperimentalService(flightsEnabled), new Lazy<IOutputConsoleProvider>(() => new TestOutputConsoleProvider()));
-
-            service.IsExperimentEnabled(constant).Should().Be(true);
-            componentModel.Setup(x => x.GetService<INuGetExperimentationService>()).Returns(service);
+            var mockOutputConsoleUtility = OutputConsoleUtility.GetMock();
+            _outputConsoleProviderMock = mockOutputConsoleUtility.mockIOutputConsoleProvider;
+            _outputConsoleProvider = new Lazy<IOutputConsoleProvider>(() => _outputConsoleProviderMock.Object);
 
             _logger = new TestLogger(output);
         }
@@ -157,13 +157,13 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
                 Initialize(packageSources);
 
-                var unconfiguredProject = new Mock<UnconfiguredProject>();
+                var mockUnconfiguredProject = new Mock<UnconfiguredProject>();
                 var configuredProject = new Mock<ConfiguredProject>();
                 var projectServices = new Mock<ConfiguredProjectServices>();
                 var packageReferencesService = new Mock<IPackageReferencesService>();
                 var result = new Mock<IUnresolvedPackageReference>();
 
-                unconfiguredProject.Setup(x => x.GetSuggestedConfiguredProjectAsync())
+                mockUnconfiguredProject.Setup(x => x.GetSuggestedConfiguredProjectAsync())
                     .ReturnsAsync(configuredProject.Object);
 
                 configuredProject.SetupGet(x => x.Services)
@@ -174,6 +174,9 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
                 packageReferencesService.Setup(x => x.AddAsync(It.IsNotNull<string>(), It.IsNotNull<string>()))
                     .ReturnsAsync(new AddReferenceResult<IUnresolvedPackageReference>(result.Object, added: true));
+
+                var unconfiguredProject = new Microsoft.VisualStudio.Threading.AsyncLazy<UnconfiguredProject>(
+                    () => Task.FromResult(mockUnconfiguredProject.Object));
 
                 var nuGetProjectServices = new Mock<INuGetProjectServices>();
 
@@ -188,11 +191,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     projectUniqueName: projectFullPath,
                     projectFullPath: projectFullPath,
                     projectSystemCache,
-                    unconfiguredProject.Object,
+                    unconfiguredProject,
                     nuGetProjectServices.Object,
                     projectId);
 
-                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectRestoreInfo.AddProject(packageSpec);
                 var projectNames = new ProjectNames(
                     fullName: projectFullPath,
@@ -386,15 +389,6 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
                 _solutionManager.NuGetProjects.Add(project);
 
-                var telemetrySession = new Mock<ITelemetrySession>();
-                var telemetryEvents = new ConcurrentQueue<TelemetryEvent>();
-
-                telemetrySession
-                    .Setup(x => x.PostEvent(It.IsAny<TelemetryEvent>()))
-                    .Callback<TelemetryEvent>(x => telemetryEvents.Enqueue(x));
-
-                TelemetryActivity.NuGetTelemetryService = new NuGetVSTelemetryService(telemetrySession.Object);
-
                 IReadOnlyCollection<IPackageReferenceContextInfo> packages = await _projectManager.GetInstalledPackagesAsync(
                     new[] { projectId },
                     CancellationToken.None);
@@ -410,7 +404,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 Assert.Equal(expected.IsDevelopmentDependency, actual.IsDevelopmentDependency);
                 Assert.Equal(expected.IsUserInstalled, actual.IsUserInstalled);
 
-                Assert.Equal(1, telemetryEvents.Count);
+                Assert.Equal(1, _telemetryEvents.Count);
             }
         }
 
@@ -438,13 +432,13 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
                 Initialize(packageSources);
 
-                var unconfiguredProject = new Mock<UnconfiguredProject>();
+                var mockUnconfiguredProject = new Mock<UnconfiguredProject>();
                 var configuredProject = new Mock<ConfiguredProject>();
                 var projectServices = new Mock<ConfiguredProjectServices>();
                 var packageReferencesService = new Mock<IPackageReferencesService>();
                 var result = new Mock<IUnresolvedPackageReference>();
 
-                unconfiguredProject.Setup(x => x.GetSuggestedConfiguredProjectAsync())
+                mockUnconfiguredProject.Setup(x => x.GetSuggestedConfiguredProjectAsync())
                     .ReturnsAsync(configuredProject.Object);
 
                 configuredProject.SetupGet(x => x.Services)
@@ -455,6 +449,9 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
                 packageReferencesService.Setup(x => x.AddAsync(It.IsNotNull<string>(), It.IsNotNull<string>()))
                     .ReturnsAsync(new AddReferenceResult<IUnresolvedPackageReference>(result.Object, added: true));
+
+                var unconfiguredProject = new Microsoft.VisualStudio.Threading.AsyncLazy<UnconfiguredProject>(
+                    () => Task.FromResult(mockUnconfiguredProject.Object));
 
                 var nuGetProjectServices = new Mock<INuGetProjectServices>();
 
@@ -469,12 +466,12 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     projectUniqueName: projectFullPath,
                     projectFullPath: projectFullPath,
                     projectSystemCache,
-                    unconfiguredProject.Object,
+                    unconfiguredProject,
                     nuGetProjectServices.Object,
                     projectId);
 
 
-                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+                DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
                 projectRestoreInfo.AddProject(packageSpec);
                 var projectNames = new ProjectNames(
                     fullName: projectFullPath,
@@ -556,8 +553,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             }
         }
 
-        [Fact]
-        private async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsWithLegacyPackageReferenceProject_OneTransitiveOriginAsync()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsWithLegacyPackageReferenceProject_OneTransitiveOriginAsync(
+            bool usePackageSpecFactory)
         {
             // packageA_2.15.3 -> packageB_1.0.0 -> packageC_2.1.43
 
@@ -565,7 +565,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             using TestDirectory testDirectory = TestDirectory.Create();
             // Arrange
-            LegacyPackageReferenceProject testProject = CreateLegacyPackageReferenceProject(testDirectory, projectId, "[1.0.0, )", _threadingService);
+            LegacyPackageReferenceProject testProject = CreateLegacyPackageReferenceProject(testDirectory, projectId, "[1.0.0, )", _threadingService, usePackageSpecFactory);
 
             NullSettings settings = NullSettings.Instance;
             var context = new DependencyGraphCacheContext(NullLogger.Instance, settings);
@@ -587,7 +587,8 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             var logger = new TestLogger();
             var request = new TestRestoreRequest(packageSpecs[0], sources, packagesDir.FullName, logger)
             {
-                LockFilePath = Path.Combine(testDirectory, "obj", "project.assets.json")
+                LockFilePath = Path.Combine(testDirectory, "obj", "project.assets.json"),
+                LockFileVersion = 3,
             };
 
             await SimpleTestPackageUtility.CreateFullPackageAsync(packageSource.FullName, "packageC", "2.1.43");
@@ -621,17 +622,17 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             installedAndTransitive.TransitivePackages.Should().HaveCount(2);
 
             var transitiveOrigin = new PackageIdentity("packageA", new NuGetVersion("2.15.3"));
-            ITransitivePackageReferenceContextInfo transitivePackageB = installedAndTransitive.TransitivePackages.Where(pkg => pkg.Identity.Id == "packageB").Single();
+            ITransitivePackageReferenceContextInfo transitivePackageB = installedAndTransitive.TransitivePackages.Single(pkg => pkg.Identity.Id == "packageB");
             IPackageReferenceContextInfo transitiveOriginB = transitivePackageB.TransitiveOrigins.Single();
             Assert.Equal(transitiveOrigin, transitiveOriginB.Identity);
 
-            ITransitivePackageReferenceContextInfo transitivePackageC = installedAndTransitive.TransitivePackages.Where(pkg => pkg.Identity.Id == "packageC").Single();
+            ITransitivePackageReferenceContextInfo transitivePackageC = installedAndTransitive.TransitivePackages.Single(pkg => pkg.Identity.Id == "packageC");
             IPackageReferenceContextInfo transitiveOriginC = transitivePackageC.TransitiveOrigins.Single();
             Assert.Equal(transitiveOrigin, transitiveOriginC.Identity);
         }
 
         [Fact]
-        private async Task GetInstalledAndTransitivePackagesAsync_WithTransitivePackageNotRestored_NoTransitivePackageInfoAsync()
+        public async Task GetInstalledAndTransitivePackagesAsync_WithTransitivePackageNotRestored_NoTransitivePackageInfoAsync()
         {
             // packageA_1.0.0 -> packageB_2.0.0
 
@@ -647,7 +648,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             var prProject = CreateCpsPackageReferenceProject(projectName, projectFullPath, projectSystemCache);
 
             ProjectNames projectNames = GetTestProjectNames(projectFullPath, projectName);
-            // This test PackageSpec makes the project look NuGet-restored 
+            // This test PackageSpec makes the project look NuGet-restored
             PackageSpec packageSpec = GetPackageSpec(projectName, projectFullPath, "[1.0.0, )");
 
             // Packages
@@ -659,7 +660,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             await SimpleTestPackageUtility.CreateFullPackageAsync(pathContext.PackageSource, "packageB", "2.0.0");
 
             // Restore info
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
             projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
 
@@ -667,7 +668,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             // Act I: We will not have transitive packages data
 
-            var installedProject1 = await prProject.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
+            var installedProject1 = await prProject.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
             Assert.NotEmpty(installedProject1.InstalledPackages);
             Assert.Empty(installedProject1.TransitivePackages);
 
@@ -677,7 +678,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             // Now, make a NuGet-Restore
             var pajFilepath = Path.Combine(Path.GetDirectoryName(projectFullPath), "project.assets.json");
-            TestRestoreRequest restoreRequest = ProjectTestHelpers.CreateRestoreRequest(packageSpec, pathContext, _logger);
+            TestRestoreRequest restoreRequest = ProjectTestHelpers.CreateRestoreRequest(pathContext, _logger, packageSpec);
             restoreRequest.LockFilePath = pajFilepath;
             restoreRequest.ProjectStyle = ProjectStyle.PackageReference;
             var command = new RestoreCommand(restoreRequest);
@@ -688,7 +689,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             // Act II: From this point, we will have transitive packages
 
-            var installedProject2 = await prProject.GetInstalledAndTransitivePackagesAsync(CancellationToken.None);
+            var installedProject2 = await prProject.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, CancellationToken.None);
             Assert.NotEmpty(installedProject2.InstalledPackages);
             Assert.NotEmpty(installedProject2.TransitivePackages);
 
@@ -698,9 +699,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         }
 
         [Theory]
-        [InlineData(true)]
-        [InlineData(false)]
-        private async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsWithLegacyPackageReferenceProject_MultipleOriginsAsync(bool useSameVersions)
+        [InlineData(true, true)]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        [InlineData(false, false)]
+        public async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsWithLegacyPackageReferenceProject_MultipleOriginsAsync(bool useSameVersions, bool usePackageSpecFactory)
         {
             // case useSameversions = true
             // packageX_3.0.0 -> packageD_0.1.1
@@ -733,7 +736,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     },
                 };
 
-            LegacyPackageReferenceProject testProject = CreateLegacyPackageReferenceProject(testDirectory, projectId, _threadingService, onedep);
+            LegacyPackageReferenceProject testProject = CreateLegacyPackageReferenceProject(testDirectory, projectId, _threadingService, onedep, usePackageSpecFactory);
 
             NullSettings settings = NullSettings.Instance;
             var context = new DependencyGraphCacheContext(NullLogger.Instance, settings);
@@ -755,7 +758,8 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             var logger = _logger;
             var request = new TestRestoreRequest(packageSpecs[0], sources, packagesDir.FullName, logger)
             {
-                LockFilePath = Path.Combine(testDirectory, "obj", "project.assets.json")
+                LockFilePath = Path.Combine(testDirectory, "obj", "project.assets.json"),
+                LockFileVersion = 3
             };
 
             await CreatePackages(packageSource.FullName, useSameVersions);
@@ -768,7 +772,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             var installedAndTransitive = await _projectManager.GetInstalledAndTransitivePackagesAsync(new[] { projectId }, includeTransitiveOrigins: true, CancellationToken.None);
 
             // Verify transitive package B
-            var transitivePackageB = installedAndTransitive.TransitivePackages.Where(pkg => pkg.Identity.Id == "packageB").First();
+            var transitivePackageB = installedAndTransitive.TransitivePackages.First(pkg => pkg.Identity.Id == "packageB");
             Assert.NotNull(transitivePackageB);
             Assert.Equal(1, transitivePackageB.TransitiveOrigins.Count());
             var transitiveOriginB = transitivePackageB.TransitiveOrigins.First();
@@ -776,7 +780,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.Equal(new NuGetVersion("2.0.0"), transitiveOriginB.Identity.Version);
 
             // Verify transitive package C
-            var transitivePackageC = installedAndTransitive.TransitivePackages.Where(pkg => pkg.Identity.Id == "packageC").First();
+            var transitivePackageC = installedAndTransitive.TransitivePackages.First(pkg => pkg.Identity.Id == "packageC");
             Assert.NotNull(transitivePackageC);
             Assert.Equal(1, transitivePackageC.TransitiveOrigins.Count());
             var transitiveOriginC = transitivePackageC.TransitiveOrigins.First();
@@ -784,7 +788,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.Equal(new NuGetVersion("2.0.0"), transitiveOriginC.Identity.Version);
 
             // Verify transitive package D
-            var transitivePackageD = installedAndTransitive.TransitivePackages.Where(pkg => pkg.Identity.Id == "packageD").First();
+            var transitivePackageD = installedAndTransitive.TransitivePackages.First(pkg => pkg.Identity.Id == "packageD");
             Assert.NotNull(transitivePackageD);
             Assert.Equal(2, transitivePackageD.TransitiveOrigins.Count()); // Two top dependencies
             Assert.Collection(transitivePackageD.TransitiveOrigins,
@@ -793,7 +797,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         }
 
         [Fact]
-        private async Task GetInstalledAndTransitivePackagesAsync_WithCpsPackageReferenceProject_OneTransitiveReferenceAndEmitsCounterfactualTelemetryAsync()
+        public async Task GetInstalledAndTransitivePackagesAsync_WithCpsPackageReferenceProject_OneTransitiveReferenceAsync()
         {
             // packageA_2.0.0 -> packageB_1.0.0
 
@@ -815,7 +819,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             PackageSpec packageSpec = GetPackageSpec(projectName, projectFullPath, "[2.0.0, )");
 
             // Restore info
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
             projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
 
@@ -846,16 +850,6 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             _solutionManager.NuGetProjects.Add(prProject);
 
-            // Prepare: Create telemetry
-            var telemetrySession = new Mock<ITelemetrySession>();
-            var telemetryEvents = new ConcurrentQueue<TelemetryEvent>();
-
-            telemetrySession
-                .Setup(x => x.PostEvent(It.IsAny<TelemetryEvent>()))
-                .Callback<TelemetryEvent>(x => telemetryEvents.Enqueue(x));
-
-            TelemetryActivity.NuGetTelemetryService = new NuGetVSTelemetryService(telemetrySession.Object);
-
             // Prepare: Force a nuget Restore
             var command = new RestoreCommand(request);
             // Force writing project.assets.json
@@ -864,9 +858,6 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             Assert.True(result.Success);
             Assert.True(File.Exists(pajFilepath));
-
-            // Reset sending counterfactual telemetry, for testing purposes
-            CounterfactualLoggers.TransitiveDependencies.Reset();
 
             // Act
             var installedAndTransitive = await _projectManager.GetInstalledAndTransitivePackagesAsync(new[] { projectId }, includeTransitiveOrigins: true, CancellationToken.None);
@@ -880,11 +871,10 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.Equal(1, packagesB.Count());
             Assert.Collection(packagesB,
                 pkg => AssertElement(pkg, "packageA", "2.0.0"));
-            Assert.Contains(telemetryEvents, te => te.Name == CounterfactualLoggers.TransitiveDependencies.EventName);
         }
 
         [Fact]
-        private async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsWithCpsPackageReferenceProjectAndMultipleCalls_SucceedsAsync()
+        public async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsWithCpsPackageReferenceProjectAndMultipleCalls_SucceedsAsync()
         {
             // packageX_3.0.0 -> packageD_0.1.1
             // packageA_2.0.0 -> packageB_1.0.0 -> packageC_0.0.1
@@ -930,7 +920,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             PackageSpec packageSpec = JsonPackageSpecReader.GetPackageSpec(referenceSpec, projectName, projectFullPath).WithTestRestoreMetadata();
 
             // Restore info
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
             projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
 
@@ -952,16 +942,6 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             await CreatePackages(packageSource.FullName);
 
             _solutionManager.NuGetProjects.Add(prProject);
-
-            // Prepare: Create telemetry
-            var telemetrySession = new Mock<ITelemetrySession>();
-            var telemetryEvents = new ConcurrentQueue<TelemetryEvent>();
-
-            telemetrySession
-                .Setup(x => x.PostEvent(It.IsAny<TelemetryEvent>()))
-                .Callback<TelemetryEvent>(x => telemetryEvents.Enqueue(x));
-
-            TelemetryActivity.NuGetTelemetryService = new NuGetVSTelemetryService(telemetrySession.Object);
 
             // Prepare: Force a nuget Restore
             var command = new RestoreCommand(request);
@@ -1017,7 +997,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        private async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsWithCpsPackageReferenceProjectAndMultitargeting_SucceedsAsync(bool useSameVersions)
+        public async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsWithCpsPackageReferenceProjectAndMultitargeting_SucceedsAsync(bool useSameVersions)
         {
             // useSameVersion = true
             // net5.0:
@@ -1086,7 +1066,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             PackageSpec packageSpec = JsonPackageSpecReader.GetPackageSpec(referenceSpec, projectName, projectFullPath).WithTestRestoreMetadata();
 
             // Restore info
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
             projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
 
@@ -1108,16 +1088,6 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             await CreatePackages(packageSource.FullName, useSameVersions);
 
             _solutionManager.NuGetProjects.Add(prProject);
-
-            // Prepare: Create telemetry
-            var telemetrySession = new Mock<ITelemetrySession>();
-            var telemetryEvents = new ConcurrentQueue<TelemetryEvent>();
-
-            telemetrySession
-                .Setup(x => x.PostEvent(It.IsAny<TelemetryEvent>()))
-                .Callback<TelemetryEvent>(x => telemetryEvents.Enqueue(x));
-
-            TelemetryActivity.NuGetTelemetryService = new NuGetVSTelemetryService(telemetrySession.Object);
 
             // Prepare: Force a nuget Restore
             var command = new RestoreCommand(request);
@@ -1165,7 +1135,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         }
 
         [Fact]
-        private async Task GetInstalledAndTransitivePackagesAsync_InvalidInput_ThrowsAsync()
+        public async Task GetInstalledAndTransitivePackagesAsync_InvalidInput_ThrowsAsync()
         {
             Initialize();
 
@@ -1191,7 +1161,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         }
 
         [Fact]
-        private async Task GetInstalledAndTransitivePackagesAsync_WithCancellationToken_ThrowsAsync()
+        public async Task GetInstalledAndTransitivePackagesAsync_WithCancellationToken_ThrowsAsync()
         {
             Initialize();
 
@@ -1204,7 +1174,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         }
 
         [Fact]
-        private async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsWithCpsPackageReferenceProjectAndMultitargetingMultipleCalls_MergedResultsAsync()
+        public async Task GetInstalledAndTransitivePackagesAsync_TransitiveOriginsWithCpsPackageReferenceProjectAndMultitargetingMultipleCalls_MergedResultsAsync()
         {
             // net5.0:
             // packageX_3.0.0 -> packageD_0.1.1
@@ -1271,7 +1241,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             PackageSpec packageSpec = JsonPackageSpecReader.GetPackageSpec(referenceSpec, projectName, projectFullPath).WithTestRestoreMetadata();
 
             // Restore info
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
             projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
 
@@ -1293,16 +1263,6 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             await CreatePackages(packageSource.FullName);
 
             _solutionManager.NuGetProjects.Add(prProject);
-
-            // Prepare: Create telemetry
-            var telemetrySession = new Mock<ITelemetrySession>();
-            var telemetryEvents = new ConcurrentQueue<TelemetryEvent>();
-
-            telemetrySession
-                .Setup(x => x.PostEvent(It.IsAny<TelemetryEvent>()))
-                .Callback<TelemetryEvent>(x => telemetryEvents.Enqueue(x));
-
-            TelemetryActivity.NuGetTelemetryService = new NuGetVSTelemetryService(telemetrySession.Object);
 
             // Prepare: Force a nuget Restore
             var command = new RestoreCommand(request);
@@ -1344,7 +1304,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         }
 
         [Fact]
-        private async Task GetPackageFoldersAsync_InvalidInput_ThrowsAsync()
+        public async Task GetPackageFoldersAsync_InvalidInput_ThrowsAsync()
         {
             Initialize();
 
@@ -1360,7 +1320,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         }
 
         [Fact]
-        private async Task GetPackageFoldersAsync_WithCancellationToken_ThowsAsync()
+        public async Task GetPackageFoldersAsync_WithCancellationToken_ThowsAsync()
         {
             Initialize();
 
@@ -1373,7 +1333,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         }
 
         [Fact]
-        private async Task GetPackageFoldersAsync_CpsProject_ReturnsPackageFolderAsync()
+        public async Task GetPackageFoldersAsync_CpsProject_ReturnsPackageFolderAsync()
         {
             string projectName = Guid.NewGuid().ToString();
             string projectId = projectName;
@@ -1404,7 +1364,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             PackageSpec packageSpec = JsonPackageSpecReader.GetPackageSpec(referenceSpec, projectName, projectFullPath).WithTestRestoreMetadata();
 
             // Restore info
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
             projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
 
@@ -1412,7 +1372,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             // Perform NuGet restore
             var pajFilepath = Path.Combine(Path.GetDirectoryName(projectFullPath), "project.assets.json");
-            TestRestoreRequest restoreRequest = ProjectTestHelpers.CreateRestoreRequest(packageSpec, pathContext, _logger); // Adds 1 source
+            TestRestoreRequest restoreRequest = ProjectTestHelpers.CreateRestoreRequest(pathContext, _logger, packageSpec); // Adds 1 source
             restoreRequest.LockFilePath = pajFilepath;
             restoreRequest.ProjectStyle = ProjectStyle.PackageReference;
             var command = new RestoreCommand(restoreRequest);
@@ -1428,14 +1388,16 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.Equal(1, folders.Count); // only globalPackagesFolder is listed
         }
 
-        [Fact]
-        private async Task GetPackageFoldersAsync_LegacyProject_ReturnsPackageFolderAsync()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task GetPackageFoldersAsync_LegacyProject_ReturnsPackageFolderAsync(bool usePackageSpecFactory)
         {
             string projectId = Guid.NewGuid().ToString();
 
             using TestDirectory testDirectory = TestDirectory.Create();
             // Arrange
-            LegacyPackageReferenceProject testProject = CreateLegacyPackageReferenceProject(testDirectory, projectId, "[1.0.0, )", _threadingService);
+            LegacyPackageReferenceProject testProject = CreateLegacyPackageReferenceProject(testDirectory, projectId, "[1.0.0, )", _threadingService, usePackageSpecFactory);
 
             NullSettings settings = NullSettings.Instance;
             var context = new DependencyGraphCacheContext(_logger, settings);
@@ -1456,7 +1418,8 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             var request = new TestRestoreRequest(packageSpecs[0], sources, packagesDir.FullName, _logger)
             {
-                LockFilePath = Path.Combine(testDirectory, "obj", "project.assets.json")
+                LockFilePath = Path.Combine(testDirectory, "obj", "project.assets.json"),
+                LockFileVersion = 3,
             };
 
             await SimpleTestPackageUtility.CreateFullPackageAsync(packageSource.FullName, "packageA", "1.0.0", new PackageDependency[] { });
@@ -1473,14 +1436,16 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.Equal(1, folders.Count);
         }
 
-        [Fact]
-        private async Task GetPackageFoldersAsync_LegacyProjectWithFallbackFolder_ReturnsPackageFoldersAsync()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task GetPackageFoldersAsync_LegacyProjectWithFallbackFolder_ReturnsPackageFoldersAsync(bool usePackageSpecFactory)
         {
             string projectId = Guid.NewGuid().ToString();
 
             using TestDirectory testDirectory = TestDirectory.Create();
             // Arrange
-            LegacyPackageReferenceProject testProject = CreateLegacyPackageReferenceProject(testDirectory, projectId, "[1.0.0, )", _threadingService);
+            LegacyPackageReferenceProject testProject = CreateLegacyPackageReferenceProject(testDirectory, projectId, "[1.0.0, )", _threadingService, usePackageSpecFactory);
 
             NullSettings settings = NullSettings.Instance;
             var context = new DependencyGraphCacheContext(_logger, settings);
@@ -1505,7 +1470,8 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             var request = new TestRestoreRequest(packageSpecs[0], sources, packagesDir.FullName, new[] { fallbackFolder.FullName }, _logger)
             {
-                LockFilePath = Path.Combine(testDirectory, "obj", "project.assets.json")
+                LockFilePath = Path.Combine(testDirectory, "obj", "project.assets.json"),
+                LockFileVersion = 3,
             };
 
             var command = new RestoreCommand(request);
@@ -1520,8 +1486,56 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.Equal(2, folders.Count);
         }
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task GetCentralPackageVersionsManagmentEnabled_SucceedsAsync(bool isCentralPackageVersionsEnabled)
+        {
+            string projectName = Guid.NewGuid().ToString();
+            string projectId = projectName;
+            var projectSystemCache = new ProjectSystemCache();
+            IVsProjectAdapter projectAdapter = Mock.Of<IVsProjectAdapter>();
+
+            using var pathContext = new SimpleTestPathContext();
+            Initialize();
+
+            // Prepare: Create project
+            string projectFullPath = Path.Combine(pathContext.SolutionRoot, projectName, $"{projectName}.csproj");
+
+            CpsPackageReferenceProject prProject = CreateCpsPackageReferenceProject(projectName, projectFullPath, projectSystemCache);
+
+            ProjectNames projectNames = GetTestProjectNames(projectFullPath, projectName);
+            string referenceSpec = $@"
+                {{
+                    ""frameworks"":
+                    {{
+                        ""net6.0"":
+                        {{
+                            ""dependencies"":
+                            {{
+                            }}
+                        }}
+                    }}
+                }}";
+            PackageSpec packageSpec = JsonPackageSpecReader.GetPackageSpec(referenceSpec, projectName, projectFullPath).WithTestRestoreMetadata();
+            packageSpec.RestoreMetadata.CentralPackageVersionsEnabled = isCentralPackageVersionsEnabled;
+
+            // Restore info
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
+            projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
+            projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
+
+            _solutionManager.NuGetProjects.Add(prProject);
+
+            // Act
+            bool isCentralPackageManagmentEnabled = await _projectManager.IsCentralPackageManagementEnabledAsync(projectId, CancellationToken.None);
+
+            // Assert
+            Assert.Equal(isCentralPackageVersionsEnabled, isCentralPackageManagmentEnabled);
+        }
+
         [Fact]
-        private async Task GetPackageFoldersAsync_CpsProjectWithFallbackFolder_ReturnsPackageFoldersAsync()
+        public async Task GetPackageFoldersAsync_CpsProjectWithFallbackFolder_ReturnsPackageFoldersAsync()
         {
             string projectName = Guid.NewGuid().ToString();
             string projectId = projectName;
@@ -1552,7 +1566,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             PackageSpec packageSpec = JsonPackageSpecReader.GetPackageSpec(referenceSpec, projectName, projectFullPath).WithTestRestoreMetadata();
 
             // Restore info
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, new List<IAssetsLogMessage>());
             projectSystemCache.AddProject(projectNames, projectAdapter, prProject).Should().BeTrue();
 
@@ -1601,8 +1615,10 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     typeConstraint: LibraryDependencyTarget.Package)
             };
 
-            packageSpec.TargetFrameworks.First().Dependencies.Add(dependency);
-            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecFromPackageSpecs(packageSpec);
+            var newDependencies = packageSpec.TargetFrameworks.First().Dependencies.Add(dependency);
+            packageSpec.TargetFrameworks[0] = new TargetFrameworkInformation(packageSpec.TargetFrameworks[0]) { Dependencies = newDependencies };
+
+            DependencyGraphSpec projectRestoreInfo = ProjectTestHelpers.GetDGSpecForAllProjects(packageSpec);
             projectSystemCache.AddProjectRestoreInfo(projectNames, projectRestoreInfo, Array.Empty<IAssetsLogMessage>());
         }
 
@@ -1623,11 +1639,25 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             _testDirectory = TestDirectory.Create();
             ISettings testSettings = CreateSettings(sourceRepositoryProvider, _testDirectory);
             var deleteOnRestartManager = new TestDeleteOnRestartManager();
+            _telemetryEvents = new ConcurrentQueue<TelemetryEvent>();
+
+            var telemetrySession = new Mock<ITelemetrySession>();
+
+            var telemetryEvents = new ConcurrentQueue<TelemetryEvent>();
+            telemetrySession
+                .Setup(x => x.PostEvent(It.IsAny<TelemetryEvent>()))
+                .Callback<TelemetryEvent>(x => telemetryEvents.Enqueue(x));
+            var telemetryService = new NuGetVSTelemetryService(telemetrySession.Object);
+
             _packageManager = new NuGetPackageManager(
                 sourceRepositoryProvider,
                 testSettings,
                 _solutionManager,
-                deleteOnRestartManager);
+                deleteOnRestartManager)
+            {
+                NuGetTelemetryService = telemetryService
+            };
+
             _state = new NuGetProjectManagerServiceState();
             _sharedState = new TestSharedServiceState(
                 new Microsoft.VisualStudio.Threading.AsyncLazy<NuGetPackageManager>(
@@ -1637,10 +1667,17 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                 sourceRepositoryProvider,
                 new Microsoft.VisualStudio.Threading.AsyncLazy<IReadOnlyCollection<SourceRepository>>(
                     () => Task.FromResult<IReadOnlyCollection<SourceRepository>>(sourceRepositoryProvider.GetRepositories().ToList())));
+
+            var telemetryProvider = new Mock<INuGetTelemetryProvider>();
+            telemetryProvider
+                .Setup(x => x.EmitEvent(It.IsAny<TelemetryEvent>()))
+                .Callback<TelemetryEvent>(x => _telemetryEvents.Enqueue(x));
+
             _projectManager = new NuGetProjectManagerService(
                 default(ServiceActivationOptions),
                 Mock.Of<IServiceBroker>(),
                 new AuthorizationServiceClient(Mock.Of<IAuthorizationService>()),
+                telemetryProvider.Object,
                 _state,
                 _sharedState);
         }

@@ -1,9 +1,10 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -12,7 +13,6 @@ using System.Threading.Tasks;
 using NuGet.Common;
 using NuGet.LibraryModel;
 using NuGet.ProjectModel;
-using NuGet.Shared;
 
 namespace NuGet.Commands
 {
@@ -84,10 +84,26 @@ namespace NuGet.Commands
         /// </summary>
         internal PackagesLockFile _newPackagesLockFile { get; }
 
+        /// <inheritdoc cref="RestoreSummary.AuditRan"/>
+        internal bool AuditRan { get; init; }
+
+        /// <summary>
+        /// If the dg spec did not change, we can assume that we don't need to write the dg spec.
+        /// </summary>
+        internal bool DidDGHashChange { get; init; }
+
+        /// <summary>
+        /// If true, the dg spec file should not be written to disk.
+        /// </summary>
+        internal bool DoNotWriteDependencyGraphSpec { get; init; }
 
         private readonly string _dependencyGraphSpecFilePath;
 
         private readonly DependencyGraphSpec _dependencyGraphSpec;
+
+        internal readonly Lazy<bool> _isAssetsFileDirty;
+        internal readonly Lazy<List<MSBuildOutputFile>> _dirtyMSBuildFiles;
+
 
         public RestoreResult(
             bool success,
@@ -122,6 +138,12 @@ namespace NuGet.Commands
             ProjectStyle = projectStyle;
             ElapsedTime = elapsedTime;
             LogMessages = lockFile?.LogMessages ?? new List<IAssetsLogMessage>();
+            _isAssetsFileDirty = new Lazy<bool>(() => PreviousLockFile == null
+                || !PreviousLockFile.Equals(LockFile));
+            _dirtyMSBuildFiles = new Lazy<List<MSBuildOutputFile>>(() =>
+            {
+                return MSBuildOutputFiles.Where(e => BuildAssetsUtils.HasChanges(e.Content, e.Path, NullLogger.Instance)).ToList();
+            });
         }
 
         /// <summary>
@@ -156,38 +178,49 @@ namespace NuGet.Commands
         ///  the file will not be written to disk.</remarks>
         public virtual async Task CommitAsync(ILogger log, CancellationToken token)
         {
+            if (log == null)
+            {
+                throw new ArgumentNullException(nameof(log));
+            }
+
             // Write the lock file
             var lockFileFormat = new LockFileFormat();
 
             var isTool = ProjectStyle == ProjectStyle.DotnetCliTool;
 
             // Commit the assets file to disk.
+            if (CommandsEventSource.Instance.IsEnabled()) CommandsEventSource.Instance.RestoreResult_WriteAssetsFileStart(LockFilePath);
             await CommitAssetsFileAsync(
                 lockFileFormat,
-                result: this,
                 log: log,
                 toolCommit: isTool,
                 token: token);
+            if (CommandsEventSource.Instance.IsEnabled()) CommandsEventSource.Instance.RestoreResult_WriteAssetsFileStop(LockFilePath);
 
             //Commit the cache file to disk
+            if (CommandsEventSource.Instance.IsEnabled()) CommandsEventSource.Instance.RestoreResult_WriteCacheFileStart(CacheFilePath);
             await CommitCacheFileAsync(
                 log: log,
                 toolCommit: isTool);
+            if (CommandsEventSource.Instance.IsEnabled()) CommandsEventSource.Instance.RestoreResult_WriteCacheFileStop(CacheFilePath);
 
             // Commit the lock file to disk
+            if (CommandsEventSource.Instance.IsEnabled()) CommandsEventSource.Instance.RestoreResult_WritePackagesLockFileStart(_newPackagesLockFilePath);
             await CommitLockFileAsync(
                 log: log,
                 toolCommit: isTool);
+            if (CommandsEventSource.Instance.IsEnabled()) CommandsEventSource.Instance.RestoreResult_WritePackagesLockFileStop(_newPackagesLockFilePath);
 
             // Commit the dg spec file to disk
+            if (CommandsEventSource.Instance.IsEnabled()) CommandsEventSource.Instance.RestoreResult_WriteDgSpecFileStart(_dependencyGraphSpecFilePath);
             await CommitDgSpecFileAsync(
                 log: log,
                 toolCommit: isTool);
+            if (CommandsEventSource.Instance.IsEnabled()) CommandsEventSource.Instance.RestoreResult_WriteDgSpecFileStop(_dependencyGraphSpecFilePath);
         }
 
         private async Task CommitAssetsFileAsync(
             LockFileFormat lockFileFormat,
-            IRestoreResult result,
             ILogger log,
             bool toolCommit,
             CancellationToken token)
@@ -197,12 +230,9 @@ namespace NuGet.Commands
             // Commit targets/props to disk before the assets file.
             // Visual Studio typically watches the assets file for changes
             // and begins a reload when that file changes.
-            var buildFilesToWrite = result.MSBuildOutputFiles
-                    .Where(e => BuildAssetsUtils.HasChanges(e.Content, e.Path, log));
+            BuildAssetsUtils.WriteFiles(_dirtyMSBuildFiles.Value, log);
 
-            BuildAssetsUtils.WriteFiles(buildFilesToWrite, log);
-
-            if (result.LockFile == null || result.LockFilePath == null)
+            if (LockFile == null || LockFilePath == null)
             {
                 // there is no assets file to be written so just return
                 return;
@@ -210,28 +240,27 @@ namespace NuGet.Commands
 
             // Avoid writing out the lock file if it is the same to avoid triggering an intellisense
             // update on a restore with no actual changes.
-            if (result.PreviousLockFile == null
-                || !result.PreviousLockFile.Equals(result.LockFile))
+            if (_isAssetsFileDirty.Value)
             {
                 if (toolCommit)
                 {
                     log.LogInformation(string.Format(CultureInfo.CurrentCulture,
                     Strings.Log_ToolWritingAssetsFile,
-                    result.LockFilePath));
+                    LockFilePath));
 
                     await FileUtility.ReplaceWithLock(
-                        (outputPath) => lockFileFormat.Write(outputPath, result.LockFile),
-                        result.LockFilePath);
+                        (outputPath) => lockFileFormat.Write(outputPath, LockFile),
+                        LockFilePath);
                 }
                 else
                 {
                     log.LogInformation(string.Format(CultureInfo.CurrentCulture,
                         Strings.Log_WritingAssetsFile,
-                        result.LockFilePath));
+                        LockFilePath));
 
                     FileUtility.Replace(
-                        (outputPath) => lockFileFormat.Write(outputPath, result.LockFile),
-                        result.LockFilePath);
+                        (outputPath) => lockFileFormat.Write(outputPath, LockFile),
+                        LockFilePath);
                 }
             }
             else
@@ -240,13 +269,13 @@ namespace NuGet.Commands
                 {
                     log.LogInformation(string.Format(CultureInfo.CurrentCulture,
                         Strings.Log_ToolSkippingAssetsFile,
-                        result.LockFilePath));
+                        LockFilePath));
                 }
                 else
                 {
                     log.LogInformation(string.Format(CultureInfo.CurrentCulture,
                         Strings.Log_SkippingAssetsFile,
-                        result.LockFilePath));
+                        LockFilePath));
                 }
             }
         }
@@ -292,7 +321,7 @@ namespace NuGet.Commands
 
         private async Task CommitDgSpecFileAsync(ILogger log, bool toolCommit)
         {
-            if (!toolCommit && _dependencyGraphSpecFilePath != null && _dependencyGraphSpec != null)
+            if (!toolCommit && !DoNotWriteDependencyGraphSpec && _dependencyGraphSpecFilePath != null && _dependencyGraphSpec != null && (DidDGHashChange || !File.Exists(_dependencyGraphSpecFilePath)))
             {
                 log.LogVerbose($"Persisting dg to {_dependencyGraphSpecFilePath}");
 
@@ -300,6 +329,23 @@ namespace NuGet.Commands
                     (outputPath) => _dependencyGraphSpec.Save(outputPath),
                     _dependencyGraphSpecFilePath);
             }
+        }
+
+        internal virtual IReadOnlyList<string> GetDirtyFiles()
+        {
+            List<string> dirtyFiles = null;
+
+            if (_dirtyMSBuildFiles.Value.Count > 0)
+            {
+                dirtyFiles = _dirtyMSBuildFiles.Value.Select(e => e.Path).ToList();
+            }
+            if (_isAssetsFileDirty.Value)
+            {
+                dirtyFiles ??= new List<string>(1);
+                dirtyFiles.Add(LockFilePath);
+            }
+
+            return dirtyFiles;
         }
     }
 }

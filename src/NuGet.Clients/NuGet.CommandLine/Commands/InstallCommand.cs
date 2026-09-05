@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -168,9 +170,7 @@ namespace NuGet.CommandLine
             var sourceRepositoryProvider = GetSourceRepositoryProvider();
             var nuGetPackageManager = new NuGetPackageManager(sourceRepositoryProvider, Settings, installPath, ExcludeVersion);
 
-            var installedPackageReferences = GetInstalledPackageReferences(
-                packagesConfigFilePath,
-                allowDuplicatePackageIds: true);
+            var installedPackageReferences = GetInstalledPackageReferences(packagesConfigFilePath);
 
             var packageRestoreData = installedPackageReferences.Select(reference =>
                 new PackageRestoreData(
@@ -191,7 +191,10 @@ namespace NuGet.CommandLine
                 packageRestoredEvent: null,
                 packageRestoreFailedEvent: (sender, args) => { failedEvents.Enqueue(args); },
                 sourceRepositories: packageSources.Select(sourceRepositoryProvider.CreateRepository),
+                auditSources: RestoreCommand.GetAuditSources(SourceProvider),
                 maxNumberOfParallelTasks: DisableParallelProcessing ? 1 : PackageManagementConstants.DefaultMaxDegreeOfParallelism,
+                enableNuGetAudit: true,
+                restoreAuditProperties: new(),
                 logger: Console);
 
             var packageSaveMode = Packaging.PackageSaveMode.Defaultv2;
@@ -213,7 +216,7 @@ namespace NuGet.CommandLine
             }
             using (var cacheContext = new SourceCacheContext())
             {
-                cacheContext.NoCache = NoCache;
+                cacheContext.NoCache = NoCache || NoHttpCache;
                 cacheContext.DirectDownload = DirectDownload;
 
                 var clientPolicyContext = ClientPolicyContext.GetClientPolicy(Settings, Console);
@@ -350,18 +353,30 @@ namespace NuGet.CommandLine
                     PackageSaveMode = EffectivePackageSaveMode;
                 }
 
-                // Check if the package already exists or a higher version exists already.
-                var skipInstall = project.PackageExists(packageIdentity, PackageSaveMode);
+                var exactVersionExists = project.PackageExists(packageIdentity, PackageSaveMode);
+                var higherVersionExists = alreadyInstalledVersions.Any(e => e >= version);
 
-                // For SxS allow other versions to install. For non-SxS skip if a higher version exists.
-                skipInstall |= (ExcludeVersion && alreadyInstalledVersions.Any(e => e >= version));
+                // For SxS skip if exact version exists. For non-SxS skip if a higher version exists.
+                var skipInstall = exactVersionExists || (ExcludeVersion && higherVersionExists);
 
                 if (skipInstall)
                 {
-                    var message = string.Format(
-                        CultureInfo.CurrentCulture,
-                        LocalizedResourceManager.GetString("InstallCommandPackageAlreadyExists"),
-                        packageIdentity);
+                    string message;
+                    if (exactVersionExists)
+                    {
+                        message = string.Format(
+                            CultureInfo.CurrentCulture,
+                            LocalizedResourceManager.GetString("InstallCommandPackageAlreadyExists"),
+                            packageIdentity);
+                    }
+                    else
+                    {
+                        var higherPackageIdentity = new PackageIdentity(packageId, alreadyInstalledVersions.FirstOrDefault(e => e >= version));
+                        message = string.Format(
+                            CultureInfo.CurrentCulture,
+                            LocalizedResourceManager.GetString("InstallCommandHigherVersionAlreadyExists"),
+                            packageIdentity, higherPackageIdentity);
+                    }
 
                     Console.LogMinimal(message);
                 }
@@ -378,7 +393,7 @@ namespace NuGet.CommandLine
                             Console)
                     };
 
-                    resolutionContext.SourceCacheContext.NoCache = NoCache;
+                    resolutionContext.SourceCacheContext.NoCache = NoCache || NoHttpCache;
                     resolutionContext.SourceCacheContext.DirectDownload = DirectDownload;
 
                     var packageSourceMapping = PackageSourceMapping.GetPackageSourceMapping(Settings);

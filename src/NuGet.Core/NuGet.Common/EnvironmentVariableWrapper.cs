@@ -10,11 +10,13 @@ namespace NuGet.Common
     {
         public static IEnvironmentVariableReader Instance { get; } = new EnvironmentVariableWrapper();
 
-        public string GetEnvironmentVariable(string variable)
+        public string? GetEnvironmentVariable(string variable)
         {
             try
             {
+#pragma warning disable RS0030 // Do not use banned APIs
                 return Environment.GetEnvironmentVariable(variable);
+#pragma warning restore RS0030 // Do not use banned APIs
             }
             catch (SecurityException)
             {

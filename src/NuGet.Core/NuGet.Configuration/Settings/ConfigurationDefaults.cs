@@ -13,8 +13,9 @@ namespace NuGet.Configuration
     {
         private ISettings _settingsManager = NullSettings.Instance;
         private bool _defaultPackageSourceInitialized;
-        private List<PackageSource> _defaultPackageSources;
-        private string _defaultPushSource;
+        private IReadOnlyList<PackageSource>? _defaultPackageSources;
+        private IReadOnlyList<PackageSource>? _defaultAuditSources;
+        private string? _defaultPushSource;
 
         private static ConfigurationDefaults InitializeInstance()
         {
@@ -47,7 +48,34 @@ namespace NuGet.Configuration
             // This way, administrator will become aware of the failures when the ConfigurationDefaults file is not valid or permissions are not set properly
         }
 
+        internal ConfigurationDefaults(ISettings settingsManager)
+        {
+            _settingsManager = settingsManager ?? throw new ArgumentNullException(nameof(settingsManager));
+        }
+
         public static ConfigurationDefaults Instance { get; } = InitializeInstance();
+
+        private IReadOnlyList<PackageSource> GetSourceItems(string sectionName)
+        {
+            IEnumerable<SourceItem>? sourceItems = _settingsManager.GetSection(sectionName)?.Items.OfType<SourceItem>();
+            if (sourceItems == null)
+            {
+                return Array.Empty<PackageSource>();
+            }
+
+            var disabledPackageSources = _settingsManager.GetSection(ConfigurationConstants.DisabledPackageSources)?.Items.OfType<AddItem>() ?? Enumerable.Empty<AddItem>();
+
+            List<PackageSource> sources = new();
+            foreach (var source in sourceItems)
+            {
+                bool isEnabled = !disabledPackageSources.Any(p => p.Key.Equals(source.Key, StringComparison.OrdinalIgnoreCase));
+                PackageSource packageSource = PackageSourceProvider.ReadPackageSource(source, isEnabled, _settingsManager, EnvironmentVariableWrapper.Instance);
+                packageSource.IsOfficial = true;
+                sources.Add(packageSource);
+            }
+
+            return sources;
+        }
 
         public IEnumerable<PackageSource> DefaultPackageSources
         {
@@ -55,26 +83,25 @@ namespace NuGet.Configuration
             {
                 if (_defaultPackageSources == null)
                 {
-                    List<PackageSource> defaultPackageSources = new();
-                    var disabledPackageSources = _settingsManager.GetSection(ConfigurationConstants.DisabledPackageSources)?.Items.OfType<AddItem>() ?? Enumerable.Empty<AddItem>();
-                    var packageSources = _settingsManager.GetSection(ConfigurationConstants.PackageSources)?.Items.OfType<SourceItem>() ?? Enumerable.Empty<SourceItem>();
-
-                    foreach (var source in packageSources)
-                    {
-                        // In a SettingValue representing a package source, the Key represents the name of the package source and the Value its source
-                        defaultPackageSources.Add(new PackageSource(source.GetValueAsPath(),
-                            source.Key,
-                            isEnabled: !disabledPackageSources.Any(p => p.Key.Equals(source.Key, StringComparison.OrdinalIgnoreCase)),
-                            isOfficial: true));
-                    }
-
-                    _defaultPackageSources = defaultPackageSources;
+                    _defaultPackageSources = GetSourceItems(ConfigurationConstants.PackageSources);
                 }
                 return _defaultPackageSources;
             }
         }
 
-        public string DefaultPushSource
+        public IReadOnlyList<PackageSource> DefaultAuditSources
+        {
+            get
+            {
+                if (_defaultAuditSources is null)
+                {
+                    _defaultAuditSources = GetSourceItems(ConfigurationConstants.AuditSources);
+                }
+                return _defaultAuditSources;
+            }
+        }
+
+        public string? DefaultPushSource
         {
             get
             {
@@ -89,6 +116,6 @@ namespace NuGet.Configuration
             }
         }
 
-        public string DefaultPackageRestoreConsent => SettingsUtility.GetValueForAddItem(_settingsManager, ConfigurationConstants.PackageRestore, ConfigurationConstants.Enabled);
+        public string? DefaultPackageRestoreConsent => SettingsUtility.GetValueForAddItem(_settingsManager, ConfigurationConstants.PackageRestore, ConfigurationConstants.Enabled);
     }
 }

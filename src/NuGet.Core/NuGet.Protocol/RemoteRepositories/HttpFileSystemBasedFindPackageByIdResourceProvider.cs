@@ -17,10 +17,10 @@ namespace NuGet.Protocol
         {
         }
 
-        public override async Task<Tuple<bool, INuGetResource>> TryCreate(SourceRepository sourceRepository, CancellationToken token)
+        public override async Task<Tuple<bool, INuGetResource?>> TryCreate(SourceRepository sourceRepository, CancellationToken token)
         {
-            INuGetResource resource = null;
-            var serviceIndexResource = await sourceRepository.GetResourceAsync<ServiceIndexResourceV3>();
+            INuGetResource? resource = null;
+            var serviceIndexResource = await sourceRepository.GetResourceAsync<ServiceIndexResourceV3>(token);
             var packageBaseAddress = serviceIndexResource?.GetServiceEntryUris(ServiceTypes.PackageBaseAddress);
 
             if (packageBaseAddress != null
@@ -30,14 +30,15 @@ namespace NuGet.Protocol
                 var repositorySignatureResource = await sourceRepository.GetResourceAsync<RepositorySignatureResource>(token);
                 repositorySignatureResource?.UpdateRepositorySignatureInfo();
 
-                var httpSourceResource = await sourceRepository.GetResourceAsync<HttpSourceResource>(token);
+                var httpSourceResource = await sourceRepository.GetResourceAsync<HttpSourceResource>(token)
+                    ?? throw new InvalidOperationException($"The source '{sourceRepository.PackageSource.Source}' does not provide {nameof(HttpSourceResource)}.");
 
                 resource = new HttpFileSystemBasedFindPackageByIdResource(
                     packageBaseAddress,
                     httpSourceResource.HttpSource);
             }
 
-            return Tuple.Create(resource != null, resource);
+            return new Tuple<bool, INuGetResource?>(resource != null, resource);
         }
     }
 }

@@ -1,13 +1,11 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#nullable enable
-
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using NuGet.Configuration;
+using NuGet.Protocol.Core.Types;
 using NuGet.VisualStudio.Internal.Contracts;
 
 namespace NuGet.PackageManagement.UI
@@ -16,8 +14,6 @@ namespace NuGet.PackageManagement.UI
     {
         private INuGetSourcesService _service = NullNuGetSourcesService.Instance;
         private readonly object _syncObject = new object();
-
-        public event EventHandler<IReadOnlyList<PackageSourceContextInfo>>? PackageSourcesChanged;
 
         internal INuGetSourcesService Service
         {
@@ -34,21 +30,12 @@ namespace NuGet.PackageManagement.UI
         {
             lock (_syncObject)
             {
-                Service.PackageSourcesChanged -= OnPackageSourcesChanged;
-
                 INuGetSourcesService oldService = _service;
 
                 _service = newService ?? NullNuGetSourcesService.Instance;
 
-                Service.PackageSourcesChanged += OnPackageSourcesChanged;
-
                 return oldService;
             }
-        }
-
-        private void OnPackageSourcesChanged(object sender, IReadOnlyList<PackageSourceContextInfo> e)
-        {
-            PackageSourcesChanged?.Invoke(sender, e);
         }
 
         public void Dispose()
@@ -74,22 +61,18 @@ namespace NuGet.PackageManagement.UI
             return Service.SavePackageSourceContextInfosAsync(sources, cancellationToken);
         }
 
-#pragma warning disable CS0618 // Type or member is obsolete
-        public ValueTask SavePackageSourcesAsync(IReadOnlyList<PackageSource> sources, PackageSourceUpdateOptions packageSourceUpdateOptions, CancellationToken cancellationToken)
-        {
-            return Service.SavePackageSourcesAsync(sources, packageSourceUpdateOptions, cancellationToken);
-        }
-#pragma warning restore CS0618 // Type or member is obsolete
-
         public ValueTask<string?> GetActivePackageSourceNameAsync(CancellationToken cancellationToken)
         {
             return Service.GetActivePackageSourceNameAsync(cancellationToken);
         }
 
+        public IReadOnlyList<SourceRepository> GetEnabledAuditSources()
+        {
+            return Service.GetEnabledAuditSources();
+        }
+
         private sealed class NullNuGetSourcesService : INuGetSourcesService
         {
-            public event EventHandler<IReadOnlyList<PackageSourceContextInfo>>? PackageSourcesChanged { add { } remove { } }
-
             internal static NullNuGetSourcesService Instance { get; } = new NullNuGetSourcesService();
 
             public void Dispose() { }
@@ -98,11 +81,9 @@ namespace NuGet.PackageManagement.UI
 
             public ValueTask SavePackageSourceContextInfosAsync(IReadOnlyList<PackageSourceContextInfo> sources, CancellationToken cancellationToken) => new ValueTask();
 
-#pragma warning disable CS0618 // Type or member is obsolete
-            public ValueTask SavePackageSourcesAsync(IReadOnlyList<PackageSource> sources, PackageSourceUpdateOptions packageSourceUpdateOptions, CancellationToken cancellationToken) => new ValueTask();
-#pragma warning restore CS0618 // Type or member is obsolete
-
             public ValueTask<string?> GetActivePackageSourceNameAsync(CancellationToken cancellationToken) => new ValueTask<string?>();
+
+            public IReadOnlyList<SourceRepository> GetEnabledAuditSources() => Array.Empty<SourceRepository>();
         }
     }
 }

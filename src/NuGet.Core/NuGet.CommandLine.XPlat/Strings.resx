@@ -118,7 +118,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="ApiKey_Description" xml:space="preserve">
-    <value>The API key for the server.</value>
+    <value>The API key for the server. If not set, the NUGET_API_KEY environment variable is read.</value>
   </data>
   <data name="App_FullName" xml:space="preserve">
     <value>NuGet Command Line</value>
@@ -133,7 +133,7 @@
     <value>Deletes a package from the server.</value>
   </data>
   <data name="Delete_MissingArguments" xml:space="preserve">
-    <value>Please provide arguments for package id and package version.</value>
+    <value>Provide arguments for package id and package version.</value>
   </data>
   <data name="Delete_PackageIdAndVersion_Description" xml:space="preserve">
     <value>The Package Id and version.</value>
@@ -151,7 +151,7 @@
     <value>Pushes a package to the server and publishes it.</value>
   </data>
   <data name="Push_MissingArguments" xml:space="preserve">
-    <value>Please specify the path to the package.</value>
+    <value>Specify the path to the package.</value>
   </data>
   <data name="Push_Package_ApiKey_Description" xml:space="preserve">
     <value>Specify the path to the package and your API key to push the package to the server.</value>
@@ -180,7 +180,7 @@
     <value>Symbol server URL to use.</value>
   </data>
   <data name="SymbolApiKey_Description" xml:space="preserve">
-    <value>The API key for the symbol server.</value>
+    <value>The API key for the symbol server. If not set, the NUGET_SYMBOL_API_KEY environment variable is read.</value>
   </data>
   <data name="LocalsCommand_ArgumentDescription" xml:space="preserve">
     <value>Specifies the cache location(s) to list or clear.
@@ -196,7 +196,7 @@
     <value>Clears or lists local NuGet resources such as http requests cache, packages folder, plugin operations cache  or machine-wide global packages folder.</value>
   </data>
   <data name="LocalsCommand_MultipleOperations" xml:space="preserve">
-    <value>Both operations, --list and --clear, are not supported in the same command. Please specify only one operation.
+    <value>Both operations, --list and --clear, are not supported in the same command. Specify only one operation.
 usage: NuGet locals &lt;all | http-cache | global-packages | temp | plugins-cache&gt; [--clear | -c | --list | -l]
 For more information, visit https://docs.nuget.org/docs/reference/command-line-reference</value>
   </data>
@@ -206,7 +206,7 @@ usage: NuGet locals &lt;all | http-cache | global-packages | temp | plugins-cach
 For more information, visit https://docs.nuget.org/docs/reference/command-line-reference</value>
   </data>
   <data name="LocalsCommand_NoOperation" xml:space="preserve">
-    <value>Please specify an operation i.e. --list or --clear.
+    <value>Specify an operation i.e. --list or --clear.
 usage: NuGet locals &lt;all | http-cache | global-packages | temp | plugins-cache&gt; [--clear | -c | --list | -l]
 For more information, visit https://docs.nuget.org/docs/reference/command-line-reference</value>
   </data>
@@ -362,7 +362,7 @@ For more information, visit https://docs.nuget.org/docs/reference/command-line-r
     <value>A path to a project, solution file or directory.</value>
   </data>
   <data name="Error_AssetsFileNotFound" xml:space="preserve">
-    <value>No assets file was found for `{0}`. Please run restore before running this command.</value>
+    <value>No assets file was found for `{0}`. Run restore before running this command.</value>
   </data>
   <data name="ListPkg_ProjectHeaderLog" xml:space="preserve">
     <value>Project '{0}' has the following package references</value>
@@ -395,13 +395,14 @@ For more information, visit https://docs.nuget.org/docs/reference/command-line-r
     <value>The project `{0}` uses package.config for NuGet packages, while the command works only with package reference projects.</value>
   </data>
   <data name="ListPkg_ErrorReadingAssetsFile" xml:space="preserve">
-    <value>Unable to read the assets file `{0}`. Please make sure the file has the write format.</value>
+    <value>Unable to read the assets file `{0}`. Make sure the file has the correct format.</value>
   </data>
   <data name="ListPkg_ErrorReadingReferenceFromProject" xml:space="preserve">
-    <value>Unable to read a package reference from the project `{0}`. Please make sure that your project file and project.assets.json file are in sync by running restore.</value>
+    <value>Unable to read a package reference from the project `{0}`. Make sure that your project file and project.assets.json file are in sync by running restore.</value>
   </data>
   <data name="ListPkg_InvalidFramework" xml:space="preserve">
-    <value>Failed to parse one of the given frameworks. Please make sure the given frameworks are valid.</value>
+    <value>The specified TargetFramework '{0}' is not found in the project '{1}'.</value>
+    <comment>0 - alias, 1 - project path, {Locked="TargetFramework"}</comment>
   </data>
   <data name="ListPkg_Latest" xml:space="preserve">
     <value>Latest</value>
@@ -586,7 +587,7 @@ For more information, visit https://docs.nuget.org/docs/reference/command-line-r
     <value>Set the verbosity level of the command. Allowed values are q[uiet], m[inimal], n[ormal], d[etailed], and diag[nostic].</value>
     <comment>Please don't localize "q[uiet]", "m[inimal]", "n[ormal]", "d[etailed]", or "diag[nostic]"</comment>
   </data>
-  <data name="AddPkg_PackagePrerelease" xml:space="preserve">
+  <data name="Prerelease_Description" xml:space="preserve">
     <value>Allows prerelease packages to be installed.</value>
   </data>
   <data name="Error_PrereleaseWhenVersionSpecified" xml:space="preserve">
@@ -629,7 +630,7 @@ For more information, visit https://docs.nuget.org/docs/reference/command-line-r
     <value>Directory where the signed package(s) should be saved. By default the original package is overwritten by the signed package.</value>
   </data>
   <data name="SignCommandCertificateFingerprintDescription" xml:space="preserve">
-    <value>SHA-1 fingerprint of the certificate used to search a local certificate store for the certificate. The certificate store can be specified by --certificate-store-name and --certificate-store-location options.</value>
+    <value>SHA-256, SHA-384 or SHA-512 fingerprint of the certificate used to search a local certificate store for the certificate. The certificate store can be specified by --certificate-store-name and --certificate-store-location options.</value>
     <comment>Please don't localize '--certificate-store-name' and '--certificate-store-location'</comment>
   </data>
   <data name="SignCommandCertificatePasswordDescription" xml:space="preserve">
@@ -660,6 +661,9 @@ The search is a case-insensitive string comparison using the supplied value, whi
   <data name="SignCommandOverwriteDescription" xml:space="preserve">
     <value>Switch to indicate if the current signature should be overwritten. By default the command will fail if the package already has a signature.</value>
   </data>
+  <data name="SignCommandAllowUntrustedRootDescription" xml:space="preserve">
+    <value>Allow signing with certificates whose root certificate is not in a trusted root store. The certificate chain is still built and validated for structure, but UntrustedRoot status is treated as a warning.</value>
+  </data>
   <data name="SignCommandPackagePathDescription" xml:space="preserve">
     <value>Signs NuGet packages at &lt;package-paths&gt; with the specified certificate.</value>
     <comment>Please don't localize '&lt;package-paths&gt;'</comment>
@@ -675,7 +679,7 @@ The search is a case-insensitive string comparison using the supplied value, whi
     <comment>Please don't localize '&lt;package-paths&gt;'</comment>
   </data>
   <data name="SignCommandNoTimestamperWarning" xml:space="preserve">
-    <value>The '--timestamper' option was not provided. The signed package will not be timestamped. To learn more about this option, please visit https://docs.microsoft.com/dotnet/core/tools</value>
+    <value>The '--timestamper' option was not provided. The signed package will not be timestamped. To learn more about this option, visit https://docs.microsoft.com/dotnet/core/tools</value>
     <comment>Please don't localize '--timestamper'</comment>
   </data>
   <data name="Err_InvalidValue" xml:space="preserve">
@@ -741,16 +745,13 @@ The search is a case-insensitive string comparison using the supplied value, whi
   <data name="Error_TrustFingerPrintAlreadyExist" xml:space="preserve">
     <value>The certificate finger you're trying to add is already in the certificate fingerprint list.</value>
   </data>
-  <data name="String1" xml:space="preserve">
-    <value />
-  </data>
-  <data name="Warning_HttpServerUsage" xml:space="preserve">
-    <value>You are running the '{0}' operation with an 'HTTP' source, '{1}'. Non-HTTPS access will be removed in a future version. Consider migrating to an 'HTTPS' source.</value>
+  <data name="Error_HttpServerUsage" xml:space="preserve">
+    <value>You are running the '{0}' operation with an 'HTTP' source, '{1}'. NuGet requires HTTPS sources. To use HTTP sources, you must explicitly set 'allowInsecureConnections' to true in your NuGet.Config file. Refer to https://aka.ms/nuget-https-everywhere for more information.</value>
     <comment>0 - The command name. Ex. Push/Delete. 1 - server uri.</comment>
   </data>
-  <data name="Warning_HttpServerUsage_MultipleSources" xml:space="preserve">
+  <data name="Error_HttpServerUsage_MultipleSources" xml:space="preserve">
     <value>You are running the '{0}' operation with 'HTTP' sources: {1}
-Non-HTTPS access will be removed in a future version. Consider migrating to 'HTTPS' sources.</value>
+NuGet requires HTTPS sources. To use HTTP sources, you must explicitly set 'allowInsecureConnections' to true in your NuGet.Config file. Refer to https://aka.ms/nuget-https-everywhere for more information.</value>
     <comment>0 - The command name. Ex. Push/Delete. 1 - list of server uris</comment>
   </data>
   <data name="Debug_CurrentUICulture" xml:space="preserve">
@@ -763,7 +764,7 @@ Non-HTTPS access will be removed in a future version. Consider migrating to 'HTT
   </data>
   <data name="Info_AddPkgCPM" xml:space="preserve">
     <value>PackageReference for package '{0}' added to '{1}' and PackageVersion added to central package management file '{2}'.</value>
-    <comment>0 - The package ID. 1 - Directory.Packages.props file path. 2 - Project file path.</comment>
+    <comment>0 - The package ID. 1 - Project file path. 2 - Directory.Packages.props.</comment>
   </data>
   <data name="ListPkg_OutputFormatDescription" xml:space="preserve">
     <value>Set the report output format.</value>
@@ -782,5 +783,395 @@ Non-HTTPS access will be removed in a future version. Consider migrating to 'HTT
   <data name="ListPkg_OutputVersionNotApplicable" xml:space="preserve">
     <value>'--output-version' option not applicable for console output, it can only be used together with `--format json` option.</value>
     <comment>Don't localize '--output-version' and `--format json`</comment>
+  </data>
+  <data name="Error_CentralPackageVersions_VersionsNotAllowed" xml:space="preserve">
+    <value>Projects that use central package version management should not define the version on the PackageReference items but on the PackageVersion items: {0}</value>
+    <comment>0 - package id</comment>
+  </data>
+  <data name="Error_AddPkg_CentralPackageVersions_EmptyVersionOverride" xml:space="preserve">
+    <value>VersionOverride for package '{0}' should not be empty.</value>
+    <comment>0 - package id</comment>
+  </data>
+  <data name="Error_AddPkg_CentralPackageVersions_PackageReference_WrongLocation" xml:space="preserve">
+    <value>Package reference for package '{0}' defined in incorrect location, PackageReference should be defined in project file.</value>
+    <comment>0 - package id</comment>
+  </data>
+  <data name="Error_AddPkg_CentralPackageVersions_PackageVersion_WrongLocation" xml:space="preserve">
+    <value>PackageVersion for package '{0}' defined in incorrect location, PackageVersion should be defined in Directory.Package.props.</value>
+    <comment>0 - package id</comment>
+  </data>
+  <data name="Error_CentralPackageVersions_AutoreferencedReferencesNotAllowed" xml:space="preserve">
+    <value>The packages {0} are implicitly referenced. You do not typically need to reference them from your project or in your central package versions management file. For more information, see https://aka.ms/sdkimplicitrefs</value>
+  </data>
+  <data name="Error_CentralPackageVersions_FloatingVersionsAreNotAllowed" xml:space="preserve">
+    <value>Centrally defined floating package versions are not allowed.</value>
+  </data>
+  <data name="Error_CentralPackageVersions_MissingPackageVersion" xml:space="preserve">
+    <value>The PackageReference items {0} do not have corresponding PackageVersion.</value>
+  </data>
+  <data name="Error_CentralPackageVersions_VersionOverrideDisabled" xml:space="preserve">
+    <value>The package reference {0} specifies a VersionOverride but the ability to override a centrally defined version is currently disabled.</value>
+    <comment>0 - packagereference name</comment>
+  </data>
+  <data name="SourcesCommandProtocolVersionDescription" xml:space="preserve">
+    <value>The NuGet server protocol version to be used. Currently supported versions are 2 and 3. See https://learn.microsoft.com/nuget/api/overview for information about the version 3 protocol. Defaults to 2 if not specified.</value>
+  </data>
+  <data name="SourcesCommandValidProtocolVersion" xml:space="preserve">
+    <value>The protocol version specified is invalid. Provide a valid protocol version.</value>
+  </data>
+  <data name="pkgSearch_Description" xml:space="preserve">
+    <value>Searches one or more package sources for packages that match a search term. If no sources are specified, all sources defined in the NuGet.Config are used.</value>
+  </data>
+  <data name="pkgSearch_ExactMatchDescription" xml:space="preserve">
+    <value>Require that the search term exactly match the name of the package. Causes `--take` and `--skip` options to be ignored.</value>
+  </data>
+  <data name="pkgSearch_InteractiveDescription" xml:space="preserve">
+    <value>Stop and wait for user input or action (for example to complete authentication).</value>
+  </data>
+  <data name="pkgSearch_PrereleaseDescription" xml:space="preserve">
+    <value>Include prerelease packages.</value>
+  </data>
+  <data name="pkgSearch_SkipDescription" xml:space="preserve">
+    <value>Number of results to skip, to allow pagination. Default 0.</value>
+  </data>
+  <data name="pkgSearch_SourceDescription" xml:space="preserve">
+    <value>Package source to search. You can pass multiple `--source` options to search multiple package sources. Example: `--source https://api.nuget.org/v3/index.json`.</value>
+  </data>
+  <data name="pkgSearch_TakeDescription" xml:space="preserve">
+    <value>Number of results to return. Default 20.</value>
+  </data>
+  <data name="pkgSearch_termDescription" xml:space="preserve">
+    <value>Search term to filter package names, descriptions, and tags. Used as a literal value. Example: `dotnet package search some.package`. See also `--exact-match`.</value>
+  </data>
+  <data name="Error_InvalidOptionValue" xml:space="preserve">
+    <value>Invalid value `{0}` for option {1}.</value>
+    <comment>0 - The invalid value. 1 - the option.</comment>
+  </data>
+  <data name="Error_InvalidSource" xml:space="preserve">
+    <value>The specified source '{0}' is invalid. Provide a valid source.</value>
+    <comment>0 - The invalid source.</comment>
+  </data>
+  <data name="Error_CannotObtainSearchSource" xml:space="preserve">
+    <value>Failed to obtain a search resource.</value>
+  </data>
+  <data name="ConfigPathsCommandDescription" xml:space="preserve">
+    <value>Lists the paths to all NuGet configuration files that will be applied when invoking NuGet command in a specific directory</value>
+  </data>
+  <data name="ConfigPathsWorkingDirectoryDescription" xml:space="preserve">
+    <value>Specifies the directory to start from when listing configuration files. If not specified, the current directory is used.</value>
+  </data>
+  <data name="Config_Description" xml:space="preserve">
+    <value>NuGet configuration CLI</value>
+  </data>
+  <data name="Error_PathNotFound" xml:space="preserve">
+    <value>The specified path '{0}' does not exist.</value>
+    <comment>0 - path</comment>
+  </data>
+  <data name="Error_NoSource" xml:space="preserve">
+    <value>No package sources found.</value>
+  </data>
+  <data name="Error_MultipleProjectOrSolutionFilesInDirectory" xml:space="preserve">
+    <value>The directory '{0}' contains multiple project or solution files. Specify which project or solution file to use.</value>
+    <comment>{0} - Directory</comment>
+  </data>
+  <data name="Error_NoProjectOrSolutionFilesInDirectory" xml:space="preserve">
+    <value>The directory '{0}' does not contain any project or solution files.</value>
+    <comment>{0} - Directory</comment>
+  </data>
+  <data name="pkgSearch_FormatDescription" xml:space="preserve">
+    <value>Format the output accordingly. Either `table`, or `json`. The default value is `table`.</value>
+    <comment>Please don't translate `table`, `json`.</comment>
+  </data>
+  <data name="pkgSearch_VerbosityDescription" xml:space="preserve">
+    <value>Display this amount of details in the output: `normal`, `minimal`, `detailed`. The default is `normal`.</value>
+    <comment>Please don't translate `minimal`, `normal`, `detailed`</comment>
+  </data>
+  <data name="ConfigCommandKeyNotFound" xml:space="preserve">
+    <value>Key '{0}' not found.</value>
+  </data>
+  <data name="ConfigSetCommandDescription" xml:space="preserve">
+    <value>Set the value of a specified NuGet configuration setting.</value>
+  </data>
+  <data name="ConfigSetConfigKeyDescription" xml:space="preserve">
+    <value>The key of the settings that are to be set.</value>
+  </data>
+  <data name="ConfigSetConfigValueDescription" xml:space="preserve">
+    <value>The value of the settings that are to be set.</value>
+  </data>
+  <data name="Error_ConfigSetInvalidKey" xml:space="preserve">
+    <value>'{0}' is not a valid config key in config section.</value>
+    <comment>0 - The config key</comment>
+  </data>
+  <data name="ConfigUnsetCommandDescription" xml:space="preserve">
+    <value>Removes the key-value pair from a specified NuGet configuration setting.</value>
+  </data>
+  <data name="ConfigUnsetConfigKeyDescription" xml:space="preserve">
+    <value>The key of the settings that are to be removed.</value>
+  </data>
+  <data name="ConfigUnsetNonExistingKey" xml:space="preserve">
+    <value>The key "{0}" could not be found in config section, so it could not be unset.</value>
+    <comment>0 - The config key</comment>
+  </data>
+  <data name="ConfigGetAllOrConfigKeyDescription" xml:space="preserve">
+    <value>ALL: Get all merged NuGet configuration settings from multiple NuGet configuration files that will be applied, when invoking NuGet command from the working directory path.  CONFIG_KEY: Get the effective value of the specified configuration settings of the config section.</value>
+  </data>
+  <data name="ConfigGetShowPathDescription" xml:space="preserve">
+    <value>Indicate that the NuGet configuration file path will be shown beside the configuration settings.</value>
+  </data>
+  <data name="ConfigGetCommandDescription" xml:space="preserve">
+    <value>Gets the NuGet configuration settings that will be applied.</value>
+  </data>
+  <data name="WhyCommand_Description" xml:space="preserve">
+    <value>Shows the dependency graph for a particular package for a given project or solution.</value>
+  </data>
+  <data name="WhyCommand_PathArgument_Description" xml:space="preserve">
+    <value>A path to a project, solution file, file-based app, or project directory.</value>
+  </data>
+  <data name="WhyCommand_PackageArgument_Description" xml:space="preserve">
+    <value>The package name to lookup in the dependency graph.</value>
+  </data>
+  <data name="WhyCommand_FrameworksOption_Description" xml:space="preserve">
+    <value>The target framework(s) for which dependency graphs are shown.</value>
+  </data>
+  <data name="WhyCommand_Error_ArgumentCannotBeEmpty" xml:space="preserve">
+    <value>Unable to run 'dotnet nuget why'. The '{0}' argument cannot be empty.</value>
+    <comment>{0} - Argument that was not provided</comment>
+  </data>
+  <data name="Error_PathIsMissingOrInvalid" xml:space="preserve">
+    <value>Missing or invalid path '{0}'. Provide a path to a project, solution file, file-based app, or project directory.</value>
+    <comment>{0} - Input path argument</comment>
+  </data>
+  <data name="WhyCommand_Error_ArgumentExceptionThrown" xml:space="preserve">
+    <value>Unable to run 'dotnet nuget why'. {0}</value>
+    <comment>{0} - Exception mssage</comment>
+  </data>
+  <data name="WhyCommand_Message_NonSDKStyleProjectsAreNotSupported" xml:space="preserve">
+    <value>Unable to run 'dotnet nuget why' for project '{0}'. See https://aka.ms/dotnet/nuget/why#older-project-format</value>
+  </data>
+  <data name="WhyCommand_Error_InvalidAssetsFile_WithoutProject" xml:space="preserve">
+    <value>The file '{0}' does not appear to be a NuGet assets file. For more information, see https://aka.ms/dotnet/nuget/why#older-project-format</value>
+    <comment>{0} - Assets file path</comment>
+  </data>
+  <data name="WhyCommand_Error_InvalidAssetsFile_WithProject" xml:space="preserve">
+    <value>The file '{0}' does not appear to be a NuGet assets file. Run restore for project '{1}' before running this command.</value>
+    <comment>{0} - Assets file path, {1} - Project name</comment>
+  </data>
+  <data name="WhyCommand_Warning_AssetsFileDoesNotContainSpecifiedTarget" xml:space="preserve">
+    <value>The assets file '{0}' for project '{1}' does not contain a target for the specified input framework '{2}'.</value>
+    <comment>{0} - Assets file path, {1} - Project name, {2} - Framework</comment>
+  </data>
+  <data name="WhyCommand_Message_NoDependencyGraphsFoundInProject" xml:space="preserve">
+    <value>Project '{0}' does not have a dependency on '{1}'.</value>
+    <comment>{0} - Project name, {1} - Target package</comment>
+  </data>
+  <data name="WhyCommand_Message_DependencyGraphsFoundInProject" xml:space="preserve">
+    <value>Project '{0}' has the following dependency graph(s) for '{1}':</value>
+    <comment>{0} - Project name, {1} - Target package</comment>
+  </data>
+  <data name="WhyCommand_Message_NoDependencyGraphsFoundForFramework" xml:space="preserve">
+    <value>No dependency graph(s) found for this target framework.</value>
+  </data>
+  <data name="SourcesCommandAllowInsecureConnectionsDescription" xml:space="preserve">
+    <value>Allows HTTP connections for adding or updating packages. Note: This method is not secure. For secure options, see https://aka.ms/nuget-https-everywhere for more information.</value>
+  </data>
+  <data name="SignCommandInvalidCertificateFingerprint" xml:space="preserve">
+    <value>{0}: Invalid value for '--certificate-fingerprint' option. The value must be a SHA-256, SHA-384, or SHA-512 certificate fingerprint (in hexadecimal).</value>
+    <comment>{0} - error code</comment>
+  </data>
+  <data name="Error_ProjectAssetsFilePropertyNotFound" xml:space="preserve">
+    <value>Project '{0}' does not have MSBuild property ProjectAssetsFile defined. This may indicate that this project does not support NuGet PackageReference, or that project customization has prevented the .NET SDK setting default values.</value>
+    <comment>{0} - Path to the project with the error</comment>
+  </data>
+  <data name="Warning_AuditSourceWithoutData" xml:space="preserve">
+    <value>Audit source '{0}' did not provide any vulnerability data.</value>
+    <comment>{0} is the source name</comment>
+  </data>
+  <data name="Unsupported_UpdatingMoreThanOneProject" xml:space="preserve">
+    <value>Unsupported: Updating more than one project is not yet supported</value>
+  </data>
+  <data name="PackageUpdate_PreviewRestoreFailed" xml:space="preserve">
+    <value>Preview restore with updated packages was not successful. Force mode is not yet available.</value>
+  </data>
+  <data name="Error_CouldNotFindPackageVersionForCpmPackage" xml:space="preserve">
+    <value>Central Package Management configuration error: Could not find PackageVersion for package {0}</value>
+    <comment>0 - a package name
+Do not translate "PackageVersion"</comment>
+  </data>
+  <data name="Unsupported_UpdatePackageWithDifferentPerTfmVersions" xml:space="preserve">
+    <value>The package {0} references different versions of the package for different target frameworks. This is not supported by this command. Edit the project file directly. ({1})</value>
+    <comment>0 - The package id
+1 - The project path</comment>
+  </data>
+  <data name="PackageUpdateCommand_Description" xml:space="preserve">
+    <value>Update referenced packages in a project or solution.</value>
+  </data>
+  <data name="PackageUpdateCommand_ProjectOptionDescription" xml:space="preserve">
+    <value>Path to a project or solution file or file-based app, or a project directory.</value>
+  </data>
+  <data name="Warning_AlreadyHighestVersion" xml:space="preserve">
+    <value>The package {0} is already referencing the highest version {1} in project {2}</value>
+    <comment>0 - package id
+1 - version string
+2 - project path</comment>
+  </data>
+  <data name="Unsupported_UpgradeAllPackages" xml:space="preserve">
+    <value>Unsupported: Upgrading all packages in a project is not yet supported</value>
+  </data>
+  <data name="Warning_AlreadyUsingSameVersion" xml:space="preserve">
+    <value>Package {0} is already referencing version {1}</value>
+    <comment>0 - package id
+1 - version string</comment>
+  </data>
+  <data name="Error_MissingVersion" xml:space="preserve">
+    <value>Missing version from {0}</value>
+    <comment>0 - package id </comment>
+  </data>
+  <data name="Error_InvalidVersionRange" xml:space="preserve">
+    <value>Invalid version range '{0}'</value>
+    <comment>0 - string provided by customer</comment>
+  </data>
+  <data name="PackageUpdate_PackageArgumentDescription" xml:space="preserve">
+    <value>Package reference in the form of a package identifier like 'Newtonsoft.Json' or package identifier and version separated by '@' like 'Newtonsoft.Json@13.0.3'.</value>
+  </data>
+  <data name="PackageUpdate_UpdatingOutdatedPackages" xml:space="preserve">
+    <value>Updating outdated packages in {0}.</value>
+    <comment>{0}: the project or solution that is being updated</comment>
+  </data>
+  <data name="PackageUpdate_LoadingDGSpec" xml:space="preserve">
+    <value>Loading Project(s).</value>
+  </data>
+  <data name="PackageUpdate_FindingUpdateVersions" xml:space="preserve">
+    <value>Finding versions of packages to update.</value>
+  </data>
+  <data name="PackageUpdate_PreviewRestore" xml:space="preserve">
+    <value>Running preview restore to check package compatibility.</value>
+  </data>
+  <data name="PackageUpdate_UpdatedMessage" xml:space="preserve">
+    <value>Updating {0} {1} to {2}.</value>
+    <comment>{0}: package id
+{1}: existing version
+{2}: new version</comment>
+  </data>
+  <data name="PackageUpdate_FinalSummary" xml:space="preserve">
+    <value>Updated {0} packages in {1} scanned packages.</value>
+    <comment>{0}: Number of packages updated
+{1}: Package checked for updated versions</comment>
+  </data>
+  <data name="Error_AddPkgUnresolved" xml:space="preserve">
+    <value>Unable to find a resolved package for '{0}'. This is a tooling error. Please file an issue at https://github.com/NuGet/Home.</value>
+    <comment>{0} Package Id</comment>
+  </data>
+  <data name="Error_AddPkgProjectReference" xml:space="preserve">
+    <value>Failed to add a PackageReference for '{0}'. A ProjectReference with the same name already exists and a package with the same name cannot be added to the project.</value>
+    <comment>{0} - PackageId</comment>
+  </data>
+  <data name="AllowInsecureConnections_Description" xml:space="preserve">
+    <value>Allows pushing to HTTP sources (insecure).</value>
+  </data>
+  <data name="PackageUpdate_AllPackagesAlreadyUpToDate" xml:space="preserve">
+    <value>All packages are already up to date.</value>
+  </data>
+  <data name="PackageUpdateCommand_VulnerableOptionDescription" xml:space="preserve">
+    <value>Upgrade packages with known vulnerabilities.</value>
+  </data>
+  <data name="PackageUpdate_AlreadyUpToDate" xml:space="preserve">
+    <value>All packages are up to date</value>
+  </data>
+  <data name="PackageUpdate_NoVulnerablePackages" xml:space="preserve">
+    <value>No upgradable packages have known vulnerabilities.</value>
+  </data>
+  <data name="PackageUpdate_UpdatingVulnerablePackages" xml:space="preserve">
+    <value>Updating packages with security advisories in {0}</value>
+    <comment>{0} - the project/solution being checked</comment>
+  </data>
+  <data name="PackageUpdate_AllVersionsHaveAdvisories" xml:space="preserve">
+    <value>All versions of package {0} have security advisories. Unable to find a non-vulnerable version to update to.</value>
+    <comment>{0}: package id</comment>
+  </data>
+  <data name="PackageUpdate_AuditDisabled" xml:space="preserve">
+    <value>This command requires NuGetAudit to be enabled at this time. See https://aka.ms/nuget/audit for more information.</value>
+    <comment>{Locked="NuGetAudit"}{Locked="dotnet package update"}</comment>
+  </data>
+  <data name="PackageUpdate_AuditModeIsDirect" xml:space="preserve">
+    <value>NuGetAuditMode is set to direct, which means that transitive packages with known vulnerabilities will not be updated. See https://aka.ms/nuget/audit for more information.</value>
+    <comment>{Locked="NuGetAuditMode"}</comment>
+  </data>
+  <data name="Error_PackageSourceMappingNotFound" xml:space="preserve">
+    <value>Package source mapping is enabled, but no mapping for package {0} was found. See https://aka.ms/nuget/psm for more information.</value>
+    <comment>{0} - package id</comment>
+  </data>
+  <data name="Error_CannotUpgradeAutoReferencedPackage" xml:space="preserve">
+    <value>{0}: Package {1} is implicitly added by the SDK and cannot be upgraded independently</value>
+    <comment>{0} - project referencing the package
+{1} - package id</comment>
+  </data>
+  <data name="ArgumentNullOrEmpty" xml:space="preserve">
+    <value>Argument cannot be null or empty.</value>
+  </data>
+  <data name="Error_InvalidVersion" xml:space="preserve">
+    <value>Invalid version value '{0}'.</value>
+    <comment>0 - package version</comment>
+  </data>
+  <data name="PackageDownloadCommand_Description" xml:space="preserve">
+    <value>Downloads a NuGet package to a local folder without requiring a project file.</value>
+  </data>
+  <data name="PackageDownloadCommand_PackageIdDescription" xml:space="preserve">
+    <value>Package identifier (e.g. 'Newtonsoft.Json').</value>
+  </data>
+  <data name="PackageDownloadCommand_AllowInsecureConnectionsDescription" xml:space="preserve">
+    <value>Allows downloading from HTTP (non-HTTPS) package sources.</value>
+  </data>
+  <data name="PackageDownloadCommand_OutputDirectoryDescription" xml:space="preserve">
+    <value>Directory where the package will be placed. Defaults to the current working directory.</value>
+  </data>
+  <data name="PackageDownloadCommand_SourcesDescription" xml:space="preserve">
+    <value>Specifies one or more NuGet package sources to use.</value>
+  </data>
+  <data name="PackageDownloadCommand_Starting" xml:space="preserve">
+    <value>Downloading package {0}, version {1}.</value>
+    <comment>0- package id
+1- package version</comment>
+  </data>
+  <data name="PackageDownloadCommand_AlreadyInstalled" xml:space="preserve">
+    <value>Skipping download. Package '{0}' version {1} already exists at '{2}'.</value>
+    <comment>0 - package id
+1 - version
+2 - directory path where the package was downloaded</comment>
+  </data>
+  <data name="PackageDownloadCommand_Succeeded" xml:space="preserve">
+    <value>Package '{0}' ({1}) successfully downloaded to '{2}'.</value>
+    <comment>0 - package id
+1 - package version
+2 - package download location</comment>
+  </data>
+  <data name="PackageDownloadCommand_Failed" xml:space="preserve">
+    <value>Package '{0}' ({1}) failed to download.</value>
+    <comment>0 - package id
+1 - package version</comment>
+  </data>
+  <data name="PackageDownloadCommand_UnableToDownload" xml:space="preserve">
+    <value>Package download failed for `{0} {1}` from source `{2}`.</value>
+    <comment>0 package id
+1 package version
+2 package source</comment>
+  </data>
+  <data name="PackageDownloadCommand_LatestVersion" xml:space="preserve">
+    <value>latest version</value>
+  </data>
+  <data name="Error_PackageDownload_VersionNotFound" xml:space="preserve">
+    <value>Unable to find a valid package version</value>
+  </data>
+  <data name="PackageDownloadCommand_PackageSourceMapping_NoSuchSource" xml:space="preserve">
+    <value>The mapped source '{0}' for package '{1}' was not found among the configured sources.</value>
+    <comment>0 - package source name
+1 - package name</comment>
+  </data>
+  <data name="PackageDownloadCommand_PackageSourceMapping_NoSourcesMapped" xml:space="preserve">
+    <value>Unable to download package '{0}'. PackageSourceMapping is enabled, but no mapped sources were found for this package. The following source(s) were not considered: {1}.</value>
+    <comment>{0} = package ID 
+{1} = comma-separated list of all configured sources </comment>
+  </data>
+  <data name="WhyCommand_Error_InconsistentAssetsFile" xml:space="preserve">
+    <value>Internal error: Assets file is inconsistent</value>
   </data>
 </root>

@@ -12,7 +12,7 @@ namespace NuGet.VisualStudio.Internal.Contracts
     {
         private const string IncludePrereleasePropertyName = "includeprerelease";
         private const string IncludeDelistedPropertyName = "includedelisted";
-        private const string PackageTypesPropertyName = "packagetypes";
+        private const string PackageTypePropertyName = "packagetype";
         private const string FilterPropertyName = "filter";
         private const string OrderByPropertyName = "orderby";
         private const string SupportedFrameworksPropertyName = "supportedframeworks";
@@ -30,7 +30,7 @@ namespace NuGet.VisualStudio.Internal.Contracts
             SearchFilterType? filterType = null;
             SearchOrderBy? searchOrderBy = null;
             IEnumerable<string>? supportedFrameworks = null;
-            IEnumerable<string>? packageTypes = null;
+            string? packageType = null;
 
             int propertyCount = reader.ReadMapHeader();
             for (int propertyIndex = 0; propertyIndex < propertyCount; propertyIndex++)
@@ -43,17 +43,17 @@ namespace NuGet.VisualStudio.Internal.Contracts
                     case IncludeDelistedPropertyName:
                         includeDelisted = reader.ReadBoolean();
                         break;
-                    case PackageTypesPropertyName:
-                        packageTypes = options.Resolver.GetFormatter<IEnumerable<string>>().Deserialize(ref reader, options);
+                    case PackageTypePropertyName:
+                        packageType = reader.ReadString();
                         break;
                     case FilterPropertyName:
-                        filterType = options.Resolver.GetFormatter<SearchFilterType?>().Deserialize(ref reader, options);
+                        filterType = options.Resolver.GetFormatter<SearchFilterType?>()!.Deserialize(ref reader, options);
                         break;
                     case OrderByPropertyName:
-                        searchOrderBy = options.Resolver.GetFormatter<SearchOrderBy?>().Deserialize(ref reader, options);
+                        searchOrderBy = options.Resolver.GetFormatter<SearchOrderBy?>()!.Deserialize(ref reader, options);
                         break;
                     case SupportedFrameworksPropertyName:
-                        supportedFrameworks = options.Resolver.GetFormatter<IEnumerable<string>>().Deserialize(ref reader, options);
+                        supportedFrameworks = options.Resolver.GetFormatter<IEnumerable<string>>()!.Deserialize(ref reader, options);
                         break;
                     default:
                         reader.Skip();
@@ -63,9 +63,9 @@ namespace NuGet.VisualStudio.Internal.Contracts
 
             return new SearchFilter(includePrerelease, filterType)
             {
-                SupportedFrameworks = supportedFrameworks,
+                SupportedFrameworks = supportedFrameworks ?? [],
                 OrderBy = searchOrderBy,
-                PackageTypes = packageTypes,
+                PackageType = packageType,
                 IncludeDelisted = includeDelisted,
             };
         }
@@ -77,14 +77,14 @@ namespace NuGet.VisualStudio.Internal.Contracts
             writer.Write(value.IncludePrerelease);
             writer.Write(IncludeDelistedPropertyName);
             writer.Write(value.IncludeDelisted);
-            writer.Write(PackageTypesPropertyName);
-            options.Resolver.GetFormatter<IEnumerable<string>>().Serialize(ref writer, value.PackageTypes, options);
+            writer.Write(PackageTypePropertyName);
+            writer.Write(value.PackageType);
             writer.Write(FilterPropertyName);
-            options.Resolver.GetFormatter<SearchFilterType?>().Serialize(ref writer, value.Filter, options);
+            options.Resolver.GetFormatter<SearchFilterType?>()!.Serialize(ref writer, value.Filter, options);
             writer.Write(OrderByPropertyName);
-            options.Resolver.GetFormatter<SearchOrderBy?>().Serialize(ref writer, value.OrderBy, options);
+            options.Resolver.GetFormatter<SearchOrderBy?>()!.Serialize(ref writer, value.OrderBy, options);
             writer.Write(SupportedFrameworksPropertyName);
-            options.Resolver.GetFormatter<IEnumerable<string>>().Serialize(ref writer, value.SupportedFrameworks, options);
+            options.Resolver.GetFormatter<IEnumerable<string>>()!.Serialize(ref writer, value.SupportedFrameworks, options);
         }
     }
 }

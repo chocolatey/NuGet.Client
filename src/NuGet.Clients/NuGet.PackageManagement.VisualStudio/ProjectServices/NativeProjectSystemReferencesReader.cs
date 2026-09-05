@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -107,6 +109,12 @@ namespace NuGet.PackageManagement.VisualStudio
             NuGetFramework targetFramework, CancellationToken _)
         {
             throw new NotSupportedException();
+        }
+
+        public async Task<IReadOnlyList<(string id, string[] metadata)>> GetItemsAsync(string itemTypeName, params string[] metadataNames)
+        {
+            await _threadingService.JoinableTaskFactory.SwitchToMainThreadAsync();
+            return VsManagedLanguagesProjectSystemServices.GetItems(_vsProjectAdapter, itemTypeName, metadataNames);
         }
     }
 }

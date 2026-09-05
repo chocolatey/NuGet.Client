@@ -14,7 +14,7 @@ namespace NuGet.Protocol
 
         public override bool CanWrite => false;
 
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+        public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
         {
             if (reader.TokenType == JsonToken.Null)
             {
@@ -23,14 +23,14 @@ namespace NuGet.Protocol
 
             if (reader.TokenType == JsonToken.StartArray)
             {
-                var array = JArray.Load(reader);
+                var array = JArray.Load(reader, JsonUtility.DefaultLoadSettings);
                 return string.Join(", ", array.Values<string>().Where(s => !string.IsNullOrWhiteSpace(s)));
             }
 
             return serializer.Deserialize<string>(reader);
         }
 
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
         {
             throw new NotImplementedException();
         }

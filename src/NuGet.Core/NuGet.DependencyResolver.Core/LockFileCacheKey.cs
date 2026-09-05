@@ -20,12 +20,15 @@ namespace NuGet.DependencyResolver
         /// <summary>	
         /// Null for RIDless graphs.	
         /// </summary>	
-        public string RuntimeIdentifier { get; }
+        public string? RuntimeIdentifier { get; }
 
-        public LockFileCacheKey(NuGetFramework framework, string runtimeIdentifier)
+        public string TargetAlias { get; }
+
+        public LockFileCacheKey(NuGetFramework framework, string? runtimeIdentifier, string? targetAlias)
         {
             TargetFramework = framework;
             RuntimeIdentifier = runtimeIdentifier;
+            TargetAlias = targetAlias ?? string.Empty; // alias may be passed as both null or empty and we need to treat them equivalently.
         }
 
         /// <summary>
@@ -33,7 +36,7 @@ namespace NuGet.DependencyResolver
         /// </summary>
         public string Name => GetNameString(TargetFramework.DotNetFrameworkName, RuntimeIdentifier);
 
-        public bool Equals(LockFileCacheKey other)
+        public bool Equals(LockFileCacheKey? other)
         {
             if (other == null)
             {
@@ -46,10 +49,11 @@ namespace NuGet.DependencyResolver
             }
 
             return StringComparer.Ordinal.Equals(RuntimeIdentifier, other.RuntimeIdentifier)
-                && NuGetFramework.Comparer.Equals(TargetFramework, other.TargetFramework);
+                && NuGetFramework.Comparer.Equals(TargetFramework, other.TargetFramework)
+                && StringComparer.OrdinalIgnoreCase.Equals(TargetAlias, other.TargetAlias);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return Equals(obj as LockFileCacheKey);
         }
@@ -60,6 +64,7 @@ namespace NuGet.DependencyResolver
 
             combiner.AddObject(TargetFramework);
             combiner.AddObject(RuntimeIdentifier);
+            combiner.AddStringIgnoreCase(TargetAlias);
 
             return combiner.CombinedHash;
         }
@@ -69,7 +74,7 @@ namespace NuGet.DependencyResolver
             return Name;
         }
 
-        private static string GetNameString(string framework, string runtime)
+        private static string GetNameString(string framework, string? runtime)
         {
             if (!string.IsNullOrEmpty(runtime))
             {

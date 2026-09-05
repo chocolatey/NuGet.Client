@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -38,7 +40,6 @@ namespace NuGet.PackageManagement.VisualStudio
                 throw new ArgumentNullException(nameof(project));
             }
 
-            var sortedPackages = new List<PackageIdentity>();
             var installedRefs = await project.GetInstalledPackagesAsync(CancellationToken.None);
 
             if (installedRefs != null && installedRefs.Any())

@@ -3,10 +3,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using NuGet.Common;
 using NuGet.Packaging.Core;
-using NuGet.Shared;
 
 namespace NuGet.Packaging.Signing
 {
@@ -15,9 +13,9 @@ namespace NuGet.Packaging.Signing
         /// <summary>
         /// Individual trust results.
         /// </summary>
-        public IReadOnlyList<PackageVerificationResult> Results { get; }
+        public IReadOnlyList<PackageVerificationResult>? Results { get; }
 
-        public PackageIdentity PackageIdentity { get; }
+        public PackageIdentity? PackageIdentity { get; }
 
         public TimeSpan VerifyDuration { get; set; }
 

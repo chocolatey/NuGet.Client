@@ -7,17 +7,15 @@ using System.Threading.Tasks;
 using Moq;
 using NuGet.Packaging.Signing;
 using Test.Utility;
-using Test.Utility.Signing;
 using Xunit;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
 
 namespace NuGet.Packaging.Test
 {
     public class SignatureTrustAndValidityVerificationProviderTests
     {
-#if IS_SIGNING_SUPPORTED
         private static readonly Lazy<PrimarySignature> _signature = new Lazy<PrimarySignature>(
             () => PrimarySignature.Load(SigningTestUtility.GetResourceBytes(".signature.p7s")));
-#endif
         private readonly SignatureTrustAndValidityVerificationProvider _provider;
 
         public SignatureTrustAndValidityVerificationProviderTests()
@@ -25,20 +23,18 @@ namespace NuGet.Packaging.Test
             _provider = new SignatureTrustAndValidityVerificationProvider();
         }
 
-#if IS_SIGNING_SUPPORTED
         [Fact]
         public async Task GetTrustResultAsync_WhenPackageIsNull_Throws()
         {
             var exception = await Assert.ThrowsAsync<ArgumentNullException>(
                 () => _provider.GetTrustResultAsync(
-                    package: null,
+                    package: null!,
                     signature: _signature.Value,
                     settings: SignedPackageVerifierSettings.GetDefault(TestEnvironmentVariableReader.EmptyInstance),
                     token: CancellationToken.None));
 
             Assert.Equal("package", exception.ParamName);
         }
-#endif
 
         [Fact]
         public async Task GetTrustResultAsync_WhenSignatureIsNull_Throws()
@@ -46,14 +42,13 @@ namespace NuGet.Packaging.Test
             var exception = await Assert.ThrowsAsync<ArgumentNullException>(
                 () => _provider.GetTrustResultAsync(
                     package: Mock.Of<ISignedPackageReader>(),
-                    signature: null,
+                    signature: null!,
                     settings: SignedPackageVerifierSettings.GetDefault(TestEnvironmentVariableReader.EmptyInstance),
                     token: CancellationToken.None));
 
             Assert.Equal("signature", exception.ParamName);
         }
 
-#if IS_SIGNING_SUPPORTED
         [Fact]
         public async Task GetTrustResultAsync_WhenSettingsIsNull_Throws()
         {
@@ -61,7 +56,7 @@ namespace NuGet.Packaging.Test
                 () => _provider.GetTrustResultAsync(
                     package: Mock.Of<ISignedPackageReader>(),
                     signature: _signature.Value,
-                    settings: null,
+                    settings: null!,
                     token: CancellationToken.None));
 
             Assert.Equal("settings", exception.ParamName);
@@ -77,6 +72,5 @@ namespace NuGet.Packaging.Test
                     settings: SignedPackageVerifierSettings.GetDefault(TestEnvironmentVariableReader.EmptyInstance),
                     token: new CancellationToken(canceled: true)));
         }
-#endif
     }
 }

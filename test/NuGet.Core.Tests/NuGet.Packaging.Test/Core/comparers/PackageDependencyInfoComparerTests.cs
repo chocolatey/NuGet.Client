@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Linq;
 using NuGet.Packaging.Core;
 using NuGet.Shared;
 using NuGet.Versioning;
@@ -24,7 +23,7 @@ namespace NuGet.Packaging.Tests
         {
             ArgumentNullException exception = Assert.Throws<ArgumentNullException>(
                 () => new PackageDependencyInfoComparer(
-                    identityComparer: null,
+                    identityComparer: null!,
                     PackageDependencyComparer.Default));
 
             Assert.Equal("identityComparer", exception.ParamName);
@@ -36,7 +35,7 @@ namespace NuGet.Packaging.Tests
             ArgumentNullException exception = Assert.Throws<ArgumentNullException>(
                 () => new PackageDependencyInfoComparer(
                     PackageIdentityComparer.Default,
-                    dependencyComparer: null));
+                    dependencyComparer: null!));
 
             Assert.Equal("dependencyComparer", exception.ParamName);
         }
@@ -120,8 +119,8 @@ namespace NuGet.Packaging.Tests
         {
             var combiner = new HashCodeCombiner();
 
-            combiner.AddObject(PackageIdentityComparer.Default.GetHashCode(DependencyInfoA));
-            combiner.AddObject(DependencyInfoA.Dependencies.First());
+            combiner.AddObject(DependencyInfoA, PackageIdentityComparer.Default);
+            combiner.AddUnorderedSequence(DependencyInfoA.Dependencies);
 
             int expectedResult = combiner.CombinedHash;
             int actualResult = Comparer.GetHashCode(DependencyInfoA);

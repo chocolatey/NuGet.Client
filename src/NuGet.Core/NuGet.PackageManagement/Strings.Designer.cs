@@ -268,6 +268,15 @@ namespace NuGet.PackageManagement {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to You are running the &apos;{0}&apos; operation with an &apos;HTTP&apos; source: {1}. NuGet requires HTTPS sources. To use an HTTP source, you must explicitly set &apos;allowInsecureConnections&apos; to true in your NuGet.Config file. Refer to https://aka.ms/nuget-https-everywhere for more information..
+        /// </summary>
+        internal static string Error_HttpSource_Single {
+            get {
+                return ResourceManager.GetString("Error_HttpSource_Single", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Invalid restore input where RestorePackagesWithLockFile property is set to false but a packages lock file exists at {0}..
         /// </summary>
         internal static string Error_InvalidLockFileInput {
@@ -295,6 +304,15 @@ namespace NuGet.PackageManagement {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Error occurred while getting package vulnerability data: {0}.
+        /// </summary>
+        internal static string Error_VulnerabilityDataFetch {
+            get {
+                return ResourceManager.GetString("Error_VulnerabilityDataFetch", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to An error occurred while reading file &apos;{0}&apos;: {1}.
         /// </summary>
         internal static string ErrorLoadingPackagesConfig {
@@ -313,7 +331,7 @@ namespace NuGet.PackageManagement {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Exception &apos;{0}&apos; thrown when trying to add source &apos;{1}&apos;. Please verify all your online package sources are available..
+        ///   Looks up a localized string similar to Exception &apos;{0}&apos; thrown when trying to add source &apos;{1}&apos;. Verify all your online package sources are available..
         /// </summary>
         internal static string ExceptionWhenTryingToAddSource {
             get {
@@ -529,7 +547,7 @@ namespace NuGet.PackageManagement {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Package &apos;{0}&apos; is not found in the following primary source(s): &apos;{1}&apos;. Please verify all your online package sources are available (OR) package id, version are specified correctly..
+        ///   Looks up a localized string similar to Package &apos;{0}&apos; is not found in the following primary source(s): &apos;{1}&apos;. Verify all your online package sources are available (OR) package id, version are specified correctly..
         /// </summary>
         internal static string PackageNotFoundInPrimarySources {
             get {
@@ -754,7 +772,7 @@ namespace NuGet.PackageManagement {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Solution is not opened or not saved. Please ensure you have an open and saved solution..
+        ///   Looks up a localized string similar to Solution is not opened or not saved. Ensure you have an open and saved solution..
         /// </summary>
         internal static string SolutionDirectoryNotAvailable {
             get {
@@ -826,7 +844,7 @@ namespace NuGet.PackageManagement {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Unable to gather package &apos;{0}&apos; from source &apos;{1}&apos;. Please verify all your online package sources are available. .
+        ///   Looks up a localized string similar to Unable to gather package &apos;{0}&apos; from source &apos;{1}&apos;. Verify all your online package sources are available. .
         /// </summary>
         internal static string UnableToGatherPackageFromSource {
             get {
@@ -880,6 +898,15 @@ namespace NuGet.PackageManagement {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Audit source &apos;{0}&apos; did not provide any vulnerability data..
+        /// </summary>
+        internal static string Warning_AuditSourceWithoutData {
+            get {
+                return ResourceManager.GetString("Warning_AuditSourceWithoutData", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Directory &apos;{0}&apos; is not empty. Skipping....
         /// </summary>
         internal static string Warning_DirectoryNotEmpty {
@@ -916,11 +943,11 @@ namespace NuGet.PackageManagement {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to You are running the &apos;{0}&apos; operation with an &apos;http&apos; source, &apos;{1}&apos;. Support for &apos;http&apos; sources will be removed in a future version..
+        ///   Looks up a localized string similar to Package &apos;{0}&apos; {1} has a known {2} severity vulnerability, {3}.
         /// </summary>
-        internal static string Warning_HttpServerUsage {
+        internal static string Warning_PackageWithKnownVulnerability {
             get {
-                return ResourceManager.GetString("Warning_HttpServerUsage", resourceCulture);
+                return ResourceManager.GetString("Warning_PackageWithKnownVulnerability", resourceCulture);
             }
         }
         

@@ -16,7 +16,7 @@ namespace NuGet.Protocol
         /// Gets a flag indicating whether or not a type is convertible.
         /// </summary>
         /// <param name="objectType">An object type to check.</param>
-        /// <returns><c>true</c> if <paramref name="objectType" /> is convertible; otherwise <c>false</c>.</returns>
+        /// <returns><see langword="true" /> if <paramref name="objectType" /> is convertible; otherwise <see langword="false" />.</returns>
         public override bool CanConvert(Type objectType) => objectType == typeof(VersionRange);
 
         /// <summary>
@@ -27,9 +27,10 @@ namespace NuGet.Protocol
         /// <param name="existingValue">The existing value of the object.</param>
         /// <param name="serializer">A serializer.</param>
         /// <returns>A <see cref="VersionRange" /> object.</returns>
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+        public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
         {
-            return reader.TokenType != JsonToken.Null ? VersionRange.Parse(serializer.Deserialize<string>(reader)) : null;
+            string? value = serializer.Deserialize<string>(reader);
+            return !string.IsNullOrEmpty(value) ? VersionRange.Parse(value!) : null;
         }
 
         /// <summary>
@@ -38,9 +39,14 @@ namespace NuGet.Protocol
         /// <param name="writer">A JSON writer.</param>
         /// <param name="value">A value to serialize.</param>
         /// <param name="serializer">A serializer.</param>
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
         {
-            var versionRange = VersionRange.Parse(value.ToString());
+            if (value is null)
+            {
+                throw new ArgumentNullException(nameof(value));
+            }
+
+            var versionRange = VersionRange.Parse(value.ToString()!);
             serializer.Serialize(writer, versionRange.ToString());
         }
     }

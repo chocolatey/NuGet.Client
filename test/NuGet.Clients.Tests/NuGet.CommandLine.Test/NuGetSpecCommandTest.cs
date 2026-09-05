@@ -4,6 +4,7 @@
 using System;
 using System.IO;
 using System.Xml.Linq;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using NuGet.Shared;
 using NuGet.Test.Utility;
 using Xunit;
@@ -31,8 +32,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingDirectory,
-                    "spec",
-                    waitForExit: true);
+                    "spec");
 
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
@@ -71,8 +71,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingDirectory,
-                    "spec Whatnot",
-                    waitForExit: true);
+                    "spec Whatnot");
 
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
@@ -125,8 +124,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingDirectory,
-                    "spec",
-                    waitForExit: true);
+                    "spec");
 
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
@@ -163,8 +161,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingDirectory,
-                    "spec",
-                    waitForExit: true);
+                    "spec");
 
                 Util.VerifyResultSuccess(r);
 

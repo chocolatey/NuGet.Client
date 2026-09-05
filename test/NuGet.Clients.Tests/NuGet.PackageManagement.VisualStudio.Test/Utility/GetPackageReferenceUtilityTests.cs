@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using NuGet.Frameworks;
 using NuGet.PackageManagement.VisualStudio.Utility;
 using NuGet.Packaging;
@@ -76,7 +78,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             // Act and Assert 3: Both are null
             int result3 = GetPackageReferenceUtility.PackageReferenceMergeComparer.Compare(null, null);
-            Assert.True(result3 == 0);
+            Assert.Equal(0, result3);
 
             var prWithNullIdentity = new PackageReference(null, null);
 

@@ -14,9 +14,14 @@ namespace NuGet.Protocol
 
         public Guid Version { get; private set; } = Guid.NewGuid();
 
-        public string GetToken(Uri sourceUri)
+        public string? GetToken(Uri sourceUri)
         {
-            string token;
+            if (sourceUri == null)
+            {
+                throw new ArgumentNullException(nameof(sourceUri));
+            }
+
+            string? token;
             if (_tokenCache.TryGetValue(sourceUri, out token))
             {
                 return token;
@@ -33,6 +38,16 @@ namespace NuGet.Protocol
 
         public void AddToken(Uri sourceUri, string token)
         {
+            if (sourceUri == null)
+            {
+                throw new ArgumentNullException(nameof(sourceUri));
+            }
+
+            if (token == null)
+            {
+                throw new ArgumentNullException(nameof(token));
+            }
+
             StoreToken(sourceUri, token);
 
             var rootUri = GetRootUri(sourceUri);

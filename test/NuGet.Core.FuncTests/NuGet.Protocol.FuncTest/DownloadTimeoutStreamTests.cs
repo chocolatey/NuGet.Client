@@ -20,7 +20,7 @@ namespace NuGet.Core.FuncTest
             // Arrange & Act & Assert
             var exception = Assert.Throws<ArgumentNullException>(() =>
                 new DownloadTimeoutStream(
-                    downloadName: null,
+                    downloadName: null!,
                     networkStream: new MemoryStream(),
                     timeout: TimeSpan.Zero));
             Assert.Equal("downloadName", exception.ParamName);
@@ -33,7 +33,7 @@ namespace NuGet.Core.FuncTest
             var exception = Assert.Throws<ArgumentNullException>(() =>
                 new DownloadTimeoutStream(
                     downloadName: "downloadName",
-                    networkStream: null,
+                    networkStream: null!,
                     timeout: TimeSpan.Zero));
 
             Assert.Equal("networkStream", exception.ParamName);
@@ -90,7 +90,7 @@ namespace NuGet.Core.FuncTest
         }
 
 
-        public async Task VerifyFailureOnReadAsync(Func<Stream, Task<string>> readAsync)
+        internal async Task VerifyFailureOnReadAsync(Func<Stream, Task<string>> readAsync)
         {
             // Arrange
             var expected = new IOException();
@@ -110,7 +110,7 @@ namespace NuGet.Core.FuncTest
             Assert.Same(expected, actual);
         }
 
-        public async Task VerifyTimeoutOnReadFunc(Func<Stream, Task<string>> readFunc, bool isSync)
+        internal async Task VerifyTimeoutOnReadFunc(Func<Stream, Task<string>> readFunc, bool isSync)
         {
             // Arrange
             var expectedDownload = "download";

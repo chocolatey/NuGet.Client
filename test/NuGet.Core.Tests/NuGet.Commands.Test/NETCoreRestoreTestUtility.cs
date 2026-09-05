@@ -1,10 +1,13 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using NuGet.Configuration;
 using NuGet.Frameworks;
+using NuGet.LibraryModel;
 using NuGet.ProjectModel;
 using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
@@ -31,7 +34,7 @@ namespace NuGet.Commands.Test
             }
 
             var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot, projects.ToArray());
-            solution.Create(pathContext.SolutionRoot);
+            solution.Create();
 
             return projects;
         }
@@ -60,10 +63,21 @@ namespace NuGet.Commands.Test
             return await RestoreRunner.RunAsync(restoreContext);
         }
 
-        public static PackageSpec GetProject(string projectName, string framework)
+        public static PackageSpec GetProject(string projectName, string framework, LibraryRange libraryRange = null)
         {
-            var targetFrameworkInfo = new TargetFrameworkInformation();
-            targetFrameworkInfo.FrameworkName = NuGetFramework.Parse(framework);
+            var targetFrameworkInfo = libraryRange == null ?
+                new TargetFrameworkInformation()
+                {
+                    FrameworkName = NuGetFramework.Parse(framework),
+                    TargetAlias = framework,
+                } :
+                new TargetFrameworkInformation()
+                {
+                    FrameworkName = NuGetFramework.Parse(framework),
+                    TargetAlias = framework,
+                    Dependencies = [new LibraryDependency() { LibraryRange = libraryRange }]
+                };
+
             var frameworks = new[] { targetFrameworkInfo };
 
             // Create two net45 projects

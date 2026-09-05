@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -23,11 +25,13 @@ namespace NuGet.CommandLine
     {
         internal const int MsBuildWaitTime = 2 * 60 * 1000; // 2 minutes in milliseconds
 
+        private const string NuGetProps = "NuGet.CommandLine.NuGet.props";
         private const string NuGetTargets = "NuGet.CommandLine.NuGet.targets";
         private static readonly XNamespace MSBuildNamespace = XNamespace.Get("http://schemas.microsoft.com/developer/msbuild/2003");
 
         private readonly static string[] MSBuildVersions = new string[] { "14", "12", "4" };
 
+        private readonly static string[] ArchitectureFolderNames = new string[] { "arm64", "amd64" };
         public static bool IsMsBuildBasedProject(string projectFullPath)
         {
             return projectFullPath.EndsWith("proj", StringComparison.OrdinalIgnoreCase);
@@ -102,10 +106,12 @@ namespace NuGet.CommandLine
             }
 
             using (var inputTargetPath = new TempFile(".nugetinputs.targets"))
+            using (var nugetPropsPath = new TempFile(".nugetrestore.props"))
             using (var entryPointTargetPath = new TempFile(".nugetrestore.targets"))
             using (var resultsPath = new TempFile(".output.dg"))
             {
-                // Read NuGet.targets from nuget.exe and write it to disk for msbuild.exe
+                // Read NuGet.props and NuGet.targets from nuget.exe and write it to disk for msbuild.exe
+                ExtractResource(NuGetProps, nugetPropsPath);
                 ExtractResource(NuGetTargets, entryPointTargetPath);
 
                 // Build a .targets file of all restore inputs, this is needed to avoid going over the limit on command line arguments.
@@ -114,7 +120,7 @@ namespace NuGet.CommandLine
                     { "RestoreUseCustomAfterTargets", "true" },
                     { "RestoreGraphOutputPath", resultsPath },
                     { "RestoreRecursive", recursive.ToString(CultureInfo.CurrentCulture).ToLowerInvariant() },
-                    { "RestoreProjectFilterMode", "exclusionlist" }
+                    { "RestoreProjectFilterMode", "exclusionlist" },
                 };
 
                 var inputTargetXML = GetRestoreInputFile(entryPointTargetPath, properties, projectPaths);
@@ -122,7 +128,7 @@ namespace NuGet.CommandLine
                 inputTargetXML.Save(inputTargetPath);
 
                 // Create msbuild parameters and include global properties that cannot be set in the input targets path
-                var arguments = GetMSBuildArguments(entryPointTargetPath, inputTargetPath, nugetExePath, solutionDirectory, solutionName, restoreConfigFile, sources, packagesDirectory, msbuildToolset, restoreLockProperties, EnvironmentVariableWrapper.Instance);
+                var arguments = GetMSBuildArguments(entryPointTargetPath, nugetPropsPath, inputTargetPath, nugetExePath, solutionDirectory, solutionName, restoreConfigFile, sources, packagesDirectory, msbuildToolset, restoreLockProperties, EnvironmentVariableWrapper.Instance);
 
                 var processStartInfo = new ProcessStartInfo
                 {
@@ -173,7 +179,7 @@ namespace NuGet.CommandLine
 
                     if (process.ExitCode != 0 || !finished)
                     {
-                        // If a problem occurred log all msbuild output as an error 
+                        // If a problem occurred log all msbuild output as an error
                         // so that the user can see it.
                         // By default this runs with /v:q which means that only
                         // errors and warnings will be in the output.
@@ -182,7 +188,7 @@ namespace NuGet.CommandLine
 
                     // MSBuild writes errors to the output stream, parsing the console output to find
                     // the errors would be error prone so here we log all output combined with any
-                    // errors on the error stream (haven't seen the error stream used to date) 
+                    // errors on the error stream (haven't seen the error stream used to date)
                     // to give the user the complete info.
                     await console.LogAsync(logLevel, output.ToString() + errors.ToString());
 
@@ -220,6 +226,7 @@ namespace NuGet.CommandLine
 
         public static string GetMSBuildArguments(
             string entryPointTargetPath,
+            string nugetPropsPath,
             string inputTargetPath,
             string nugetExePath,
             string solutionDirectory,
@@ -252,6 +259,8 @@ namespace NuGet.CommandLine
                 args.Add($"/v:{msbuildVerbosity} ");
             }
 
+            AddProperty(args, "NuGetPropsFile", nugetPropsPath);
+
             // Override the target under ImportsAfter with the current NuGet.targets version.
             AddProperty(args, "NuGetRestoreTargets", entryPointTargetPath);
             AddProperty(args, "RestoreUseCustomAfterTargets", bool.TrueString);
@@ -275,6 +284,12 @@ namespace NuGet.CommandLine
             {
                 AddProperty(args, "RestoreBuildInParallel", bool.FalseString);
                 AddProperty(args, "RestoreUseSkipNonexistentTargets", bool.FalseString);
+            }
+
+            // Checking the SDK uses MSBuild intrinsic functions that were added in 16.5
+            if (toolset.ParsedVersion.CompareTo(new Version(16, 5)) < 0)
+            {
+                AddProperty(args, "NuGetExeSkipSdkAnalysisLevelCheck", bool.TrueString);
             }
 
             // Add additional args to msbuild if needed
@@ -437,9 +452,8 @@ namespace NuGet.CommandLine
             try
             {
                 var solution = new Solution(solutionFile, msbuildPath);
-                var solutionDirectory = Path.GetDirectoryName(solutionFile);
                 return solution.Projects.Where(project => !project.IsSolutionFolder)
-                    .Select(project => CombinePathWithVerboseError(solutionDirectory, project.RelativePath));
+                    .Select(project => project.AbsolutePath);
             }
             catch (Exception ex)
             {
@@ -501,7 +515,7 @@ namespace NuGet.CommandLine
 
                     if (msbuildExe != null)
                     {
-                        var msBuildDirectory = Path.GetDirectoryName(msbuildExe);
+                        var msBuildDirectory = GetNonArchitectureDirectory(msbuildExe);
                         var msbuildVersion = FileVersionInfo.GetVersionInfo(msbuildExe)?.FileVersion;
                         return toolset = new MsBuildToolset(msbuildVersion, msBuildDirectory);
                     }
@@ -552,6 +566,43 @@ namespace NuGet.CommandLine
             {
                 LogToolsetToConsole(console, toolset);
             }
+        }
+
+        internal static string GetNonArchitectureDirectory(string msbuildExe)
+        {
+            var msbuildFile = Path.GetFileName(msbuildExe);
+            var directory = Path.GetDirectoryName(msbuildExe);
+            var directoryInfo = new DirectoryInfo(directory);
+            var directoryName = directoryInfo.Name;
+            var parentDirectory = directoryInfo.Parent.FullName;
+
+            //Given Visual Studio 2022 or later, the PATH environment variable in Developer Command Prompt contains the architecture specific path of msbuild.exe.
+            // e.g. C:\Program Files\Microsoft Visual Studio\2022\Preview\\MSBuild\Current\Bin\arm64
+            //Using the architecture specific path will cause some runtime error when loading assembly, e.g."Microsoft.Build.Framework.dll".
+            //
+            //This method is to get the non-architecture specific path of msbuild.exe if the msbuildexe is in the architecture specific folder.
+            //     C:\Program Files\Microsoft Visual Studio\2022\Preview\\MSBuild\Current\Bin\arm64
+            //  => C:\Program Files\Microsoft Visual Studio\2022\Preview\\MSBuild\Current\Bin
+            //If msbuildExe is already in the non-architecture specific folder, just return the directory.
+            foreach (var architecture in ArchitectureFolderNames)
+            {
+                if (directoryName.Equals(architecture, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (File.Exists(Path.Combine(parentDirectory, msbuildFile)))
+                    {
+                        return parentDirectory;
+                    }
+                    else
+                    {
+                        throw new CommandException(
+                            string.Format(
+                                CultureInfo.CurrentCulture,
+                                LocalizedResourceManager.GetString(nameof(NuGetResources.Error_CannotFindNonArchitectureSpecificMsbuild)),
+                                directory));
+                    }
+                }
+            }
+            return directory;
         }
 
         /// <summary>
@@ -655,41 +706,6 @@ namespace NuGet.CommandLine
             }
 
             return null;
-        }
-
-        /// <summary>
-        /// Gets the (first) path of MSBuild to appear in environment variable PATH.
-        /// </summary>
-        /// <returns>The path of MSBuild in PATH environment variable. Returns null if MSBuild location does not exist
-        /// in the variable string.</returns>
-        private static string GetMsBuildPathInPathVar(IEnvironmentVariableReader reader)
-        {
-            var path = reader.GetEnvironmentVariable("PATH");
-            var paths = path?.Split(new char[] { ';' });
-            return paths?.Select(p =>
-            {
-                // Strip leading/trailing quotes
-                if (p.Length > 0 && p[0] == '\"')
-                {
-                    p = p.Substring(1);
-                }
-                if (p.Length > 0 && p[p.Length - 1] == '\"')
-                {
-                    p = p.Substring(0, p.Length - 1);
-                }
-
-                return p;
-            }).FirstOrDefault(p =>
-            {
-                try
-                {
-                    return File.Exists(Path.Combine(p, "msbuild.exe"));
-                }
-                catch
-                {
-                    return false;
-                }
-            });
         }
 
         /// <summary>
@@ -826,6 +842,16 @@ namespace NuGet.CommandLine
                                nameof(NuGetResources.MSbuildFromPath)),
                            msbuildPath);
 
+                if (msbuildPath.EndsWith("MSBuild.exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    string msbuildDirectory = Path.GetDirectoryName(msbuildPath);
+
+                    if (!string.IsNullOrWhiteSpace(msbuildDirectory))
+                    {
+                        msbuildPath = msbuildDirectory;
+                    }
+                }
+
                 if (!Directory.Exists(msbuildPath))
                 {
                     var message = string.Format(
@@ -837,12 +863,37 @@ namespace NuGet.CommandLine
                     throw new CommandException(message);
                 }
 
+                if (IsNetCoreMsBuildDirectory(msbuildPath))
+                {
+                    var message = string.Format(
+                        CultureInfo.CurrentCulture,
+                        LocalizedResourceManager.GetString(
+                            nameof(NuGetResources.Error_MsBuildIsNetCoreMsBuild)),
+                        msbuildPath);
+
+                    throw new CommandException(message);
+                }
+
                 return new Lazy<MsBuildToolset>(() => new MsBuildToolset(msbuildVersion, msbuildPath));
             }
             else
             {
                 return new Lazy<MsBuildToolset>(() => GetMsBuildToolset(msbuildVersion, console));
             }
+        }
+
+        /// <summary>
+        /// Detects whether the given directory contains a .NET SDK (dotnet) MSBuild installation
+        /// rather than a .NET Framework MSBuild installation.
+        /// NuGet.exe requires .NET Framework MSBuild because it loads Microsoft.Build.dll
+        /// in-process via Assembly.LoadFrom, which is incompatible with .NET Core assemblies.
+        /// Detection uses the presence of MSBuild.runtimeconfig.json, which is the canonical
+        /// indicator of a .NET Core application and will be present even if a future SDK
+        /// ships an AoT-compiled MSBuild.exe.
+        /// </summary>
+        internal static bool IsNetCoreMsBuildDirectory(string msbuildPath)
+        {
+            return File.Exists(Path.Combine(msbuildPath, "MSBuild.runtimeconfig.json"));
         }
 
         private static void AddProperty(List<string> args, string property, string value)
@@ -879,16 +930,11 @@ namespace NuGet.CommandLine
             ISetupConfiguration configuration;
             try
             {
-                configuration = new SetupConfiguration() as ISetupConfiguration2;
+                configuration = new SetupConfiguration();
             }
             catch (Exception)
             {
                 return null; // No COM class
-            }
-
-            if (configuration == null)
-            {
-                return null;
             }
 
             var enumerator = configuration.EnumInstances();

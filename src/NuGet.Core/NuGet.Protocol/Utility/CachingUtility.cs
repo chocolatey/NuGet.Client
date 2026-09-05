@@ -34,7 +34,7 @@ namespace NuGet.Protocol
             return EncodingUtility.ToHex(hash, HashLength) + (addIdentifiableCharacters ? "$" + trailing : string.Empty);
         }
 
-        public static Stream ReadCacheFile(TimeSpan maxAge, string cacheFile)
+        public static Stream? ReadCacheFile(TimeSpan maxAge, string cacheFile)
         {
             var fileInfo = new FileInfo(cacheFile);
 
@@ -59,7 +59,7 @@ namespace NuGet.Protocol
 
         public static bool IsFileAlreadyOpen(string filePath)
         {
-            FileStream stream = null;
+            FileStream? stream = null;
 
             try
             {

@@ -1,9 +1,12 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -25,6 +28,75 @@ namespace NuGet.Commands.Test
 {
     public class SourceRepositoryDependencyProviderTests
     {
+        [Fact]
+        public async Task FindLibraryAsync_WhenRestoreStateIsRefreshedMidRequest_StillReleasesTheThrottleItAcquired()
+        {
+            // The concurrency throttle is process-wide and every call site reads the static field twice - once to
+            // wait, once to release in a finally. Swapping the field between those two reads releases a different,
+            // already-full semaphore (SemaphoreFullException), and disposing the previous one faults the waiters.
+            // So the throttle must keep its identity for the lifetime of the operations it gates.
+            // Regression test for NuGet/Home#15045.
+            //
+            // The throttle is only non-null where a concurrency limit applies - macOS by default, or when
+            // NUGET_CONCURRENCY_LIMIT is set - so this exercises the race there and passes trivially elsewhere.
+            var requestStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseRequest = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var findResource = new Mock<FindPackageByIdResource>();
+            findResource.Setup(s => s.DoesPackageExistAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<NuGetVersion>(),
+                    It.IsAny<SourceCacheContext>(),
+                    It.IsAny<ILogger>(),
+                    It.IsAny<CancellationToken>()))
+                .Returns(async () =>
+                {
+                    // The throttle has been acquired by now; hold it until the test says otherwise.
+                    requestStarted.SetResult(true);
+                    await releaseRequest.Task;
+                    return true;
+                });
+
+            var source = new Mock<SourceRepository>();
+            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(findResource.Object);
+            source.SetupGet(s => s.PackageSource)
+                .Returns(new PackageSource("http://test/index.json"));
+
+            using (var cacheContext = new SourceCacheContext())
+            {
+                var provider = new SourceRepositoryDependencyProvider(
+                    source.Object,
+                    new TestLogger(),
+                    cacheContext,
+                    ignoreFailedSources: true,
+                    ignoreWarning: true);
+
+                var libraryRange = new LibraryRange(
+                    "a",
+                    new VersionRange(new NuGetVersion(1, 0, 0)),
+                    LibraryDependencyTarget.Package);
+
+                Task<LibraryIdentity> find = provider.FindLibraryAsync(
+                    libraryRange,
+                    NuGetFramework.Parse("net5.0"),
+                    cacheContext,
+                    NullLogger.Instance,
+                    CancellationToken.None);
+
+                await requestStarted.Task;
+
+                // A restore starting elsewhere in this process must not invalidate the throttle this request holds.
+                StaticState.RaiseBuildEnded();
+
+                releaseRequest.SetResult(true);
+
+                LibraryIdentity result = await find;
+
+                Assert.Equal("a", result.Name);
+            }
+        }
+
         [Fact]
         public void Constructor_ThrowsForNullSourceRepository()
         {
@@ -190,7 +262,7 @@ namespace NuGet.Commands.Test
                 .ThrowsAsync(new PackageNotFoundProtocolException(new PackageIdentity("x", NuGetVersion.Parse("1.0.0"))));
 
             var source = new Mock<SourceRepository>();
-            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>())
+            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None))
                 .ReturnsAsync(findResource.Object);
             source.SetupGet(s => s.PackageSource)
                 .Returns(new PackageSource("http://test/index.json"));
@@ -244,7 +316,7 @@ namespace NuGet.Commands.Test
                     Enumerable.Empty<FrameworkSpecificGroup>()));
 
             var source = new Mock<SourceRepository>();
-            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>())
+            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None))
                 .ReturnsAsync(findResource.Object);
             source.SetupGet(s => s.PackageSource)
                 .Returns(new PackageSource("http://test/index.json"));
@@ -296,7 +368,7 @@ namespace NuGet.Commands.Test
                 .Callback(() => dependencyHitCount++);
 
             var source = new Mock<SourceRepository>();
-            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>())
+            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None))
                 .ReturnsAsync(findResource.Object);
             source.SetupGet(s => s.PackageSource)
                 .Returns(new PackageSource("http://test/index.json"));
@@ -433,7 +505,7 @@ namespace NuGet.Commands.Test
                 .Callback(() => versionsHitCount++);
 
             var source = new Mock<SourceRepository>();
-            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>())
+            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None))
                 .ReturnsAsync(findResource.Object);
             source.SetupGet(s => s.PackageSource)
                 .Returns(new PackageSource("http://test/index.json"));
@@ -466,6 +538,64 @@ namespace NuGet.Commands.Test
 
             // Assert
             Assert.Equal(1, versionsHitCount);
+        }
+
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        public async Task FindLibraryAsync_WhenLocalPackagesFolderAndMinVersionDoesNotExist_ReturnsNull(bool isGlobalPackagesFolder, bool isFallbackFolderSource)
+        {
+            // Arrange
+            var testLogger = new TestLogger();
+            var cacheContext = new SourceCacheContext();
+            var findResource = new Mock<FindPackageByIdResource>(MockBehavior.Strict);
+            var minVersion = NuGetVersion.Parse("1.0.0");
+
+            findResource.Setup(s => s.DoesPackageExistAsync(
+                    "x",
+                    minVersion,
+                    cacheContext,
+                    testLogger,
+                    CancellationToken.None))
+                .ReturnsAsync(false);
+
+            var source = new Mock<SourceRepository>();
+            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None))
+                .ReturnsAsync(findResource.Object);
+            source.SetupGet(s => s.PackageSource)
+                .Returns(new PackageSource("http://test/index.json"));
+
+            var libraryRange = new LibraryRange(
+                "x",
+                new VersionRange(minVersion),
+                LibraryDependencyTarget.Package);
+            var provider = new SourceRepositoryDependencyProvider(
+                source.Object,
+                testLogger,
+                cacheContext,
+                ignoreFailedSources: true,
+                ignoreWarning: true,
+                fileCache: null,
+                isGlobalPackagesFolder: isGlobalPackagesFolder,
+                isFallbackFolderSource: isFallbackFolderSource,
+                environmentVariableReader: EnvironmentVariableWrapper.Instance);
+
+            // Act
+            var library = await provider.FindLibraryAsync(
+                libraryRange,
+                NuGetFramework.Parse("net45"),
+                cacheContext,
+                testLogger,
+                CancellationToken.None);
+
+            // Assert
+            Assert.Null(library);
+            findResource.Verify(s => s.GetAllVersionsAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<SourceCacheContext>(),
+                    It.IsAny<ILogger>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Never);
         }
 
         [Fact]
@@ -544,7 +674,7 @@ namespace NuGet.Commands.Test
                         It.IsAny<CancellationToken>()))
                     .ThrowsAsync(new FatalProtocolException("simulated"));
 
-                test.SourceRepository.Setup(s => s.GetResourceAsync<FindPackageByIdResource>())
+                test.SourceRepository.Setup(s => s.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None))
                     .ReturnsAsync(resource.Object);
 
                 await Assert.ThrowsAsync<FatalProtocolException>(
@@ -570,7 +700,7 @@ namespace NuGet.Commands.Test
                         It.IsAny<CancellationToken>()))
                     .ThrowsAsync(new FatalProtocolException("simulated"));
 
-                test.SourceRepository.Setup(s => s.GetResourceAsync<FindPackageByIdResource>())
+                test.SourceRepository.Setup(s => s.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None))
                     .ReturnsAsync(resource.Object);
 
                 var packageDownloader = await test.Provider.GetPackageDownloaderAsync(
@@ -599,7 +729,7 @@ namespace NuGet.Commands.Test
                         It.IsAny<CancellationToken>()))
                     .ThrowsAsync(new FatalProtocolException("simulated"));
 
-                test.SourceRepository.Setup(s => s.GetResourceAsync<FindPackageByIdResource>())
+                test.SourceRepository.Setup(s => s.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None))
                     .ReturnsAsync(resource.Object);
 
                 Assert.Equal(0, test.Logger.Warnings);
@@ -643,7 +773,7 @@ namespace NuGet.Commands.Test
                         It.IsAny<CancellationToken>()))
                     .ReturnsAsync(expectedPackageDownloader.Object);
 
-                test.SourceRepository.Setup(s => s.GetResourceAsync<FindPackageByIdResource>())
+                test.SourceRepository.Setup(s => s.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None))
                     .ReturnsAsync(resource.Object);
 
                 var actualPackageDownloader = await test.Provider.GetPackageDownloaderAsync(
@@ -656,6 +786,56 @@ namespace NuGet.Commands.Test
 
                 expectedPackageDownloader.VerifyAll();
             }
+        }
+
+        [Fact]
+        public async Task GetAllVersionsAsync_EnsuresResourceIsInitialized_ReturnsVersions()
+        {
+            // Arrange
+            // This test verifies that GetAllVersionsAsync properly calls EnsureResource
+            // to initialize _findPackagesByIdResource. Previously, EnsureResource was not called
+            // and GetAllVersionsInternalAsync would see _findPackagesByIdResource as null,
+            // silently returning null instead of the actual versions.
+            var testLogger = new TestLogger();
+            var cacheContext = new SourceCacheContext();
+            var expectedVersions = new[] { NuGetVersion.Parse("1.0.0"), NuGetVersion.Parse("2.0.0") };
+
+            var findResource = new Mock<FindPackageByIdResource>();
+            findResource.Setup(s => s.GetAllVersionsAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<SourceCacheContext>(),
+                    It.IsAny<ILogger>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(expectedVersions);
+
+            var source = new Mock<SourceRepository>();
+            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None))
+                .ReturnsAsync(findResource.Object);
+            source.SetupGet(s => s.PackageSource)
+                .Returns(new PackageSource("http://test/index.json"));
+
+            var provider = new SourceRepositoryDependencyProvider(
+                source.Object,
+                testLogger,
+                cacheContext,
+                ignoreFailedSources: true,
+                ignoreWarning: true);
+
+            // Act
+            var versions = await provider.GetAllVersionsAsync(
+                "x",
+                cacheContext,
+                testLogger,
+                CancellationToken.None);
+
+            // Assert
+            versions.Should().BeEquivalentTo(expectedVersions);
+            source.Verify(s => s.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None), Times.Once);
+            findResource.Verify(s => s.GetAllVersionsAsync(
+                "x",
+                It.IsAny<SourceCacheContext>(),
+                It.IsAny<ILogger>(),
+                It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Fact]
@@ -675,7 +855,7 @@ namespace NuGet.Commands.Test
                 .Throws(expectedException);
 
             var source = new Mock<SourceRepository>();
-            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>())
+            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None))
                 .ReturnsAsync(findResource.Object);
             source.SetupGet(s => s.PackageSource)
                 .Returns(new PackageSource("http://test/index.json"));
@@ -717,6 +897,54 @@ namespace NuGet.Commands.Test
         }
 
         [Fact]
+        public async Task FindLibraryAsync_WhenASourceIsInaccessibleAndHasInnerException_AndFailuresAreNotIgnored_EveryCallLogsAnErrorMessageWithTheInnerException()
+        {
+            // Arrange
+            var cacheContext = new SourceCacheContext();
+            var expectedInnerException = new HttpRequestException("Response status code does not indicate success: 404 (Not Found).");
+            var expectedException = new FatalProtocolException("The source cannot be accessed", expectedInnerException);
+
+            var findResource = new Mock<FindPackageByIdResource>();
+            findResource.Setup(s => s.DoesPackageExistAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<NuGetVersion>(),
+                    It.IsAny<SourceCacheContext>(),
+                    It.IsAny<ILogger>(),
+                    It.IsAny<CancellationToken>()))
+                .Throws(expectedException);
+
+            var source = new Mock<SourceRepository>();
+            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None))
+                .ReturnsAsync(findResource.Object);
+            source.SetupGet(s => s.PackageSource)
+                .Returns(new PackageSource("http://test/index.json"));
+            var firstTestLogger = new TestLogger();
+            var secondTestLogger = new TestLogger();
+
+            var libraryRange = new LibraryRange("x", new VersionRange(new NuGetVersion(1, 0, 0)), LibraryDependencyTarget.Package);
+            var provider = new SourceRepositoryDependencyProvider(
+                source.Object,
+                firstTestLogger,
+                cacheContext,
+                ignoreFailedSources: false,
+                ignoreWarning: false);
+
+            // Act
+            var exception = await Assert.ThrowsAsync<FatalProtocolException>(() => provider.FindLibraryAsync(
+                 new LibraryIdentity("x", NuGetVersion.Parse("1.0.0-beta"), LibraryType.Package),
+                 NuGetFramework.Parse("net45"),
+                 cacheContext,
+                 firstTestLogger,
+                 CancellationToken.None));
+
+            // Assert
+            exception.Should().Be(expectedException);
+            firstTestLogger.ErrorMessages.Should().HaveCount(1);
+            firstTestLogger.ShowErrors().Should().Contain("NU1301");
+            firstTestLogger.ShowErrors().Should().Contain(expectedInnerException.Message);
+        }
+
+        [Fact]
         public async Task FindLibraryAsync_WhenASourceIsInaccessible_AndFailuresAreIgnored_EveryCallLogsAnErrorMessage()
         {
             // Arrange
@@ -733,7 +961,7 @@ namespace NuGet.Commands.Test
                 .Throws(expectedException);
 
             var source = new Mock<SourceRepository>();
-            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>())
+            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None))
                 .ReturnsAsync(findResource.Object);
             source.SetupGet(s => s.PackageSource)
                 .Returns(new PackageSource("http://test/index.json"));
@@ -803,7 +1031,7 @@ namespace NuGet.Commands.Test
                     Enumerable.Empty<FrameworkSpecificGroup>()));
 
             var source = new Mock<SourceRepository>();
-            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>())
+            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None))
                 .ReturnsAsync(findResource.Object);
             source.SetupGet(s => s.PackageSource)
                 .Returns(new PackageSource("http://test/index.json"));
@@ -815,6 +1043,7 @@ namespace NuGet.Commands.Test
                 ignoreFailedSources: true,
                 ignoreWarning: true,
                 fileCache: null,
+                isGlobalPackagesFolder: false,
                 isFallbackFolderSource: false,
                 new TestEnvironmentVariableReader(new Dictionary<string, string>()));
 
@@ -865,7 +1094,7 @@ namespace NuGet.Commands.Test
                     Enumerable.Empty<FrameworkSpecificGroup>()));
 
             var source = new Mock<SourceRepository>();
-            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>())
+            source.Setup(s => s.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None))
                 .ReturnsAsync(findResource.Object);
             source.SetupGet(s => s.PackageSource)
                 .Returns(new PackageSource("http://test/index.json"));
@@ -877,6 +1106,7 @@ namespace NuGet.Commands.Test
                 ignoreFailedSources: true,
                 ignoreWarning: true,
                 fileCache: null,
+                isGlobalPackagesFolder: false,
                 isFallbackFolderSource: false,
                 wrapper);
 

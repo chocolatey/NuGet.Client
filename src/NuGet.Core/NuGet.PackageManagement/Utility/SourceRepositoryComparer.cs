@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System.Collections.Generic;
 using NuGet.Protocol.Core.Types;
 
@@ -8,6 +10,12 @@ namespace NuGet.PackageManagement
 {
     public class SourceRepositoryComparer : IEqualityComparer<SourceRepository>
     {
+        public static SourceRepositoryComparer Instance { get; } = new();
+
+        private SourceRepositoryComparer()
+        {
+        }
+
         public bool Equals(SourceRepository x, SourceRepository y)
         {
             return x.PackageSource.Equals(y.PackageSource);

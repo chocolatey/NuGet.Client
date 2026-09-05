@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -8,13 +10,21 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
+using NuGet.Commands.Restore.Utility;
 using NuGet.Common;
 using NuGet.Frameworks;
 using NuGet.Packaging;
+using NuGet.Packaging.Signing;
 using NuGet.ProjectModel;
+using NuGet.Protocol;
 using NuGet.Test.Utility;
+using NuGet.Versioning;
+using Test.Utility;
 using Test.Utility.Signing;
 using Xunit;
+using Xunit.Abstractions;
 using static NuGet.Frameworks.FrameworkConstants;
 
 namespace Dotnet.Integration.Test
@@ -25,19 +35,23 @@ namespace Dotnet.Integration.Test
         private const string SignatureVerificationEnvironmentVariable = "DOTNET_NUGET_SIGNATURE_VERIFICATION";
         private const string SignatureVerificationEnvironmentVariableTypo = "DOTNET_NUGET_SIGNATURE_VERIFICATIOn";
 
-        private MsbuildIntegrationTestFixture _msbuildFixture;
+        private readonly DotnetIntegrationTestFixture _dotnetFixture;
+        private readonly SignCommandTestFixture _signFixture;
+        private readonly ITestOutputHelper _testOutputHelper;
 
-        public DotnetRestoreTests(MsbuildIntegrationTestFixture fixture)
+        public DotnetRestoreTests(DotnetIntegrationTestFixture dotnetFixture, SignCommandTestFixture signFixture, ITestOutputHelper testOutputHelper)
         {
-            _msbuildFixture = fixture;
+            _dotnetFixture = dotnetFixture;
+            _signFixture = signFixture;
+            _testOutputHelper = testOutputHelper;
         }
 
         [PlatformFact(Platform.Windows)]
         public void DotnetRestore_SolutionRestoreVerifySolutionDirPassedToProjects()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, "proj");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, "proj", args: "classlib", _testOutputHelper);
 
                 var slnContents = @"
 Microsoft Visual Studio Solution File, Format Version 12.00
@@ -80,7 +94,7 @@ EndGlobal";
                 File.Delete(projPath);
                 File.WriteAllText(projPath, doc.ToString());
 
-                var result = _msbuildFixture.RunDotnet(pathContext.SolutionRoot, "msbuild proj.sln /t:restore /p:DisableImplicitFrameworkReferences=true", ignoreExitCode: true);
+                var result = _dotnetFixture.RunDotnetExpectFailure(pathContext.SolutionRoot, "msbuild proj.sln /t:restore /p:DisableImplicitFrameworkReferences=true", testOutputHelper: _testOutputHelper);
 
                 result.ExitCode.Should().Be(1, "error text should be displayed");
                 result.AllOutput.Should().Contain($"|SOLUTION {PathUtility.EnsureTrailingSlash(pathContext.SolutionRoot)} proj .sln proj.sln {slnPath}|");
@@ -90,7 +104,7 @@ EndGlobal";
         [Fact]
         public void DotnetRestore_WithAuthorSignedPackage_Succeeds()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var packageFile = new FileInfo(Path.Combine(pathContext.PackageSource, "TestPackage.AuthorSigned.1.0.0.nupkg"));
                 var package = SigningTestUtility.GetResourceBytes(packageFile.Name);
@@ -100,33 +114,77 @@ EndGlobal";
                 var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
                 var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
 
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0", testOutputHelper: _testOutputHelper);
 
-                using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+                ProjectFileUtils.AddItem(projectFile, "PackageReference", "TestPackage.AuthorSigned", string.Empty, new Dictionary<string, string>() { { "Version", "1.0.0" } });
+
+                _dotnetFixture.RestoreProjectExpectSuccess(workingDirectory, projectName, testOutputHelper: _testOutputHelper);
+            }
+        }
+
+        [Fact]
+        public async Task DotnetRestore_WithUntrustedSignedPackage_LogsNU3042BasedOnOperatingSystem()
+        {
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
+            {
+                IX509StoreCertificate storeCertificate = _signFixture.UntrustedSelfIssuedCertificateInCertificateStore;
+                SimpleTestPackageContext packageContext = new("A", "1.0.0");
+                string signedPackagePath = await SignedArchiveTestUtility.AuthorSignPackageAsync(
+                    storeCertificate.Certificate,
+                    packageContext,
+                    pathContext.PackageSource);
+
+                var projectName = "ClassLibrary1";
+                string workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
+                string projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
+
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0", testOutputHelper: _testOutputHelper);
+
+                using (FileStream stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
                 {
-                    var xml = XDocument.Load(stream);
+                    XDocument xml = XDocument.Load(stream);
 
-                    var attributes = new Dictionary<string, string>() { { "Version", "1.0.0" } };
+                    Dictionary<string, string> attributes = new() { { "Version", packageContext.Version } };
 
                     ProjectFileUtils.AddItem(
                         xml,
                         "PackageReference",
-                        "TestPackage.AuthorSigned",
+                        packageContext.Id,
                         string.Empty,
                         new Dictionary<string, string>(),
-                        attributes);
+                    attributes);
+
+                    ProjectFileUtils.AddProperty(xml, "AutomaticallyUseReferenceAssemblyPackages", bool.FalseString);
 
                     ProjectFileUtils.WriteXmlToFile(xml, stream);
                 }
 
-                _msbuildFixture.RestoreProject(workingDirectory, projectName, args: string.Empty);
+                CommandRunnerResult result = _dotnetFixture.RunDotnetExpectSuccess(
+                    workingDirectory,
+                    $"restore {projectName}.csproj",
+                    environmentVariables: new Dictionary<string, string>()
+                        {
+                            { EnvironmentVariableConstants.DotNetNuGetSignatureVerification, "true" }
+                        },
+                    testOutputHelper: _testOutputHelper);
+
+                string expectedText = "warning NU3042:";
+
+                if (RuntimeEnvironmentHelper.IsWindows)
+                {
+                    Assert.DoesNotContain(expectedText, result.AllOutput);
+                }
+                else
+                {
+                    Assert.Contains(expectedText, result.AllOutput);
+                }
             }
         }
 
         [Fact]
         public async Task DotnetRestore_UpdateLastAccessTime()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var packageX = new SimpleTestPackageContext()
                 {
@@ -143,7 +201,7 @@ EndGlobal";
                 var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
                 var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
 
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0", testOutputHelper: _testOutputHelper);
 
                 using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
                 {
@@ -158,6 +216,8 @@ EndGlobal";
                         string.Empty,
                         new Dictionary<string, string>(),
                         attributes);
+
+                    ProjectFileUtils.AddProperty(xml, "AutomaticallyUseReferenceAssemblyPackages", bool.FalseString);
 
                     ProjectFileUtils.WriteXmlToFile(xml, stream);
                 }
@@ -178,7 +238,7 @@ EndGlobal";
                 File.WriteAllText(Path.Combine(workingDirectory, "NuGet.Config"), doc.ToString());
 
                 // first restore
-                _msbuildFixture.RestoreProject(workingDirectory, projectName, args: string.Empty);
+                _dotnetFixture.RestoreProjectExpectSuccess(workingDirectory, projectName, testOutputHelper: _testOutputHelper);
 
                 var testFolder = Path.GetDirectoryName(Path.GetDirectoryName(workingDirectory));
                 var metadataFile = Path.Combine(testFolder, "globalPackages", packageX.Id.ToLower(), packageX.Version, ".nupkg.metadata");
@@ -187,7 +247,7 @@ EndGlobal";
                 var TenMinsAgo = DateTime.UtcNow.AddMinutes(-10);
                 File.SetLastAccessTimeUtc(metadataFile, TenMinsAgo);
 
-                _msbuildFixture.RestoreProject(workingDirectory, projectName, args: string.Empty);
+                _dotnetFixture.RestoreProjectExpectSuccess(workingDirectory, projectName, testOutputHelper: _testOutputHelper);
 
                 var updatedAccessTime = File.GetLastAccessTimeUtc(metadataFile);
 
@@ -195,11 +255,10 @@ EndGlobal";
             }
         }
 
-#if IS_SIGNING_SUPPORTED
-        [PlatformFact(Platform.Windows)]
+        [PlatformFact(Platform.Windows, Platform.Linux)]
         public async Task DotnetRestore_WithUnSignedPackageAndSignatureValidationModeAsRequired_FailsAsync()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 //Setup packages and feed
                 var packageX = new SimpleTestPackageContext()
@@ -225,7 +284,7 @@ EndGlobal";
                 var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
                 var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
 
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib", testOutputHelper: _testOutputHelper);
 
                 using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
                 {
@@ -260,10 +319,9 @@ EndGlobal";
                 File.WriteAllText(Path.Combine(workingDirectory, "NuGet.Config"), doc.ToString());
 
                 // Act
-                var result = _msbuildFixture.RunDotnet(workingDirectory, "restore", ignoreExitCode: true);
+                var result = _dotnetFixture.RunDotnetExpectFailure(workingDirectory, "restore", testOutputHelper: _testOutputHelper);
 
                 result.AllOutput.Should().Contain($"error NU3004: Package '{packageX.Id} {packageX.Version}' from source '{pathContext.PackageSource}': signatureValidationMode is set to require, so packages are allowed only if signed by trusted signers; however, this package is unsigned.");
-                result.Success.Should().BeFalse();
                 result.ExitCode.Should().Be(1, because: "error text should be displayed as restore failed");
             }
         }
@@ -271,7 +329,7 @@ EndGlobal";
         [PlatformFact(Platform.Darwin)]
         public async Task DotnetRestore_WithUnSignedPackageAndSignatureValidationModeAsRequired_SucceedAsync()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 //Setup packages and feed
                 var packageX = new SimpleTestPackageContext()
@@ -297,7 +355,7 @@ EndGlobal";
                 var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
                 var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
 
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib", testOutputHelper: _testOutputHelper);
 
                 using (FileStream stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
                 {
@@ -332,11 +390,9 @@ EndGlobal";
                 File.WriteAllText(Path.Combine(workingDirectory, "NuGet.Config"), doc.ToString());
 
                 // Act
-                CommandRunnerResult result = _msbuildFixture.RunDotnet(workingDirectory, "restore", ignoreExitCode: true);
+                CommandRunnerResult result = _dotnetFixture.RunDotnetExpectSuccess(workingDirectory, "restore", testOutputHelper: _testOutputHelper);
 
                 result.AllOutput.Should().NotContain($"error NU3004");
-                result.Success.Should().BeTrue();
-                result.ExitCode.Should().Be(0);
             }
         }
 
@@ -346,7 +402,7 @@ EndGlobal";
         [InlineData("true")]
         public async Task DotnetRestore_WithUnSignedPackageAndSignatureValidationModeAsRequired_WithEnvVarTrue_Fails(string envVarValue)
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 //Arrange
                 var envVarName = SignatureVerificationEnvironmentVariable;
@@ -374,7 +430,7 @@ EndGlobal";
                 var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
                 var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
 
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib", testOutputHelper: _testOutputHelper);
 
                 using (FileStream stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
                 {
@@ -409,17 +465,16 @@ EndGlobal";
                 File.WriteAllText(Path.Combine(workingDirectory, "NuGet.Config"), doc.ToString());
 
                 // Act
-                CommandRunnerResult result = _msbuildFixture.RunDotnet(
+                CommandRunnerResult result = _dotnetFixture.RunDotnetExpectFailure(
                     workingDirectory, "restore",
-                    ignoreExitCode: true,
-                    additionalEnvVars: new Dictionary<string, string>()
+                    environmentVariables: new Dictionary<string, string>()
                         {
                             { envVarName, envVarValue }
-                        }
+                        },
+                    testOutputHelper: _testOutputHelper
                     );
 
                 result.AllOutput.Should().Contain($"error NU3004: Package '{packageX.Id} {packageX.Version}' from source '{pathContext.PackageSource}': signatureValidationMode is set to require, so packages are allowed only if signed by trusted signers; however, this package is unsigned.");
-                result.Success.Should().BeFalse(because: "error text should be displayed as restore failed");
             }
         }
 
@@ -427,7 +482,7 @@ EndGlobal";
         [PlatformFact(Platform.Darwin, SkipPlatform = Platform.Darwin)]
         public async Task DotnetRestore_WithUnSignedPackageAndSignatureValidationModeAsRequired_WithEnvVarNameCaseSensitive_Succeed()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 //Arrange
                 var envVarName = SignatureVerificationEnvironmentVariableTypo;
@@ -456,7 +511,7 @@ EndGlobal";
                 var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
                 var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
 
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib", testOutputHelper: _testOutputHelper);
 
                 using (FileStream stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
                 {
@@ -491,18 +546,16 @@ EndGlobal";
                 File.WriteAllText(Path.Combine(workingDirectory, "NuGet.Config"), doc.ToString());
 
                 // Act
-                CommandRunnerResult result = _msbuildFixture.RunDotnet(
+                CommandRunnerResult result = _dotnetFixture.RunDotnetExpectSuccess(
                     workingDirectory, "restore",
-                    ignoreExitCode: true,
-                    additionalEnvVars: new Dictionary<string, string>()
+                    environmentVariables: new Dictionary<string, string>()
                         {
                             { envVarName, envVarValue }
-                        }
+                        },
+                    testOutputHelper: _testOutputHelper
                     );
 
                 result.AllOutput.Should().NotContain($"error NU3004");
-                result.Success.Should().BeTrue();
-                result.ExitCode.Should().Be(0);
             }
         }
 
@@ -510,7 +563,7 @@ EndGlobal";
         [PlatformFact(Platform.Linux, Platform.Darwin, SkipPlatform = Platform.Darwin)]
         public async Task DotnetRestore_WithUnSignedPackageAndSignatureValidationModeAsRequired_WithEnvVarValueCaseInsensitive_Fails()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 //Arrange
                 var envVarName = SignatureVerificationEnvironmentVariable;
@@ -539,7 +592,7 @@ EndGlobal";
                 var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
                 var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
 
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib", testOutputHelper: _testOutputHelper);
 
                 using (FileStream stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
                 {
@@ -574,24 +627,23 @@ EndGlobal";
                 File.WriteAllText(Path.Combine(workingDirectory, "NuGet.Config"), doc.ToString());
 
                 // Act
-                CommandRunnerResult result = _msbuildFixture.RunDotnet(
+                CommandRunnerResult result = _dotnetFixture.RunDotnetExpectFailure(
                     workingDirectory, "restore",
-                    ignoreExitCode: true,
-                    additionalEnvVars: new Dictionary<string, string>()
+                    environmentVariables: new Dictionary<string, string>()
                         {
                             { envVarName, envVarValue }
-                        }
+                        },
+                    testOutputHelper: _testOutputHelper
                     );
 
                 result.AllOutput.Should().Contain($"error NU3004: Package '{packageX.Id} {packageX.Version}' from source '{pathContext.PackageSource}': signatureValidationMode is set to require, so packages are allowed only if signed by trusted signers; however, this package is unsigned.");
-                result.Success.Should().BeFalse(because: "error text should be displayed as restore failed");
             }
         }
 
         [PlatformFact(Platform.Windows)]
         public void DotnetRestore_WithAuthorSignedPackageAndSignatureValidationModeAsRequired_Succeeds()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var packageFile = new FileInfo(Path.Combine(pathContext.PackageSource, "TestPackage.AuthorSigned.1.0.0.nupkg"));
                 var package = SigningTestUtility.GetResourceBytes(packageFile.Name);
@@ -601,7 +653,7 @@ EndGlobal";
                 var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
                 var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
 
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0", testOutputHelper: _testOutputHelper);
 
                 using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
                 {
@@ -668,17 +720,17 @@ EndGlobal";
 
                 File.WriteAllText(configPath, doc.ToString());
 
-                _msbuildFixture.RestoreProject(workingDirectory, projectName, args: string.Empty);
+                _dotnetFixture.RestoreProjectExpectSuccess(workingDirectory, projectName, testOutputHelper: _testOutputHelper);
             }
         }
-#endif //IS_SIGNING_SUPPORTED
 
         [PlatformTheory(Platform.Windows)]
-        [InlineData(true)]
-        [InlineData(false)]
-        public async Task DotnetRestore_OneLinePerRestore(bool useStaticGraphRestore)
+        [InlineData(true, true)]
+        [InlineData(true, false)]
+        [InlineData(false, false)]
+        public async Task DotnetRestore_OneLinePerRestore(bool useStaticGraphRestore, bool usePackageSpecFactory)
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var testDirectory = pathContext.SolutionRoot;
                 var pkgX = new SimpleTestPackageContext("x", "1.0.0");
@@ -687,7 +739,7 @@ EndGlobal";
                 var projectName1 = "ClassLibrary1";
                 var workingDirectory1 = Path.Combine(testDirectory, projectName1);
                 var projectFile1 = Path.Combine(workingDirectory1, $"{projectName1}.csproj");
-                _msbuildFixture.CreateDotnetNewProject(testDirectory, projectName1, " classlib");
+                _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName1, " classlib", testOutputHelper: _testOutputHelper);
 
                 using (var stream = File.Open(projectFile1, FileMode.Open, FileAccess.ReadWrite))
                 {
@@ -736,28 +788,96 @@ EndGlobal";
                 var slnPath = Path.Combine(pathContext.SolutionRoot, "proj.sln");
                 File.WriteAllText(slnPath, slnContents);
 
+                Dictionary<string, string> environmentVariables = new Dictionary<string, string>
+                {
+                    { PackageSpecFactory.EnvironmentVariableName, usePackageSpecFactory.ToString() }
+                };
+
                 // Act
                 var arguments = $"restore proj.sln {$"--source \"{pathContext.PackageSource}\""}" + (useStaticGraphRestore ? " /p:RestoreUseStaticGraphEvaluation=true" : string.Empty);
-                var result = _msbuildFixture.RunDotnet(pathContext.SolutionRoot, arguments, ignoreExitCode: true);
+                var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, arguments, environmentVariables, testOutputHelper: _testOutputHelper);
 
                 // Assert
-                Assert.True(result.ExitCode == 0, result.AllOutput);
                 Assert.True(2 == result.AllOutput.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries).Length, result.AllOutput);
 
                 // Act - make sure no-op does the same thing.
-                result = _msbuildFixture.RunDotnet(pathContext.SolutionRoot, arguments, ignoreExitCode: true);
+                result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, arguments, testOutputHelper: _testOutputHelper);
 
                 // Assert
-                Assert.True(result.ExitCode == 0, result.AllOutput);
                 Assert.True(2 == result.AllOutput.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries).Length, result.AllOutput);
 
+            }
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void StaticGraphRestore_CanReadSolutionFiles(bool useSlnx)
+        {
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
+            {
+                var testDirectory = pathContext.SolutionRoot;
+
+                var projectName1 = "ClassLibrary1";
+                var workingDirectory1 = Path.Combine(testDirectory, projectName1);
+                var projectFile1 = Path.Combine(workingDirectory1, $"{projectName1}.csproj");
+                _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName1, " classlib", testOutputHelper: _testOutputHelper);
+
+                string slnContents;
+                string slnFileName;
+                if (useSlnx)
+                {
+                    slnContents = @"<Solution>
+  <Project Path=""ClassLibrary1\ClassLibrary1.csproj"" />
+</Solution>
+";
+                    slnFileName = "proj.slnx";
+                }
+                else
+                {
+                    slnContents = @"
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27330.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project(""{9A19103F-16F7-4668-BE54-9A1E7A4F7556}"") = ""ClassLibrary1"", ""ClassLibrary1\ClassLibrary1.csproj"", ""{216FF388-8C16-4AF4-87A8-9094030692FA}""
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{216FF388-8C16-4AF4-87A8-9094030692FA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{216FF388-8C16-4AF4-87A8-9094030692FA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{216FF388-8C16-4AF4-87A8-9094030692FA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{216FF388-8C16-4AF4-87A8-9094030692FA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9A6704E2-6E77-4FF4-9E54-B789D88829DD}
+	EndGlobalSection
+EndGlobal";
+                    slnFileName = "proj.sln";
+                }
+                var slnPath = Path.Combine(pathContext.SolutionRoot, slnFileName);
+                File.WriteAllText(slnPath, slnContents);
+
+                // Act
+                var arguments = $"restore {slnFileName} /p:RestoreUseStaticGraphEvaluation=true";
+                var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, arguments, testOutputHelper: _testOutputHelper);
+
+                // Assert
+                File.Exists(Path.Combine(workingDirectory1, "obj", "project.assets.json")).Should().BeTrue();
             }
         }
 
         [PlatformFact(Platform.Windows)]
         public async Task DotnetRestore_ProjectMovedDoesNotRunRestore()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var tfm = "net472";
                 var testDirectory = pathContext.SolutionRoot;
@@ -774,7 +894,7 @@ EndGlobal";
                 var projectFile1 = Path.Combine(projectDirectory, $"{projectName}.csproj");
                 var movedProjectFile = Path.Combine(movedDirectory, $"{projectName}.csproj");
 
-                _msbuildFixture.CreateDotnetNewProject(testDirectory, projectName, "classlib");
+                _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName, "classlib", testOutputHelper: _testOutputHelper);
 
                 using (var stream = File.Open(projectFile1, FileMode.Open, FileAccess.ReadWrite))
                 {
@@ -795,19 +915,17 @@ EndGlobal";
 
 
                 // Act
-                var result = _msbuildFixture.RunDotnet(projectDirectory, $"build {projectFile1} {$"--source \"{pathContext.PackageSource}\""}", ignoreExitCode: true);
+                var result = _dotnetFixture.RunDotnetExpectSuccess(projectDirectory, $"build {projectFile1} {$"--source \"{pathContext.PackageSource}\""}", testOutputHelper: _testOutputHelper);
 
 
                 // Assert
-                Assert.True(result.ExitCode == 0, result.AllOutput);
                 Assert.Contains("Restored ", result.AllOutput);
 
                 Directory.Move(projectDirectory, movedDirectory);
 
-                result = _msbuildFixture.RunDotnet(movedDirectory, $"build {movedProjectFile} --no-restore", ignoreExitCode: true);
+                result = _dotnetFixture.RunDotnetExpectSuccess(movedDirectory, $"build {movedProjectFile} --no-restore", testOutputHelper: _testOutputHelper);
 
                 // Assert
-                Assert.True(result.ExitCode == 0, result.AllOutput);
                 Assert.DoesNotContain("Restored ", result.AllOutput);
 
             }
@@ -816,9 +934,9 @@ EndGlobal";
         [PlatformFact(Platform.Windows)]
         public void DotnetRestore_PackageDownloadSupported_IsSet()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, "proj");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, "proj", args: "classlib", testOutputHelper: _testOutputHelper);
 
                 var projPath = Path.Combine(pathContext.SolutionRoot, "proj", "proj.csproj");
                 var doc = XDocument.Parse(File.ReadAllText(projPath));
@@ -833,7 +951,7 @@ EndGlobal";
                 File.Delete(projPath);
                 File.WriteAllText(projPath, doc.ToString());
 
-                var result = _msbuildFixture.RunDotnet(pathContext.SolutionRoot, $"msbuild /t:restore {projPath}", ignoreExitCode: true);
+                var result = _dotnetFixture.RunDotnetExpectFailure(pathContext.SolutionRoot, $"msbuild /t:restore {projPath}", testOutputHelper: _testOutputHelper);
 
                 result.ExitCode.Should().Be(1, because: "error text should be displayed");
                 result.AllOutput.Should().Contain(errorText);
@@ -843,7 +961,7 @@ EndGlobal";
         [PlatformFact(Platform.Windows)]
         public async Task DotnetRestore_LockedMode_NewProjectOutOfBox()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
 
                 // Set up solution, and project
@@ -882,7 +1000,7 @@ EndGlobal";
                 //add the packe to the project
                 projectA.AddPackageToAllFrameworks(packageX);
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
                 solution.Save();
                 projectA.Save();
 
@@ -892,7 +1010,7 @@ EndGlobal";
                 var projdir = Path.GetDirectoryName(projectA.ProjectPath);
                 var projfilename = Path.GetFileNameWithoutExtension(projectA.ProjectName);
 
-                _msbuildFixture.RestoreProject(projdir, projfilename, args);
+                _dotnetFixture.RestoreProjectExpectSuccess(projdir, projfilename, args, testOutputHelper: _testOutputHelper);
                 Assert.True(File.Exists(projectA.NuGetLockFileOutputPath));
 
                 //Now set it to locked mode
@@ -902,7 +1020,7 @@ EndGlobal";
                 //Act
                 //Run the restore and it should still properly restore.
                 //Assert within RestoreProject piece
-                _msbuildFixture.RestoreProject(projdir, projfilename, args);
+                _dotnetFixture.RestoreProjectExpectSuccess(projdir, projfilename, args, testOutputHelper: _testOutputHelper);
                 Assert.True(File.Exists(projectA.NuGetLockFileOutputPath));
             }
         }
@@ -910,10 +1028,10 @@ EndGlobal";
         [PlatformFact(Platform.Windows)]
         public void DotnetRestore_LockedMode_Net7WithAndWithoutPlatform()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 // Arrange
-                string tfm = Constants.DefaultTargetFramework.GetShortFolderName();
+                string tfm = TestConstants.DefaultTargetFramework.GetShortFolderName();
                 string projectFileContents =
 @$"<Project Sdk=""Microsoft.NET.Sdk"">
     <PropertyGroup>
@@ -922,18 +1040,18 @@ EndGlobal";
 </Project>";
                 File.WriteAllText(Path.Combine(pathContext.SolutionRoot, "a.csproj"), projectFileContents);
 
-                _msbuildFixture.RestoreProject(pathContext.SolutionRoot, "a", args: "--use-lock-file");
+                _dotnetFixture.RestoreProjectExpectSuccess(pathContext.SolutionRoot, "a", args: "--use-lock-file", testOutputHelper: _testOutputHelper);
                 string lockFilePath = Path.Combine(pathContext.SolutionRoot, PackagesLockFileFormat.LockFileName);
                 Assert.True(File.Exists(lockFilePath));
                 Directory.Delete(Path.Combine(pathContext.SolutionRoot, "obj"), recursive: true);
 
                 // Act
-                _msbuildFixture.RestoreProject(pathContext.SolutionRoot, "a", args: "--locked-mode");
+                _dotnetFixture.RestoreProjectExpectSuccess(pathContext.SolutionRoot, "a", args: "--locked-mode", testOutputHelper: _testOutputHelper);
 
                 // Assert
                 PackagesLockFile lockFile = PackagesLockFileFormat.Read(lockFilePath);
                 Assert.Equal(2, lockFile.Targets.Count);
-                Assert.Contains(lockFile.Targets, target => target.TargetFramework == Constants.DefaultTargetFramework);
+                Assert.Contains(lockFile.Targets, target => target.TargetFramework == TestConstants.DefaultTargetFramework);
                 NuGetFramework targetFramework = NuGetFramework.Parse($"{tfm}-windows7.0");
                 Assert.Contains(lockFile.Targets, target => target.TargetFramework == targetFramework);
             }
@@ -947,7 +1065,7 @@ EndGlobal";
         public async Task DotnetRestore_VerifyPerProjectConfigSourcesAreUsedForChildProjectsWithoutSolutionAsync()
         {
             // Arrange
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
                 var projects = new Dictionary<string, SimpleTestProjectContext>();
@@ -1021,20 +1139,18 @@ EndGlobal";
                 projectRoot.Save();
                 solution.Projects.Add(projectRoot);
 
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
-                var result = _msbuildFixture.RunDotnet(pathContext.SolutionRoot, $"restore {projectRoot.ProjectPath}");
-
-                result.Success.Should().BeTrue(because: result.AllOutput);
+                var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, $"restore {projectRoot.ProjectPath}", testOutputHelper: _testOutputHelper);
 
                 // Assert
                 projects.Should().NotBeEmpty();
 
-                foreach (var letter in projects.Keys)
+                foreach ((var letter, var context) in projects)
                 {
-                    projects[letter].AssetsFile.Should().NotBeNull(because: result.AllOutput);
-                    projects[letter].AssetsFile.Libraries.Select(e => e.Name).Should().Contain($"package{letter}", because: result.AllOutput);
+                    context.AssetsFile.Should().NotBeNull(because: result.AllOutput);
+                    context.AssetsFile.Libraries.Select(e => e.Name).Should().Contain($"package{letter}", because: result.AllOutput);
                 }
             }
         }
@@ -1047,7 +1163,7 @@ EndGlobal";
         public async Task DotnetRestore_VerifyPerProjectConfigSourcesAreUsedForChildProjectsWithSolutionAsync()
         {
             // Arrange
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var projects = new Dictionary<string, SimpleTestProjectContext>();
                 var sources = new List<string>();
@@ -1118,19 +1234,17 @@ EndGlobal";
                     child.Save();
                 }
                 projectRoot.Save();
-                var solutionPath = Path.Combine(pathContext.SolutionRoot, "solution.sln");
-                _msbuildFixture.RunDotnet(pathContext.SolutionRoot, $"new sln -n solution");
+                var solutionPath = Path.Combine(pathContext.SolutionRoot, "solution.slnx");
+                _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, $"new sln -n solution", testOutputHelper: _testOutputHelper);
 
                 foreach (var child in projects.Values)
                 {
-                    _msbuildFixture.RunDotnet(pathContext.SolutionRoot, $"sln {solutionPath} add {child.ProjectPath}");
+                    _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, $"sln {solutionPath} add {child.ProjectPath}", testOutputHelper: _testOutputHelper);
                 }
-                _msbuildFixture.RunDotnet(pathContext.SolutionRoot, $"sln {solutionPath} add {projectRoot.ProjectPath}");
+                _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, $"sln {solutionPath} add {projectRoot.ProjectPath}", testOutputHelper: _testOutputHelper);
 
                 // Act
-                var result = _msbuildFixture.RunDotnet(pathContext.SolutionRoot, $"restore {solutionPath}");
-
-                result.Success.Should().BeTrue(because: result.AllOutput);
+                var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, $"restore {solutionPath}", testOutputHelper: _testOutputHelper);
 
                 // Assert
                 projects.Count.Should().BeGreaterThan(0);
@@ -1146,7 +1260,7 @@ EndGlobal";
         [PlatformFact(Platform.Windows)]
         public async Task DotnetRestore_PackageReferenceWithAliases_ReflectedInTheAssetsFile()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 // Set up solution, and project
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
@@ -1174,14 +1288,14 @@ EndGlobal";
                 //add the packe to the project
                 projectA.AddPackageToAllFrameworks(packageX);
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var args = $" --source \"{pathContext.PackageSource}\" ";
                 var projdir = Path.GetDirectoryName(projectA.ProjectPath);
                 var projfilename = Path.GetFileNameWithoutExtension(projectA.ProjectName);
 
-                _msbuildFixture.RestoreProject(projdir, projfilename, args);
+                _dotnetFixture.RestoreProjectExpectSuccess(projdir, projfilename, args, testOutputHelper: _testOutputHelper);
                 Assert.True(File.Exists(projectA.AssetsFileOutputPath));
 
                 var library = projectA.AssetsFile.Targets.First(e => e.RuntimeIdentifier == null).Libraries.First();
@@ -1194,7 +1308,7 @@ EndGlobal";
         [PlatformFact(Platform.Windows)]
         public async Task DotnetRestore_MultiTargettingWithAliases_Succeeds()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var testDirectory = pathContext.SolutionRoot;
                 var pkgX = new SimpleTestPackageContext("x", "1.0.0");
@@ -1205,7 +1319,7 @@ EndGlobal";
                 var projectName1 = "ClassLibrary1";
                 var workingDirectory1 = Path.Combine(testDirectory, projectName1);
                 var projectFile1 = Path.Combine(workingDirectory1, $"{projectName1}.csproj");
-                _msbuildFixture.CreateDotnetNewProject(testDirectory, projectName1, " classlib");
+                _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName1, " classlib", testOutputHelper: _testOutputHelper);
 
                 using (var stream = File.Open(projectFile1, FileMode.Open, FileAccess.ReadWrite))
                 {
@@ -1237,10 +1351,9 @@ EndGlobal";
                 }
 
                 // Act
-                var result = _msbuildFixture.RunDotnet(pathContext.SolutionRoot, $"restore {projectFile1} {$"--source \"{pathContext.PackageSource}\" /p:AutomaticallyUseReferenceAssemblyPackages=false"}", ignoreExitCode: true);
+                var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, $"restore {projectFile1} {$"--source \"{pathContext.PackageSource}\" /p:AutomaticallyUseReferenceAssemblyPackages=false"}", testOutputHelper: _testOutputHelper);
 
                 // Assert
-                result.ExitCode.Should().Be(0, because: result.AllOutput);
                 var assetsFilePath = Path.Combine(workingDirectory1, "obj", "project.assets.json");
                 File.Exists(assetsFilePath).Should().BeTrue(because: "The assets file needs to exist");
                 var assetsFile = new LockFileFormat().Read(assetsFilePath);
@@ -1251,11 +1364,12 @@ EndGlobal";
             }
         }
 
-#if NET5_0_OR_GREATER
-        [Fact]
-        public async Task DotnetRestore_WithTargetFrameworksProperty_StaticGraphAndRegularRestore_AreEquivalent()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task DotnetRestore_WithTargetFrameworksProperty_StaticGraphAndRegularRestore_AreEquivalent(bool usePackageSpecFactory)
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var testDirectory = pathContext.SolutionRoot;
                 var pkgX = new SimpleTestPackageContext("x", "1.0.0");
@@ -1264,7 +1378,7 @@ EndGlobal";
                 var projectName1 = "ClassLibrary1";
                 var workingDirectory1 = Path.Combine(testDirectory, projectName1);
                 var projectFile1 = Path.Combine(workingDirectory1, $"{projectName1}.csproj");
-                _msbuildFixture.CreateDotnetNewProject(testDirectory, projectName1, " classlib");
+                _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName1, " classlib", testOutputHelper: _testOutputHelper);
 
                 using (var stream = File.Open(projectFile1, FileMode.Open, FileAccess.ReadWrite))
                 {
@@ -1282,11 +1396,15 @@ EndGlobal";
                     ProjectFileUtils.WriteXmlToFile(xml, stream);
                 }
 
+                var environmentVariables = new Dictionary<string, string>
+                {
+                    { PackageSpecFactory.EnvironmentVariableName, usePackageSpecFactory.ToString() }
+                };
+
                 // Preconditions
                 var command = $"restore {projectFile1} {$"--source \"{pathContext.PackageSource}\" /p:AutomaticallyUseReferenceAssemblyPackages=false"}";
-                var result = _msbuildFixture.RunDotnet(pathContext.SolutionRoot, command, ignoreExitCode: true);
+                var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, command, environmentVariables, testOutputHelper: _testOutputHelper);
 
-                result.ExitCode.Should().Be(0, because: result.AllOutput);
                 var assetsFilePath = Path.Combine(workingDirectory1, "obj", "project.assets.json");
                 File.Exists(assetsFilePath).Should().BeTrue(because: "The assets file needs to exist");
                 var assetsFile = new LockFileFormat().Read(assetsFilePath);
@@ -1294,36 +1412,42 @@ EndGlobal";
                 target.Libraries.Should().ContainSingle(e => e.Name.Equals("x"));
 
                 // Act static graph restore
-                result = _msbuildFixture.RunDotnet(pathContext.SolutionRoot, command + " /p:RestoreUseStaticGraphEvaluation=true", ignoreExitCode: true);
+                result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, command + " /p:RestoreUseStaticGraphEvaluation=true", testOutputHelper: _testOutputHelper);
 
                 // Ensure static graph restore no-ops
-                result.ExitCode.Should().Be(0, because: result.AllOutput);
                 result.AllOutput.Should().Contain("All projects are up-to-date for restore.");
             }
         }
 
-        [Fact]
-        public void GenerateRestoreGraphFile_StandardAndStaticGraphRestore_AreEquivalent()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void GenerateRestoreGraphFile_StandardAndStaticGraphRestore_AreEquivalent(bool usePackageSpecFactory)
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var testDirectory = pathContext.SolutionRoot;
                 var projectName1 = "ClassLibrary";
                 var projectName2 = "ConsoleApp";
                 var projectName3 = "WebApplication";
 
-                _msbuildFixture.CreateDotnetNewProject(testDirectory, projectName1, " classlib");
-                _msbuildFixture.CreateDotnetNewProject(testDirectory, projectName2, " console");
-                _msbuildFixture.CreateDotnetNewProject(testDirectory, projectName3, " webapp");
-                _msbuildFixture.RunDotnet(testDirectory, "new sln --name test");
-                _msbuildFixture.RunDotnet(testDirectory, $"sln add {projectName1}");
-                _msbuildFixture.RunDotnet(testDirectory, $"sln add {projectName2}");
-                _msbuildFixture.RunDotnet(testDirectory, $"sln add {projectName3}");
-                var targetPath = Path.Combine(testDirectory, "test.sln");
+                var environmentVariables = new Dictionary<string, string>
+                {
+                    { PackageSpecFactory.EnvironmentVariableName, usePackageSpecFactory.ToString() }
+                };
+
+                _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName1, " classlib", testOutputHelper: _testOutputHelper);
+                _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName2, " console", testOutputHelper: _testOutputHelper);
+                _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName3, " webapp", testOutputHelper: _testOutputHelper);
+                _dotnetFixture.RunDotnetExpectSuccess(testDirectory, "new sln --name test", testOutputHelper: _testOutputHelper);
+                _dotnetFixture.RunDotnetExpectSuccess(testDirectory, $"sln add {projectName1}", testOutputHelper: _testOutputHelper);
+                _dotnetFixture.RunDotnetExpectSuccess(testDirectory, $"sln add {projectName2}", testOutputHelper: _testOutputHelper);
+                _dotnetFixture.RunDotnetExpectSuccess(testDirectory, $"sln add {projectName3}", testOutputHelper: _testOutputHelper);
+                var targetPath = Path.Combine(testDirectory, "test.slnx");
                 var standardDgSpecFile = Path.Combine(pathContext.WorkingDirectory, "standard.dgspec.json");
                 var staticGraphDgSpecFile = Path.Combine(pathContext.WorkingDirectory, "staticGraph.dgspec.json");
-                _msbuildFixture.RunDotnet(testDirectory, $"msbuild /t:GenerateRestoreGraphFile /p:RestoreGraphOutputPath=\"{standardDgSpecFile}\" {targetPath}");
-                _msbuildFixture.RunDotnet(testDirectory, $"msbuild /t:GenerateRestoreGraphFile /p:RestoreGraphOutputPath=\"{staticGraphDgSpecFile}\" /p:RestoreUseStaticGraphEvaluation=true {targetPath}");
+                _dotnetFixture.RunDotnetExpectSuccess(testDirectory, $"msbuild /nologo /t:GenerateRestoreGraphFile /p:RestoreGraphOutputPath=\"{standardDgSpecFile}\" {targetPath}", environmentVariables, testOutputHelper: _testOutputHelper);
+                _dotnetFixture.RunDotnetExpectSuccess(testDirectory, $"msbuild /nologo /t:GenerateRestoreGraphFile /p:RestoreGraphOutputPath=\"{staticGraphDgSpecFile}\" /p:RestoreUseStaticGraphEvaluation=true {targetPath}", environmentVariables, testOutputHelper: _testOutputHelper);
 
                 var regularDgSpec = File.ReadAllText(standardDgSpecFile);
                 var staticGraphDgSpec = File.ReadAllText(staticGraphDgSpecFile);
@@ -1331,16 +1455,71 @@ EndGlobal";
                 regularDgSpec.Should().BeEquivalentTo(staticGraphDgSpec);
             }
         }
-#endif
 
         [Theory]
-        [InlineData("netcoreapp3.0;net5.0;net472", true)]
+        [InlineData(true, true)]
+        [InlineData(true, false)]
+        [InlineData(false, false)]
+        public void GenerateRestoreGraphFile_StandardAndStaticGraphRestore_AuditPropertiesAreSet(bool useStaticGraphRestore, bool usePackageSpecFactory)
+        {
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
+            {
+                var testDirectory = pathContext.SolutionRoot;
+                var projectName1 = "ClassLibrary";
+                var projectName2 = "ConsoleApp";
+                var projectName3 = "WebApplication";
+
+                var environmentVariables = new Dictionary<string, string>
+                {
+                    { PackageSpecFactory.EnvironmentVariableName, usePackageSpecFactory.ToString() }
+                };
+
+                string directoryBuildPropsPath = Path.Combine(testDirectory, "Directory.Build.props");
+                string directoryBuildPropsContent = """
+                    <Project>
+                        <PropertyGroup>
+                            <NuGetAudit>one</NuGetAudit>
+                            <NuGetAuditMode>two</NuGetAuditMode>
+                            <NuGetAuditLevel>three</NuGetAuditLevel>
+                        </PropertyGroup>
+                        <ItemGroup>
+                            <NuGetAuditSuppress Include="four" />
+                        </ItemGroup>
+                    </Project>
+                    """;
+                File.WriteAllText(directoryBuildPropsPath, directoryBuildPropsContent);
+
+                _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName1, " classlib", testOutputHelper: _testOutputHelper);
+                _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName2, " console", testOutputHelper: _testOutputHelper);
+                _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName3, " webapp", testOutputHelper: _testOutputHelper);
+                _dotnetFixture.RunDotnetExpectSuccess(testDirectory, "new sln --name test", testOutputHelper: _testOutputHelper);
+                _dotnetFixture.RunDotnetExpectSuccess(testDirectory, $"sln add {projectName1}", testOutputHelper: _testOutputHelper);
+                _dotnetFixture.RunDotnetExpectSuccess(testDirectory, $"sln add {projectName2}", testOutputHelper: _testOutputHelper);
+                _dotnetFixture.RunDotnetExpectSuccess(testDirectory, $"sln add {projectName3}", testOutputHelper: _testOutputHelper);
+                var targetPath = Path.Combine(testDirectory, "test.slnx");
+                var standardDgSpecFile = Path.Combine(pathContext.WorkingDirectory, "standard.dgspec.json");
+                var staticGraphDgSpecFile = Path.Combine(pathContext.WorkingDirectory, "staticGraph.dgspec.json");
+                _dotnetFixture.RunDotnetExpectSuccess(testDirectory, $"msbuild /nologo /t:GenerateRestoreGraphFile /p:RestoreGraphOutputPath=\"{staticGraphDgSpecFile}\" /p:RestoreUseStaticGraphEvaluation={useStaticGraphRestore} {targetPath}", environmentVariables, testOutputHelper: _testOutputHelper);
+
+                DependencyGraphSpec dgSpec = DependencyGraphSpec.Load(staticGraphDgSpecFile);
+                for (int i = 0; i < dgSpec.Projects.Count; i++)
+                {
+                    dgSpec.Projects[i].RestoreMetadata.RestoreAuditProperties.EnableAudit.Should().Be("one");
+                    dgSpec.Projects[i].RestoreMetadata.RestoreAuditProperties.AuditMode.Should().Be("two");
+                    dgSpec.Projects[i].RestoreMetadata.RestoreAuditProperties.AuditLevel.Should().Be("three");
+                    dgSpec.Projects[i].RestoreMetadata.RestoreAuditProperties.SuppressedAdvisories.Should().BeEquivalentTo(["four"]);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData("netcoreapp3.0;net7.0;net472", true)]
         [InlineData("netcoreapp2.1;netcoreapp3.0;netcoreapp3.1", true)]
-        [InlineData("netcoreapp3.0;net5.0;net472", false)]
+        [InlineData("netcoreapp3.0;net7.0;net472", false)]
         [InlineData("netcoreapp2.1;netcoreapp3.0;netcoreapp3.1", false)]
         public async Task DotnetRestore_MultiTargettingProject_WithDifferentPackageReferences_ForceDoesNotRewriteAssetsFile(string targetFrameworks, bool useStaticGraphRestore)
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var projectName = "ClassLibrary1";
                 var testDirectory = pathContext.SolutionRoot;
@@ -1357,7 +1536,7 @@ EndGlobal";
                 var projectDirectory = Path.Combine(testDirectory, projectName);
                 var projectFilePath = Path.Combine(projectDirectory, $"{projectName}.csproj");
 
-                _msbuildFixture.CreateDotnetNewProject(testDirectory, projectName, "classlib");
+                _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName, "classlib", testOutputHelper: _testOutputHelper);
 
                 using (var stream = File.Open(projectFilePath, FileMode.Open, FileAccess.ReadWrite))
                 {
@@ -1382,14 +1561,12 @@ EndGlobal";
 
                 // Preconditions
                 var additionalArgs = useStaticGraphRestore ? "/p:RestoreUseStaticGraphEvaluation=true" : string.Empty;
-                var result = _msbuildFixture.RunDotnet(projectDirectory, $"restore {projectFilePath} {additionalArgs}", ignoreExitCode: true);
-                result.Success.Should().BeTrue(because: result.AllOutput);
+                var result = _dotnetFixture.RunDotnetExpectSuccess(projectDirectory, $"restore {projectFilePath} {additionalArgs}", testOutputHelper: _testOutputHelper);
                 var assetsFilePath = Path.Combine(projectDirectory, "obj", "project.assets.json");
                 DateTime originalAssetsFileWriteTime = new FileInfo(assetsFilePath).LastWriteTimeUtc;
 
                 //Act
-                result = _msbuildFixture.RunDotnet(projectDirectory, $"restore {projectFilePath} --force {additionalArgs}", ignoreExitCode: true);
-                result.Success.Should().BeTrue(because: result.AllOutput);
+                result = _dotnetFixture.RunDotnetExpectSuccess(projectDirectory, $"restore {projectFilePath} --force {additionalArgs}", testOutputHelper: _testOutputHelper);
                 DateTime forceAssetsFileWriteTime = new FileInfo(assetsFilePath).LastWriteTimeUtc;
 
                 forceAssetsFileWriteTime.Should().Be(originalAssetsFileWriteTime);
@@ -1397,13 +1574,13 @@ EndGlobal";
         }
 
         [Theory]
-        [InlineData("net5.0;netcoreapp3.0;net472", true)]
+        [InlineData("net7.0;netcoreapp3.0;net472", true)]
         [InlineData("netcoreapp3.0;netcoreapp2.1;netcoreapp3.1", true)]
-        [InlineData("net5.0;netcoreapp3.0;net472", false)]
+        [InlineData("net7.0;netcoreapp3.0;net472", false)]
         [InlineData("netcoreapp3.0;netcoreapp2.1;netcoreapp3.1", false)]
         public async Task DotnetRestore_MultiTargettingProject_WithDifferentProjectReferences_ForceDoesNotRewriteAssetsFile(string targetFrameworks, bool useStaticGraphRestore)
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var projectName = "ClassLibrary1";
                 var testDirectory = pathContext.SolutionRoot;
@@ -1414,13 +1591,13 @@ EndGlobal";
 
                 await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, CreateNetstandardCompatiblePackage("x", "1.0.0"));
 
-                _msbuildFixture.CreateDotnetNewProject(testDirectory, projectName, "classlib");
+                _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName, "classlib", testOutputHelper: _testOutputHelper);
 
                 var projectPaths = new List<string>(originalFrameworks.Length);
                 foreach (var originalFramework in originalFrameworks)
                 {
                     var p2pProjectName = $"project-{originalFramework}";
-                    _msbuildFixture.CreateDotnetNewProject(testDirectory, p2pProjectName, "classlib");
+                    _dotnetFixture.CreateDotnetNewProject(testDirectory, p2pProjectName, "classlib", testOutputHelper: _testOutputHelper);
                     var p2pProjectFilePath = Path.Combine(testDirectory, p2pProjectName, $"{p2pProjectName}.csproj");
                     projectPaths.Add(p2pProjectFilePath);
 
@@ -1465,30 +1642,28 @@ EndGlobal";
 
                 // Preconditions
                 var additionalArgs = useStaticGraphRestore ? "/p:RestoreUseStaticGraphEvaluation=true" : string.Empty;
-                var result = _msbuildFixture.RunDotnet(projectDirectory, $"restore {projectFilePath} {additionalArgs}", ignoreExitCode: true);
-                result.Success.Should().BeTrue(because: result.AllOutput);
+                var result = _dotnetFixture.RestoreProjectExpectSuccess(projectDirectory, projectName, $"{additionalArgs} -clp:Verbosity=Minimal;Summary;ShowTimestamp", testOutputHelper: _testOutputHelper);
                 var assetsFilePath = Path.Combine(projectDirectory, "obj", "project.assets.json");
                 DateTime originalAssetsFileWriteTime = new FileInfo(assetsFilePath).LastWriteTimeUtc;
 
                 //Act
-                result = _msbuildFixture.RunDotnet(projectDirectory, $"restore {projectFilePath} --force {additionalArgs}", ignoreExitCode: true);
-                result.Success.Should().BeTrue(because: result.AllOutput);
+                result = _dotnetFixture.RestoreProjectExpectSuccess(projectDirectory, projectName, $"--force {additionalArgs} -clp:Verbosity=Minimal;Summary;ShowTimestamp", testOutputHelper: _testOutputHelper);
                 DateTime forceAssetsFileWriteTime = new FileInfo(assetsFilePath).LastWriteTimeUtc;
 
                 forceAssetsFileWriteTime.Should().Be(originalAssetsFileWriteTime);
             }
         }
 
-        [Fact]
+        [PlatformFact(Platform.Windows, Platform.Linux)]
         public void CollectFrameworkReferences_WithTransitiveFrameworkReferences_ExcludesTransitiveFrameworkReferences()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 // Arrange
                 // Library project with Framework Reference
                 var libraryName = "Library";
                 var libraryProjectFilePath = Path.Combine(Path.Combine(pathContext.SolutionRoot, libraryName), $"{libraryName}.csproj");
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, libraryName, "classlib");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, libraryName, "classlib");
 
                 using (var stream = File.Open(libraryProjectFilePath, FileMode.Open, FileAccess.ReadWrite))
                 {
@@ -1504,12 +1679,11 @@ EndGlobal";
                     ProjectFileUtils.WriteXmlToFile(xml, stream);
                 }
 
-                var packResult = _msbuildFixture.RunDotnet(pathContext.SolutionRoot, $"pack {libraryProjectFilePath} /p:PackageOutputPath=\"{pathContext.PackageSource}\"", ignoreExitCode: true);
-                packResult.Success.Should().BeTrue(because: packResult.AllOutput);
+                var packResult = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, $"pack {libraryProjectFilePath} /p:PackageOutputPath=\"{pathContext.PackageSource}\"", testOutputHelper: _testOutputHelper);
 
                 // Consumer project.
                 var consumerName = "Consumer";
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, consumerName, "console");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, consumerName, "console", testOutputHelper: _testOutputHelper);
 
                 var consumerProjectFilePath = Path.Combine(Path.Combine(pathContext.SolutionRoot, consumerName), $"{consumerName}.csproj");
 
@@ -1535,43 +1709,41 @@ EndGlobal";
 </Project>");
 
                 // Act
-                var buildResult = _msbuildFixture.RunDotnet(pathContext.SolutionRoot, $"build {consumerProjectFilePath}", ignoreExitCode: true);
+                var buildResult = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, $"build {consumerProjectFilePath}", testOutputHelper: _testOutputHelper);
 
                 // Assert
-                buildResult.Success.Should().BeTrue(because: buildResult.AllOutput);
                 buildResult.AllOutput.Should().Contain("Microsoft.NETCore.App");
                 buildResult.AllOutput.Should().NotContain("Microsoft.AspNetCore.App");
             }
         }
 
+        // https://learn.microsoft.com/dotnet/core/tools/dotnet-new-sdk-templates
         [PlatformTheory(Platform.Linux)]
-        [InlineData("worker")]
-        [InlineData("mstest")]
-        [InlineData("nunit")]
-        [InlineData("xunit")]
-        [InlineData("blazorserver")]
+        [InlineData("blazor")]
         [InlineData("blazorwasm")]
-        [InlineData("web")]
-        [InlineData("mvc")]
-        [InlineData("webapp")]
-        [InlineData("angular")]
-        [InlineData("react")]
-        [InlineData("webapi")]
         [InlineData("grpc")]
+        // [InlineData("mstest")] Starting in .NET 9, this template uses a NuGet-based MSBuild project SDK which is only available via nuget.org, while these tests are supposed to be offline.
+        [InlineData("mvc")]
+        [InlineData("nunit")]
+        [InlineData("web")]
+        [InlineData("webapi")]
+        // [InlineData("webapiaot")] Skipping due to failures: https://github.com/NuGet/Home/issues/14523
+        [InlineData("webapp")]
+        [InlineData("worker")]
+        [InlineData("xunit")]
         public void Dotnet_New_Template_Restore_Success(string template)
         {
             // Arrange
-            using (var pathContext = new SimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var projectName = new DirectoryInfo(pathContext.SolutionRoot).Name;
                 var solutionDirectory = pathContext.SolutionRoot;
 
                 // Act
-                CommandRunnerResult newResult = _msbuildFixture.RunDotnet(solutionDirectory, "new " + template);
+                CommandRunnerResult newResult = _dotnetFixture.RunDotnetExpectSuccess(solutionDirectory, "new " + template, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 // Make sure restore action was success.
-                newResult.Success.Should().BeTrue(because: newResult.AllOutput);
                 Assert.True(File.Exists(Path.Combine(solutionDirectory, "obj", "project.assets.json")));
                 // Pack doesn't work because `IsPackable` is set to false.
             }
@@ -1581,7 +1753,7 @@ EndGlobal";
         [PlatformFact(Platform.Windows)]
         public async Task DotnetRestore_SameNameSameKeyProjectPackageReferencing_Succeeds()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 // Set up solution, and project
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
@@ -1619,7 +1791,7 @@ EndGlobal";
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectIntermed);
                 solution.Projects.Add(projectMain);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var args = $" --source \"{pathContext.PackageSource}\" ";
@@ -1627,20 +1799,20 @@ EndGlobal";
 
                 var projdir = Path.GetDirectoryName(projectA.ProjectPath);
                 var projfilename = Path.GetFileNameWithoutExtension(projectA.ProjectName);
-                _msbuildFixture.RestoreProject(projdir, projfilename, args);
+                _dotnetFixture.RestoreProjectExpectSuccess(projdir, projfilename, args, testOutputHelper: _testOutputHelper);
                 Assert.True(File.Exists(projectA.AssetsFileOutputPath));
 
                 projdir = Path.GetDirectoryName(projectIntermed.ProjectPath);
                 projfilename = Path.GetFileNameWithoutExtension(projectIntermed.ProjectName);
-                _msbuildFixture.RestoreProject(projdir, projfilename, args);
+                _dotnetFixture.RestoreProjectExpectSuccess(projdir, projfilename, args, testOutputHelper: _testOutputHelper);
                 Assert.True(File.Exists(projectIntermed.AssetsFileOutputPath));
                 var lockFile = reader.Read(projectIntermed.AssetsFileOutputPath);
                 IList<LockFileTargetLibrary> libraries = lockFile.Targets[0].Libraries;
-                Assert.True(libraries.Any(l => l.Type == "package" && l.Name == projectA.ProjectName));
+                Assert.Contains(libraries, l => l.Type == "package" && l.Name == projectA.ProjectName);
 
                 projdir = Path.GetDirectoryName(projectMain.ProjectPath);
                 projfilename = Path.GetFileNameWithoutExtension(projectMain.ProjectName);
-                _msbuildFixture.RestoreProject(projdir, projfilename, args);
+                _dotnetFixture.RestoreProjectExpectSuccess(projdir, projfilename, args, testOutputHelper: _testOutputHelper);
                 Assert.True(File.Exists(projectMain.AssetsFileOutputPath));
                 lockFile = reader.Read(projectMain.AssetsFileOutputPath);
                 var errors = lockFile.LogMessages.Where(m => m.Level == LogLevel.Error);
@@ -1649,23 +1821,24 @@ EndGlobal";
                 Assert.Equal(0, warnings.Count());
                 libraries = lockFile.Targets[0].Libraries;
                 Assert.Equal(2, libraries.Count);
-                Assert.True(libraries.Any(l => l.Type == "project" && l.Name == projectA.ProjectName));
-                Assert.True(libraries.Any(l => l.Type == "project" && l.Name == projectIntermed.ProjectName));
+                Assert.Contains(libraries, l => l.Type == "project" && l.Name == projectA.ProjectName);
+                Assert.Contains(libraries, l => l.Type == "project" && l.Name == projectIntermed.ProjectName);
             }
         }
 
         [Theory]
         [InlineData("PackageReference", "NU1504")]
         [InlineData("PackageDownload", "NU1505")]
+        [InlineData("NuGetAuditSuppress", "NU1508")]
         public async Task DotnetRestore_WithDuplicateItem_WarnsWithLogCode(string itemName, string logCode)
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var projectName = "ClassLibrary1";
                 var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
                 var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
 
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0", testOutputHelper: _testOutputHelper);
 
                 var packageContext = CreateNetstandardCompatiblePackage("X", "1.0.0");
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(pathContext.PackageSource, packageContext);
@@ -1690,12 +1863,14 @@ EndGlobal";
                         string.Empty,
                         new Dictionary<string, string>(),
                         attributes200);
+
+                    ProjectFileUtils.AddProperty(xml, "AutomaticallyUseReferenceAssemblyPackages", bool.FalseString);
+
                     ProjectFileUtils.WriteXmlToFile(xml, stream);
                 }
 
-                var result = _msbuildFixture.RunDotnet(workingDirectory, $"restore {projectFile}", ignoreExitCode: true);
+                var result = _dotnetFixture.RunDotnetExpectSuccess(workingDirectory, $"restore {projectFile}", testOutputHelper: _testOutputHelper);
 
-                result.Success.Should().BeTrue();
                 result.AllOutput.Should().Contain(logCode);
                 result.AllOutput.Contains("X [1.0.0], X [2.0.0]");
             }
@@ -1704,13 +1879,13 @@ EndGlobal";
         [Fact]
         public async Task DotnetRestore_WithDuplicatePackageVersion_WarnsWithNU1506()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var projectName = "ClassLibrary1";
                 var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
                 var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
 
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0", testOutputHelper: _testOutputHelper);
 
                 var packageContext = CreateNetstandardCompatiblePackage("X", "1.0.0");
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(pathContext.PackageSource, packageContext);
@@ -1740,12 +1915,13 @@ EndGlobal";
                          new Dictionary<string, string>(),
                          new Dictionary<string, string>());
 
+                    ProjectFileUtils.AddProperty(xml, "AutomaticallyUseReferenceAssemblyPackages", bool.FalseString);
+
                     ProjectFileUtils.WriteXmlToFile(xml, stream);
                 }
 
-                var result = _msbuildFixture.RunDotnet(workingDirectory, $"restore {projectFile}", ignoreExitCode: true);
+                var result = _dotnetFixture.RunDotnetExpectSuccess(workingDirectory, $"restore {projectFile}", testOutputHelper: _testOutputHelper);
 
-                result.Success.Should().BeTrue();
                 result.AllOutput.Should().Contain("NU1506");
                 result.AllOutput.Contains("X [1.0.0], X [2.0.0]");
             }
@@ -1756,13 +1932,13 @@ EndGlobal";
         [InlineData("PackageDownload", "NU1505")]
         public async Task DotnetRestore_WithDuplicateItem_WithTreatWarningsAsErrors_ErrorsWithLogCode(string itemName, string logCode)
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var projectName = "ClassLibrary1";
                 var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
                 var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
 
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0", testOutputHelper: _testOutputHelper);
 
                 var packageContext = CreateNetstandardCompatiblePackage("X", "1.0.0");
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(pathContext.PackageSource, packageContext);
@@ -1796,9 +1972,8 @@ EndGlobal";
                     ProjectFileUtils.WriteXmlToFile(xml, stream);
                 }
 
-                var result = _msbuildFixture.RunDotnet(workingDirectory, $"restore {projectFile}", ignoreExitCode: true);
+                var result = _dotnetFixture.RunDotnetExpectFailure(workingDirectory, $"restore {projectFile}", testOutputHelper: _testOutputHelper);
 
-                result.Success.Should().BeFalse();
                 result.AllOutput.Should().Contain(logCode);
                 result.AllOutput.Contains("X [1.0.0], X [2.0.0]");
             }
@@ -1807,11 +1982,11 @@ EndGlobal";
         [Fact]
         public async Task WhenPackageSourceMappingConfiguredInstallsPackageReferencesAndDownloadsFromExpectedSources_Success()
         {
-            using var pathContext = _msbuildFixture.CreateSimpleTestPathContext();
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
 
             // Set up solution, and project
             var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
-            var projFramework = FrameworkConstants.CommonFrameworks.Net50;
+            var projFramework = FrameworkConstants.CommonFrameworks.Net70;
             var projectPackageName = "projectA";
             var projectA = SimpleTestProjectContext.CreateNETCore(
                projectPackageName,
@@ -1833,7 +2008,7 @@ EndGlobal";
             projectA.AddPackageDownloadToAllFrameworks(packageK100);
 
             solution.Projects.Add(projectA);
-            solution.Create(pathContext.SolutionRoot);
+            solution.Create();
 
             var packageSource2 = new DirectoryInfo(Path.Combine(pathContext.WorkingDirectory, "source2"));
             packageSource2.Create();
@@ -1874,9 +2049,8 @@ EndGlobal";
             File.WriteAllText(Path.Combine(pathContext.SolutionRoot, projectA.ProjectName, "NuGet.Config"), configFile);
 
             //Act
-            var result = _msbuildFixture.RunDotnet(pathContext.WorkingDirectory, $"restore {projectA.ProjectPath} -v n", ignoreExitCode: true);
+            var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.WorkingDirectory, $"restore {projectA.ProjectPath} -v n", testOutputHelper: _testOutputHelper);
 
-            result.Success.Should().BeTrue(because: result.AllOutput);
             Assert.Contains($"Installed {packageX} {version} from {packageSource2.FullName}", result.AllOutput);
             Assert.Contains($"Installed {packageZ} {version} from {pathContext.PackageSource}", result.AllOutput);
             Assert.Contains($"Installed {packageY} {version} from {pathContext.PackageSource}", result.AllOutput);
@@ -1886,11 +2060,11 @@ EndGlobal";
         [Fact]
         public async Task WhenPackageSourceMappingConfiguredAndNoMatchingSourceFound_Fails()
         {
-            using var pathContext = _msbuildFixture.CreateSimpleTestPathContext();
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
 
             // Set up solution, and project
             var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
-            var projFramework = FrameworkConstants.CommonFrameworks.Net50;
+            var projFramework = FrameworkConstants.CommonFrameworks.Net70;
             var projectPackageName = "projectA";
             var projectA = SimpleTestProjectContext.CreateNETCore(
                projectPackageName,
@@ -1912,7 +2086,7 @@ EndGlobal";
             projectA.AddPackageDownloadToAllFrameworks(packageK100);
 
             solution.Projects.Add(projectA);
-            solution.Create(pathContext.SolutionRoot);
+            solution.Create();
 
             var packageSource2 = new DirectoryInfo(Path.Combine(pathContext.WorkingDirectory, "source2"));
             packageSource2.Create();
@@ -1951,9 +2125,8 @@ EndGlobal";
             File.WriteAllText(Path.Combine(pathContext.SolutionRoot, projectA.ProjectName, "NuGet.Config"), configFile);
 
             //Act
-            var result = _msbuildFixture.RunDotnet(pathContext.WorkingDirectory, $"restore {projectA.ProjectPath} -v n", ignoreExitCode: true);
+            var result = _dotnetFixture.RunDotnetExpectFailure(pathContext.WorkingDirectory, $"restore {projectA.ProjectPath} -v n", testOutputHelper: _testOutputHelper);
 
-            result.Success.Should().BeFalse(because: result.AllOutput);
             Assert.Contains($"NU1100: Unable to resolve '{packageZ} (>= {version})'", result.AllOutput);
             Assert.Contains($"NU1100: Unable to resolve '{packageK} (= {version})'", result.AllOutput);
             Assert.Contains($"Installed {packageX} {version} from {packageSource2.FullName}", result.AllOutput);
@@ -1963,11 +2136,11 @@ EndGlobal";
         [Fact]
         public async Task DotnetRestore_PackageSourceMappingFilter_WithAllSourceOptions_Succeed()
         {
-            using var pathContext = _msbuildFixture.CreateSimpleTestPathContext();
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
 
             // Set up solution, and project
             var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
-            var projFramework = FrameworkConstants.CommonFrameworks.Net50;
+            var projFramework = FrameworkConstants.CommonFrameworks.Net70;
             var projectPackageName = "projectA";
             var projectA = SimpleTestProjectContext.CreateNETCore(
                projectPackageName,
@@ -1989,7 +2162,7 @@ EndGlobal";
             projectA.AddPackageDownloadToAllFrameworks(packageK100);
 
             solution.Projects.Add(projectA);
-            solution.Create(pathContext.SolutionRoot);
+            solution.Create();
 
             var packageSource2 = new DirectoryInfo(Path.Combine(pathContext.WorkingDirectory, "source2"));
             packageSource2.Create();
@@ -2031,9 +2204,8 @@ EndGlobal";
             File.WriteAllText(Path.Combine(pathContext.SolutionRoot, projectA.ProjectName, "NuGet.Config"), configFile);
 
             //Act
-            var result = _msbuildFixture.RunDotnet(pathContext.WorkingDirectory, $"restore {projectA.ProjectPath} --source {packageSource2.FullName};{pathContext.PackageSource} -v d", ignoreExitCode: true);
+            var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.WorkingDirectory, $"restore {projectA.ProjectPath} --source {packageSource2.FullName};{pathContext.PackageSource} --verbosity detailed", testOutputHelper: _testOutputHelper);
 
-            result.Success.Should().BeTrue(because: result.AllOutput);
             Assert.Contains($"Installed {packageX} {version} from {packageSource2.FullName}", result.AllOutput);
             Assert.Contains($"Installed {packageZ} {version} from {pathContext.PackageSource}", result.AllOutput);
             Assert.Contains($"Installed {packageY} {version} from {pathContext.PackageSource}", result.AllOutput);
@@ -2047,11 +2219,11 @@ EndGlobal";
         [Fact]
         public async Task DotnetRestore_PackageSourceMappingFilter_WithNotEnoughSourceOptions_Fails()
         {
-            using var pathContext = _msbuildFixture.CreateSimpleTestPathContext();
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
 
             // Set up solution, and project
             var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
-            var projFramework = FrameworkConstants.CommonFrameworks.Net50;
+            var projFramework = FrameworkConstants.CommonFrameworks.Net70;
             var projectPackageName = "projectA";
             var projectA = SimpleTestProjectContext.CreateNETCore(
                projectPackageName,
@@ -2069,7 +2241,7 @@ EndGlobal";
             projectA.AddPackageToAllFrameworks(packageY100);
 
             solution.Projects.Add(projectA);
-            solution.Create(pathContext.SolutionRoot);
+            solution.Create();
 
             var packageSource2 = new DirectoryInfo(Path.Combine(pathContext.WorkingDirectory, "source2"));
             packageSource2.Create();
@@ -2105,9 +2277,8 @@ EndGlobal";
             File.WriteAllText(Path.Combine(pathContext.SolutionRoot, projectA.ProjectName, "NuGet.Config"), configFile);
 
             //Act
-            var result = _msbuildFixture.RunDotnet(pathContext.WorkingDirectory, $"restore {projectA.ProjectPath} --source {packageSource2.FullName} -v d", ignoreExitCode: true);
+            var result = _dotnetFixture.RunDotnetExpectFailure(pathContext.WorkingDirectory, $"restore {projectA.ProjectPath} --source {packageSource2.FullName} --verbosity detailed", testOutputHelper: _testOutputHelper);
 
-            result.Success.Should().BeFalse(because: result.AllOutput);
             Assert.Contains("Package source mapping match not found for package ID 'Y'", result.AllOutput);
             Assert.Contains($"NU1100: Unable to resolve '{packageY} (>= {version})'", result.AllOutput);
             Assert.Contains($"Package source mapping matches found for package ID 'X' are: 'source2'.", result.AllOutput);
@@ -2117,11 +2288,11 @@ EndGlobal";
         [Fact]
         public async Task WhenPackageSourceMappingIsEnabled_InstallsPackagesFromRestoreSources_Success()
         {
-            using var pathContext = _msbuildFixture.CreateSimpleTestPathContext();
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
 
             // Set up solution, and project
             var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
-            var projFramework = CommonFrameworks.Net50;
+            var projFramework = CommonFrameworks.Net70;
             var projectPackageName = "projectA";
             var projectA = SimpleTestProjectContext.CreateNETCore(
                projectPackageName,
@@ -2144,7 +2315,7 @@ EndGlobal";
             projectA.Properties.Add("RestoreSources", $"{packageSource2.FullName};{pathContext.PackageSource}");
 
             solution.Projects.Add(projectA);
-            solution.Create(pathContext.SolutionRoot);
+            solution.Create();
 
             await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
@@ -2176,10 +2347,9 @@ EndGlobal";
             File.WriteAllText(Path.Combine(pathContext.SolutionRoot, projectA.ProjectName, "NuGet.Config"), configFile);
 
             //Act
-            var result = _msbuildFixture.RunDotnet(pathContext.WorkingDirectory, $"restore {projectA.ProjectPath} -v d", ignoreExitCode: true);
+            var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.WorkingDirectory, $"restore {projectA.ProjectPath} --verbosity normal", testOutputHelper: _testOutputHelper);
 
             // Assert
-            result.Success.Should().BeTrue(because: result.AllOutput);
             Assert.Contains($"Installed {packageY} {version} from {pathContext.PackageSource}", result.AllOutput);
             Assert.Contains($"Installed {packageX} {version} from {packageSource2.FullName}", result.AllOutput);
         }
@@ -2187,11 +2357,11 @@ EndGlobal";
         [Fact]
         public async Task WhenPackageSourceMappingIsEnabled_CannotInstallsPackagesFromRestoreSources_Fails()
         {
-            using var pathContext = _msbuildFixture.CreateSimpleTestPathContext();
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
 
             // Set up solution, and project
             var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
-            var projFramework = CommonFrameworks.Net50;
+            var projFramework = CommonFrameworks.Net70;
             var projectPackageName = "projectA";
             var projectA = SimpleTestProjectContext.CreateNETCore(
                projectPackageName,
@@ -2215,7 +2385,7 @@ EndGlobal";
             projectA.Properties.Add("RestoreSources", $"{pathContext.PackageSource}");
 
             solution.Projects.Add(projectA);
-            solution.Create(pathContext.SolutionRoot);
+            solution.Create();
 
             await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
@@ -2247,25 +2417,25 @@ EndGlobal";
             File.WriteAllText(Path.Combine(pathContext.SolutionRoot, projectA.ProjectName, "NuGet.Config"), configFile);
 
             //Act
-            var result = _msbuildFixture.RunDotnet(pathContext.WorkingDirectory, $"restore {projectA.ProjectPath} -v d", ignoreExitCode: true);
+            var result = _dotnetFixture.RunDotnetExpectFailure(pathContext.WorkingDirectory, $"restore {projectA.ProjectPath} --verbosity detailed", testOutputHelper: _testOutputHelper);
 
             //Assert
-            result.Success.Should().BeFalse(because: result.AllOutput);
             Assert.Contains("Package source mapping match not found for package ID 'X'", result.AllOutput);
             Assert.Contains($"NU1100: Unable to resolve '{packageX} (>= {version})'", result.AllOutput);
             Assert.Contains($"Package source mapping matches found for package ID 'Y' are: 'source'.", result.AllOutput);
             Assert.Contains($"Installed {packageY} {version} from {pathContext.PackageSource}", result.AllOutput);
         }
 
+        [Fact]
         public async Task DotnetRestore_WithDuplicatePackageVersion_WithTreatWarningsAsErrors_ErrorsWithNU1506()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var projectName = "ClassLibrary1";
                 var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
                 var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
 
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0", testOutputHelper: _testOutputHelper);
 
                 var packageContext = CreateNetstandardCompatiblePackage("X", "1.0.0");
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(pathContext.PackageSource, packageContext);
@@ -2277,7 +2447,7 @@ EndGlobal";
                             <PackageVersion Include=""X"" Version=""[2.0.0]"" />
                         </ItemGroup>
                     </Project>";
-                File.WriteAllText(Path.Combine(workingDirectory, $"Directory.Packages.Props"), directoryPackagesPropsContent);
+                File.WriteAllText(Path.Combine(workingDirectory, $"Directory.Packages.props"), directoryPackagesPropsContent);
 
                 using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
                 {
@@ -2303,10 +2473,9 @@ EndGlobal";
                     ProjectFileUtils.WriteXmlToFile(xml, stream);
                 }
 
-                var result = _msbuildFixture.RunDotnet(workingDirectory, $"restore {projectFile}", ignoreExitCode: true);
+                var result = _dotnetFixture.RunDotnetExpectFailure(workingDirectory, $"restore {projectFile}", testOutputHelper: _testOutputHelper);
 
-                result.Success.Should().BeFalse();
-                result.Errors.Should().Contain("NU1506");
+                result.AllOutput.Should().Contain("NU1506");
                 result.AllOutput.Contains("X [1.0.0], X [2.0.0]");
             }
         }
@@ -2314,7 +2483,7 @@ EndGlobal";
         [Fact]
         public async Task DotnetRestore_WithDuplicatePackageReference_RespectsContinueOnError()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var projectName = "ClassLibrary1";
                 var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
@@ -2322,7 +2491,7 @@ EndGlobal";
                 var package = CreateNetstandardCompatiblePackage("X", "1.0.0");
                 await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, package);
 
-                _msbuildFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0");
+                _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.0", testOutputHelper: _testOutputHelper);
 
                 using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
                 {
@@ -2346,12 +2515,14 @@ EndGlobal";
                         string.Empty,
                         new Dictionary<string, string>(),
                         attributes200);
+
+                    ProjectFileUtils.AddProperty(xml, "AutomaticallyUseReferenceAssemblyPackages", bool.FalseString);
+
                     ProjectFileUtils.WriteXmlToFile(xml, stream);
                 }
 
-                var result = _msbuildFixture.RunDotnet(workingDirectory, $"restore {projectFile} /p:ContinueOnError=true", ignoreExitCode: true);
+                var result = _dotnetFixture.RunDotnetExpectSuccess(workingDirectory, $"restore {projectFile} /p:ContinueOnError=true", testOutputHelper: _testOutputHelper);
 
-                result.Success.Should().BeTrue(because: result.AllOutput);
                 result.AllOutput.Should().Contain("warning NU1504");
                 result.AllOutput.Contains("X [1.0.0], X [2.0.0]");
             }
@@ -2360,12 +2531,12 @@ EndGlobal";
         [Fact]
         public async Task WhenPackageReferrenceHasRelatedFiles_RelatedPropertyIsApplied_Success()
         {
-            using var pathContext = _msbuildFixture.CreateSimpleTestPathContext();
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
 
             // Set up solution, and project
             // projectA -> projectB -> packageX -> packageY
             var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
-            var framework = "net5.0";
+            var framework = "net7.0";
             var projectA = SimpleTestProjectContext.CreateNETCore(
                "projectA",
                pathContext.SolutionRoot,
@@ -2382,21 +2553,21 @@ EndGlobal";
 
             var packageX = new SimpleTestPackageContext("packageX", "1.0.0");
             packageX.Files.Clear();
-            packageX.AddFile($"lib/net5.0/X.dll");
-            packageX.AddFile($"lib/net5.0/X.xml");
+            packageX.AddFile($"lib/net7.0/X.dll");
+            packageX.AddFile($"lib/net7.0/X.xml");
 
             var packageY = new SimpleTestPackageContext("packageY", "1.0.0");
             packageY.Files.Clear();
             // Compile
-            packageY.AddFile("ref/net5.0/Y.dll");
-            packageY.AddFile("ref/net5.0/Y.xml");
+            packageY.AddFile("ref/net7.0/Y.dll");
+            packageY.AddFile("ref/net7.0/Y.xml");
             // Runtime
-            packageY.AddFile("lib/net5.0/Y.dll");
-            packageY.AddFile("lib/net5.0/Y.pdb");
-            packageY.AddFile("lib/net5.0/Y.xml");
+            packageY.AddFile("lib/net7.0/Y.dll");
+            packageY.AddFile("lib/net7.0/Y.pdb");
+            packageY.AddFile("lib/net7.0/Y.xml");
             // Embed
-            packageY.AddFile("embed/net5.0/Y.dll");
-            packageY.AddFile("embed/net5.0/Y.pdb");
+            packageY.AddFile("embed/net7.0/Y.dll");
+            packageY.AddFile("embed/net7.0/Y.pdb");
 
             packageX.Dependencies.Add(packageY);
             await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, packageX, packageY);
@@ -2404,7 +2575,7 @@ EndGlobal";
 
             solution.Projects.Add(projectA);
             solution.Projects.Add(projectB);
-            solution.Create(pathContext.SolutionRoot);
+            solution.Create();
 
             await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
@@ -2413,11 +2584,9 @@ EndGlobal";
                     packageY);
 
             //Act
-            var result = _msbuildFixture.RunDotnet(pathContext.WorkingDirectory, $"restore {projectA.ProjectPath} -v n", ignoreExitCode: true);
+            var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.WorkingDirectory, $"restore {projectA.ProjectPath} -v n", testOutputHelper: _testOutputHelper);
 
             // Assert
-            result.Success.Should().BeTrue(because: result.AllOutput);
-
             var assetsFile = projectA.AssetsFile;
             Assert.NotNull(assetsFile);
             var targets = assetsFile.GetTarget(framework, null);
@@ -2425,18 +2594,18 @@ EndGlobal";
             // packageX (top-level package reference): "related" property is applied correctly for Compile & Runtime
             var packageXLib = targets.Libraries.Single(x => x.Name.Equals("packageX"));
             var packageXCompile = packageXLib.CompileTimeAssemblies;
-            AssertRelatedProperty(packageXCompile, $"lib/net5.0/X.dll", ".xml");
+            AssertRelatedProperty(packageXCompile, $"lib/net7.0/X.dll", ".xml");
             var packageXRuntime = packageXLib.RuntimeAssemblies;
-            AssertRelatedProperty(packageXRuntime, $"lib/net5.0/X.dll", ".xml");
+            AssertRelatedProperty(packageXRuntime, $"lib/net7.0/X.dll", ".xml");
 
             // packageY (transitive package reference): "related" property is applied for Compile, Runtime and Embeded.
             var packageYLib = targets.Libraries.Single(x => x.Name.Equals("packageY"));
             var packageYCompile = packageYLib.CompileTimeAssemblies;
-            AssertRelatedProperty(packageYCompile, $"ref/net5.0/Y.dll", ".xml");
+            AssertRelatedProperty(packageYCompile, $"ref/net7.0/Y.dll", ".xml");
             var packageYRuntime = packageYLib.RuntimeAssemblies;
-            AssertRelatedProperty(packageYRuntime, $"lib/net5.0/Y.dll", ".pdb;.xml");
+            AssertRelatedProperty(packageYRuntime, $"lib/net7.0/Y.dll", ".pdb;.xml");
             var packageYEmbed = packageYLib.EmbedAssemblies;
-            AssertRelatedProperty(packageYEmbed, $"embed/net5.0/Y.dll", ".pdb");
+            AssertRelatedProperty(packageYEmbed, $"embed/net7.0/Y.dll", ".pdb");
 
             // projectB (project reference): "related" property is NOT applied for Compile or Runtime.
             var projectBLib = targets.Libraries.Single(x => x.Name.Equals("projectB"));
@@ -2457,7 +2626,7 @@ EndGlobal";
         [Fact]
         public async Task DotnetRestore_CentralPackageVersionManagement_NoOps()
         {
-            using (var pathContext = _msbuildFixture.CreateSimpleTestPathContext())
+            using (SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext())
             {
                 var testDirectory = pathContext.SolutionRoot;
                 var pkgX = new SimpleTestPackageContext("x", "1.0.0");
@@ -2466,12 +2635,12 @@ EndGlobal";
                 var projectName1 = "ClassLibrary1";
                 var workingDirectory1 = Path.Combine(testDirectory, projectName1);
                 var projectFile1 = Path.Combine(workingDirectory1, $"{projectName1}.csproj");
-                _msbuildFixture.CreateDotnetNewProject(testDirectory, projectName1, " classlib");
+                _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName1, " classlib", testOutputHelper: _testOutputHelper);
 
                 using (var stream = File.Open(projectFile1, FileMode.Open, FileAccess.ReadWrite))
                 {
                     var xml = XDocument.Load(stream);
-                    ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", Constants.DefaultTargetFramework.GetShortFolderName());
+                    ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", TestConstants.DefaultTargetFramework.GetShortFolderName());
                     ProjectFileUtils.AddProperty(xml, "ManagePackageVersionsCentrally", "true");
 
                     ProjectFileUtils.AddItem(
@@ -2504,20 +2673,18 @@ EndGlobal";
 
                 // Preconditions
                 var command = $"restore {projectFile1} {$"--source \"{pathContext.PackageSource}\" /p:AutomaticallyUseReferenceAssemblyPackages=false"}";
-                var result = _msbuildFixture.RunDotnet(pathContext.SolutionRoot, command, ignoreExitCode: true);
+                var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, command, testOutputHelper: _testOutputHelper);
 
-                result.ExitCode.Should().Be(0, because: result.AllOutput);
                 var assetsFilePath = Path.Combine(workingDirectory1, "obj", "project.assets.json");
                 File.Exists(assetsFilePath).Should().BeTrue(because: "The assets file needs to exist");
                 var assetsFile = new LockFileFormat().Read(assetsFilePath);
-                LockFileTarget target = assetsFile.Targets.Single(e => e.TargetFramework.Equals(Constants.DefaultTargetFramework) && string.IsNullOrEmpty(e.RuntimeIdentifier));
+                LockFileTarget target = assetsFile.Targets.Single(e => e.TargetFramework.Equals(TestConstants.DefaultTargetFramework) && string.IsNullOrEmpty(e.RuntimeIdentifier));
                 target.Libraries.Should().ContainSingle(e => e.Name.Equals("x"));
 
                 // Act another restore
-                result = _msbuildFixture.RunDotnet(pathContext.SolutionRoot, command, ignoreExitCode: true);
+                result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, command, testOutputHelper: _testOutputHelper);
 
                 // Ensure restore no-ops
-                result.ExitCode.Should().Be(0, because: result.AllOutput);
                 result.AllOutput.Should().Contain("All projects are up-to-date for restore.");
             }
         }
@@ -2528,9 +2695,9 @@ EndGlobal";
         public async Task DotnetRestore_WithMultiTargetingProject_WhenTargetFrameworkIsSpecifiedOnTheCommandline_RestoresForSingleFramework(bool useStaticGraphEvaluation)
         {
             // Arrange
-            using var pathContext = _msbuildFixture.CreateSimpleTestPathContext();
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
             await SimpleTestPackageUtility.CreateFolderFeedV3Async(pathContext.PackageSource, new SimpleTestPackageContext("x", "1.0.0"));
-            string tfm = Constants.DefaultTargetFramework.GetShortFolderName();
+            string tfm = TestConstants.DefaultTargetFramework.GetShortFolderName();
             string projectFileContents =
 @$"<Project Sdk=""Microsoft.NET.Sdk"">
     <PropertyGroup>
@@ -2545,10 +2712,9 @@ EndGlobal";
 
             // Act
             var additionalArgs = useStaticGraphEvaluation ? "/p:RestoreUseStaticGraphEvaluation=true" : string.Empty;
-            var result = _msbuildFixture.RunDotnet(pathContext.SolutionRoot, args: $"restore a.csproj {additionalArgs} /p:TargetFramework=\"{tfm}\"", ignoreExitCode: true);
+            var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, args: $"restore a.csproj {additionalArgs} /p:TargetFramework=\"{tfm}\"", testOutputHelper: _testOutputHelper);
 
             // Assert
-            result.Success.Should().BeTrue(because: result.AllOutput);
             var assetsFilePath = Path.Combine(pathContext.SolutionRoot, "obj", LockFileFormat.AssetsFileName);
             var format = new LockFileFormat();
             LockFile assetsFile = format.Read(assetsFilePath);
@@ -2567,7 +2733,7 @@ EndGlobal";
         public async Task DotnetRestore_WithMultiTargetingProject_WhenTargetFrameworkIsSpecifiedOnTheCommandline_AndPerFrameworkProjectReferencesAreUsed_RestoresForSingleFramework(bool useStaticGraphEvaluation)
         {
             // Arrange
-            using var pathContext = _msbuildFixture.CreateSimpleTestPathContext();
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
             await SimpleTestPackageUtility.CreateFolderFeedV3Async(pathContext.PackageSource, new SimpleTestPackageContext("x", "1.0.0"));
             var projectAWorkingDirectory = Path.Combine(pathContext.SolutionRoot, "a");
             var projectBWorkingDirectory = Path.Combine(pathContext.SolutionRoot, "b");
@@ -2575,7 +2741,7 @@ EndGlobal";
             Directory.CreateDirectory(projectBWorkingDirectory);
             var projectAPath = Path.Combine(projectAWorkingDirectory, "a.csproj");
             var projectBPath = Path.Combine(projectBWorkingDirectory, "b.csproj");
-            string tfm = Constants.DefaultTargetFramework.GetShortFolderName();
+            string tfm = TestConstants.DefaultTargetFramework.GetShortFolderName();
             string projectAFileContents =
 @$"<Project Sdk=""Microsoft.NET.Sdk"">
     <PropertyGroup>
@@ -2596,10 +2762,9 @@ EndGlobal";
 
             // Act
             var additionalArgs = useStaticGraphEvaluation ? "/p:RestoreUseStaticGraphEvaluation=true" : string.Empty;
-            var result = _msbuildFixture.RunDotnet(projectAWorkingDirectory, args: $"restore a.csproj /p:TargetFramework=\"{tfm}\" /p:RestoreRecursive=\"false\" {additionalArgs}", ignoreExitCode: true);
+            var result = _dotnetFixture.RunDotnetExpectSuccess(projectAWorkingDirectory, args: $"restore a.csproj /p:TargetFramework=\"{tfm}\" /p:RestoreRecursive=\"false\" {additionalArgs}", testOutputHelper: _testOutputHelper);
 
             // Assert
-            result.Success.Should().BeTrue(because: result.AllOutput);
             var assetsFilePath = Path.Combine(projectAWorkingDirectory, "obj", LockFileFormat.AssetsFileName);
             var format = new LockFileFormat();
             LockFile assetsFile = format.Read(assetsFilePath);
@@ -2618,10 +2783,10 @@ EndGlobal";
         public async Task DotnetRestore_WithMultiTargettingProject_WhenTargetFrameworkIsSpecifiedOnTheCommandline_PerFrameworkProjectReferencesAreUsed_RestoresForSingleFramework(bool useStaticGraphEvaluation)
         {
             // Arrange
-            using var pathContext = _msbuildFixture.CreateSimpleTestPathContext();
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
             var additionalSource = Path.Combine(pathContext.SolutionRoot, "additionalSource");
             await SimpleTestPackageUtility.CreateFolderFeedV3Async(additionalSource, new SimpleTestPackageContext("x", "1.0.0"));
-            string tfm = Constants.DefaultTargetFramework.GetShortFolderName();
+            string tfm = TestConstants.DefaultTargetFramework.GetShortFolderName();
             string projectFileContents =
 @$"<Project Sdk=""Microsoft.NET.Sdk"">
     <PropertyGroup>
@@ -2637,10 +2802,9 @@ EndGlobal";
 
             // Act
             var additionalArgs = useStaticGraphEvaluation ? "/p:RestoreUseStaticGraphEvaluation=true" : string.Empty;
-            var result = _msbuildFixture.RunDotnet(pathContext.SolutionRoot, args: $"restore a.csproj /p:TargetFramework=\"{tfm}\" {additionalArgs}", ignoreExitCode: true);
+            var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, args: $"restore a.csproj /p:TargetFramework=\"{tfm}\" {additionalArgs}", testOutputHelper: _testOutputHelper);
 
             // Assert
-            result.Success.Should().BeTrue(because: result.AllOutput);
             var assetsFilePath = Path.Combine(pathContext.SolutionRoot, "obj", LockFileFormat.AssetsFileName);
             var format = new LockFileFormat();
             LockFile assetsFile = format.Read(assetsFilePath);
@@ -2659,6 +2823,1894 @@ EndGlobal";
             allTargets.Should().Contain(condition);
         }
 
+        // https://github.com/NuGet/Home/issues/13829
+        [PlatformFact(SkipPlatform = Platform.Linux)]
+        public async Task DotnetRestore_WithServerProvidingAuditData_RestoreTaskReturnsCountProperties()
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+            using var mockServer = new FileSystemBackedV3MockServer(pathContext.PackageSource, sourceReportsVulnerabilities: true);
+
+            mockServer.Vulnerabilities.Add(
+                "Insecure.Package",
+                new List<(Uri, PackageVulnerabilitySeverity, VersionRange)> {
+                    (new Uri("https://contoso.test/advisories/12346"), PackageVulnerabilitySeverity.Critical, VersionRange.Parse("[1.0.0, 2.0.0)"))
+                });
+            pathContext.Settings.RemoveSource("source");
+            pathContext.Settings.AddSource("source", mockServer.ServiceIndexUri, allowInsecureConnectionsValue: "true");
+
+            var packageA1 = new SimpleTestPackageContext()
+            {
+                Id = "packageA",
+                Version = "1.0.0"
+            };
+
+            await SimpleTestPackageUtility.CreatePackagesAsync(
+                pathContext.PackageSource,
+                packageA1);
+
+            var targetFramework = TestConstants.DefaultTargetFramework.GetShortFolderName();
+            string csprojContents = GetProjectFileForRestoreTaskOutputTests(targetFramework);
+            var csprojPath = Path.Combine(pathContext.SolutionRoot, "test.csproj");
+            File.WriteAllText(csprojPath, csprojContents);
+
+            mockServer.Start();
+
+            // Act & Assert
+
+            // First restore is fresh, so should not be skipped (no-op), and should run audit
+            _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, "restore -p:ExpectedRestoreProjectCount=1 -p:ExpectedRestoreSkippedCount=0 -p:ExpectedRestoreProjectsAuditedCount=1");
+
+            // Second restore is no-op, so should be skipped, and audit not run
+            _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, "restore -p:ExpectedRestoreProjectCount=1 -p:ExpectedRestoreSkippedCount=1 -p:ExpectedRestoreProjectsAuditedCount=0");
+
+            mockServer.Stop();
+        }
+
+        [Theory]
+        [InlineData("../")]
+        [InlineData("../ contoso")]
+        [InlineData("Some.Package/../contoso.json")]
+        public void DotnetRestore_WithInvalidPackageId_Fails(string id)
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+            using var mockServer = new FileSystemBackedV3MockServer(pathContext.PackageSource);
+            pathContext.Settings.RemoveSource("source");
+            pathContext.Settings.AddSource("source", mockServer.ServiceIndexUri, allowInsecureConnectionsValue: "true");
+            var targetFramework = TestConstants.DefaultTargetFramework.GetShortFolderName();
+            string csprojContents = GetProjectFileForRestoreTaskOutputTestsFromPackageId(targetFramework, id);
+            var csprojPath = Path.Combine(pathContext.SolutionRoot, "test.csproj");
+            File.WriteAllText(csprojPath, csprojContents);
+            mockServer.Start();
+
+            // Act & Assert
+            var result = _dotnetFixture.RunDotnetExpectFailure(pathContext.SolutionRoot, "restore");
+            result.AllOutput.Should().Contain("NU1017");
+            result.AllOutput.Should().Contain(string.Format("Invalid package id : `{0}`", id));
+
+            mockServer.Stop();
+        }
+
+        [Fact]
+        public async Task DotnetRestore_With100CharsPackageID_Succeeds()
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+            using var mockServer = new FileSystemBackedV3MockServer(pathContext.PackageSource);
+            pathContext.Settings.RemoveSource("source");
+            pathContext.Settings.AddSource("source", mockServer.ServiceIndexUri, allowInsecureConnectionsValue: "true");
+            string packageid = new string('a', 200);
+            var packageA1 = new SimpleTestPackageContext()
+            {
+                Id = packageid,
+                Version = "1.0.0"
+            };
+
+            await SimpleTestPackageUtility.CreatePackagesAsync(
+                pathContext.PackageSource,
+                packageA1);
+
+            var targetFramework = TestConstants.DefaultTargetFramework.GetShortFolderName();
+            string csprojContents = GetProjectFileForRestoreTaskOutputTestsFromPackageId(targetFramework, packageid);
+            var csprojPath = Path.Combine(pathContext.SolutionRoot, "test.csproj");
+            File.WriteAllText(csprojPath, csprojContents);
+
+            mockServer.Start();
+
+            // Act & Assert
+            var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, "restore -p:ExpectedRestoreProjectCount=1 -p:ExpectedRestoreSkippedCount=0  -p:ExpectedRestoreProjectsAuditedCount=0");
+
+            mockServer.Stop();
+        }
+
+        [Fact]
+        public async Task DotnetRestore_WithServerWithoutAuditData_RestoreTaskReturnsCountProperties()
+        {
+            // Arrange
+            using var pathContext = new SimpleTestPathContext();
+
+            var packageA1 = new SimpleTestPackageContext()
+            {
+                Id = "packageA",
+                Version = "1.0.0"
+            };
+
+            await SimpleTestPackageUtility.CreatePackagesAsync(
+                pathContext.PackageSource,
+                packageA1);
+
+            var targetFramework = TestConstants.DefaultTargetFramework.GetShortFolderName();
+            string csprojContents = GetProjectFileForRestoreTaskOutputTests(targetFramework);
+            var csprojPath = Path.Combine(pathContext.SolutionRoot, "test.csproj");
+            File.WriteAllText(csprojPath, csprojContents);
+
+            // Act & Assert
+
+            // First restore is fresh, so should not be skipped (no-op), and should run audit
+            _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, "restore -p:ExpectedRestoreProjectCount=1 -p:ExpectedRestoreSkippedCount=0 -p:ExpectedRestoreProjectsAuditedCount=0");
+
+            // Second restore is no-op, so should be skipped, and audit not run
+            _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, "restore -p:ExpectedRestoreProjectCount=1 -p:ExpectedRestoreSkippedCount=1 -p:ExpectedRestoreProjectsAuditedCount=0");
+        }
+
+        private string GetProjectFileForRestoreTaskOutputTests(string targetFramework)
+        {
+            return GetProjectFileForRestoreTaskOutputTestsFromPackageId(targetFramework, "packageA");
+        }
+
+        private string GetProjectFileForRestoreTaskOutputTestsFromPackageId(string targetFramework, string packageId)
+        {
+            string csprojContents = @$"<Project Sdk=""Microsoft.NET.Sdk"">
+    <PropertyGroup>
+        <TargetFramework>{targetFramework}</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include=""{packageId}"" Version=""1.0.0"" />
+    </ItemGroup>
+
+    <Target Name=""AssertRestoreTaskOutputProperties""
+            AfterTargets=""Restore"">
+        <Error
+            Condition="" '$(RestoreProjectCount)' != '$(ExpectedRestoreProjectCount)' ""
+            Text=""RestoreProjectCount did not have the expected value. Expected: $(ExpectedRestoreProjectCount) Found: $(RestoreProjectCount)"" />
+        <Error
+            Condition="" '$(RestoreSkippedCount)' != '$(ExpectedRestoreSkippedCount)' ""
+            Text=""RestoreSkippedCount did not have the expected value. Expected: $(ExpectedRestoreSkippedCount) Found: $(RestoreSkippedCount)"" />
+        <Error
+            Condition="" '$(RestoreProjectsAuditedCount)' != '$(ExpectedRestoreProjectsAuditedCount)' ""
+            Text=""RestoreProjectsAuditedCount did not have the expected value. Expected: $(ExpectedRestoreProjectsAuditedCount) Found: $(RestoreProjectsAuditedCount)"" />
+    </Target>
+</Project>";
+            return csprojContents;
+        }
+
+        /// ClassLibrary1 -> X 1.0.0 -> Y 1.0.0
+        /// Prune Y 2.0.0
+        [Theory]
+        [InlineData(true, true)]
+        [InlineData(true, false)]
+        [InlineData(false, false)]
+        public async Task DotnetRestore_WithConditionalPrunedPackageReference_Succeeds(bool isStaticGraphRestore, bool usePackageSpecFactory)
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            var projectName = "ClassLibrary1";
+            var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
+            var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
+            string tfm = TestConstants.DefaultTargetFramework.GetShortFolderName();
+            await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, new SimpleTestPackageContext("X", "1.0.0") { Dependencies = [new SimpleTestPackageContext("Y", "1.0.0")] });
+
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.1", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", $"netstandard2.1;{tfm}");
+                ProjectFileUtils.AddProperty(xml, "RestoreEnablePackagePruning", "true");
+
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "X",
+                    string.Empty,
+                    [],
+                    new Dictionary<string, string>() { { "Version", "1.0.0" } });
+
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PrunePackageReference",
+                    "Y",
+                    string.Empty,
+                    [],
+                    new Dictionary<string, string>() { { "Version", "2.0.0" } });
+
+                ProjectFileUtils.AddProperty(xml, "RestoreEnablePackagePruning", "false", "'$(TargetFramework)' == 'netstandard2.1'");
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            var environmentVariables = new Dictionary<string, string>()
+            {
+                { PackageSpecFactory.EnvironmentVariableName, usePackageSpecFactory.ToString() }
+            };
+
+            var result = _dotnetFixture.RunDotnetExpectSuccess(workingDirectory, $"restore {projectFile}" + (isStaticGraphRestore ? " /p:RestoreUseStaticGraphEvaluation=true" : string.Empty), environmentVariables, testOutputHelper: _testOutputHelper);
+            result.AllOutput.Should().NotContain("Warning");
+            string assetsFilePath = Path.Combine(workingDirectory, "obj", LockFileFormat.AssetsFileName);
+            LockFile assetsFile = new LockFileFormat().Read(assetsFilePath);
+            assetsFile.Targets.Should().HaveCount(2);
+            assetsFile.PackageSpec.TargetFrameworks.Should().HaveCount(2);
+            assetsFile.PackageSpec.TargetFrameworks[0].TargetAlias.Should().Be(tfm);
+            assetsFile.PackageSpec.TargetFrameworks[0].PackagesToPrune.Should().NotBeEmpty();
+            assetsFile.PackageSpec.TargetFrameworks[1].TargetAlias.Should().Be("netstandard2.1");
+            assetsFile.PackageSpec.TargetFrameworks[1].PackagesToPrune.Should().BeEmpty();
+
+            // netstandard2.1
+            assetsFile.Targets[0].TargetFramework.Should().Be(assetsFile.PackageSpec.TargetFrameworks[1].FrameworkName);
+            assetsFile.Targets[0].Libraries.Should().Contain(e => e.Name.Equals("X"));
+            assetsFile.Targets[0].Libraries.Should().Contain(e => e.Name.Equals("Y"));
+            //net9.0
+            assetsFile.Targets[1].Libraries.Should().Contain(e => e.Name.Equals("X"));
+            assetsFile.Targets[1].Libraries.Should().NotContain(e => e.Name.Equals("Y"));
+        }
+
+        [Theory]
+        [InlineData("10.0.100", null, true)]
+        [InlineData("9.0.100", "true", true)]
+        [InlineData("10.0.100", null, false)]
+        [InlineData("9.0.100", "true", false)]
+        public async Task DotnetRestore_SDKAnalysisLevelAndRestoreEnablePackagePruning_EnablesPruning(string sdkAnalysisLevel, string restoreEnablePackagePruning, bool useStaticGraphRestore)
+        {
+            string tfm = TestConstants.DefaultTargetFramework.GetShortFolderName();
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            var projectName = "ClassLibrary1";
+            var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
+            var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
+            await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, new SimpleTestPackageContext("X", "1.0.0") { Dependencies = [new SimpleTestPackageContext("Y", "1.0.0")] });
+
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.1", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFramework", tfm);
+                ProjectFileUtils.AddProperty(xml, "SdkAnalysisLevel", sdkAnalysisLevel);
+                if (!string.IsNullOrEmpty(restoreEnablePackagePruning))
+                {
+                    ProjectFileUtils.AddProperty(xml, "RestoreEnablePackagePruning", restoreEnablePackagePruning);
+                }
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "X",
+                    string.Empty,
+                    [],
+                    new Dictionary<string, string>() { { "Version", "1.0.0" } });
+
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PrunePackageReference",
+                    "Y",
+                    string.Empty,
+                    [],
+                    new Dictionary<string, string>() { { "Version", "2.0.0" } });
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            var result = _dotnetFixture.RunDotnetExpectSuccess(workingDirectory, $"restore {projectFile} {(useStaticGraphRestore ? " /p:RestoreUseStaticGraphEvaluation=true" : string.Empty)}", testOutputHelper: _testOutputHelper);
+            result.AllOutput.Should().NotContain("Warning");
+            string assetsFilePath = Path.Combine(workingDirectory, "obj", LockFileFormat.AssetsFileName);
+            LockFile assetsFile = new LockFileFormat().Read(assetsFilePath);
+            assetsFile.Targets.Should().HaveCount(1);
+            assetsFile.PackageSpec.TargetFrameworks.Should().HaveCount(1);
+            assetsFile.PackageSpec.TargetFrameworks[0].TargetAlias.Should().Be(tfm);
+            assetsFile.PackageSpec.TargetFrameworks[0].PackagesToPrune.Should().NotBeEmpty();
+            assetsFile.Targets[0].Libraries.Should().Contain(e => e.Name.Equals("X"));
+            assetsFile.Targets[0].Libraries.Should().NotContain(e => e.Name.Equals("Y"));
+        }
+
+        [Theory]
+        [InlineData("9.0.100", null)]
+        [InlineData("10.0.100", "false")]
+        public async Task DotnetRestore_SDKAnalysisLevelAndRestoreEnablePackagePruning_DisablesPruning(string sdkAnalysisLevel, string restoreEnablePackagePruning)
+        {
+            string tfm = TestConstants.DefaultTargetFramework.GetShortFolderName();
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            var projectName = "ClassLibrary1";
+            var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
+            var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
+            await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, new SimpleTestPackageContext("X", "1.0.0") { Dependencies = [new SimpleTestPackageContext("Y", "1.0.0")] });
+
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.1", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFramework", tfm);
+                ProjectFileUtils.AddProperty(xml, "SdkAnalysisLevel", sdkAnalysisLevel);
+                if (!string.IsNullOrEmpty(restoreEnablePackagePruning))
+                {
+                    ProjectFileUtils.AddProperty(xml, "RestoreEnablePackagePruning", restoreEnablePackagePruning);
+                }
+
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "X",
+                    string.Empty,
+                    [],
+                    new Dictionary<string, string>() { { "Version", "1.0.0" } });
+
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PrunePackageReference",
+                    "Y",
+                    string.Empty,
+                    [],
+                    new Dictionary<string, string>() { { "Version", "2.0.0" } });
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            var result = _dotnetFixture.RunDotnetExpectSuccess(workingDirectory, $"restore {projectFile}", testOutputHelper: _testOutputHelper);
+            result.AllOutput.Should().NotContain("Warning");
+            string assetsFilePath = Path.Combine(workingDirectory, "obj", LockFileFormat.AssetsFileName);
+            LockFile assetsFile = new LockFileFormat().Read(assetsFilePath);
+            assetsFile.Targets.Should().HaveCount(1);
+            assetsFile.PackageSpec.TargetFrameworks.Should().HaveCount(1);
+            assetsFile.PackageSpec.TargetFrameworks[0].TargetAlias.Should().Be(tfm);
+            assetsFile.PackageSpec.TargetFrameworks[0].PackagesToPrune.Should().BeEmpty();
+            assetsFile.Targets[0].Libraries.Should().Contain(e => e.Name.Equals("X"));
+            assetsFile.Targets[0].Libraries.Should().Contain(e => e.Name.Equals("Y"));
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task DotnetRestore_WithMultiTargetedProjectAndSDKAnalysisLevel_EnablesForAllFrameworks(bool useStaticGraphRestore)
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            LockFile assetsFile = await DotnetRestore_MultiTargetedProjectWithSDKAnalysisLevel(pathContext, "10.0.100", useStaticGraphRestore);
+
+            assetsFile.PackageSpec.TargetFrameworks[0].PackagesToPrune.Should().NotBeEmpty();
+            assetsFile.Targets[0].Libraries.Should().Contain(e => e.Name.Equals("X"));
+            assetsFile.Targets[0].Libraries.Should().NotContain(e => e.Name.Equals("Y"));
+
+            assetsFile.PackageSpec.TargetFrameworks[1].PackagesToPrune.Should().NotBeEmpty();
+            assetsFile.Targets[1].Libraries.Should().Contain(e => e.Name.Equals("X"));
+            assetsFile.Targets[1].Libraries.Should().NotContain(e => e.Name.Equals("Y"));
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task DotnetRestore_WithMultiTargetedProjectAndSDKAnalysisLevel_DisablesForAllFrameworks(bool useStaticGraphRestore)
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            LockFile assetsFile = await DotnetRestore_MultiTargetedProjectWithSDKAnalysisLevel(pathContext, "9.0.100", useStaticGraphRestore);
+
+            assetsFile.PackageSpec.TargetFrameworks[0].PackagesToPrune.Should().BeEmpty();
+            assetsFile.Targets[0].Libraries.Should().Contain(e => e.Name.Equals("X"));
+            assetsFile.Targets[0].Libraries.Should().Contain(e => e.Name.Equals("Y"));
+
+            assetsFile.PackageSpec.TargetFrameworks[1].PackagesToPrune.Should().BeEmpty();
+            assetsFile.Targets[1].Libraries.Should().Contain(e => e.Name.Equals("X"));
+            assetsFile.Targets[1].Libraries.Should().Contain(e => e.Name.Equals("Y"));
+        }
+
+        private async Task<LockFile> DotnetRestore_MultiTargetedProjectWithSDKAnalysisLevel(SimpleTestPathContext pathContext, string sdkAnalysisLevel, bool useStaticGraphRestore)
+        {
+            string tfm = TestConstants.DefaultTargetFramework.GetShortFolderName();
+            var projectName = "ClassLibrary1";
+            var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
+            var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
+            await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, new SimpleTestPackageContext("X", "1.0.0") { Dependencies = [new SimpleTestPackageContext("Y", "1.0.0")] });
+
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.1", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", $"{tfm};netstandard2.1");
+                ProjectFileUtils.AddProperty(xml, "SdkAnalysisLevel", sdkAnalysisLevel);
+
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "X",
+                    string.Empty,
+                    [],
+                    new Dictionary<string, string>() { { "Version", "1.0.0" } });
+
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PrunePackageReference",
+                    "Y",
+                    string.Empty,
+                    [],
+                    new Dictionary<string, string>() { { "Version", "2.0.0" } });
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            var result = _dotnetFixture.RunDotnetExpectSuccess(workingDirectory, $"restore {projectFile} {(useStaticGraphRestore ? " /p:RestoreUseStaticGraphEvaluation=true" : string.Empty)}", testOutputHelper: _testOutputHelper);
+            result.AllOutput.Should().NotContain("Warning");
+            string assetsFilePath = Path.Combine(workingDirectory, "obj", LockFileFormat.AssetsFileName);
+            LockFile assetsFile = new LockFileFormat().Read(assetsFilePath);
+            assetsFile.Targets.Should().HaveCount(2);
+            assetsFile.PackageSpec.TargetFrameworks.Should().HaveCount(2);
+            return assetsFile;
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task DotnetRestore_WithMultiTargetedProjectAndRestoreEnablePackagePruning_CanConditionallyDisablePruning(bool useStaticGraphRestore)
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            LockFile assetsFile = await DotnetRestore_MultiTargetedProjectWithRestoreEnablePackagePruning(pathContext, "false", "'$(TargetFramework)' == 'netstandard2.1'", useStaticGraphRestore);
+
+            assetsFile.PackageSpec.TargetFrameworks[0].PackagesToPrune.Should().NotBeEmpty();
+            var firstTarget = assetsFile.GetTarget(assetsFile.PackageSpec.TargetFrameworks[0].TargetAlias, string.Empty);
+            firstTarget.Libraries.Should().Contain(e => e.Name.Equals("X"));
+            firstTarget.Libraries.Should().NotContain(e => e.Name.Equals("Y"));
+
+            assetsFile.PackageSpec.TargetFrameworks[1].PackagesToPrune.Should().BeEmpty();
+            var secondTarget = assetsFile.GetTarget(assetsFile.PackageSpec.TargetFrameworks[1].TargetAlias, string.Empty);
+            secondTarget.Libraries.Should().Contain(e => e.Name.Equals("X"));
+            secondTarget.Libraries.Should().Contain(e => e.Name.Equals("Y"));
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task DotnetRestore_WithMultiTargetedProjectAndRestoreEnablePackagePruning_CanDisablePruningForAll(bool useStaticGraphRestore)
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            LockFile assetsFile = await DotnetRestore_MultiTargetedProjectWithRestoreEnablePackagePruning(pathContext, "false", null, useStaticGraphRestore);
+
+            assetsFile.PackageSpec.TargetFrameworks[0].PackagesToPrune.Should().BeEmpty();
+            var firstTarget = assetsFile.GetTarget(assetsFile.PackageSpec.TargetFrameworks[0].TargetAlias, string.Empty);
+            firstTarget.Libraries.Should().Contain(e => e.Name.Equals("X"));
+            firstTarget.Libraries.Should().Contain(e => e.Name.Equals("Y"));
+
+            assetsFile.PackageSpec.TargetFrameworks[1].PackagesToPrune.Should().BeEmpty();
+            var secondTarget = assetsFile.GetTarget(assetsFile.PackageSpec.TargetFrameworks[1].TargetAlias, string.Empty);
+            secondTarget.Libraries.Should().Contain(e => e.Name.Equals("X"));
+            secondTarget.Libraries.Should().Contain(e => e.Name.Equals("Y"));
+        }
+
+        private async Task<LockFile> DotnetRestore_MultiTargetedProjectWithRestoreEnablePackagePruning(SimpleTestPathContext pathContext, string restoreEnablePackagePruning, string condition, bool useStaticGraphRestore)
+        {
+            string tfm = TestConstants.DefaultTargetFramework.GetShortFolderName();
+            var projectName = "ClassLibrary1";
+            var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
+            var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
+            await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, new SimpleTestPackageContext("X", "1.0.0") { Dependencies = [new SimpleTestPackageContext("Y", "1.0.0")] });
+
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib -f netstandard2.1", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", $"{tfm};netstandard2.1");
+                if (!string.IsNullOrEmpty(restoreEnablePackagePruning))
+                {
+                    ProjectFileUtils.AddProperty(xml, "RestoreEnablePackagePruning", restoreEnablePackagePruning, condition);
+                }
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "X",
+                    string.Empty,
+                    [],
+                    new Dictionary<string, string>() { { "Version", "1.0.0" } });
+
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PrunePackageReference",
+                    "Y",
+                    string.Empty,
+                    [],
+                    new Dictionary<string, string>() { { "Version", "2.0.0" } });
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            var result = _dotnetFixture.RunDotnetExpectSuccess(workingDirectory, $"restore {projectFile} {(useStaticGraphRestore ? " /p:RestoreUseStaticGraphEvaluation=true" : string.Empty)}", testOutputHelper: _testOutputHelper);
+            result.AllOutput.Should().NotContain("Warning");
+            string assetsFilePath = Path.Combine(workingDirectory, "obj", LockFileFormat.AssetsFileName);
+            LockFile assetsFile = new LockFileFormat().Read(assetsFilePath);
+            assetsFile.Targets.Should().HaveCount(2);
+            assetsFile.PackageSpec.TargetFrameworks.Should().HaveCount(2);
+            return assetsFile;
+        }
+
+        [Theory]
+        [InlineData(false, false)] // Standard task-based restore
+        [InlineData(true, true)]   // Static graph with PackageSpecFactory
+        [InlineData(true, false)]  // Static graph with legacy PackageSpec construction
+        public async Task DotnetRestore_MultiTargetedProjectWithAnalyzerAssetsEnabledForOneFramework_WritesAnalyzersForAllFrameworks(
+            bool useStaticGraphRestore,
+            bool usePackageSpecFactory)
+        {
+            // Arrange
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            const string PackageId = "AnalyzerPackage";
+            const string AnalyzerPath = "analyzers/dotnet/cs/Analyzer.dll";
+            var package = new SimpleTestPackageContext(PackageId, "1.0.0")
+            {
+                UseDefaultRuntimeAssemblies = false,
+            };
+            package.AddFile(AnalyzerPath);
+            package.AddFile("lib/netstandard2.0/Package.dll");
+            await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, package);
+
+            var projectName = "AnalyzerProject";
+            var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
+            var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(
+                pathContext.SolutionRoot,
+                projectName,
+                "classlib",
+                testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", "net10.0;net11.0");
+                ProjectFileUtils.AddProperty(
+                    xml,
+                    "RestoreEnableAnalyzerAssets",
+                    bool.TrueString,
+                    " '$(TargetFramework)' == 'net11.0' ");
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    PackageId,
+                    string.Empty,
+                    [],
+                    new Dictionary<string, string>() { { "Version", package.Version } });
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            var environmentVariables = new Dictionary<string, string>()
+            {
+                { PackageSpecFactory.EnvironmentVariableName, usePackageSpecFactory.ToString() }
+            };
+            string staticGraphArgument = useStaticGraphRestore
+                ? " /p:RestoreUseStaticGraphEvaluation=true"
+                : string.Empty;
+
+            // Act
+            _dotnetFixture.RunDotnetExpectSuccess(
+                workingDirectory,
+                $"restore {projectFile} /p:DisableImplicitFrameworkReferences=true{staticGraphArgument}",
+                environmentVariables,
+                testOutputHelper: _testOutputHelper);
+
+            // Assert
+            string assetsFilePath = Path.Combine(workingDirectory, "obj", LockFileFormat.AssetsFileName);
+            LockFile assetsFile = new LockFileFormat().Read(assetsFilePath);
+            assetsFile.PackageSpec.RestoreMetadata.RestoreEnableAnalyzerAssets.Should().BeTrue();
+
+            foreach (string targetAlias in new[] { "net10.0", "net11.0" })
+            {
+                LockFileTarget target = assetsFile.GetTarget(targetAlias, string.Empty);
+                LockFileTargetLibrary targetLibrary = target.Libraries.Single(
+                    library => library.Name.Equals(PackageId, StringComparison.OrdinalIgnoreCase));
+                targetLibrary.AnalyzerAssets.Should().ContainSingle(
+                    analyzer => analyzer.Path.Equals(AnalyzerPath, StringComparison.Ordinal));
+            }
+        }
+
+        [Theory]
+        [InlineData(null, "all")]
+        [InlineData("direct", "direct")]
+        [InlineData("all", "all")]
+        public void DotnetRestore_WritesExpectedAuditModeInAssetsFile(string userAuditMode, string expectedAuditMode)
+        {
+            // Arrange
+            using var pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            var projectName = "AuditProject";
+            var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
+            var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
+
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, $"classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+
+                if (!string.IsNullOrEmpty(userAuditMode))
+                {
+                    ProjectFileUtils.AddProperty(xml, "NuGetAuditMode", userAuditMode);
+                }
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Act
+            _dotnetFixture.RunDotnetExpectSuccess(workingDirectory, $"restore {projectFile}", testOutputHelper: _testOutputHelper);
+
+            var assetsFilePath = Path.Combine(workingDirectory, "obj", "project.assets.json");
+            LockFile assetsFile = new LockFileFormat().Read(assetsFilePath);
+
+            // Assert
+            assetsFile.PackageSpec.RestoreMetadata.RestoreAuditProperties.AuditMode.Should().Be(expectedAuditMode);
+        }
+
+        [InlineData("9.0.100", "warning NU1604")]
+        [InlineData("10.0.100", "error NU1015")]
+        [Theory]
+        public void DotnetRestore_PackageReferenceWithNoVersion_OutputExpectedDiagnostic(string sdkAnalysisLevel, string expected)
+        {
+            // Arrange
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            var projectName = "ClassLibrary1";
+            var workingDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
+            var projectFile = Path.Combine(workingDirectory, $"{projectName}.csproj");
+
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, "classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.AddProperty(xml, "SdkAnalysisLevel", sdkAnalysisLevel);
+
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "X",
+                    string.Empty,
+                    [],
+                    []);
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            var result = _dotnetFixture.RunDotnetExpectFailure(workingDirectory, $"restore {projectFile}", testOutputHelper: _testOutputHelper);
+            result.Output.Should().Contain(expected);
+        }
+
+        // P1 (banana) -> X
+        // P1 (apple) -> Y
+        [PlatformFact(Platform.Windows)]
+        public async Task DotnetRestore_WithAliasesOfTheSameFramework_UsesCorrectPackages()
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            var testDirectory = pathContext.SolutionRoot;
+            var pkgX = new SimpleTestPackageContext("x", "1.0.0");
+            var pkgY = new SimpleTestPackageContext("y", "1.0.0");
+            await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, pkgX, pkgY);
+
+            string apple = nameof(apple);
+            string banana = nameof(banana);
+            var projectName = "ClassLibrary1";
+            var projectDirectory = Path.Combine(testDirectory, projectName);
+            var projectFile = Path.Combine(projectDirectory, $"{projectName}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName, " classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", $"{apple};{banana}");
+
+                var attributes = new Dictionary<string, string>() { { "Version", "1.0.0" } };
+
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "x",
+                    banana,
+                    [],
+                    attributes);
+
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "y",
+                    apple,
+                    [],
+                    attributes);
+
+                var appleProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" }
+                    };
+                ProjectFileUtils.AddProperties(xml, appleProps, $" '$(TargetFramework)' == '{apple}' ");
+
+                var bananaProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" }
+                    };
+                ProjectFileUtils.AddProperties(xml, bananaProps, $" '$(TargetFramework)' == '{banana}' ");
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Act
+            var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, $"restore {projectFile}", testOutputHelper: _testOutputHelper);
+
+            // Assert
+            var assetsFilePath = Path.Combine(projectDirectory, "obj", "project.assets.json");
+            var assetsFile = new LockFileFormat().Read(assetsFilePath);
+            LockFileTarget bananaTarget = assetsFile.GetTarget(banana, null);
+            bananaTarget.Libraries.Should().ContainSingle(e => e.Name.Equals("x"));
+            bananaTarget.Libraries.Should().NotContain(e => e.Name.Equals("y"));
+            LockFileTarget appleTarget = assetsFile.GetTarget(apple, null);
+            appleTarget.Libraries.Should().NotContain(e => e.Name.Equals("x"));
+            appleTarget.Libraries.Should().ContainSingle(e => e.Name.Equals("y"));
+        }
+
+        // P (apple)  -> Net472 package, with ATF, succeeds
+        // P (banana) -> Net472 package, with ATF, fails
+        [PlatformFact(Platform.Windows)]
+        public async Task DotnetRestore_WithAliasesOfSameFramework_WithAssetTargetFallback_OneSucceedsOneFails()
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+
+            // Create a package that only supports net472
+            var pkgNet472Only = new SimpleTestPackageContext("Net472Package", "1.0.0");
+            pkgNet472Only.AddFile("lib/net472/Net472Package.dll");
+            await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, pkgNet472Only);
+
+            string apple = nameof(apple);
+            string banana = nameof(banana);
+            var projectName = "ClassLibrary1";
+            var projectDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
+            var projectFile = Path.Combine(projectDirectory, $"{projectName}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, " classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", $"{apple};{banana}");
+
+                var attributes = new Dictionary<string, string>() { { "Version", "1.0.0" } };
+
+                // Add package reference to both frameworks
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "Net472Package",
+                    string.Empty,
+                    [],
+                    attributes);
+
+                // Apple framework props - with AssetTargetFallback
+                var appleProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" },
+                    };
+                ProjectFileUtils.AddProperties(xml, appleProps, $" '$(TargetFramework)' == '{apple}' ");
+
+                // Banana framework props - without AssetTargetFallback (should fail)
+                var bananaProps = new Dictionary<string, string>
+                    {
+                        { "DisableImplicitAssetTargetFallback", "true" },
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" }
+                    };
+                ProjectFileUtils.AddProperties(xml, bananaProps, $" '$(TargetFramework)' == '{banana}' ");
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Act
+            var result = _dotnetFixture.RunDotnetExpectFailure(pathContext.SolutionRoot, $"restore {projectFile}", testOutputHelper: _testOutputHelper);
+
+            // Assert
+            var assetsFilePath = Path.Combine(projectDirectory, "obj", "project.assets.json");
+            var assetsFile = new LockFileFormat().Read(assetsFilePath);
+
+            // Apple alias should succeed with the package
+            LockFileTarget appleTarget = assetsFile.GetTarget(apple, null);
+            appleTarget.Libraries.Should().ContainSingle(e => e.Name.Equals("Net472Package"));
+
+            // Banana alias should have no compatible assets
+            LockFileTarget bananaTarget = assetsFile.GetTarget(banana, null);
+            // The package will be in the graph but with no compatible assets
+            var bananaLib = bananaTarget.Libraries.Single(e => e.Name.Equals("Net472Package"));
+            bananaLib.CompileTimeAssemblies.Should().BeEmpty();
+            bananaLib.RuntimeAssemblies.Should().BeEmpty();
+
+            assetsFile.LogMessages.Should().HaveCount(2);
+            assetsFile.LogMessages[0].Level.Should().Be(LogLevel.Warning);
+            assetsFile.LogMessages[0].Code.Should().Be(NuGetLogCode.NU1701);
+            assetsFile.LogMessages[0].TargetGraphs.Should().BeEquivalentTo([apple]);
+
+            assetsFile.LogMessages[1].Level.Should().Be(LogLevel.Error);
+            assetsFile.LogMessages[1].Code.Should().Be(NuGetLogCode.NU1202);
+            assetsFile.LogMessages[1].TargetGraphs.Should().BeEquivalentTo([banana]);
+        }
+
+        // P (apple)  -> Net472 package -> Transitive Net472 package, with ATF, succeeds
+        // P (banana) -> Net472 package, with ATF, fails
+        [PlatformFact(Platform.Windows)]
+        public async Task DotnetRestore_WithAliasesOfSameFramework_WithAssetTargetFallback_TransitiveDependenciesFlowCorrectly()
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+
+            // Create a transitive dependency package that only supports net472
+            var pkgTransitive = new SimpleTestPackageContext("TransitiveNet472Package", "1.0.0");
+            pkgTransitive.AddFile("lib/net472/TransitiveNet472Package.dll");
+
+            // Create a top-level package that only supports net472 and depends on the transitive package
+            var pkgNet472WithDependency = new SimpleTestPackageContext("Net472PackageWithDependency", "1.0.0");
+            pkgNet472WithDependency.AddFile("lib/net472/Net472PackageWithDependency.dll");
+            pkgNet472WithDependency.PerFrameworkDependencies.Add(CommonFrameworks.Net472, [pkgTransitive]);
+
+            await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, pkgNet472WithDependency, pkgTransitive);
+
+            string apple = nameof(apple);
+            string banana = nameof(banana);
+            var projectName = "ClassLibrary1";
+            var projectDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
+            var projectFile = Path.Combine(projectDirectory, $"{projectName}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, " classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", $"{apple};{banana}");
+
+                var attributes = new Dictionary<string, string>() { { "Version", "1.0.0" } };
+
+                // Add package reference to both frameworks
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "Net472PackageWithDependency",
+                    string.Empty,
+                    [],
+                    attributes);
+
+                // Apple framework props - with AssetTargetFallback
+                var appleProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" },
+                    };
+                ProjectFileUtils.AddProperties(xml, appleProps, $" '$(TargetFramework)' == '{apple}' ");
+
+                // Banana framework props - without AssetTargetFallback (should fail)
+                var bananaProps = new Dictionary<string, string>
+                    {
+                        { "DisableImplicitAssetTargetFallback", "true" },
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" }
+                    };
+                ProjectFileUtils.AddProperties(xml, bananaProps, $" '$(TargetFramework)' == '{banana}' ");
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Act
+            var result = _dotnetFixture.RunDotnetExpectFailure(pathContext.SolutionRoot, $"restore {projectFile}", testOutputHelper: _testOutputHelper);
+
+            // Assert
+            var assetsFilePath = Path.Combine(projectDirectory, "obj", "project.assets.json");
+            var assetsFile = new LockFileFormat().Read(assetsFilePath);
+
+            // Apple alias should succeed with both the package and its transitive dependency
+            LockFileTarget appleTarget = assetsFile.GetTarget(apple, null);
+            appleTarget.Libraries.Should().Contain(e => e.Name.Equals("Net472PackageWithDependency"));
+            appleTarget.Libraries.Should().Contain(e => e.Name.Equals("TransitiveNet472Package"));
+
+            // Verify the dependency relationship
+            var appleTopLevelLib = appleTarget.Libraries.First(e => e.Name.Equals("Net472PackageWithDependency"));
+            appleTopLevelLib.Dependencies.Should().Contain(d => d.Id.Equals("TransitiveNet472Package"));
+
+            // Banana alias should have no compatible assets for either package
+            LockFileTarget bananaTarget = assetsFile.GetTarget(banana, null);
+            bananaTarget.Libraries.Should().HaveCount(1);
+            bananaTarget.Libraries[0].CompileTimeAssemblies.Should().BeEmpty();
+            bananaTarget.Libraries[0].RuntimeAssemblies.Should().BeEmpty();
+
+            assetsFile.LogMessages.Should().HaveCount(3);
+            assetsFile.LogMessages[0].Level.Should().Be(LogLevel.Warning);
+            assetsFile.LogMessages[0].Code.Should().Be(NuGetLogCode.NU1701);
+
+            assetsFile.LogMessages[1].Level.Should().Be(LogLevel.Warning);
+            assetsFile.LogMessages[1].Code.Should().Be(NuGetLogCode.NU1701);
+
+            assetsFile.LogMessages[2].Level.Should().Be(LogLevel.Error);
+            assetsFile.LogMessages[2].Code.Should().Be(NuGetLogCode.NU1202);
+        }
+
+        // P (apple) -> Project2 (apple) -> Package A
+        // P (banana) -> Project2 (banana) -> Package B
+        [PlatformFact(Platform.Windows)]
+        public async Task DotnetRestore_WithAliasesOfSameFrameworkAndProjectReferences_TransitivePackageDependenciesFlowCorrectly()
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+
+            // Create packages
+            var pkgA = new SimpleTestPackageContext("PackageA", "1.0.0");
+            var pkgB = new SimpleTestPackageContext("PackageB", "1.0.0");
+            await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, pkgA, pkgB);
+
+            string apple = nameof(apple);
+            string banana = nameof(banana);
+
+            // Create project2 with dependencies on different packages for each alias
+            var project2Name = "Project2";
+            var project2File = Path.Combine(pathContext.SolutionRoot, project2Name, $"{project2Name}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, project2Name, " classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(project2File, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", $"{apple};{banana}");
+
+                var attributesA = new Dictionary<string, string>() { { "Version", "1.0.0" } };
+                var attributesB = new Dictionary<string, string>() { { "Version", "1.0.0" } };
+
+                // Add PackageA only for apple alias
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "PackageA",
+                    apple,
+                    [],
+                    attributesA);
+
+                // Add PackageB only for banana alias
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "PackageB",
+                    banana,
+                    [],
+                    attributesB);
+
+                var appleProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" },
+                    };
+                ProjectFileUtils.AddProperties(xml, appleProps, $" '$(TargetFramework)' == '{apple}' ");
+
+                var bananaProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" }
+                    };
+                ProjectFileUtils.AddProperties(xml, bananaProps, $" '$(TargetFramework)' == '{banana}' ");
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Create project1 that references project2
+            var project1Name = "Project1";
+            var project1Directory = Path.Combine(pathContext.SolutionRoot, project1Name);
+            var project1File = Path.Combine(project1Directory, $"{project1Name}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, project1Name, " classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(project1File, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", $"{apple};{banana}");
+
+                // Add project reference to project2
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "ProjectReference",
+                    $"..\\{project2Name}\\{project2Name}.csproj",
+                    string.Empty,
+                    [],
+                    []);
+
+                var appleProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" },
+                    };
+                ProjectFileUtils.AddProperties(xml, appleProps, $" '$(TargetFramework)' == '{apple}' ");
+
+                var bananaProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" }
+                    };
+                ProjectFileUtils.AddProperties(xml, bananaProps, $" '$(TargetFramework)' == '{banana}' ");
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Act
+            var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, $"restore {project1File}", testOutputHelper: _testOutputHelper);
+
+            // Assert
+            var assetsFilePath = Path.Combine(project1Directory, "obj", "project.assets.json");
+            var assetsFile = new LockFileFormat().Read(assetsFilePath);
+
+            // Apple alias should have PackageA transitively through Project2
+            LockFileTarget appleTarget = assetsFile.GetTarget(apple, null);
+            appleTarget.Libraries.Should().Contain(e => e.Name.Equals("Project2"));
+            appleTarget.Libraries.Should().Contain(e => e.Name.Equals("PackageA"));
+            appleTarget.Libraries.Should().NotContain(e => e.Name.Equals("PackageB"));
+
+            // Banana alias should have PackageB transitively through Project2
+            LockFileTarget bananaTarget = assetsFile.GetTarget(banana, null);
+            bananaTarget.Libraries.Should().Contain(e => e.Name.Equals("Project2"));
+            bananaTarget.Libraries.Should().NotContain(e => e.Name.Equals("PackageA"));
+            bananaTarget.Libraries.Should().Contain(e => e.Name.Equals("PackageB"));
+        }
+
+        // P (apple) -> Project2 
+        // P (banana) -> Project3
+        [PlatformFact(Platform.Windows)]
+        public async Task DotnetRestore_WithAliasesOfSameFramework_MultipleProjectReferencesFlowCorrectly()
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+
+            string apple = nameof(apple);
+            string banana = nameof(banana);
+
+            // Create project2 - uses default framework, no custom aliases needed
+            string project2Name = "Project2";
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, project2Name, " classlib", testOutputHelper: _testOutputHelper);
+
+            // Create project3 - uses default framework, no custom aliases needed
+            var project3Name = "Project3";
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, project3Name, " classlib", testOutputHelper: _testOutputHelper);
+
+            // Create project1 that references both project2 and project3, but with different references per alias
+            var project1Name = "Project1";
+            var project1Directory = Path.Combine(pathContext.SolutionRoot, project1Name);
+            var project1File = Path.Combine(project1Directory, $"{project1Name}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, project1Name, " classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(project1File, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", $"{apple};{banana}");
+
+                // Add Project2 reference only for apple alias
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "ProjectReference",
+                    $"..\\{project2Name}\\{project2Name}.csproj",
+                    apple,
+                    [],
+                    []);
+
+                // Add Project3 reference only for banana alias
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "ProjectReference",
+                    $"..\\{project3Name}\\{project3Name}.csproj",
+                    banana,
+                    [],
+                    []);
+
+                var appleProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" }
+                    };
+                ProjectFileUtils.AddProperties(xml, appleProps, $" '$(TargetFramework)' == '{apple}' ");
+
+                var bananaProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" }
+                    };
+                ProjectFileUtils.AddProperties(xml, bananaProps, $" '$(TargetFramework)' == '{banana}' ");
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Act
+            var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, $"restore {project1File}", testOutputHelper: _testOutputHelper);
+
+            // Assert
+            var assetsFilePath = Path.Combine(project1Directory, "obj", "project.assets.json");
+            var assetsFile = new LockFileFormat().Read(assetsFilePath);
+
+            // Apple alias should have Project2 but not Project3
+            LockFileTarget appleTarget = assetsFile.GetTarget(apple, null);
+            appleTarget.Libraries.Should().Contain(e => e.Name.Equals("Project2"));
+            appleTarget.Libraries.Should().NotContain(e => e.Name.Equals("Project3"));
+
+            // Banana alias should have Project3 but not Project2
+            LockFileTarget bananaTarget = assetsFile.GetTarget(banana, null);
+            bananaTarget.Libraries.Should().NotContain(e => e.Name.Equals("Project2"));
+            bananaTarget.Libraries.Should().Contain(e => e.Name.Equals("Project3"));
+        }
+
+        // P1 (banana) -> X
+        // P1 (apple) -> Y
+        [PlatformFact(Platform.Windows)]
+        public async Task DotnetRestore_WithAliasesOfTheSameFramework_AndSDKAnalysisLevel10_0_200_FailsWithNU1018()
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            var testDirectory = pathContext.SolutionRoot;
+            var pkgX = new SimpleTestPackageContext("x", "1.0.0");
+            var pkgY = new SimpleTestPackageContext("y", "1.0.0");
+            await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, pkgX, pkgY);
+
+            string apple = nameof(apple);
+            string banana = nameof(banana);
+            var projectName = "ClassLibrary1";
+            var projectDirectory = Path.Combine(testDirectory, projectName);
+            var projectFile = Path.Combine(projectDirectory, $"{projectName}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName, " classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", $"{apple};{banana}");
+                ProjectFileUtils.AddProperty(xml, "SDKAnalysisLevel", "10.0.200");
+
+                var attributes = new Dictionary<string, string>() { { "Version", "1.0.0" } };
+
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "x",
+                    banana,
+                    [],
+                    attributes);
+
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "y",
+                    apple,
+                    [],
+                    attributes);
+
+                var appleProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" }
+                    };
+                ProjectFileUtils.AddProperties(xml, appleProps, $" '$(TargetFramework)' == '{apple}' ");
+
+                var bananaProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" }
+                    };
+                ProjectFileUtils.AddProperties(xml, bananaProps, $" '$(TargetFramework)' == '{banana}' ");
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Act
+            var result = _dotnetFixture.RunDotnetExpectFailure(pathContext.SolutionRoot, $"restore {projectFile}", testOutputHelper: _testOutputHelper);
+
+            // Assert
+            var assetsFilePath = Path.Combine(projectDirectory, "obj", "project.assets.json");
+            var assetsFile = new LockFileFormat().Read(assetsFilePath);
+            assetsFile.Version.Should().Be(3);
+            assetsFile.LogMessages.Should().HaveCount(1);
+            assetsFile.LogMessages[0].Code.Should().Be(NuGetLogCode.NU1018);
+        }
+
+        // P (apple) -> Project2 with APPLE constant -> Uses Project2Type
+        // P (banana) -> Project3 with BANANA constant -> Uses Project3Type
+        [PlatformFact(Platform.Windows)]
+        public async Task DotnetRestore_WithAliasesOfSameFramework_MultipleProjectReferencesWithConditionalCompilation_BuildSucceeds()
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+
+            string apple = nameof(apple);
+            string banana = nameof(banana);
+
+            // Create project2 with a type that Project1 will reference
+            string project2Name = "Project2";
+            var project2Directory = Path.Combine(pathContext.SolutionRoot, project2Name);
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, project2Name, " classlib", testOutputHelper: _testOutputHelper);
+
+            // Add a class to Project2
+            var project2ClassFile = Path.Combine(project2Directory, "Project2Type.cs");
+            File.WriteAllText(project2ClassFile, @"
+        namespace Project2
+        {
+            public class Project2Type
+            {
+                public string GetMessage() => ""Hello from Project2"";
+            }
+        }");
+
+            // Create project3 with a type that Project1 will reference
+            var project3Name = "Project3";
+            var project3Directory = Path.Combine(pathContext.SolutionRoot, project3Name);
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, project3Name, " classlib", testOutputHelper: _testOutputHelper);
+
+            // Add a class to Project3
+            var project3ClassFile = Path.Combine(project3Directory, "Project3Type.cs");
+            File.WriteAllText(project3ClassFile, @"
+        namespace Project3
+        {
+            public class Project3Type
+            {
+                public string GetMessage() => ""Hello from Project3"";
+            }
+        }");
+
+            // Create project1 that references both project2 and project3, but with different references per alias
+            var project1Name = "Project1";
+            var project1Directory = Path.Combine(pathContext.SolutionRoot, project1Name);
+            var project1File = Path.Combine(project1Directory, $"{project1Name}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, project1Name, " classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(project1File, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", $"{apple};{banana}");
+
+                // Add Project2 reference only for apple alias
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "ProjectReference",
+                    $"..\\{project2Name}\\{project2Name}.csproj",
+                    apple,
+                    [],
+                    []);
+
+                // Add Project3 reference only for banana alias
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "ProjectReference",
+                    $"..\\{project3Name}\\{project3Name}.csproj",
+                    banana,
+                    [],
+                    []);
+
+                var appleProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" },
+                        { "DefineConstants", "APPLE" }
+                    };
+                ProjectFileUtils.AddProperties(xml, appleProps, $" '$(TargetFramework)' == '{apple}' ");
+
+                var bananaProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" },
+                        { "DefineConstants", "BANANA" }
+                    };
+                ProjectFileUtils.AddProperties(xml, bananaProps, $" '$(TargetFramework)' == '{banana}' ");
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Add conditional code to Project1 that uses the project references
+            var project1ClassFile = Path.Combine(project1Directory, "Class1.cs");
+            File.WriteAllText(project1ClassFile, @"
+        #if APPLE
+        using Project2;
+        #elif BANANA
+        using Project3;
+        #endif
+
+        namespace Project1
+        {
+            public class Class1
+            {
+                public string GetFrameworkMessage()
+                {
+        #if APPLE
+                    var type = new Project2Type();
+                    return type.GetMessage();
+        #elif BANANA
+                    var type = new Project3Type();
+                    return type.GetMessage();
+        #else
+                    return ""Unknown framework"";
+        #endif
+                }
+            }
+        }");
+
+            // Act - Restore
+            var restoreResult = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, $"restore {project1File}", testOutputHelper: _testOutputHelper);
+
+            // Assert - Verify restore results
+            var assetsFilePath = Path.Combine(project1Directory, "obj", "project.assets.json");
+            var assetsFile = new LockFileFormat().Read(assetsFilePath);
+
+            // Apple alias should have Project2 but not Project3
+            LockFileTarget appleTarget = assetsFile.GetTarget(apple, null);
+            appleTarget.Libraries.Should().Contain(e => e.Name.Equals("Project2"));
+            appleTarget.Libraries.Should().NotContain(e => e.Name.Equals("Project3"));
+
+            // Banana alias should have Project3 but not Project2
+            LockFileTarget bananaTarget = assetsFile.GetTarget(banana, null);
+            bananaTarget.Libraries.Should().NotContain(e => e.Name.Equals("Project2"));
+            bananaTarget.Libraries.Should().Contain(e => e.Name.Equals("Project3"));
+
+            // Act - Build
+            var buildResult = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, $"build {project1File} --no-restore", testOutputHelper: _testOutputHelper);
+
+            // Assert - Verify build succeeded
+            buildResult.ExitCode.Should().Be(0);
+        }
+
+        [PlatformFact(Platform.Windows)]
+        public async Task DotnetRestore_WithAliasedFramework_SuppressesWithPackageSpecificNoWarn()
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            var testDirectory = pathContext.SolutionRoot;
+
+            var packageA = new SimpleTestPackageContext("packageA", "1.0.0");
+            packageA.AddFile("lib/net45/a.dll");
+
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(
+                pathContext.PackageSource,
+                PackageSaveMode.Defaultv3,
+                packageA);
+
+            string apple = nameof(apple);
+            var projectName = "ClassLibrary1";
+            var projectDirectory = Path.Combine(testDirectory, projectName);
+            var projectFile = Path.Combine(projectDirectory, $"{projectName}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName, " classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", $"{apple}");
+
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    packageA.Id,
+                    framework: (string)null,
+                    [],
+                    new Dictionary<string, string>() {
+                        { "Version", packageA.Version },
+                        { "NoWarn", "NU1701" },
+                    });
+
+                var appleProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" },
+                        { "TargetFrameworkMoniker", $".NETCoreApp, Version={TestConstants.DefaultTargetFramework.Version.ToString(2)}" }
+                    };
+                ProjectFileUtils.AddProperties(xml, appleProps, $" '$(TargetFramework)' == '{apple}' ");
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Act
+            var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, $"restore {projectFile}", testOutputHelper: _testOutputHelper);
+
+            // Assert
+            var assetsFilePath = Path.Combine(projectDirectory, "obj", "project.assets.json");
+            var assetsFile = new LockFileFormat().Read(assetsFilePath);
+            assetsFile.LogMessages.Should().BeEmpty();
+        }
+
+        [PlatformFact(Platform.Windows)]
+        public async Task DotnetRestore_WithAliasesOfSameFramework_WithAssetTargetFallbackProjectReference_CanBuildSuccessfully()
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+
+            var pkgNet472 = new SimpleTestPackageContext("a", "1.0.0");
+            pkgNet472.AddFile("lib/net472/a.dll");
+            await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, pkgNet472);
+
+            string apple = nameof(apple);
+            string banana = nameof(banana);
+
+            var project2Name = "Project2";
+            var project2File = Path.Combine(pathContext.SolutionRoot, project2Name, $"{project2Name}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, project2Name, " classlib", testOutputHelper: _testOutputHelper);
+            using (var stream = File.Open(project2File, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", $"{apple};{banana}");
+
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    pkgNet472.Id,
+                    string.Empty,
+                    [],
+                    new Dictionary<string, string>() { { "Version", "1.0.0" } });
+
+                var frameworkProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETFramework" },
+                        { "TargetFrameworkVersion", $"v4.7.2" },
+                    };
+
+                ProjectFileUtils.AddProperties(xml, frameworkProps, $" '$(TargetFramework)' == '{apple}' ");
+                ProjectFileUtils.AddProperties(xml, frameworkProps, $" '$(TargetFramework)' == '{banana}' ");
+
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            var projectName = "ClassLibrary1";
+            var projectDirectory = Path.Combine(pathContext.SolutionRoot, projectName);
+            var projectFile = Path.Combine(projectDirectory, $"{projectName}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(pathContext.SolutionRoot, projectName, " classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFrameworks", $"{apple};{banana}");
+
+                // Add project reference to project2
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "ProjectReference",
+                    $"..\\{project2Name}\\{project2Name}.csproj",
+                    string.Empty,
+                    [],
+                    []);
+
+                var frameworkProps = new Dictionary<string, string>
+                    {
+                        { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                        { "TargetFrameworkVersion", $"v{TestConstants.DefaultTargetFramework.Version.ToString(2)}" },
+                    };
+                ProjectFileUtils.AddProperties(xml, frameworkProps, $" '$(TargetFramework)' == '{apple}' ");
+                ProjectFileUtils.AddProperties(xml, frameworkProps, $" '$(TargetFramework)' == '{banana}' ");
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Act
+            var result = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, $"restore {projectFile}", testOutputHelper: _testOutputHelper);
+
+            // Assert
+            var assetsFilePath = Path.Combine(projectDirectory, "obj", "project.assets.json");
+            var assetsFile = new LockFileFormat().Read(assetsFilePath);
+
+            LockFileTarget appleTarget = assetsFile.GetTarget(apple, null);
+            appleTarget.Libraries.Should().HaveCount(2);
+            LockFileTarget bananaTarget = assetsFile.GetTarget(banana, null);
+            bananaTarget.Libraries.Should().HaveCount(2);
+
+            assetsFile.LogMessages.Should().HaveCount(1);
+            assetsFile.LogMessages[0].Level.Should().Be(LogLevel.Warning);
+            assetsFile.LogMessages[0].Code.Should().Be(NuGetLogCode.NU1701);
+            //assetsFile.LogMessages[0].TargetGraphs.Should().HaveCount(2);
+
+            var buildResult = _dotnetFixture.RunDotnetExpectSuccess(pathContext.SolutionRoot, $"build {projectFile} --no-restore", testOutputHelper: _testOutputHelper);
+            buildResult.AllOutput.Should().Contain("NU1702");
+        }
+
+        // When a referenced project has an empty/invalid TargetFramework, the error should be attributed
+        // to the offending project (ProjectB), not the referencing project (ProjectA) or the solution.
+        [Theory]
+        [InlineData("", false, false)]
+        [InlineData("invalid", false, false)]
+        [InlineData("net8.0;net472", false, false)]
+        [InlineData("", true, false)]
+        [InlineData("invalid", true, false)]
+        [InlineData("net8.0;net472", true, false)]
+        [InlineData("", true, true)]
+        [InlineData("invalid", true, true)]
+        [InlineData("net8.0;net472", true, true)]
+        public void DotnetRestore_ProjectReferencesProjectWithInvalidTargetFramework_ErrorAttributedToReferencedProject(string invalidTargetFramework, bool useStaticGraphRestore, bool usePackageSpecFactory)
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            var testDirectory = pathContext.SolutionRoot;
+
+            // Create ProjectB with an invalid TargetFramework
+            var projectBName = "ProjectB";
+            var projectBDirectory = Path.Combine(testDirectory, projectBName);
+            var projectBFile = Path.Combine(projectBDirectory, $"{projectBName}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(testDirectory, projectBName, "classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectBFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFramework", invalidTargetFramework);
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Create ProjectA (valid TFM) with a ProjectReference to ProjectB
+            var projectAName = "ProjectA";
+            var projectADirectory = Path.Combine(testDirectory, projectAName);
+            var projectAFile = Path.Combine(projectADirectory, $"{projectAName}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(testDirectory, projectAName, "classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectAFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "ProjectReference",
+                    projectBFile,
+                    string.Empty,
+                    new Dictionary<string, string>(),
+                    new Dictionary<string, string>());
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Act - restore ProjectA (which references ProjectB with the bad TFM)
+            var additionalArgs = useStaticGraphRestore ? "/p:RestoreUseStaticGraphEvaluation=true" : string.Empty;
+            var environmentVariables = new Dictionary<string, string>
+            {
+                { PackageSpecFactory.EnvironmentVariableName, usePackageSpecFactory.ToString() }
+            };
+            var result = _dotnetFixture.RestoreProjectExpectFailure(projectADirectory, projectAName, additionalArgs, environmentVariables, testOutputHelper: _testOutputHelper);
+
+            // Assert - the restore should fail and attribute the error to ProjectB (the offending project)
+            result.ExitCode.Should().NotBe(0);
+            result.AllOutput.Should().Contain("ProjectB");
+
+            // Assert - ProjectB's assets file behavior depends on the error path:
+            // Empty TFM throws during PackageSpec creation → caught → error spec with assets file
+            // Invalid/semicolon TFM parses silently → SpecValidationUtility rejects → no assets file
+            // https://github.com/NuGet/Home/issues/12943 tracks generating assets files in all error scenarios
+            var projectBAssetsFile = Path.Combine(projectBDirectory, "obj", "project.assets.json");
+            if (string.IsNullOrEmpty(invalidTargetFramework))
+            {
+                File.Exists(projectBAssetsFile).Should().BeTrue();
+                var lockFileFormat = new LockFileFormat();
+                var projectBLockFile = lockFileFormat.Read(projectBAssetsFile);
+                projectBLockFile.LogMessages.Should().NotBeEmpty();
+                projectBLockFile.LogMessages[0].Code.Should().Be(NuGetLogCode.NU1105);
+                var frameworkError = Assert.Throws<FrameworkException>(() => new NuGetFramework("").GetShortFolderName());
+                projectBLockFile.LogMessages[0].Message.Should().Be(
+                    string.Format(NuGet.Commands.Strings.Error_ReadingProjectInformation, projectBName, frameworkError.Message));
+            }
+            else
+            {
+                File.Exists(projectBAssetsFile).Should().BeFalse();
+                result.AllOutput.Should().Contain(string.Format(NuGet.Commands.Strings.SpecValidationInvalidFramework, invalidTargetFramework));
+            }
+        }
+
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public void DotnetRestore_ProjectWithBadVersion_ErrorAttributedToProject(bool useStaticGraphRestore, bool usePackageSpecFactory)
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            var testDirectory = pathContext.SolutionRoot;
+
+            // Create a project with a bad Version
+            var projectName = "ProjectA";
+            var projectDirectory = Path.Combine(testDirectory, projectName);
+            var projectFile = Path.Combine(projectDirectory, $"{projectName}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName, "classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                xml.Root.Descendants("PropertyGroup").First().Add(new XElement("Version", "1.0.badversion"));
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Act - restore the project with the bad Version
+            var additionalArgs = useStaticGraphRestore ? "/p:RestoreUseStaticGraphEvaluation=true" : string.Empty;
+            var environmentVariables = new Dictionary<string, string>
+            {
+                { PackageSpecFactory.EnvironmentVariableName, usePackageSpecFactory.ToString() }
+            };
+            var result = _dotnetFixture.RestoreProjectExpectFailure(projectDirectory, projectName, additionalArgs, environmentVariables, testOutputHelper: _testOutputHelper);
+
+            // Assert - the restore should fail with NU1105 attributed to the project
+            result.ExitCode.Should().NotBe(0);
+            result.AllOutput.Should().Contain(projectName);
+
+            // Assert - the assets file should exist and contain a NU1105 log entry about the bad version
+            var lockFileFormat = new LockFileFormat();
+            var assetsFile = Path.Combine(projectDirectory, "obj", "project.assets.json");
+            File.Exists(assetsFile).Should().BeTrue();
+            var lockFile = lockFileFormat.Read(assetsFile);
+            lockFile.LogMessages.Should().NotBeEmpty();
+            lockFile.LogMessages[0].Code.Should().Be(NuGetLogCode.NU1105);
+            var versionError = Assert.Throws<ArgumentException>(() => NuGetVersion.Parse("1.0.badversion"));
+            lockFile.LogMessages[0].Message.Should().Be(
+                string.Format(NuGet.Commands.Strings.Error_ReadingProjectInformation, projectName, versionError.Message));
+        }
+
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public void DotnetRestore_ProjectWithInvalidNuGetVersion_CreatesAssetsFileWithError(bool useStaticGraphRestore, bool usePackageSpecFactory)
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            var testDirectory = pathContext.SolutionRoot;
+
+            // Create a project with a version that is valid semver but not a valid NuGet version (e.g. iOS app version)
+            var projectName = "ProjectA";
+            var projectDirectory = Path.Combine(testDirectory, projectName);
+            var projectFile = Path.Combine(projectDirectory, $"{projectName}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName, "classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                xml.Root.Descendants("PropertyGroup").First().Add(new XElement("Version", "3.1.3a1"));
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Act - restore the project with the invalid NuGet version
+            var additionalArgs = useStaticGraphRestore ? "/p:RestoreUseStaticGraphEvaluation=true" : string.Empty;
+            var environmentVariables = new Dictionary<string, string>
+            {
+                { PackageSpecFactory.EnvironmentVariableName, usePackageSpecFactory.ToString() }
+            };
+            var result = _dotnetFixture.RestoreProjectExpectFailure(projectDirectory, projectName, additionalArgs, environmentVariables, testOutputHelper: _testOutputHelper);
+
+            // Assert - the restore should fail with the error attributed to the project
+            result.ExitCode.Should().NotBe(0);
+            result.AllOutput.Should().Contain(projectName);
+
+            // Assert - the assets file should exist and contain a NU1105 log entry
+            var lockFileFormat = new LockFileFormat();
+            var assetsFile = Path.Combine(projectDirectory, "obj", "project.assets.json");
+            File.Exists(assetsFile).Should().BeTrue();
+            var lockFile = lockFileFormat.Read(assetsFile);
+            lockFile.LogMessages.Should().NotBeEmpty();
+            lockFile.LogMessages[0].Code.Should().Be(NuGetLogCode.NU1105);
+            var versionError = Assert.Throws<ArgumentException>(() => NuGetVersion.Parse("3.1.3a1"));
+            lockFile.LogMessages[0].Message.Should().Be(
+                string.Format(NuGet.Commands.Strings.Error_ReadingProjectInformation, projectName, versionError.Message));
+        }
+
+        [Theory]
+        [InlineData("", false, false)]
+        [InlineData("invalid", false, false)]
+        [InlineData("net8.0;net472", false, false)]
+        [InlineData("", true, false)]
+        [InlineData("invalid", true, false)]
+        [InlineData("net8.0;net472", true, false)]
+        [InlineData("", true, true)]
+        [InlineData("invalid", true, true)]
+        [InlineData("net8.0;net472", true, true)]
+        public void DotnetRestore_SolutionWithProjectWithInvalidTargetFramework_ErrorAttributedToReferencedProject(string invalidTargetFramework, bool useStaticGraphRestore, bool usePackageSpecFactory)
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            var testDirectory = pathContext.SolutionRoot;
+
+            // Create ProjectB with an invalid TargetFramework
+            var projectBName = "ProjectB";
+            var projectBDirectory = Path.Combine(testDirectory, projectBName);
+            var projectBFile = Path.Combine(projectBDirectory, $"{projectBName}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(testDirectory, projectBName, "classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectBFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFramework", invalidTargetFramework);
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Create ProjectA (valid TFM) with a ProjectReference to ProjectB
+            var projectAName = "ProjectA";
+            var projectADirectory = Path.Combine(testDirectory, projectAName);
+            var projectAFile = Path.Combine(projectADirectory, $"{projectAName}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(testDirectory, projectAName, "classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectAFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "ProjectReference",
+                    projectBFile,
+                    string.Empty,
+                    new Dictionary<string, string>(),
+                    new Dictionary<string, string>());
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Create a solution containing both projects
+            var solutionName = "TestSolution";
+            _dotnetFixture.RunDotnetExpectSuccess(testDirectory, $"new sln --name {solutionName}", testOutputHelper: _testOutputHelper);
+            var solutionFile = Path.Combine(testDirectory, $"{solutionName}.slnx");
+            _dotnetFixture.RunDotnetExpectSuccess(testDirectory, $"sln {solutionFile} add {projectAFile} {projectBFile}", testOutputHelper: _testOutputHelper);
+
+            // Act - restore the solution
+            var additionalArgs = useStaticGraphRestore ? "/p:RestoreUseStaticGraphEvaluation=true" : string.Empty;
+            var environmentVariables = new Dictionary<string, string>
+            {
+                { PackageSpecFactory.EnvironmentVariableName, usePackageSpecFactory.ToString() }
+            };
+            var result = _dotnetFixture.RestoreSolutionExpectFailure(testDirectory, solutionName, additionalArgs, environmentVariables, testOutputHelper: _testOutputHelper);
+
+            // Assert - the restore should fail and attribute the error to ProjectB (the offending project)
+            result.ExitCode.Should().NotBe(0);
+            result.AllOutput.Should().Contain("ProjectB");
+
+            // Assert - ProjectB's assets file behavior depends on the error path:
+            // Empty TFM throws during PackageSpec creation → caught → error spec with assets file
+            // Invalid/semicolon TFM parses silently → SpecValidationUtility rejects → no assets file
+            // https://github.com/NuGet/Home/issues/12943 tracks generating assets files in all error scenarios
+            var projectBAssetsFile = Path.Combine(projectBDirectory, "obj", "project.assets.json");
+            if (string.IsNullOrEmpty(invalidTargetFramework))
+            {
+                File.Exists(projectBAssetsFile).Should().BeTrue();
+                var lockFileFormat = new LockFileFormat();
+                var projectBLockFile = lockFileFormat.Read(projectBAssetsFile);
+                projectBLockFile.LogMessages.Should().NotBeEmpty();
+                projectBLockFile.LogMessages[0].Code.Should().Be(NuGetLogCode.NU1105);
+                var frameworkError = Assert.Throws<FrameworkException>(() => new NuGetFramework("").GetShortFolderName());
+                projectBLockFile.LogMessages[0].Message.Should().Be(
+                    string.Format(NuGet.Commands.Strings.Error_ReadingProjectInformation, projectBName, frameworkError.Message));
+            }
+            else
+            {
+                File.Exists(projectBAssetsFile).Should().BeFalse();
+                result.AllOutput.Should().Contain(string.Format(NuGet.Commands.Strings.SpecValidationInvalidFramework, invalidTargetFramework));
+            }
+        }
+
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public void DotnetRestore_SolutionWithCPMBadPackageVersion_ErrorAttributedToProject(bool useStaticGraphRestore, bool usePackageSpecFactory)
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            var testDirectory = pathContext.SolutionRoot;
+
+            // Create ProjectA (valid)
+            var projectAName = "ProjectA";
+            var projectADirectory = Path.Combine(testDirectory, projectAName);
+            var projectAFile = Path.Combine(projectADirectory, $"{projectAName}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(testDirectory, projectAName, "classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectAFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "Newtonsoft.Json",
+                    string.Empty,
+                    new Dictionary<string, string>(),
+                    new Dictionary<string, string>());
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Create ProjectB (valid) with a package reference
+            var projectBName = "ProjectB";
+            var projectBDirectory = Path.Combine(testDirectory, projectBName);
+            var projectBFile = Path.Combine(projectBDirectory, $"{projectBName}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(testDirectory, projectBName, "classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectBFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "NuGet.Versioning",
+                    string.Empty,
+                    new Dictionary<string, string>(),
+                    new Dictionary<string, string>());
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Create Directory.Packages.props with CPM enabled and a bad version for one package
+            var directoryPackagesProps = Path.Combine(testDirectory, "Directory.Packages.props");
+            File.WriteAllText(directoryPackagesProps,
+@"<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include=""Newtonsoft.Json"" Version=""13.0.3"" />
+    <PackageVersion Include=""NuGet.Versioning"" Version=""1.0.badversion"" />
+  </ItemGroup>
+</Project>");
+
+            // Create a solution containing both projects
+            var solutionName = "TestSolution";
+            _dotnetFixture.RunDotnetExpectSuccess(testDirectory, $"new sln --name {solutionName}", testOutputHelper: _testOutputHelper);
+            var solutionFile = Path.Combine(testDirectory, $"{solutionName}.slnx");
+            _dotnetFixture.RunDotnetExpectSuccess(testDirectory, $"sln {solutionFile} add {projectAFile} {projectBFile}", testOutputHelper: _testOutputHelper);
+
+            // Act - restore the solution
+            var additionalArgs = useStaticGraphRestore ? "/p:RestoreUseStaticGraphEvaluation=true" : string.Empty;
+            var environmentVariables = new Dictionary<string, string>
+            {
+                { PackageSpecFactory.EnvironmentVariableName, usePackageSpecFactory.ToString() }
+            };
+            var result = _dotnetFixture.RestoreSolutionExpectFailure(testDirectory, solutionName, additionalArgs, environmentVariables, testOutputHelper: _testOutputHelper);
+
+            // Assert - the restore should fail with the error attributed to ProjectB
+            result.ExitCode.Should().NotBe(0);
+            result.AllOutput.Should().Contain("ProjectB");
+
+            // Assert - ProjectB's assets file should exist and contain a NU1105 log entry
+            var lockFileFormat = new LockFileFormat();
+            var projectBAssetsFile = Path.Combine(projectBDirectory, "obj", "project.assets.json");
+            File.Exists(projectBAssetsFile).Should().BeTrue();
+            var projectBLockFile = lockFileFormat.Read(projectBAssetsFile);
+            projectBLockFile.LogMessages.Should().NotBeEmpty();
+            projectBLockFile.LogMessages[0].Code.Should().Be(NuGetLogCode.NU1105);
+            var versionError = Assert.Throws<ArgumentException>(() => VersionRange.Parse("1.0.badversion"));
+            projectBLockFile.LogMessages[0].Message.Should().Be(
+                string.Format(NuGet.Commands.Strings.Error_ReadingProjectInformation, projectBName, versionError.Message));
+
+            // Assert - ProjectA's assets file should exist (it has a valid version and should restore fine)
+            var projectAAssetsFile = Path.Combine(projectADirectory, "obj", "project.assets.json");
+            File.Exists(projectAAssetsFile).Should().BeTrue();
+        }
+
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public async Task DotnetRestore_CPMProjectWithSemicolonInTargetFramework_ErrorAttributedToProject(bool useStaticGraphRestore, bool usePackageSpecFactory)
+        {
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+            var testDirectory = pathContext.SolutionRoot;
+
+            // Create a local package
+            var packageX = new SimpleTestPackageContext("PackageX", "1.0.0");
+            await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, packageX);
+
+            // Create a project with TargetFramework (singular) containing semicolons — common mistake for multi-targeting
+            var projectName = "ProjectA";
+            var projectDirectory = Path.Combine(testDirectory, projectName);
+            var projectFile = Path.Combine(projectDirectory, $"{projectName}.csproj");
+            _dotnetFixture.CreateDotnetNewProject(testDirectory, projectName, "classlib", testOutputHelper: _testOutputHelper);
+
+            using (var stream = File.Open(projectFile, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var xml = XDocument.Load(stream);
+                ProjectFileUtils.SetTargetFrameworkForProject(xml, "TargetFramework", "net10.0;net8.0");
+                ProjectFileUtils.AddItem(
+                    xml,
+                    "PackageReference",
+                    "PackageX",
+                    string.Empty,
+                    new Dictionary<string, string>(),
+                    new Dictionary<string, string>());
+                ProjectFileUtils.WriteXmlToFile(xml, stream);
+            }
+
+            // Create Directory.Packages.props with CPM enabled
+            var directoryPackagesProps = Path.Combine(testDirectory, "Directory.Packages.props");
+            File.WriteAllText(directoryPackagesProps,
+@"<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include=""PackageX"" Version=""1.0.0"" />
+  </ItemGroup>
+</Project>");
+
+            // Create a solution containing the project
+            var solutionName = "TestSolution";
+            _dotnetFixture.RunDotnetExpectSuccess(testDirectory, $"new sln --name {solutionName}", testOutputHelper: _testOutputHelper);
+            var solutionFile = Path.Combine(testDirectory, $"{solutionName}.slnx");
+            _dotnetFixture.RunDotnetExpectSuccess(testDirectory, $"sln {solutionFile} add {projectFile}", testOutputHelper: _testOutputHelper);
+
+            // Act - restore the solution
+            var additionalArgs = useStaticGraphRestore ? "/p:RestoreUseStaticGraphEvaluation=true" : string.Empty;
+            var environmentVariables = new Dictionary<string, string>
+            {
+                { PackageSpecFactory.EnvironmentVariableName, usePackageSpecFactory.ToString() }
+            };
+            var result = _dotnetFixture.RestoreSolutionExpectFailure(testDirectory, solutionName, additionalArgs, environmentVariables, testOutputHelper: _testOutputHelper);
+
+            // Assert - the restore should fail with NU1105 attributed to the project
+            result.ExitCode.Should().NotBe(0);
+            result.AllOutput.Should().Contain(string.Format("{0} : error NU1105: {1}", projectFile, string.Format(NuGet.Commands.Strings.SpecValidationInvalidFramework, "net10.0;net8.0")));
+
+            // Assert - no assets file since SpecValidationUtility rejects the non-specific framework
+            // https://github.com/NuGet/Home/issues/12943 tracks generating assets files in all error scenarios
+            var assetsFile = Path.Combine(projectDirectory, "obj", "project.assets.json");
+            File.Exists(assetsFile).Should().BeFalse();
+        }
+
         private void AssertRelatedProperty(IList<LockFileItem> items, string path, string related)
         {
             var item = items.Single(i => i.Path.Equals(path));
@@ -2670,6 +4722,135 @@ EndGlobal";
             {
                 Assert.Equal(related, item.Properties["related"]);
             }
+        }
+
+        [Theory]
+        [InlineData(false, false, false)]
+        [InlineData(false, true, false)]
+        [InlineData(false, true, true)]
+        [InlineData(true, false, false)]
+        [InlineData(true, true, false)]
+        [InlineData(true, true, true)]
+        public async Task DotnetRestore_RestoreSourcesWithRelativePaths_ResolvedCorrectPath(bool useGlobalProperty, bool useStaticGraphRestore, bool usePackageSpecFactory)
+        {
+            // Arrange
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+
+            const string packageId = "TestPackage";
+            var package100 = new SimpleTestPackageContext(packageId, "1.0.0");
+            var package200 = new SimpleTestPackageContext(packageId, "2.0.0");
+
+            // Create two source directories with different versions
+            var source1 = Path.Combine(pathContext.WorkingDirectory, "source1");
+            var source2 = Path.Combine(pathContext.WorkingDirectory, "source2");
+            Directory.CreateDirectory(source1);
+            Directory.CreateDirectory(source2);
+
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(source1, PackageSaveMode.Defaultv3, package100);
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(source2, PackageSaveMode.Defaultv3, package200);
+
+            // Create project with a floating version PackageReference, and RestoreSources pointing to source1 (which has v1.0.0)
+            var projectA = SimpleTestProjectContext.CreateNETCore(
+                "projectA",
+                pathContext.SolutionRoot,
+                TestConstants.DefaultTargetFramework);
+
+            var packageRef = new SimpleTestPackageContext(packageId, "1.0.0");
+            packageRef.Version = "*";
+            projectA.AddPackageToAllFrameworks(packageRef);
+            projectA.Properties.Add("RestoreSources", "../../source1");
+
+            var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+            solution.Projects.Add(projectA);
+            solution.Create();
+
+            var environmentVariables = new Dictionary<string, string>
+            {
+                { PackageSpecFactory.EnvironmentVariableName, usePackageSpecFactory.ToString() }
+            };
+
+            // Build restore arguments
+            string arguments = $"restore projectA{Path.DirectorySeparatorChar}projectA.csproj";
+            if (useStaticGraphRestore)
+            {
+                arguments += " /p:RestoreUseStaticGraphEvaluation=true";
+            }
+            if (useGlobalProperty)
+            {
+                arguments += " /p:RestoreSources=../source2";
+            }
+
+            // Act
+            _dotnetFixture.RunDotnetExpectSuccess(
+                pathContext.SolutionRoot,
+                arguments,
+                environmentVariables,
+                testOutputHelper: _testOutputHelper);
+
+            // Assert - check which version was extracted into the global packages folder
+            string expectedVersion = useGlobalProperty ? "2.0.0" : "1.0.0";
+            var packageDirectory = Path.Combine(pathContext.UserPackagesFolder, packageId.ToLowerInvariant(), expectedVersion);
+            Directory.Exists(packageDirectory).Should().BeTrue($"expected {packageId} {expectedVersion} to be in the global packages folder");
+        }
+
+        [Fact]
+        public async Task DotnetRestore_FloatingVersionWithForceRestore_DowngradesWhenHigherVersionIsRemovedFromSource()
+        {
+            // Arrange
+            using SimpleTestPathContext pathContext = _dotnetFixture.CreateSimpleTestPathContext();
+
+            const string packageId = "TestPackage";
+            await SimpleTestPackageUtility.CreateFolderFeedV3Async(
+                pathContext.PackageSource,
+                PackageSaveMode.Defaultv3,
+                new SimpleTestPackageContext(packageId, "1.0.0"),
+                new SimpleTestPackageContext(packageId, "2.0.0"));
+
+            var projectA = SimpleTestProjectContext.CreateNETCore(
+                "projectA",
+                pathContext.SolutionRoot,
+                TestConstants.DefaultTargetFramework);
+
+            projectA.AddPackageToAllFrameworks(new SimpleTestPackageContext(packageId, "*"));
+
+            new SimpleTestSolutionContext(pathContext.SolutionRoot, projectA).Create();
+
+            string arguments = $"restore projectA{Path.DirectorySeparatorChar}projectA.csproj";
+            string higherVersionGlobalPackageDirectory = GetPackageVersionDirectory(pathContext.UserPackagesFolder, packageId, "2.0.0");
+
+            _dotnetFixture.RunDotnetExpectSuccess(
+                pathContext.SolutionRoot,
+                arguments,
+                testOutputHelper: _testOutputHelper);
+
+            AssertRestoredPackageVersion(projectA, packageId, "2.0.0");
+
+            Directory.Delete(GetPackageVersionDirectory(pathContext.PackageSource, packageId, "2.0.0"), recursive: true);
+
+            // Act
+            _dotnetFixture.RunDotnetExpectSuccess(
+                pathContext.SolutionRoot,
+                arguments + " --force",
+                testOutputHelper: _testOutputHelper);
+
+            // Assert
+            AssertRestoredPackageVersion(projectA, packageId, "1.0.0");
+            Directory.Exists(higherVersionGlobalPackageDirectory).Should().BeTrue($"expected {packageId} 2.0.0 to remain in the global packages folder");
+        }
+
+        private static string GetPackageVersionDirectory(string source, string packageId, string version)
+        {
+            return Path.Combine(source, packageId.ToLowerInvariant(), version);
+        }
+
+        private static void AssertRestoredPackageVersion(SimpleTestProjectContext project, string packageId, string expectedVersion)
+        {
+            string assetsFilePath = Path.Combine(Path.GetDirectoryName(project.ProjectPath), "obj", LockFileFormat.AssetsFileName);
+            LockFile assetsFile = new LockFileFormat().Read(assetsFilePath);
+            assetsFile.Libraries.Single(e => e.Name.Equals(packageId, StringComparison.OrdinalIgnoreCase))
+                .Version
+                .Should()
+                .Be(NuGetVersion.Parse(expectedVersion));
         }
     }
 }

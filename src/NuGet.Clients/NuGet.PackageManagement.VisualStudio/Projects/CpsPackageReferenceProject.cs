@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -26,6 +28,7 @@ using NuGet.Versioning;
 using NuGet.VisualStudio;
 using PackageReference = NuGet.Packaging.PackageReference;
 using Task = System.Threading.Tasks.Task;
+using VSThreading = Microsoft.VisualStudio.Threading;
 
 namespace NuGet.PackageManagement.VisualStudio
 {
@@ -41,14 +44,14 @@ namespace NuGet.PackageManagement.VisualStudio
         private const string TargetFrameworkCondition = "TargetFramework";
 
         private readonly IProjectSystemCache _projectSystemCache;
-        private readonly UnconfiguredProject _unconfiguredProject;
+        private readonly VSThreading.AsyncLazy<UnconfiguredProject> _unconfiguredProject;
 
         public CpsPackageReferenceProject(
             string projectName,
             string projectUniqueName,
             string projectFullPath,
             IProjectSystemCache projectSystemCache,
-            UnconfiguredProject unconfiguredProject,
+            VSThreading.AsyncLazy<UnconfiguredProject> unconfiguredProject,
             INuGetProjectServices projectServices,
             string projectId)
             : base(projectName,
@@ -90,7 +93,7 @@ namespace NuGet.PackageManagement.VisualStudio
                 }
                 else
                 {
-                    return Task.FromResult<string>(null);
+                    return TaskResult.Null<string>();
                 }
             }
 
@@ -263,11 +266,14 @@ namespace NuGet.PackageManagement.VisualStudio
 
             nuGetProjectContext.Log(MessageLevel.Info, Strings.InstallingPackage, $"{packageId} {formattedRange}");
 
-            if (installationContext.SuccessfulFrameworks.Any() && installationContext.UnsuccessfulFrameworks.Any())
+            var unconfiguredProject = await _unconfiguredProject.GetValueAsync(token);
+
+            if (ShouldUseConditionalPackageReferenceService(installationContext))
             {
-                // This is the "partial install" case. That is, install the package to only a subset of the frameworks
-                // supported by this project.
-                var conditionalService = _unconfiguredProject
+                // The package is referenced with per-framework conditions (a partial install, or the package
+                // already exists with different versions per framework). Add/update it conditionally for each
+                // successful framework so we don't collapse the conditions into a single unconditional reference.
+                var conditionalService = unconfiguredProject
                     .Services
                     .ExportProvider
                     .GetExportedValue<IConditionalPackageReferencesService>();
@@ -280,13 +286,9 @@ namespace NuGet.PackageManagement.VisualStudio
                         ProjectFullPath));
                 }
 
-                foreach (var framework in installationContext.SuccessfulFrameworks)
+                foreach (var originalFramework in installationContext.SuccessfulFrameworks)
                 {
-                    string originalFramework;
-                    if (!installationContext.OriginalFrameworks.TryGetValue(framework, out originalFramework))
-                    {
-                        originalFramework = framework.GetShortFolderName();
-                    }
+                    token.ThrowIfCancellationRequested();
 
                     var reference = await conditionalService.AddAsync(
                         packageId,
@@ -294,69 +296,120 @@ namespace NuGet.PackageManagement.VisualStudio
                         TargetFrameworkCondition,
                         originalFramework);
 
-                    // SuppressParent could be set to All if developmentDependency flag is true in package nuspec file.
-                    if (installationContext.SuppressParent != LibraryIncludeFlagUtils.DefaultSuppressParent &&
-                        installationContext.IncludeType != LibraryIncludeFlags.All)
+                    // This is the update operation
+                    if (!reference.IsAdded)
                     {
-                        await SetPackagePropertyValueAsync(
-                            reference.Metadata,
-                            ProjectItemProperties.PrivateAssets,
-                            MSBuildStringUtility.Convert(LibraryIncludeFlagUtils.GetFlagString(installationContext.SuppressParent)));
-
-                        await SetPackagePropertyValueAsync(
-                            reference.Metadata,
-                            ProjectItemProperties.IncludeAssets,
-                            MSBuildStringUtility.Convert(LibraryIncludeFlagUtils.GetFlagString(installationContext.IncludeType)));
+                        await reference.Metadata.SetPropertyValueAsync("Version", formattedRange);
                     }
+
+                    await ApplySuppressParentAndIncludeTypeAsync(() => reference.Metadata, installationContext);
                 }
             }
             else
             {
-                // Install the package to all frameworks.
-                var configuredProject = await _unconfiguredProject.GetSuggestedConfiguredProjectAsync();
-
-                var result = await configuredProject
-                    .Services
-                    .PackageReferences
-                    .AddAsync(packageId, formattedRange);
-
-                // This is the update operation
-                if (!result.Added)
-                {
-                    var existingReference = result.Reference;
-                    await existingReference.Metadata.SetPropertyValueAsync("Version", formattedRange);
-                }
-
-                if (installationContext.SuppressParent != LibraryIncludeFlagUtils.DefaultSuppressParent &&
-                    installationContext.IncludeType != LibraryIncludeFlags.All)
-                {
-                    await SetPackagePropertyValueAsync(
-                        result.Reference.Metadata,
-                        ProjectItemProperties.PrivateAssets,
-                        MSBuildStringUtility.Convert(LibraryIncludeFlagUtils.GetFlagString(installationContext.SuppressParent)));
-
-                    await SetPackagePropertyValueAsync(
-                        result.Reference.Metadata,
-                        ProjectItemProperties.IncludeAssets,
-                        MSBuildStringUtility.Convert(LibraryIncludeFlagUtils.GetFlagString(installationContext.IncludeType)));
-                }
+                // The package resolves to the same version across all frameworks, so it is represented by a single
+                // unconditional reference shared by every framework. Adding it (new install) or updating the version
+                // on that shared reference applies to all target frameworks with a single call.
+                var configuredProject = await unconfiguredProject.GetSuggestedConfiguredProjectAsync();
+                await AddOrUpdatePackageReferenceAsync(configuredProject, packageId, formattedRange, installationContext);
             }
 
             return true;
         }
 
-        private async Task SetPackagePropertyValueAsync(IProjectProperties metadata, string propertyName, string propertyValue)
+        private static async Task AddOrUpdatePackageReferenceAsync(
+            ConfiguredProject configuredProject,
+            string packageId,
+            string formattedRange,
+            BuildIntegratedInstallationContext installationContext)
+        {
+            var result = await configuredProject
+                .Services
+                .PackageReferences
+                .AddAsync(packageId, formattedRange);
+
+            // This is the update operation
+            if (!result.Added)
+            {
+                await result.Reference.Metadata.SetPropertyValueAsync("Version", formattedRange);
+            }
+
+            await ApplySuppressParentAndIncludeTypeAsync(() => result.Reference.Metadata, installationContext);
+        }
+
+        private static async Task ApplySuppressParentAndIncludeTypeAsync(Func<IProjectProperties> metadataAccessor, BuildIntegratedInstallationContext installationContext)
+        {
+            // SuppressParent could be set to All if developmentDependency flag is true in package nuspec file.
+            if (installationContext.SuppressParent != LibraryIncludeFlagUtils.DefaultSuppressParent &&
+                installationContext.IncludeType != LibraryIncludeFlags.All)
+            {
+                IProjectProperties metadata = metadataAccessor();
+
+                await SetPackagePropertyValueAsync(
+                    metadata,
+                    ProjectItemProperties.PrivateAssets,
+                    MSBuildStringUtility.Convert(LibraryIncludeFlagUtils.GetFlagString(installationContext.SuppressParent)));
+
+                await SetPackagePropertyValueAsync(
+                    metadata,
+                    ProjectItemProperties.IncludeAssets,
+                    MSBuildStringUtility.Convert(LibraryIncludeFlagUtils.GetFlagString(installationContext.IncludeType)));
+            }
+        }
+
+        private async static Task SetPackagePropertyValueAsync(IProjectProperties metadata, string propertyName, string propertyValue)
         {
             await metadata.SetPropertyValueAsync(
                 propertyName,
                 propertyValue);
         }
 
-        public override async Task<bool> UninstallPackageAsync(PackageIdentity packageIdentity, INuGetProjectContext nuGetProjectContext, CancellationToken token)
+        public override Task<bool> UninstallPackageAsync(PackageIdentity packageIdentity, INuGetProjectContext nuGetProjectContext, CancellationToken token)
         {
-            var configuredProject = await _unconfiguredProject.GetSuggestedConfiguredProjectAsync();
-            await configuredProject?.Services.PackageReferences.RemoveAsync(packageIdentity.Id);
+            throw new InvalidOperationException("For CPSPackageReferenceProject, the uninstall method that can handle conditional targeting must be called instead.");
+        }
+
+        public override async Task<bool> UninstallPackageAsync(string packageId, BuildIntegratedInstallationContext installationContext, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            if (string.IsNullOrEmpty(packageId)) throw new ArgumentException(string.Format(Strings.Argument_Cannot_Be_Null_Or_Empty, nameof(packageId)));
+            if (installationContext == null) throw new ArgumentNullException(nameof(installationContext));
+
+            if (ShouldUseConditionalPackageReferenceService(installationContext))
+            {
+                var unconfiguredProject = await _unconfiguredProject.GetValueAsync(token);
+                var conditionalService = unconfiguredProject
+                    .Services
+                    .ExportProvider
+                    .GetExportedValue<IConditionalPackageReferencesService>();
+
+                if (conditionalService == null)
+                {
+                    throw new InvalidOperationException(string.Format(
+                        CultureInfo.CurrentCulture,
+                        Strings.UnableToGetCPSPackageInstallationService,
+                        ProjectFullPath));
+                }
+
+                foreach (var originalFramework in installationContext.SuccessfulFrameworks)
+                {
+                    await conditionalService.RemoveAsync(packageId, TargetFrameworkCondition, originalFramework);
+                }
+            }
+            else
+            {
+                var unconfiguredProject = await _unconfiguredProject.GetValueAsync(token);
+                var configuredProject = await unconfiguredProject.GetSuggestedConfiguredProjectAsync();
+
+                await configuredProject?.Services.PackageReferences.RemoveAsync(packageId);
+            }
             return true;
+        }
+
+        private static bool ShouldUseConditionalPackageReferenceService(BuildIntegratedInstallationContext installationContext)
+        {
+            return installationContext.SuccessfulFrameworks.Any() &&
+                (installationContext.UnsuccessfulFrameworks.Any() || installationContext.AreAllPackagesConditional);
         }
 
         public override Task<string> GetCacheFilePathAsync()

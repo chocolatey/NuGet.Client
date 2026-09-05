@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.IO;
 using System.IO.Compression;
@@ -8,6 +10,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
 using Moq;
 using NuGet.Common;
 using NuGet.Frameworks;
@@ -15,7 +18,6 @@ using NuGet.Packaging.Core;
 using NuGet.Packaging.Signing;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
-using Test.Utility.Signing;
 using Xunit;
 
 namespace NuGet.Packaging.Test
@@ -97,7 +99,7 @@ namespace NuGet.Packaging.Test
                 {
                     var groups = reader.GetReferenceItems().ToArray();
 
-                    Assert.Equal(4, groups.Count());
+                    Assert.Equal(4, groups.Length);
 
                     Assert.Equal(NuGetFramework.AnyFramework, groups[0].TargetFramework);
                     Assert.Equal("lib/a.dll", groups[0].Items.ToArray()[0]);
@@ -126,7 +128,7 @@ namespace NuGet.Packaging.Test
                 {
                     var groups = reader.GetReferenceItems().ToArray();
 
-                    Assert.Equal(3, groups.Count());
+                    Assert.Equal(3, groups.Length);
 
                     Assert.Equal(NuGetFramework.AnyFramework, groups[0].TargetFramework);
                     Assert.Equal(2, groups[0].Items.Count());
@@ -156,7 +158,7 @@ namespace NuGet.Packaging.Test
                 {
                     var groups = reader.GetReferenceItems().ToArray();
 
-                    var emptyGroup = groups.Where(g => g.TargetFramework == NuGetFramework.ParseFolder("net45")).Single();
+                    var emptyGroup = groups.Single(g => g.TargetFramework == NuGetFramework.ParseFolder("net45"));
 
                     Assert.Equal(0, emptyGroup.Items.Count());
                 }
@@ -174,7 +176,7 @@ namespace NuGet.Packaging.Test
                 {
                     var groups = reader.GetReferenceItems().ToArray();
 
-                    Assert.Equal(1, groups.Count());
+                    Assert.Equal(1, groups.Length);
 
                     Assert.Equal(NuGetFramework.Parse("net40"), groups[0].TargetFramework);
                     Assert.Equal(2, groups[0].Items.Count());
@@ -214,7 +216,7 @@ namespace NuGet.Packaging.Test
                 {
                     var groups = reader.GetContentItems().ToArray();
 
-                    Assert.Equal(3, groups.Count());
+                    Assert.Equal(3, groups.Length);
                 }
             }
         }
@@ -230,7 +232,7 @@ namespace NuGet.Packaging.Test
                 {
                     var groups = reader.GetContentItems().ToArray();
 
-                    Assert.Equal(3, groups.Count());
+                    Assert.Equal(3, groups.Length);
                 }
             }
         }
@@ -246,7 +248,7 @@ namespace NuGet.Packaging.Test
                 {
                     var groups = reader.GetContentItems().ToArray();
 
-                    Assert.Equal(1, groups.Count());
+                    Assert.Equal(1, groups.Length);
 
                     Assert.Equal(NuGetFramework.AnyFramework, groups.Single().TargetFramework);
 
@@ -267,7 +269,7 @@ namespace NuGet.Packaging.Test
                 {
                     var groups = reader.GetReferenceItems().ToArray();
 
-                    Assert.Equal(3, groups.Count());
+                    Assert.Equal(3, groups.Length);
 
                     Assert.Equal(4, groups.SelectMany(e => e.Items).Count());
                 }
@@ -286,7 +288,7 @@ namespace NuGet.Packaging.Test
                 {
                     var groups = reader.GetReferenceItems().ToArray();
 
-                    Assert.Equal(2, groups.Count());
+                    Assert.Equal(2, groups.Length);
 
                     Assert.Equal(NuGetFramework.AnyFramework, groups[0].TargetFramework);
                     Assert.Equal(1, groups[0].Items.Count());
@@ -311,7 +313,7 @@ namespace NuGet.Packaging.Test
                 {
                     var groups = reader.GetReferenceItems().ToArray();
 
-                    Assert.Equal(3, groups.Count());
+                    Assert.Equal(3, groups.Length);
 
                     Assert.Equal(NuGetFramework.AnyFramework, groups[0].TargetFramework);
                     Assert.Equal(1, groups[0].Items.Count());
@@ -899,7 +901,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "../../A.dll",
                    "content/net40/B.nuspec");
 
@@ -931,7 +933,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    $"{rootPath}/A.dll",
                    "content/net40/B.nuspec");
 
@@ -962,7 +964,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    ".",
                    "content/net40/B.nuspec");
 
@@ -1016,13 +1018,13 @@ namespace NuGet.Packaging.Test
                        root,
                        identity.Id,
                        identity.Version.ToString(),
-                       DateTimeOffset.UtcNow.LocalDateTime,
+                       entryModifiedTime: DateTimeOffset.Now,
                        @"readme~.txt");
 
                     using (var packageStream = File.OpenRead(packageFileInfo.FullName))
                     using (var packageReader = new PackageArchiveReader(packageStream))
                     {
-                        // Act & Assert                         
+                        // Act & Assert
                         var files = await packageReader.CopyFilesAsync(
                             destination.Path.ToUpper(),
                             new[] { @"readme~.txt" },
@@ -1055,7 +1057,7 @@ namespace NuGet.Packaging.Test
                        root,
                        identity.Id,
                        identity.Version.ToString(),
-                       DateTimeOffset.UtcNow.LocalDateTime,
+                       entryModifiedTime: DateTimeOffset.Now,
                        @"readme~.txt");
 
                     using (var packageStream = File.OpenRead(packageFileInfo.FullName))
@@ -1624,10 +1626,8 @@ namespace NuGet.Packaging.Test
 
                 // Assert is just that no exception was thrown.
             }
-
         }
 
-#if IS_SIGNING_SUPPORTED
         [Fact]
         public async Task ValidateIntegrityAsync_WhenSignatureContentNull_Throws()
         {
@@ -1701,7 +1701,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "../../A.dll",
                    "content/net40/B.nuspec");
 
@@ -1728,7 +1728,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    $"{rootPath}/A.dll",
                    "content/net40/B.nuspec");
 
@@ -1755,7 +1755,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    ".",
                    "content/net40/B.nuspec");
 
@@ -1780,7 +1780,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "C++.dll",
                    "content/net40/B&#A.txt",
                    "content/net40/B.nuspec");
@@ -1807,7 +1807,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net40/A.dll",
                    "content/net40/B.nuspec");
 
@@ -1864,50 +1864,6 @@ namespace NuGet.Packaging.Test
                 Assert.Equal(expectedResult, result);
             }
         }
-
-#if IS_SIGNING_SUPPORTED
-        [CIOnlyFact]
-        public async Task GetContentHash_IsSameForUnsignedAndSignedPackageAsync()
-        {
-            // this test will create an unsigned package, copy it, then sign it. then compare the contentHash
-            var nupkg = new SimpleTestPackageContext("Package.Content.Hash.Test", "1.0.0");
-
-            using (var unsignedDir = TestDirectory.Create())
-            {
-                var nupkgFileName = $"{nupkg.Identity.Id}.{nupkg.Identity.Version}.nupkg";
-                var nupkgFileInfo = await nupkg.CreateAsFileAsync(unsignedDir, nupkgFileName);
-
-                using (var signedDir = TestDirectory.Create())
-                {
-                    Uri timestampService = null;
-                    var signatureHashAlgorithm = HashAlgorithmName.SHA256;
-                    var timestampHashAlgorithm = HashAlgorithmName.SHA256;
-
-                    var signedPackagePath = Path.Combine(signedDir.Path, nupkgFileName);
-
-                    using (var trustedCert = SigningTestUtility.GenerateTrustedTestCertificate())
-                    using (var originalPackage = File.OpenRead(nupkgFileInfo.FullName))
-                    using (var signedPackage = File.Open(signedPackagePath, FileMode.OpenOrCreate, FileAccess.ReadWrite))
-                    using (var request = new AuthorSignPackageRequest(
-                        trustedCert.Source.Cert,
-                        signatureHashAlgorithm,
-                        timestampHashAlgorithm))
-                    {
-                        await SignedArchiveTestUtility.CreateSignedPackageAsync(request, originalPackage, signedPackage, timestampService);
-                    }
-
-                    using (var unsignedReader = new PackageArchiveReader(nupkgFileInfo.FullName))
-                    using (var signedReader = new PackageArchiveReader(signedPackagePath))
-                    {
-                        var contentHashUnsigned = unsignedReader.GetContentHash(CancellationToken.None);
-                        var contentHashSigned = signedReader.GetContentHash(CancellationToken.None);
-
-                        Assert.Equal(contentHashUnsigned, contentHashSigned);
-                    }
-                }
-            }
-        }
-#endif 
 
         private static Zip CreateZipWithNestedStoredZipArchives()
         {
@@ -1974,7 +1930,6 @@ namespace NuGet.Packaging.Test
                 return stream.ToArray();
             }
         }
-#endif
 
         [Fact]
         public void CanVerifySignedPackages_Always_ReturnsValueBasedOnOperatingSystemAndFramework()
@@ -2023,13 +1978,8 @@ namespace NuGet.Packaging.Test
                 bool result = packageArchiveReader.CanVerifySignedPackages(null);
 
                 // Assert
-#if IS_SIGNING_SUPPORTED
                 // Verify package signature when signing is supported
                 Assert.True(result);
-#else
-                // Cannot verify package signature when signing is not supported
-                Assert.False(result);
-#endif
             }
         }
 
@@ -2068,13 +2018,8 @@ namespace NuGet.Packaging.Test
                 // Act
                 bool result = packageArchiveReader.CanVerifySignedPackages(null);
                 // Assert
-#if IS_SIGNING_SUPPORTED
                 // Verify package signature when signing is supported
                 Assert.True(result);
-#else
-                // Cannot verify package signature when signing is not supported
-                Assert.False(result);
-#endif
             }
         }
 
@@ -2092,7 +2037,7 @@ namespace NuGet.Packaging.Test
             using (var packageArchiveReader = new PackageArchiveReader(packageStream, environmentVariableReader: environment.Object))
             {
                 // Act
-                bool expectedResult = CanVerifySignedPackages();
+                bool expectedResult = CanVerifySignedPackages(environment.Object);
                 bool actualResult = packageArchiveReader.CanVerifySignedPackages(null);
 
                 // Assert
@@ -2100,14 +2045,21 @@ namespace NuGet.Packaging.Test
             }
         }
 
-        private static bool CanVerifySignedPackages()
+        private static bool CanVerifySignedPackages(IEnvironmentVariableReader environmentVariableReader = null)
         {
-            return RuntimeEnvironmentHelper.IsWindows &&
-#if IS_SIGNING_SUPPORTED
-                true;
-#else
-                false;
-#endif
+            return RuntimeEnvironmentHelper.IsWindows ||
+                IsVerificationEnabledByEnvironmentVariable(environmentVariableReader);
+        }
+
+        private static bool IsVerificationEnabledByEnvironmentVariable(
+            IEnvironmentVariableReader environmentVariableReader = null)
+        {
+            IEnvironmentVariableReader reader = environmentVariableReader ?? EnvironmentVariableWrapper.Instance;
+
+            string value = reader.GetEnvironmentVariable(
+                EnvironmentVariableConstants.DotNetNuGetSignatureVerification);
+
+            return string.Equals(bool.TrueString, value, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string ExtractFile(string sourcePath, string targetPath, Stream sourceStream)

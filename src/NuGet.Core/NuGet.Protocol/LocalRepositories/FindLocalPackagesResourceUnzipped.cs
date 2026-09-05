@@ -24,7 +24,7 @@ namespace NuGet.Protocol
 
         public FindLocalPackagesResourceUnzipped(string root)
         {
-            Root = root;
+            Root = root ?? throw new ArgumentNullException(nameof(root));
             _packages = new Lazy<IReadOnlyList<LocalPackageInfo>>(() => GetPackagesCore(root));
             _index = new Lazy<Dictionary<PackageIdentity, LocalPackageInfo>>(() => GetIndex(_packages));
             _pathIndex = new Lazy<Dictionary<Uri, LocalPackageInfo>>(() => GetPathIndex(_packages));
@@ -35,17 +35,15 @@ namespace NuGet.Protocol
             return _packages.Value.Where(package => StringComparer.OrdinalIgnoreCase.Equals(id, package.Identity.Id)).ToArray();
         }
 
-        public override LocalPackageInfo GetPackage(Uri path, ILogger logger, CancellationToken token)
+        public override LocalPackageInfo? GetPackage(Uri path, ILogger logger, CancellationToken token)
         {
-            LocalPackageInfo package;
-            _pathIndex.Value.TryGetValue(path, out package);
+            _pathIndex.Value.TryGetValue(path, out LocalPackageInfo? package);
             return package;
         }
 
-        public override LocalPackageInfo GetPackage(PackageIdentity identity, ILogger logger, CancellationToken token)
+        public override LocalPackageInfo? GetPackage(PackageIdentity identity, ILogger logger, CancellationToken token)
         {
-            LocalPackageInfo package;
-            _index.Value.TryGetValue(identity, out package);
+            _index.Value.TryGetValue(identity, out LocalPackageInfo? package);
             return package;
         }
 
@@ -132,12 +130,6 @@ namespace NuGet.Protocol
             }
 
             return result;
-        }
-
-        private static PackageReaderBase GetPackage(DirectoryInfo root, string name)
-        {
-            var packageRoot = Path.Combine(root.FullName, name);
-            return new PackageFolderReader(packageRoot);
         }
 
         private static NuspecReader GetNuspec(DirectoryInfo root, string name)

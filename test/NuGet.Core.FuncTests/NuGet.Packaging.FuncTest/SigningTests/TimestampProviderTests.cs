@@ -1,7 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if IS_SIGNING_SUPPORTED
+#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -13,6 +13,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
 using NuGet.Common;
 using NuGet.Packaging.Signing;
 using NuGet.Test.Utility;
@@ -35,7 +36,7 @@ namespace NuGet.Packaging.FuncTest
             _trustedTestCert = _testFixture.TrustedTestCertificate;
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTimestampAsync_WithValidInput_ReturnsTimestampAsync()
         {
             var logger = new TestLogger();
@@ -68,7 +69,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTimestampAsync_AssertCompleteChain_SuccessAsync()
         {
             var timestampService = await _testFixture.GetDefaultTrustedTimestampServiceAsync();
@@ -89,7 +90,7 @@ namespace NuGet.Packaging.FuncTest
                 // rebuild the chain to get the list of certificates
                 using (X509ChainHolder chainHolder = X509ChainHolder.CreateForTimestamping())
                 {
-                    var chain = chainHolder.Chain;
+                    IX509Chain chain = chainHolder.Chain2;
                     var policy = chain.ChainPolicy;
 
                     policy.ApplicationPolicy.Add(new Oid(Oids.TimeStampingEku));
@@ -99,7 +100,7 @@ namespace NuGet.Packaging.FuncTest
 
                     var timestampSignerCertificate = timestampCms.SignerInfos[0].Certificate;
                     chainBuildSuccess = chain.Build(timestampSignerCertificate);
-                    certificateChain = CertificateChainUtility.GetCertificateChain(chain);
+                    certificateChain = CertificateChainUtility.GetCertificateChain(chain.PrivateReference);
                 }
 
                 using (certificateChain)
@@ -127,7 +128,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTimestampAsync_WhenRequestNull_ThrowsAsync()
         {
             var logger = new TestLogger();
@@ -165,7 +166,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTimestampAsync_WhenLoggerNull_ThrowsAsync()
         {
             var timestampService = await _testFixture.GetDefaultTrustedTimestampServiceAsync();
@@ -196,7 +197,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTimestampAsync_WhenCancelled_ThrowsAsync()
         {
             var logger = new TestLogger();
@@ -227,7 +228,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTimestampAsync_WhenRevocationInformationUnavailable_SuccessAsync()
         {
             var testServer = await _testFixture.GetSigningTestServerAsync();
@@ -257,7 +258,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTimestampAsync_WhenTimestampSigningCertificateRevoked_ThrowsAsync()
         {
             var testServer = await _testFixture.GetSigningTestServerAsync();
@@ -266,7 +267,7 @@ namespace NuGet.Packaging.FuncTest
 
             certificateAuthority.Revoke(
                 timestampService.Certificate,
-                RevocationReason.KeyCompromise,
+                X509RevocationReason.KeyCompromise,
                 DateTimeOffset.UtcNow);
 
             VerifyTimestampData(
@@ -281,7 +282,7 @@ namespace NuGet.Packaging.FuncTest
                 });
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTimestampAsync_WithFailureReponse_ThrowsAsync()
         {
             var testServer = await _testFixture.GetSigningTestServerAsync();
@@ -303,7 +304,7 @@ namespace NuGet.Packaging.FuncTest
                 });
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTimestampAsync_WhenSigningCertificateNotReturned_ThrowsAsync()
         {
             var testServer = await _testFixture.GetSigningTestServerAsync();
@@ -323,7 +324,7 @@ namespace NuGet.Packaging.FuncTest
                 });
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTimestampAsync_WhenSignatureHashAlgorithmIsSha1_ThrowsAsync()
         {
             var testServer = await _testFixture.GetSigningTestServerAsync();
@@ -345,14 +346,15 @@ namespace NuGet.Packaging.FuncTest
                 });
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTimestampAsync_WhenCertificateSignatureAlgorithmIsSha1_ThrowsAsync()
         {
+            Oid sha1 = new(Oids.Sha1);
             var testServer = await _testFixture.GetSigningTestServerAsync();
             var certificateAuthority = await _testFixture.GetDefaultTrustedCertificateAuthorityAsync();
-            var timestampServiceOptions = new TimestampServiceOptions() { SignatureHashAlgorithm = new Oid(Oids.Sha1) };
+            var timestampServiceOptions = new TimestampServiceOptions() { SignatureHashAlgorithm = sha1 };
             var issueCertificateOptions = IssueCertificateOptions.CreateDefaultForTimestampService();
-            issueCertificateOptions.SignatureAlgorithmName = "SHA1WITHRSA";
+            issueCertificateOptions.SignatureAlgorithm = sha1;
 
             var timestampService = TimestampService.Create(certificateAuthority, timestampServiceOptions, issueCertificateOptions);
 
@@ -370,7 +372,7 @@ namespace NuGet.Packaging.FuncTest
                 });
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTimestampAsync_TimestampGeneralizedTimeOutsideCertificateValidityPeriod_FailAsync()
         {
             // Arrange
@@ -400,7 +402,7 @@ namespace NuGet.Packaging.FuncTest
                 });
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task TimestampSignatureAsync_TimestampingPrimarySignature_SuccedsAsync()
         {
             var logger = new TestLogger();
@@ -429,7 +431,7 @@ namespace NuGet.Packaging.FuncTest
                 primarySignature.Should().NotBeNull();
                 primarySignature.SignedCms.Should().NotBeNull();
                 primarySignature.SignerInfo.Should().NotBeNull();
-                primarySignature.SignerInfo.UnsignedAttributes.Count.Should().BeGreaterOrEqualTo(1);
+                primarySignature.SignerInfo.UnsignedAttributes.Count.Should().BeGreaterThanOrEqualTo(1);
 
                 var hasTimestampUnsignedAttribute = false;
                 var timestampCms = new SignedCms();
@@ -448,7 +450,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task TimestampSignatureAsync_TimestampingCountersignature_SucceedsAsync()
         {
             var logger = new TestLogger();
@@ -478,7 +480,7 @@ namespace NuGet.Packaging.FuncTest
                 // Assert
                 repositoryCountersignature.Should().NotBeNull();
                 repositoryCountersignature.SignerInfo.Should().NotBeNull();
-                repositoryCountersignature.SignerInfo.UnsignedAttributes.Count.Should().BeGreaterOrEqualTo(1);
+                repositoryCountersignature.SignerInfo.UnsignedAttributes.Count.Should().BeGreaterThanOrEqualTo(1);
 
                 var hasTimestampUnsignedAttribute = false;
                 var timestampCms = new SignedCms();
@@ -543,4 +545,3 @@ namespace NuGet.Packaging.FuncTest
         }
     }
 }
-#endif

@@ -1,8 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System.Linq;
-using System.Text;
+#nullable disable
+
 using System.Windows;
 using System.Windows.Input;
 using Microsoft.VisualStudio.PlatformUI;
@@ -42,7 +42,7 @@ namespace NuGet.PackageManagement.UI
             DialogResult = false;
         }
 
-        private void OkButtonClicked(object sender, RoutedEventArgs e)
+        private void ApplyButtonClicked(object sender, RoutedEventArgs e)
         {
             DialogResult = true;
         }

@@ -1,15 +1,15 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
-using System.IO;
+using System.Collections.Immutable;
 using System.Linq;
-using Newtonsoft.Json;
 using NuGet.Common;
 using NuGet.Frameworks;
 using NuGet.LibraryModel;
-using NuGet.Packaging;
 using NuGet.RuntimeModel;
 using NuGet.Shared;
 using NuGet.Versioning;
@@ -30,10 +30,15 @@ namespace NuGet.ProjectModel
         /// <param name="writer">An <c>NuGet.Common.IObjectWriter</c> instance.</param>
         public static void Write(PackageSpec packageSpec, IObjectWriter writer)
         {
-            Write(packageSpec, writer, hashing: false);
+            Write(packageSpec, writer, hashing: false, EnvironmentVariableWrapper.Instance);
         }
 
-        internal static void Write(PackageSpec packageSpec, IObjectWriter writer, bool hashing)
+        internal static void Write(PackageSpec packageSpec, IObjectWriter writer, bool hashing, IEnvironmentVariableReader environmentVariableReader)
+        {
+            Write(packageSpec, writer, hashing, environmentVariableReader, useLegacyWriter: false);
+        }
+
+        internal static void Write(PackageSpec packageSpec, IObjectWriter writer, bool hashing, IEnvironmentVariableReader environmentVariableReader, bool useLegacyWriter)
         {
             if (packageSpec == null)
             {
@@ -45,64 +50,16 @@ namespace NuGet.ProjectModel
                 throw new ArgumentNullException(nameof(writer));
             }
 
-            SetValue(writer, "title", packageSpec.Title);
-
-#pragma warning disable CS0612 // Type or member is obsolete
             if (!packageSpec.IsDefaultVersion)
             {
                 SetValue(writer, "version", packageSpec.Version?.ToFullString());
             }
 
-            SetValue(writer, "description", packageSpec.Description);
-            SetArrayValue(writer, "authors", packageSpec.Authors);
-            SetValue(writer, "copyright", packageSpec.Copyright);
-            SetValue(writer, "language", packageSpec.Language);
-            SetArrayValue(writer, "contentFiles", packageSpec.ContentFiles);
-            SetDictionaryValue(writer, "packInclude", packageSpec.PackInclude);
-            SetPackOptions(writer, packageSpec);
-#pragma warning restore CS0612 // Type or member is obsolete
-            SetMSBuildMetadata(writer, packageSpec);
-#pragma warning disable CS0612 // Type or member is obsolete
-            SetDictionaryValues(writer, "scripts", packageSpec.Scripts);
-#pragma warning restore CS0612 // Type or member is obsolete
+            SetMSBuildMetadata(writer, packageSpec, environmentVariableReader, useLegacyWriter);
 
-
-            if (packageSpec.Dependencies.Any())
-            {
-                SetDependencies(writer, packageSpec.Dependencies);
-            }
-
-            SetFrameworks(writer, packageSpec.TargetFrameworks, hashing);
+            SetFrameworks(writer, packageSpec.TargetFrameworks, hashing, useLegacyWriter);
 
             JsonRuntimeFormat.WriteRuntimeGraph(writer, packageSpec.RuntimeGraph);
-        }
-
-        /// <summary>
-        /// Writes a PackageSpec to a file.
-        /// </summary>
-        /// <param name="packageSpec">A <c>PackageSpec</c> instance.</param>
-        /// <param name="filePath">A file path to write to.</param>
-        public static void WriteToFile(PackageSpec packageSpec, string filePath)
-        {
-            if (packageSpec == null)
-            {
-                throw new ArgumentNullException(nameof(packageSpec));
-            }
-
-            if (string.IsNullOrEmpty(filePath))
-            {
-                throw new ArgumentException(Strings.ArgumentNullOrEmpty, nameof(filePath));
-            }
-
-            using (var fileStream = new FileStream(filePath, FileMode.Create))
-            using (var textWriter = new StreamWriter(fileStream))
-            using (var jsonWriter = new JsonTextWriter(textWriter))
-            using (var writer = new JsonObjectWriter(jsonWriter))
-            {
-                jsonWriter.Formatting = Formatting.Indented;
-
-                Write(packageSpec, writer);
-            }
         }
 
         private static bool IsMetadataValid(ProjectRestoreMetadata msbuildMetadata)
@@ -125,7 +82,7 @@ namespace NuGet.ProjectModel
         /// <summary>
         /// This method sets the msbuild metadata that's important for restore. Ensures that frameworks regardless of which way they're stores in the metadata(full name or short tfm name) are written out the same.
         /// </summary>
-        private static void SetMSBuildMetadata(IObjectWriter writer, PackageSpec packageSpec)
+        private static void SetMSBuildMetadata(IObjectWriter writer, PackageSpec packageSpec, IEnvironmentVariableReader environmentVariableReader, bool useTargetFrameworkAsKey)
         {
             var msbuildMetadata = packageSpec.RestoreMetadata;
 
@@ -134,13 +91,16 @@ namespace NuGet.ProjectModel
                 return;
             }
 
+            bool useMacros = MSBuildStringUtility.IsTrue(environmentVariableReader.GetEnvironmentVariable(MacroStringsUtility.NUGET_ENABLE_EXPERIMENTAL_MACROS));
+            var userSettingsDirectory = NuGetEnvironment.GetFolderPath(NuGetFolderPath.UserSettingsDirectory);
+
             writer.WriteObjectStart(JsonPackageSpecReader.RestoreOptions);
 
             SetValue(writer, "projectUniqueName", msbuildMetadata.ProjectUniqueName);
             SetValue(writer, "projectName", msbuildMetadata.ProjectName);
             SetValue(writer, "projectPath", msbuildMetadata.ProjectPath);
             SetValue(writer, "projectJsonPath", msbuildMetadata.ProjectJsonPath);
-            SetValue(writer, "packagesPath", msbuildMetadata.PackagesPath);
+            SetValue(writer, "packagesPath", ApplyMacro(msbuildMetadata.PackagesPath, userSettingsDirectory, useMacros));
             SetValue(writer, "outputPath", msbuildMetadata.OutputPath);
 
             if (msbuildMetadata.ProjectStyle != ProjectStyle.Unknown)
@@ -150,25 +110,53 @@ namespace NuGet.ProjectModel
 
             WriteMetadataBooleans(writer, msbuildMetadata);
 
-            SetArrayValue(writer, "fallbackFolders", msbuildMetadata.FallbackFolders);
-            SetArrayValue(writer, "configFilePaths", msbuildMetadata.ConfigFilePaths);
+            if (useMacros)
+            {
+                var fallbackFolderCopy = msbuildMetadata.FallbackFolders.ToList();
+                var configFilePathsCopy = msbuildMetadata.ConfigFilePaths.ToList();
+                MacroStringsUtility.ApplyMacros(fallbackFolderCopy, userSettingsDirectory, MacroStringsUtility.UserMacro, PathUtility.GetStringComparisonBasedOnOS());
+                MacroStringsUtility.ApplyMacros(configFilePathsCopy, userSettingsDirectory, MacroStringsUtility.UserMacro, PathUtility.GetStringComparisonBasedOnOS());
+
+                SetArrayValue(writer, "fallbackFolders", fallbackFolderCopy);
+                SetArrayValue(writer, "configFilePaths", configFilePathsCopy);
+            }
+            else
+            {
+                SetArrayValue(writer, "fallbackFolders", msbuildMetadata.FallbackFolders);
+                SetArrayValue(writer, "configFilePaths", msbuildMetadata.ConfigFilePaths);
+            }
+
             // This need to stay the original strings because the nuget.g.targets have conditional imports based on the original framework name
             SetArrayValue(writer, "originalTargetFrameworks", msbuildMetadata.OriginalTargetFrameworks.OrderBy(c => c, StringComparer.Ordinal));
 
             WriteMetadataSources(writer, msbuildMetadata);
             WriteMetadataFiles(writer, msbuildMetadata);
-            WriteMetadataTargetFrameworks(writer, msbuildMetadata);
+            WriteMetadataTargetFrameworks(writer, msbuildMetadata, useTargetFrameworkAsKey);
             SetWarningProperties(writer, msbuildMetadata);
 
-            // write NuGet lock file msbuild properties
             WriteNuGetLockFileProperties(writer, msbuildMetadata);
+            WriteNuGetAuditProperties(writer, msbuildMetadata.RestoreAuditProperties);
 
             if (msbuildMetadata is PackagesConfigProjectRestoreMetadata pcMsbuildMetadata)
             {
                 SetValue(writer, "packagesConfigPath", pcMsbuildMetadata.PackagesConfigPath);
             }
 
+            if (packageSpec.RestoreMetadata.SdkAnalysisLevel is not null)
+            {
+                SetValue(writer, "SdkAnalysisLevel", packageSpec.RestoreMetadata.SdkAnalysisLevel.ToString());
+            }
+
             writer.WriteObjectEnd();
+        }
+
+        private static string ApplyMacro(string value, string userSettingsDirectory, bool useMacros)
+        {
+            if (useMacros)
+            {
+                return MacroStringsUtility.ApplyMacro(value, userSettingsDirectory, MacroStringsUtility.UserMacro, PathUtility.GetStringComparisonBasedOnOS());
+            }
+            return value;
         }
 
         private static void WriteMetadataBooleans(IObjectWriter writer, ProjectRestoreMetadata msbuildMetadata)
@@ -178,8 +166,13 @@ namespace NuGet.ProjectModel
             SetValueIfTrue(writer, "validateRuntimeAssets", msbuildMetadata.ValidateRuntimeAssets);
             SetValueIfTrue(writer, "skipContentFileWrite", msbuildMetadata.SkipContentFileWrite);
             SetValueIfTrue(writer, "centralPackageVersionsManagementEnabled", msbuildMetadata.CentralPackageVersionsEnabled);
+            SetValueIfTrue(writer, "centralPackageFloatingVersionsEnabled", msbuildMetadata.CentralPackageFloatingVersionsEnabled);
             SetValueIfTrue(writer, "centralPackageVersionOverrideDisabled", msbuildMetadata.CentralPackageVersionOverrideDisabled);
             SetValueIfTrue(writer, "CentralPackageTransitivePinningEnabled", msbuildMetadata.CentralPackageTransitivePinningEnabled);
+            SetValueIfFalse(writer, "UsingMicrosoftNETSdk", msbuildMetadata.UsingMicrosoftNETSdk);
+            SetValueIfTrue(writer, "restoreEnableAnalyzerAssets", msbuildMetadata.RestoreEnableAnalyzerAssets);
+            SetValueIfTrue(writer, "restoreUseLegacyDependencyResolver", msbuildMetadata.UseLegacyDependencyResolver);
+            SetValueIfTrue(writer, "restoreDoNotWriteDependencyGraphSpec", msbuildMetadata.RestoreDoNotWriteDependencyGraphSpec);
         }
 
 
@@ -200,26 +193,53 @@ namespace NuGet.ProjectModel
             }
         }
 
-        private static void WriteMetadataTargetFrameworks(IObjectWriter writer, ProjectRestoreMetadata msbuildMetadata)
+        private static void WriteNuGetAuditProperties(IObjectWriter writer, RestoreAuditProperties auditProperties)
+        {
+            if (auditProperties == null) return;
+
+            writer.WriteObjectStart("restoreAuditProperties");
+
+            SetValueIfNotNull(writer, "enableAudit", auditProperties.EnableAudit);
+            SetValueIfNotNull(writer, "auditLevel", auditProperties.AuditLevel);
+            SetValueIfNotNull(writer, "auditMode", auditProperties.AuditMode);
+
+            if (auditProperties.SuppressedAdvisories?.Count > 0)
+            {
+                writer.WriteObjectStart("suppressedAdvisories");
+
+                foreach (string advisory in auditProperties.SuppressedAdvisories)
+                {
+                    writer.WriteNameValue(advisory, null);
+                }
+
+                writer.WriteObjectEnd();
+            }
+
+            writer.WriteObjectEnd();
+        }
+
+        private static void WriteMetadataTargetFrameworks(IObjectWriter writer, ProjectRestoreMetadata msbuildMetadata, bool useTargetFrameworkAsKey)
         {
             if (msbuildMetadata.TargetFrameworks?.Count > 0)
             {
                 writer.WriteObjectStart("frameworks");
 
                 var frameworkNames = new HashSet<string>();
-                var frameworkSorter = new NuGetFrameworkSorter();
-                foreach (var framework in msbuildMetadata.TargetFrameworks.OrderBy(c => c.FrameworkName, frameworkSorter))
+                var frameworkSorter = NuGetFrameworkSorter.Instance;
+                foreach (var framework in msbuildMetadata.TargetFrameworks.OrderBy(c => c.TargetAlias, StringComparer.OrdinalIgnoreCase))
                 {
-                    var frameworkName = framework.FrameworkName.GetShortFolderName();
+                    string frameworkHeader = useTargetFrameworkAsKey || string.IsNullOrEmpty(framework.TargetAlias)
+                        ? framework.FrameworkName.GetShortFolderName()
+                        : framework.TargetAlias;
 
-                    if (!frameworkNames.Contains(frameworkName))
+                    if (!frameworkNames.Contains(frameworkHeader))
                     {
-                        frameworkNames.Add(frameworkName);
+                        frameworkNames.Add(frameworkHeader);
 
-                        writer.WriteObjectStart(frameworkName);
+                        writer.WriteObjectStart(frameworkHeader);
 
+                        SetValue(writer, "framework", framework.FrameworkName.GetShortFolderName());
                         SetValueIfNotNull(writer, "targetAlias", framework.TargetAlias);
-
                         writer.WriteObjectStart("projectReferences");
 
                         foreach (var project in framework.ProjectReferences.OrderBy(e => e.ProjectPath, PathUtility.GetStringComparerBasedOnOS()))
@@ -302,7 +322,6 @@ namespace NuGet.ProjectModel
                     SetArrayValue(writer, "noWarn", msbuildMetadata
                        .ProjectWideWarningProperties
                        .NoWarn
-                       .ToArray()
                        .OrderBy(c => c)
                        .Select(c => c.GetName())
                        .Where(c => !string.IsNullOrEmpty(c)));
@@ -313,7 +332,6 @@ namespace NuGet.ProjectModel
                     SetArrayValue(writer, "warnAsError", msbuildMetadata
                         .ProjectWideWarningProperties
                         .WarningsAsErrors
-                        .ToArray()
                         .OrderBy(c => c)
                         .Select(c => c.GetName())
                         .Where(c => !string.IsNullOrEmpty(c)));
@@ -324,7 +342,6 @@ namespace NuGet.ProjectModel
                     SetArrayValue(writer, "warnNotAsError", msbuildMetadata
                         .ProjectWideWarningProperties
                         .WarningsNotAsErrors
-                        .ToArray()
                         .OrderBy(c => c)
                         .Select(c => c.GetName())
                         .Where(c => !string.IsNullOrEmpty(c)));
@@ -334,54 +351,7 @@ namespace NuGet.ProjectModel
             }
         }
 
-        [Obsolete]
-        private static void SetPackOptions(IObjectWriter writer, PackageSpec packageSpec)
-        {
-            var packOptions = packageSpec.PackOptions;
-            if (packOptions == null)
-            {
-                return;
-            }
-
-            if ((packageSpec.Owners == null || packageSpec.Owners.Length == 0)
-                && (packageSpec.Tags == null || packageSpec.Tags.Length == 0)
-                && packageSpec.ProjectUrl == null && packageSpec.IconUrl == null && packageSpec.Summary == null
-                && packageSpec.ReleaseNotes == null && packageSpec.LicenseUrl == null
-                && !packageSpec.RequireLicenseAcceptance
-                && (packOptions.PackageType == null || packOptions.PackageType.Count == 0))
-            {
-                return;
-            }
-
-            writer.WriteObjectStart(JsonPackageSpecReader.PackOptions);
-
-            SetArrayValue(writer, "owners", packageSpec.Owners);
-            SetArrayValue(writer, "tags", packageSpec.Tags);
-            SetValue(writer, "projectUrl", packageSpec.ProjectUrl);
-            SetValue(writer, "iconUrl", packageSpec.IconUrl);
-            SetValue(writer, "summary", packageSpec.Summary);
-            SetValue(writer, "releaseNotes", packageSpec.ReleaseNotes);
-            SetValue(writer, "licenseUrl", packageSpec.LicenseUrl);
-
-            SetValueIfTrue(writer, "requireLicenseAcceptance", packageSpec.RequireLicenseAcceptance);
-
-            if (packOptions.PackageType != null)
-            {
-                if (packOptions.PackageType.Count == 1)
-                {
-                    SetValue(writer, JsonPackageSpecReader.PackageType, packOptions.PackageType[0].Name);
-                }
-                else if (packOptions.PackageType.Count > 1)
-                {
-                    var packageTypeNames = packOptions.PackageType.Select(p => p.Name);
-                    SetArrayValue(writer, JsonPackageSpecReader.PackageType, packageTypeNames);
-                }
-            }
-
-            writer.WriteObjectEnd();
-        }
-
-        private static void SetDependencies(IObjectWriter writer, IList<LibraryDependency> libraryDependencies)
+        private static void SetDependencies(IObjectWriter writer, IEnumerable<LibraryDependency> libraryDependencies)
         {
             SetDependencies(writer, "dependencies", libraryDependencies.Where(dependency => dependency.LibraryRange.TypeConstraint != LibraryDependencyTarget.Reference));
             SetDependencies(writer, "frameworkAssemblies", libraryDependencies.Where(dependency => dependency.LibraryRange.TypeConstraint == LibraryDependencyTarget.Reference));
@@ -420,18 +390,18 @@ namespace NuGet.ProjectModel
 
                     if (dependency.IncludeType != LibraryIncludeFlags.All)
                     {
-                        SetValue(writer, "include", dependency.IncludeType.ToString());
+                        SetValue(writer, "include", dependency.IncludeType.AsString());
                     }
 
                     if (dependency.SuppressParent != LibraryIncludeFlagUtils.DefaultSuppressParent)
                     {
-                        SetValue(writer, "suppressParent", dependency.SuppressParent.ToString());
+                        SetValue(writer, "suppressParent", dependency.SuppressParent.AsString());
                     }
 
                     if (dependency.LibraryRange.TypeConstraint != LibraryDependencyTarget.Reference
                         && dependency.LibraryRange.TypeConstraint != (LibraryDependencyTarget.All & ~LibraryDependencyTarget.Reference))
                     {
-                        SetValue(writer, "target", dependency.LibraryRange.TypeConstraint.ToString());
+                        SetValue(writer, "target", dependency.LibraryRange.TypeConstraint.AsString());
                     }
 
                     if (VersionRange.All.Equals(versionRange)
@@ -453,12 +423,12 @@ namespace NuGet.ProjectModel
 
                     SetValueIfTrue(writer, "autoReferenced", dependency.AutoReferenced);
 
-                    if (dependency.NoWarn.Count > 0)
+                    if (dependency.NoWarn.Length > 0)
                     {
                         SetArrayValue(writer, "noWarn", dependency
                             .NoWarn
-                            .OrderBy(c => c)
                             .Distinct()
+                            .OrderBy(c => c)
                             .Select(code => code.GetName())
                             .Where(s => !string.IsNullOrEmpty(s)));
                     }
@@ -516,9 +486,9 @@ namespace NuGet.ProjectModel
             writer.WriteObjectEnd();
         }
 
-        private static void SetImports(IObjectWriter writer, IList<NuGetFramework> frameworks)
+        private static void SetImports(IObjectWriter writer, ImmutableArray<NuGetFramework> frameworks)
         {
-            if (frameworks?.Any() == true)
+            if (frameworks.Length > 0)
             {
                 var imports = frameworks.Select(framework => framework.GetShortFolderName());
 
@@ -526,9 +496,9 @@ namespace NuGet.ProjectModel
             }
         }
 
-        private static void SetDownloadDependencies(IObjectWriter writer, IList<DownloadDependency> downloadDependencies)
+        private static void SetDownloadDependencies(IObjectWriter writer, ImmutableArray<DownloadDependency> downloadDependencies)
         {
-            if (!downloadDependencies.Any())
+            if (downloadDependencies.Length == 0)
             {
                 return;
             }
@@ -548,18 +518,23 @@ namespace NuGet.ProjectModel
             writer.WriteArrayEnd();
         }
 
-        private static void SetFrameworks(IObjectWriter writer, IList<TargetFrameworkInformation> frameworks, bool hashing)
+        private static void SetFrameworks(IObjectWriter writer, IList<TargetFrameworkInformation> frameworks, bool hashing, bool useTargetFrameworkAsKey)
         {
-            if (frameworks.Any())
+            if (frameworks.Count > 0)
             {
                 writer.WriteObjectStart("frameworks");
-                var frameworkSorter = new NuGetFrameworkSorter();
-                foreach (var framework in frameworks.OrderBy(c => c.FrameworkName, frameworkSorter))
+                var frameworkSorter = NuGetFrameworkSorter.Instance;
+                foreach (var framework in frameworks.OrderBy(c => c.TargetAlias, StringComparer.OrdinalIgnoreCase))
                 {
-                    writer.WriteObjectStart(framework.FrameworkName.GetShortFolderName());
+                    string frameworkHeader = useTargetFrameworkAsKey || string.IsNullOrEmpty(framework.TargetAlias)
+                        ? framework.FrameworkName.GetShortFolderName()
+                        : framework.TargetAlias;
+
+                    writer.WriteObjectStart(frameworkHeader);
+                    SetValue(writer, "framework", framework.FrameworkName.GetShortFolderName());
                     SetValueIfNotNull(writer, "targetAlias", framework.TargetAlias);
                     SetDependencies(writer, framework.Dependencies);
-                    SetCentralDependencies(writer, framework.CentralPackageVersions.Values, hashing);
+                    SetCentralDependencies(writer, framework.CentralPackageVersions.Count, framework.CentralPackageVersions.Values, hashing);
                     SetImports(writer, framework.Imports);
                     SetValueIfTrue(writer, "assetTargetFallback", framework.AssetTargetFallback);
                     SetValueIfNotNull(writer, "secondaryFramework",
@@ -568,6 +543,7 @@ namespace NuGet.ProjectModel
                     SetDownloadDependencies(writer, framework.DownloadDependencies);
                     SetFrameworkReferences(writer, framework.FrameworkReferences);
                     SetValueIfNotNull(writer, "runtimeIdentifierGraphPath", framework.RuntimeIdentifierGraphPath);
+                    SetPackagesToPrune(writer, framework.PackagesToPrune, hashing);
                     writer.WriteObjectEnd();
                 }
 
@@ -591,9 +567,9 @@ namespace NuGet.ProjectModel
             return nuGetFramework;
         }
 
-        private static void SetFrameworkReferences(IObjectWriter writer, ISet<FrameworkDependency> frameworkReferences)
+        private static void SetFrameworkReferences(IObjectWriter writer, IReadOnlyCollection<FrameworkDependency> frameworkReferences)
         {
-            if (frameworkReferences?.Any() == true)
+            if (frameworkReferences?.Count > 0)
             {
                 writer.WriteObjectStart("frameworkReferences");
 
@@ -607,28 +583,35 @@ namespace NuGet.ProjectModel
             }
         }
 
-        private static void SetCentralDependencies(IObjectWriter writer, ICollection<CentralPackageVersion> centralPackageVersions, bool hashing)
+        private static void SetCentralDependencies(IObjectWriter writer, int count, IEnumerable<CentralPackageVersion> centralPackageVersions, bool hashing)
         {
-            if (!centralPackageVersions.Any())
+            if (count == 0)
             {
                 return;
             }
 
             writer.WriteObjectStart("centralPackageVersions");
 
-            if (hashing)
+            foreach (var dependency in centralPackageVersions.OrderBy(dep => dep.Name, StringComparer.OrdinalIgnoreCase))
             {
-                foreach (var dependency in centralPackageVersions)
-                {
-                    writer.WriteNameValue(name: dependency.Name, value: dependency.VersionRange.OriginalString ?? dependency.VersionRange.ToNormalizedString());
-                }
+                writer.WriteNameValue(name: dependency.Name, value: dependency.VersionRange.OriginalString ?? dependency.VersionRange.ToNormalizedString());
             }
-            else
+
+            writer.WriteObjectEnd();
+        }
+
+        private static void SetPackagesToPrune(IObjectWriter writer, IReadOnlyDictionary<string, PrunePackageReference> packagesToPrune, bool hashing)
+        {
+            if (packagesToPrune.Count == 0)
             {
-                foreach (var dependency in centralPackageVersions.OrderBy(dep => dep.Name))
-                {
-                    writer.WriteNameValue(name: dependency.Name, value: dependency.VersionRange.ToNormalizedString());
-                }
+                return;
+            }
+
+            writer.WriteObjectStart("packagesToPrune");
+
+            foreach (var dependency in packagesToPrune.OrderBy(dep => dep.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                writer.WriteNameValue(name: dependency.Key, value: dependency.Value.VersionRange.OriginalString ?? dependency.Value.VersionRange.ToNormalizedString());
             }
 
             writer.WriteObjectEnd();
@@ -637,6 +620,14 @@ namespace NuGet.ProjectModel
         private static void SetValueIfTrue(IObjectWriter writer, string name, bool value)
         {
             if (value)
+            {
+                writer.WriteNameValue(name, value);
+            }
+        }
+
+        private static void SetValueIfFalse(IObjectWriter writer, string name, bool value)
+        {
+            if (!value)
             {
                 writer.WriteNameValue(name, value);
             }
@@ -660,43 +651,9 @@ namespace NuGet.ProjectModel
 
         private static void SetArrayValue(IObjectWriter writer, string name, IEnumerable<string> values)
         {
-            if (values != null && values.Any())
+            if (values != null)
             {
-                writer.WriteNameArray(name, values);
-            }
-        }
-
-        private static void SetDictionaryValue(IObjectWriter writer, string name, IDictionary<string, string> values)
-        {
-            if (values != null && values.Any())
-            {
-                writer.WriteObjectStart(name);
-
-                var sortedValues = values.OrderBy(pair => pair.Key, StringComparer.Ordinal);
-
-                foreach (var pair in sortedValues)
-                {
-                    writer.WriteNameValue(pair.Key, pair.Value);
-                }
-
-                writer.WriteObjectEnd();
-            }
-        }
-
-        private static void SetDictionaryValues(IObjectWriter writer, string name, IDictionary<string, IEnumerable<string>> values)
-        {
-            if (values != null && values.Any())
-            {
-                writer.WriteObjectStart(name);
-
-                var sortedValues = values.OrderBy(pair => pair.Key, StringComparer.Ordinal);
-
-                foreach (var pair in sortedValues)
-                {
-                    writer.WriteNameArray(pair.Key, pair.Value);
-                }
-
-                writer.WriteObjectEnd();
+                writer.WriteNonEmptyNameArray(name, values);
             }
         }
     }

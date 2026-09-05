@@ -1,7 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if IS_SIGNING_SUPPORTED
+#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -10,6 +10,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
 using NuGet.Common;
 using NuGet.Packaging.Signing;
 using NuGet.Test.Utility;
@@ -20,7 +21,7 @@ using Xunit;
 namespace NuGet.Packaging.FuncTest
 {
     [Collection(SigningTestCollection.Name)]
-    public class AllowListVerificationProviderTests : IDisposable
+    public class AllowListVerificationProviderTests
     {
         private const string _noMatchInAllowList = "The package signature certificate fingerprint does not match any certificate fingerprint in the allow list.";
         private const string _noAllowList = "A list of trusted signers is required but none was found.";
@@ -31,15 +32,11 @@ namespace NuGet.Packaging.FuncTest
         public AllowListVerificationProviderTests(SigningTestFixture fixture)
         {
             _testFixture = fixture ?? throw new ArgumentNullException(nameof(fixture));
-            _trustedRepoTestCert = SigningTestUtility.GenerateTrustedTestCertificate();
+            // Do not dispose this.  The fixture will dispose it.
+            _trustedRepoTestCert = fixture.TrustedRepositoryCertificate;
         }
 
-        public void Dispose()
-        {
-            _trustedRepoTestCert.Dispose();
-        }
-
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_AuthorSignedPackage_WithCertificateInAllowList_SuccessAsync()
         {
             // Arrange
@@ -80,7 +77,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyTheory]
+        [NetFxCIOnlyTheory]
         [MemberData(nameof(EmptyNullAndRequiredListCombinations))]
         public async Task GetTrustResultAsync_AuthorSignedPackage_RequirementsAsync(
             SignedPackageVerifierSettings verifierSettings,
@@ -116,8 +113,8 @@ namespace NuGet.Packaging.FuncTest
 
                     // Assert
                     result.IsValid.Should().Be(valid);
-                    resultsWithErrors.Count().Should().Be(resultsWithErrorsCount);
-                    totalErrors.Count().Should().Be(totalErrorsCount);
+                    resultsWithErrors.Count.Should().Be(resultsWithErrorsCount);
+                    totalErrors.Count.Should().Be(totalErrorsCount);
 
                     for (var i = 0; i < totalErrorsCount; i++)
                     {
@@ -128,7 +125,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_AuthorSignedPackage_VerifyWithoutCertificateInAllowList_AllowUntrusted_WarnAsync()
         {
             // Arrange
@@ -174,7 +171,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_AuthorSignedPackage_VerifyWithoutCertificateInAllowList_NotAllowUntrusted_ErrorAsync()
         {
             // Arrange
@@ -220,7 +217,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositorySignedPackage_AllowListWithAuthorTarget_AndPrimaryPlacement_ErrorAsync()
         {
             // Arrange
@@ -268,7 +265,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositorySignedPackage_AllowListWithRepositoryTarget_AndCounterPlacementOnly_ErrorAsync()
         {
             // Arrange
@@ -316,7 +313,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositorySignedPackage_AllowListWithRepositoryTarget_AndPrimaryPlacement_SuccessAsync()
         {
             // Arrange
@@ -362,7 +359,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryCountersignedPackage_AllowListWithAuthorTarget_AndPrimaryPlacement_ErrorAsync()
         {
             // Arrange
@@ -412,7 +409,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryCountersignedPackage_AllowListWithRepositoryTarget_AndPrimaryPlacementOnly_ErrorAsync()
         {
             // Arrange
@@ -462,7 +459,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryCountersignedPackage_AllowListWithRepositoryTarget_AndCounterPlacement_SuccessAsync()
         {
             // Arrange
@@ -510,7 +507,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryPrimarySignedPackage_PackageSignedWithCertFromAllowList_RequireMode_SuccessAsync()
         {
             var nupkg = new SimpleTestPackageContext();
@@ -554,7 +551,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryPrimarySignedPackage_PackageSignedWithCertNotFromAllowList_RequireMode_ErrorAsync()
         {
             var nupkg = new SimpleTestPackageContext();
@@ -605,7 +602,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryPrimarySignedPackage_PackageSignedWithCertFromAllowList_WithOwnerInOwnersList_RequireMode_SuccessAsync()
         {
             var nupkg = new SimpleTestPackageContext();
@@ -655,7 +652,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryPrimarySignedPackage_PackageSignedWithCertFromAllowList_WithOwnerNotInOwnersList_RequireMode_ErrorAsync()
         {
             var nupkg = new SimpleTestPackageContext();
@@ -706,7 +703,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryPrimarySignedPackage_PackageSignedWithCertFromAllowList_WithNoOwnersInPackage_RequireMode_ErrorAsync()
         {
             var nupkg = new SimpleTestPackageContext();
@@ -755,7 +752,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryCountersignedPackage_PackageSignedWithCertFromAllowList_WithOwnerInOwnersList_RequireMode_SuccessAsync()
         {
             var nupkg = new SimpleTestPackageContext();
@@ -807,7 +804,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryCountersignedPackage_PackageSignedWithCertFromAllowList_WithOwnerNotInOwnersList_RequireMode_ErrorAsync()
         {
             var nupkg = new SimpleTestPackageContext();
@@ -860,7 +857,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryCountersignedPackage_PackageSignedWithCertFromAllowList_WithOwnerNotInOwnersList_AuthorInList_RequireMode_SuccessAsync()
         {
             var nupkg = new SimpleTestPackageContext();
@@ -914,7 +911,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryCountersignedPackage_PackageSignedWithCertFromAllowList_WithNoOwnersInPackage_RequireMode_ErrorAsync()
         {
             var nupkg = new SimpleTestPackageContext();
@@ -966,7 +963,7 @@ namespace NuGet.Packaging.FuncTest
         }
 
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryPrimarySignedPackage_PackageSignedWithCertFromAllowList_WithEmptyOwnersList_RequireMode_SuccessAsync()
         {
             var nupkg = new SimpleTestPackageContext();
@@ -1016,7 +1013,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryPrimarySignedPackage_PackageSignedWithCertFromAllowList__WithNullOwnersList_RequireMode_SuccessAsync()
         {
             var nupkg = new SimpleTestPackageContext();
@@ -1101,4 +1098,3 @@ namespace NuGet.Packaging.FuncTest
         }
     }
 }
-#endif

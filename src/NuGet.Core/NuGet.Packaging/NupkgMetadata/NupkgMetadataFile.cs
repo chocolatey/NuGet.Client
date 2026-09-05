@@ -10,11 +10,11 @@ namespace NuGet.Packaging
     {
         public int Version { get; set; } = NupkgMetadataFileFormat.Version;
 
-        public string ContentHash { get; set; }
+        public required string? ContentHash { get; set; }
 
-        public string Source { get; set; }
+        public string? Source { get; set; }
 
-        public bool Equals(NupkgMetadataFile other)
+        public bool Equals(NupkgMetadataFile? other)
         {
             if (other == null)
             {
@@ -31,7 +31,7 @@ namespace NuGet.Packaging
                 StringComparer.Ordinal.Equals(Source, other.Source);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return Equals(obj as NupkgMetadataFile);
         }
@@ -41,8 +41,8 @@ namespace NuGet.Packaging
             var combiner = new HashCodeCombiner();
 
             combiner.AddObject(Version);
-            combiner.AddSequence(ContentHash);
-            combiner.AddSequence(Source);
+            combiner.AddObject(ContentHash);
+            combiner.AddObject(Source);
 
             return combiner.CombinedHash;
         }

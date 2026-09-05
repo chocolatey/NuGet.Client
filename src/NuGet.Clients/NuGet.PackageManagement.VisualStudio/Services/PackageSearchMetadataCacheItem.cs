@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#nullable enable
-
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -66,7 +64,7 @@ namespace NuGet.PackageManagement.VisualStudio
             var hashCodeCombiner = new HashCodeCombiner();
             hashCodeCombiner.AddSequence(packageSources);
             hashCodeCombiner.AddStringIgnoreCase(packageId);
-            hashCodeCombiner.AddObject(includePrerelease.GetHashCode());
+            hashCodeCombiner.AddObject(includePrerelease);
             return hashCodeCombiner.CombinedHash.ToString(CultureInfo.InvariantCulture);
         }
 

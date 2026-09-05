@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.X509Certificates;
 using NuGet.Common;
 
@@ -39,14 +40,18 @@ namespace NuGet.Packaging.Signing
         /// </summary>
         public abstract SignatureType SignatureType { get; }
 
-        internal IX509CertificateChain Chain { get; private set; }
+        internal IX509CertificateChain? Chain { get; private set; }
 
-#if IS_SIGNING_SUPPORTED
         /// <summary>
         /// PrivateKey is only used in mssign command.
         /// </summary>
-        public System.Security.Cryptography.CngKey PrivateKey { get; set; }
-#endif
+        public System.Security.Cryptography.CngKey? PrivateKey { get; set; }
+
+        /// <summary>
+        /// When true, allow signing with certificates whose root is not in a trusted root store.
+        /// UntrustedRoot chain status is treated as a warning instead of an error.
+        /// </summary>
+        public bool AllowUntrustedRoot { get; set; }
 
         protected SignPackageRequest(
             X509Certificate2 certificate,
@@ -96,15 +101,13 @@ namespace NuGet.Packaging.Signing
             {
                 Certificate?.Dispose();
                 Chain?.Dispose();
-
-#if IS_SIGNING_SUPPORTED
                 PrivateKey?.Dispose();
-#endif
             }
 
             _isDisposed = true;
         }
 
+        [MemberNotNull(nameof(Chain))]
         internal void BuildSigningCertificateChainOnce(ILogger logger)
         {
             if (Chain == null)
@@ -113,7 +116,8 @@ namespace NuGet.Packaging.Signing
                     Certificate,
                     AdditionalCertificates,
                     logger,
-                    CertificateType.Signature);
+                    CertificateType.Signature,
+                    AllowUntrustedRoot);
             }
         }
     }

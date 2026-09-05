@@ -12,6 +12,7 @@ namespace NuGet.SolutionRestoreManager
     /// </summary>
     [ComImport]
     [Guid("0C9117CB-828D-4E16-B73F-FEEA9BD6A027")]
+    [Obsolete]
     public interface IVsTargetFrameworks2 : IEnumerable
     {
         /// <summary>
@@ -24,7 +25,7 @@ namespace NuGet.SolutionRestoreManager
         /// </summary>
         /// <param name="index">Reference name or index.</param>
         /// <returns>Reference item matching index.</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="index" /> is <c>null</c>.</exception>
-        IVsTargetFrameworkInfo2 Item(object index);
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="index" /> is <see langword="null" />.</exception>
+        IVsTargetFrameworkInfo2? Item(object index);
     }
 }

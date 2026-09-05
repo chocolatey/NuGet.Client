@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,7 +35,7 @@ namespace NuGet.CommandLine.XPlat.Utility
             foreach (FrameworkPackages frameworkPackages in packages)
             {
                 string frameWork = frameworkPackages.Framework;
-                ListPackageReportFrameworkPackage targetFrameworkPackageMetadata = new ListPackageReportFrameworkPackage(frameWork);
+                ListPackageReportFrameworkPackage targetFrameworkPackageMetadata = new ListPackageReportFrameworkPackage(frameWork, frameworkPackages.TargetAlias);
                 projectFrameworkPackages.Add(targetFrameworkPackageMetadata);
                 var frameworkTopLevelPackages = frameworkPackages.TopLevelPackages;
                 var frameworkTransitivePackages = frameworkPackages.TransitivePackages;
@@ -122,7 +124,7 @@ namespace NuGet.CommandLine.XPlat.Utility
             // Include "Requested" version column for top level package list
             if (!printingTransitive)
             {
-                valueSelectors.Add(p => new FormattedCell((p as ListReportPackage)?.RequestedVersion));
+                valueSelectors.Add(p => new FormattedCell(p?.RequestedVersion));
             }
 
             // "Resolved" version
@@ -241,7 +243,7 @@ namespace NuGet.CommandLine.XPlat.Utility
         /// Print user-friendly representation of a NuGet version.
         /// </summary>
         /// <param name="package">The package reference having its version printed.</param>
-        /// <param name="useLatest"><c>True</c> if we're printing the latest version; otherwise <c>False</c>.</param>
+        /// <param name="useLatest"><see langword="true" /> if we're printing the latest version; otherwise <see langword="false" />.</param>
         private static string GetPackageVersion(
             InstalledPackageReference package,
             bool useLatest = false)

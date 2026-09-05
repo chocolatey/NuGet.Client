@@ -12,7 +12,7 @@ namespace NuGet.Protocol.Events
     internal sealed class ProtocolDiagnosticsStream : Stream
     {
         private readonly Stream _baseStream;
-        private ProtocolDiagnosticInProgressHttpEvent _inProgressEvent;
+        private ProtocolDiagnosticInProgressHttpEvent? _inProgressEvent;
         private readonly Stopwatch _stopwatch;
         private long _bytes;
         private readonly Action<ProtocolDiagnosticHttpEvent> _diagnosticEvent;

@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System.Collections.Generic;
 using System.Linq;
 using Lucene.Net.Documents;
@@ -70,13 +72,15 @@ namespace NuGet.Indexing
             var defaultRank = DefaultRankValue;
             foreach (var v in entries.Reverse().Select(e => e.Identity.Id))
             {
-                if (!ranking.ContainsKey(v))
+                if (ranking.TryGetValue(v, out var rank))
+                {
+                    // assign rank of element behind current
+                    defaultRank = rank;
+                }
+                else
                 {
                     ranking.Add(v, defaultRank);
                 }
-
-                // assign rank of element behind current
-                defaultRank = ranking[v];
             }
 
             // returns unmodified list for convenience

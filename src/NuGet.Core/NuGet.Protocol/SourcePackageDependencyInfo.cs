@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using NuGet.Packaging.Core;
 using NuGet.Versioning;
 
@@ -16,7 +15,7 @@ namespace NuGet.Protocol.Core.Types
             NuGetVersion version,
             IEnumerable<PackageDependency> dependencies,
             bool listed,
-            SourceRepository source)
+            SourceRepository? source)
             : this(
                   new PackageIdentity(id, version),
                   dependencies,
@@ -32,9 +31,9 @@ namespace NuGet.Protocol.Core.Types
             NuGetVersion version,
             IEnumerable<PackageDependency> dependencies,
             bool listed,
-            SourceRepository source,
-            Uri downloadUri,
-            string packageHash)
+            SourceRepository? source,
+            Uri? downloadUri,
+            string? packageHash)
             : this(
                   new PackageIdentity(id, version),
                   dependencies,
@@ -49,9 +48,9 @@ namespace NuGet.Protocol.Core.Types
             PackageIdentity identity,
             IEnumerable<PackageDependency> dependencies,
             bool listed,
-            SourceRepository source,
-            Uri downloadUri,
-            string packageHash)
+            SourceRepository? source,
+            Uri? downloadUri,
+            string? packageHash)
             : base(identity, dependencies)
         {
             Listed = listed;
@@ -69,18 +68,18 @@ namespace NuGet.Protocol.Core.Types
         /// <summary>
         /// Source repository the dependency information was retrieved from.
         /// </summary>
-        public SourceRepository Source { get; }
+        public SourceRepository? Source { get; }
 
         /// <summary>
         /// The HTTP, UNC, or local file URI to the package nupkg.
         /// </summary>
         /// <remarks>Optional</remarks>
-        public Uri DownloadUri { get; }
+        public Uri? DownloadUri { get; }
 
         /// <summary>
         /// Package hash
         /// </summary>
         /// <remarks>Optional</remarks>
-        public string PackageHash { get; }
+        public string? PackageHash { get; }
     }
 }

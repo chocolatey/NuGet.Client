@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -53,14 +55,16 @@ namespace NuGet.Build.Tasks.Console
 
         public string GetGlobalProperty(string property)
         {
-            string value = GetPropertyValue(property).Trim();
-
-            if (string.IsNullOrWhiteSpace(value))
+            if (_projectInstance.GlobalProperties.TryGetValue(property, out string value))
             {
-                return null;
+                string trimmed = value?.Trim();
+                if (!string.IsNullOrWhiteSpace(trimmed))
+                {
+                    return trimmed;
+                }
             }
 
-            return value;
+            return null;
         }
     }
 }

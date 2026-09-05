@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
@@ -14,7 +16,7 @@ namespace NuGet.VisualStudio.Telemetry
     [Export(typeof(INuGetTelemetryProvider))]
     internal sealed class NuGetTelemetryProvider : INuGetTelemetryProvider, IDisposable
     {
-        ExtensibilityTelemetryCollector _extensibilityTelemetryCollector;
+        private ExtensibilityTelemetryCollector _extensibilityTelemetryCollector;
 
         public NuGetTelemetryProvider()
         {

@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -9,12 +11,15 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
-using NuGet.Common;
 using NuGet.Protocol;
 using NuGet.Test.Server;
 using NuGet.Test.Utility;
 using Test.Utility;
 using Xunit;
+
+#if IS_CORECLR
+using NuGet.Common;
+#endif
 
 namespace NuGet.Core.FuncTest
 {
@@ -321,7 +326,6 @@ namespace NuGet.Core.FuncTest
         => new TestEnvironmentVariableReader(
             new Dictionary<string, string>()
             {
-                [EnhancedHttpRetryHelper.IsEnabledEnvironmentVariableName] = isEnabled?.ToString(),
                 [EnhancedHttpRetryHelper.RetryCountEnvironmentVariableName] = retryCount?.ToString(),
                 [EnhancedHttpRetryHelper.DelayInMillisecondsEnvironmentVariableName] = delayMilliseconds?.ToString(),
                 [EnhancedHttpRetryHelper.Retry429EnvironmentVariableName] = retry429?.ToString(),

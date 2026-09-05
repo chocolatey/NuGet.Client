@@ -9,11 +9,13 @@ namespace NuGet.Frameworks
 {
     public class FrameworkRangeComparer : IEqualityComparer<FrameworkRange>
     {
-        public FrameworkRangeComparer()
+        public static FrameworkRangeComparer Instance { get; } = new();
+
+        private FrameworkRangeComparer()
         {
         }
 
-        public bool Equals(FrameworkRange x, FrameworkRange y)
+        public bool Equals(FrameworkRange? x, FrameworkRange? y)
         {
             if (ReferenceEquals(x, y))
             {

@@ -3,10 +3,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using NuGet.Common;
 using NuGet.Packaging.Core;
-using NuGet.Shared;
 
 namespace NuGet.Packaging.Signing
 {
@@ -19,7 +17,7 @@ namespace NuGet.Packaging.Signing
         /// <param name="fallbackSettings">SignedPackageVerifierSettings to be used if RepositorySignatureInfo is unavailable.</param>
         /// <returns>SignedPackageVerifierSettings based on the RepositorySignatureInfo and SignedPackageVerifierSettings.</returns>
         public static SignedPackageVerifierSettings GetSignedPackageVerifierSettings(
-            RepositorySignatureInfo repoSignatureInfo,
+            RepositorySignatureInfo? repoSignatureInfo,
             SignedPackageVerifierSettings fallbackSettings)
         {
             if (fallbackSettings == null)
@@ -55,9 +53,9 @@ namespace NuGet.Packaging.Signing
             }
         }
 
-        public static IReadOnlyCollection<CertificateHashAllowListEntry> GetRepositoryAllowList(IEnumerable<IRepositoryCertificateInfo> repositoryCertificateInfos)
+        public static IReadOnlyCollection<CertificateHashAllowListEntry>? GetRepositoryAllowList(IEnumerable<IRepositoryCertificateInfo>? repositoryCertificateInfos)
         {
-            HashSet<CertificateHashAllowListEntry> repositoryAllowedCertificates = null;
+            HashSet<CertificateHashAllowListEntry>? repositoryAllowedCertificates = null;
 
             if (repositoryCertificateInfos != null)
             {
@@ -71,7 +69,7 @@ namespace NuGet.Packaging.Signing
 
                         if (!string.IsNullOrEmpty(fingerprint))
                         {
-                            repositoryAllowedCertificates.Add(new CertificateHashAllowListEntry(VerificationTarget.Repository, SignaturePlacement.Any, fingerprint, hashAlgorithm));
+                            repositoryAllowedCertificates.Add(new CertificateHashAllowListEntry(VerificationTarget.Repository, SignaturePlacement.Any, fingerprint!, hashAlgorithm));
                         }
                     }
                 }

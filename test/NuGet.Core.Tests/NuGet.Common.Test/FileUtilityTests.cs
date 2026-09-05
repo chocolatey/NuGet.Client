@@ -3,7 +3,6 @@
 
 using System;
 using System.IO;
-using System.Text;
 using System.Threading.Tasks;
 using NuGet.Test.Utility;
 using Xunit;
@@ -71,7 +70,7 @@ namespace NuGet.Common.Test
                     throw new Exception();
                 };
 
-                Exception exception = null;
+                Exception? exception = null;
 
                 // Act
                 try
@@ -165,7 +164,7 @@ namespace NuGet.Common.Test
                 using (var stream = File.OpenWrite(dest))
                 {
                     // Act & Assert
-                    Assert.Throws(typeof(IOException), () =>
+                    Assert.Throws<IOException>(() =>
                         FileUtility.Move(orig, dest));
                 }
             }
@@ -204,7 +203,7 @@ namespace NuGet.Common.Test
                     // Act & Assert
                     if (RuntimeEnvironmentHelper.IsWindows)
                     {
-                        Assert.Throws(typeof(IOException), () =>
+                        Assert.Throws<IOException>(() =>
                             FileUtility.Delete(path));
                     }
                     else
@@ -361,7 +360,7 @@ namespace NuGet.Common.Test
                 // Arrange
                 var dest = Path.Combine(testDirectory, "b");
 
-                Exception exception = null;
+                Exception? exception = null;
 
                 // Act
                 try

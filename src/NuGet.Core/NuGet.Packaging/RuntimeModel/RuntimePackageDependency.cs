@@ -10,7 +10,10 @@ namespace NuGet.RuntimeModel
     /// <summary>
     /// A package dependency for a specific RID.
     /// </summary>
-    public class RuntimePackageDependency : IEquatable<RuntimePackageDependency>
+    /// <remarks>
+    /// Immutable.
+    /// </remarks>
+    public sealed class RuntimePackageDependency : IEquatable<RuntimePackageDependency>
     {
         /// <summary>
         /// Dependency package id.
@@ -28,17 +31,12 @@ namespace NuGet.RuntimeModel
             VersionRange = versionRange;
         }
 
-        public RuntimePackageDependency Clone()
-        {
-            return new RuntimePackageDependency(Id, VersionRange);
-        }
-
         public override string ToString()
         {
             return $"{Id} {VersionRange}";
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return Equals(obj as RuntimePackageDependency);
         }
@@ -53,7 +51,7 @@ namespace NuGet.RuntimeModel
             return combiner.CombinedHash;
         }
 
-        public bool Equals(RuntimePackageDependency other)
+        public bool Equals(RuntimePackageDependency? other)
         {
             if (ReferenceEquals(this, other))
             {

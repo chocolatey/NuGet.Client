@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -27,7 +29,7 @@ namespace NuGet.Commands
         private readonly RestoreCollectorLogger _logger;
         private readonly ProjectRestoreRequest _request;
 
-        private const string WalkFrameworkDependencyDuration = nameof(WalkFrameworkDependencyDuration);
+        internal const string WalkFrameworkDependencyDuration = nameof(WalkFrameworkDependencyDuration);
         private const string WalkRuntimeDependencyDuration = nameof(WalkRuntimeDependencyDuration);
         private const string EvaluateDownloadDependenciesDuration = nameof(EvaluateDownloadDependenciesDuration);
 
@@ -42,6 +44,7 @@ namespace NuGet.Commands
 
         public async Task<Tuple<bool, List<RestoreTargetGraph>, RuntimeGraph>> TryRestoreAsync(LibraryRange projectRange,
             IEnumerable<FrameworkRuntimePair> frameworkRuntimePairs,
+            IDictionary<NuGetFramework, string> frameworkToAlias,
             NuGetv3LocalRepository userPackageFolder,
             IReadOnlyList<NuGetv3LocalRepository> fallbackPackageFolders,
             RemoteDependencyWalker remoteWalker,
@@ -62,8 +65,11 @@ namespace NuGet.Commands
             foreach (var pair in runtimesByFramework)
             {
                 _logger.LogVerbose(string.Format(CultureInfo.CurrentCulture, Strings.Log_RestoringPackages, pair.Key.DotNetFrameworkName));
+                string targetAlias = null;
+                frameworkToAlias?.TryGetValue(pair.Key, out targetAlias);
 
                 frameworkTasks.Add(WalkDependenciesAsync(projectRange,
+                    targetAlias,
                     pair.Key,
                     remoteWalker,
                     context,
@@ -76,22 +82,7 @@ namespace NuGet.Commands
 
             telemetryActivity.EndIntervalMeasure(telemetryPrefix + WalkFrameworkDependencyDuration);
 
-            telemetryActivity.StartIntervalMeasure();
-
-            var downloadDependencyResolutionTasks = new List<Task<DownloadDependencyResolutionResult>>();
-            var ddLibraryRangeToRemoteMatchCache = new ConcurrentDictionary<LibraryRange, Task<Tuple<LibraryRange, RemoteMatch>>>();
-            foreach (var targetFrameworkInformation in _request.Project.TargetFrameworks)
-            {
-                downloadDependencyResolutionTasks.Add(ResolveDownloadDependenciesAsync(
-                    context,
-                    ddLibraryRangeToRemoteMatchCache,
-                    targetFrameworkInformation,
-                    token));
-            }
-
-            var downloadDependencyResolutionResults = await Task.WhenAll(downloadDependencyResolutionTasks);
-
-            telemetryActivity.EndIntervalMeasure(telemetryPrefix + EvaluateDownloadDependenciesDuration);
+            var downloadDependencyResolutionResults = await DownloadDependenciesAsync(_request.Project, context, telemetryActivity, telemetryPrefix, token);
 
             var uniquePackages = new HashSet<LibraryIdentity>();
 
@@ -131,13 +122,13 @@ namespace NuGet.Commands
                         !projectProvidedRuntimeIdentifierGraphs.TryGetValue(runtimeGraphPath, out projectProviderRuntimeGraph))
                     {
 
-                        projectProviderRuntimeGraph = GetRuntimeGraph(runtimeGraphPath);
+                        projectProviderRuntimeGraph = GetRuntimeGraph(runtimeGraphPath, _logger);
                         success &= projectProviderRuntimeGraph != null;
                         projectProvidedRuntimeIdentifierGraphs.Add(runtimeGraphPath, projectProviderRuntimeGraph);
                     }
 
 
-                    var runtimeGraph = GetRuntimeGraph(graph, localRepositories, projectRuntimeGraph: projectProviderRuntimeGraph);
+                    var runtimeGraph = GetRuntimeGraph(graph, localRepositories, projectRuntimeGraph: projectProviderRuntimeGraph, _logger);
                     var runtimeIds = runtimesByFramework[graph.Framework];
 
                     // Merge all runtimes for the output
@@ -186,7 +177,7 @@ namespace NuGet.Commands
 
         // Gets the runtime graph specified in the path.
         // returns null if an error is hit. A valid runtime graph otherwise.
-        private RuntimeGraph GetRuntimeGraph(string runtimeGraphPath)
+        internal static RuntimeGraph GetRuntimeGraph(string runtimeGraphPath, RestoreCollectorLogger logger)
         {
             if (File.Exists(runtimeGraphPath))
             {
@@ -198,9 +189,11 @@ namespace NuGet.Commands
                         return runtimeGraph;
                     }
                 }
+#pragma warning disable CA1031 // Do not catch general exception types. Any exception that occurs while reading the runtime graph is a fatal error.
                 catch (Exception e)
+#pragma warning restore CA1031 // Do not catch general exception types
                 {
-                    _logger.Log(
+                    logger.Log(
                      RestoreLogMessage.CreateError(
                          NuGetLogCode.NU1007,
                          string.Format(CultureInfo.CurrentCulture,
@@ -211,7 +204,7 @@ namespace NuGet.Commands
             }
             else
             {
-                _logger.Log(
+                logger.Log(
                  RestoreLogMessage.CreateError(
                      NuGetLogCode.NU1007,
                      string.Format(CultureInfo.CurrentCulture,
@@ -221,23 +214,54 @@ namespace NuGet.Commands
             return null;
         }
 
-        private async Task<DownloadDependencyResolutionResult> ResolveDownloadDependenciesAsync(RemoteWalkContext context, ConcurrentDictionary<LibraryRange, Task<Tuple<LibraryRange, RemoteMatch>>> downloadDependenciesCache, TargetFrameworkInformation targetFrameworkInformation, CancellationToken token)
+        internal static async Task<DownloadDependencyResolutionResult[]> DownloadDependenciesAsync(PackageSpec packageSpec, RemoteWalkContext context, TelemetryActivity telemetryActivity, string telemetryPrefix, CancellationToken cancellationToken)
         {
-            var packageDownloadTasks = targetFrameworkInformation.DownloadDependencies.Select(downloadDependency =>
-            ResolverUtility.FindPackageLibraryMatchCachedAsync(downloadDependenciesCache, downloadDependency, context, token));
+            telemetryActivity.StartIntervalMeasure();
 
-            var packageDownloadMatches = await Task.WhenAll(packageDownloadTasks);
+            List<Task<DownloadDependencyResolutionResult>> downloadDependencyResolutionTasks = new(capacity: packageSpec.TargetFrameworks.Count);
 
-            return DownloadDependencyResolutionResult.Create(targetFrameworkInformation.FrameworkName, packageDownloadMatches, context.RemoteLibraryProviders);
+            foreach (TargetFrameworkInformation targetFrameworkInformation in packageSpec.TargetFrameworks.NoAllocEnumerate())
+            {
+                Task<DownloadDependencyResolutionResult> task = ResolveDownloadDependenciesAsync(context, targetFrameworkInformation, cancellationToken);
+
+                downloadDependencyResolutionTasks.Add(task);
+            }
+
+            DownloadDependencyResolutionResult[] downloadDependencyResolutionResults = await Task.WhenAll(downloadDependencyResolutionTasks);
+
+            telemetryActivity.EndIntervalMeasure(telemetryPrefix + EvaluateDownloadDependenciesDuration);
+
+            return downloadDependencyResolutionResults;
+
+            async Task<DownloadDependencyResolutionResult> ResolveDownloadDependenciesAsync(RemoteWalkContext context, TargetFrameworkInformation targetFrameworkInformation, CancellationToken token)
+            {
+                if (targetFrameworkInformation.DownloadDependencies.Length == 0)
+                {
+                    return DownloadDependencyResolutionResult.Create(targetFrameworkInformation.FrameworkName, Array.Empty<Tuple<LibraryRange, RemoteMatch>>(), context.RemoteLibraryProviders);
+                }
+
+                List<Task<Tuple<LibraryRange, RemoteMatch>>> packageDownloadTasks = new(capacity: targetFrameworkInformation.DownloadDependencies.Length);
+
+                foreach (var downloadDependency in targetFrameworkInformation.DownloadDependencies.NoAllocEnumerate())
+                {
+                    packageDownloadTasks.Add(ResolverUtility.FindPackageLibraryMatchCachedAsync(downloadDependency, context, token));
+                }
+
+                Tuple<LibraryRange, RemoteMatch>[] packageDownloadMatches = await Task.WhenAll(packageDownloadTasks);
+
+                return DownloadDependencyResolutionResult.Create(targetFrameworkInformation.FrameworkName, packageDownloadMatches, context.RemoteLibraryProviders);
+            }
         }
 
         private Task<RestoreTargetGraph> WalkDependenciesAsync(LibraryRange projectRange,
+            string targetAlias,
             NuGetFramework framework,
             RemoteDependencyWalker walker,
             RemoteWalkContext context,
             CancellationToken token)
         {
             return WalkDependenciesAsync(projectRange,
+                targetAlias,
                 framework,
                 runtimeIdentifier: null,
                 runtimeGraph: RuntimeGraph.Empty,
@@ -247,6 +271,7 @@ namespace NuGet.Commands
         }
 
         private async Task<RestoreTargetGraph> WalkDependenciesAsync(LibraryRange projectRange,
+            string targetAlias,
             NuGetFramework framework,
             string runtimeIdentifier,
             RuntimeGraph runtimeGraph,
@@ -271,10 +296,10 @@ namespace NuGet.Commands
             await _logger.LogAsync(LogLevel.Verbose, string.Format(CultureInfo.CurrentCulture, Strings.Log_ResolvingConflicts, name));
 
             // Flatten and create the RestoreTargetGraph to hold the packages
-            return RestoreTargetGraph.Create(runtimeGraph, graphs, context, _logger, framework, runtimeIdentifier);
+            return RestoreTargetGraph.Create(runtimeGraph, graphs, context, targetAlias, framework, runtimeIdentifier);
         }
 
-        private async Task<bool> ResolutionSucceeded(IEnumerable<RestoreTargetGraph> graphs, IList<DownloadDependencyResolutionResult> downloadDependencyResults, RemoteWalkContext context, CancellationToken token)
+        internal async Task<bool> ResolutionSucceeded(IEnumerable<RestoreTargetGraph> graphs, IList<DownloadDependencyResolutionResult> downloadDependencyResults, RemoteWalkContext context, CancellationToken token)
         {
             var graphSuccess = true;
             foreach (var graph in graphs)
@@ -318,7 +343,7 @@ namespace NuGet.Commands
             return graphSuccess && ddSuccess;
         }
 
-        private async Task<bool> InstallPackagesAsync(
+        public async Task<bool> InstallPackagesAsync(
             HashSet<LibraryIdentity> uniquePackages,
             IEnumerable<RestoreTargetGraph> graphs,
             IList<DownloadDependencyResolutionResult> downloadDependencyInformations,
@@ -443,6 +468,7 @@ namespace NuGet.Commands
                 _logger.LogVerbose(string.Format(CultureInfo.CurrentCulture, Strings.Log_RestoringPackages, FrameworkRuntimePair.GetTargetGraphName(graph.Framework, runtimeName)));
 
                 resultGraphs.Add(WalkDependenciesAsync(projectRange,
+                    graph.TargetAlias,
                     graph.Framework,
                     runtimeName,
                     runtimes,
@@ -457,9 +483,9 @@ namespace NuGet.Commands
         /// <summary>
         /// Merge all runtime.json found in the flattened graph.
         /// </summary>
-        private RuntimeGraph GetRuntimeGraph(RestoreTargetGraph graph, IReadOnlyList<NuGetv3LocalRepository> localRepositories, RuntimeGraph projectRuntimeGraph)
+        internal static RuntimeGraph GetRuntimeGraph(RestoreTargetGraph graph, IReadOnlyList<NuGetv3LocalRepository> localRepositories, RuntimeGraph projectRuntimeGraph, RestoreCollectorLogger logger)
         {
-            _logger.LogVerbose(Strings.Log_ScanningForRuntimeJson);
+            logger.LogVerbose(Strings.Log_ScanningForRuntimeJson);
             var runtimeGraph = projectRuntimeGraph ?? RuntimeGraph.Empty;
 
             // Find runtime.json files using the flattened graph which is unique per id.
@@ -482,7 +508,7 @@ namespace NuGet.Commands
                     var nextGraph = info.Package.RuntimeGraph;
                     if (nextGraph != null)
                     {
-                        _logger.LogVerbose(string.Format(CultureInfo.CurrentCulture, Strings.Log_MergingRuntimes, match.Library));
+                        logger.LogVerbose(string.Format(CultureInfo.CurrentCulture, Strings.Log_MergingRuntimes, match.Library));
                         runtimeGraph = RuntimeGraph.Merge(runtimeGraph, nextGraph);
                     }
                 }

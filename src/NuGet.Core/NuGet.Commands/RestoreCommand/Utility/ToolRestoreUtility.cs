@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,20 +31,19 @@ namespace NuGet.Commands
             {
                 Name = name, // make sure this package never collides with a dependency
                 FilePath = projectFilePath,
-                Dependencies = new List<LibraryDependency>(),
                 TargetFrameworks =
                 {
                     new TargetFrameworkInformation
                     {
                         TargetAlias = frameworkShortFolderName,
                         FrameworkName = framework,
-                        Dependencies = new List<LibraryDependency>
-                        {
-                            new LibraryDependency
+                        Dependencies =
+                        [
+                            new LibraryDependency()
                             {
                                 LibraryRange = new LibraryRange(id, versionRange, LibraryDependencyTarget.Package)
                             }
-                        }
+                        ]
                     }
                 },
                 RestoreMetadata = new ProjectRestoreMetadata()
@@ -161,7 +162,7 @@ namespace NuGet.Commands
                 return null;
             }
 
-            return spec.Dependencies.Concat(spec.TargetFrameworks.SelectMany(e => e.Dependencies)).SingleOrDefault();
+            return spec.TargetFrameworks.SelectMany(e => e.Dependencies).SingleOrDefault();
         }
 
         public static LockFileTargetLibrary GetToolTargetLibrary(LockFile toolLockFile, string toolId)

@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,8 +11,6 @@ using NuGet.Commands.Test;
 using NuGet.Frameworks;
 using NuGet.Packaging;
 using NuGet.ProjectModel;
-using NuGet.RuntimeModel;
-using NuGet.Versioning;
 
 namespace Test.Utility.Commands
 {
@@ -42,7 +42,7 @@ namespace Test.Utility.Commands
 
         public PackageReferenceSpecBuilder WithTargetFrameworks(IEnumerable<string> targetFrameworks)
         {
-            _targetFrameworks.AddRange(targetFrameworks?.Select(e => new TargetFrameworkInformation { FrameworkName = NuGetFramework.Parse(e) }) ?? throw new ArgumentNullException(nameof(targetFrameworks)));
+            _targetFrameworks.AddRange(targetFrameworks?.Select(e => new TargetFrameworkInformation { FrameworkName = NuGetFramework.Parse(e), TargetAlias = e }) ?? throw new ArgumentNullException(nameof(targetFrameworks)));
             return this;
         }
 
@@ -101,7 +101,7 @@ namespace Test.Utility.Commands
                 CentralPackageTransitivePinningEnabled = _centralPackageTransitivePinningEnabled,
             };
 
-            packageSpec.RestoreMetadata.TargetFrameworks.AddRange(packageSpec.TargetFrameworks.Select(e => new ProjectRestoreMetadataFrameworkInfo { FrameworkName = e.FrameworkName }));
+            packageSpec.RestoreMetadata.TargetFrameworks.AddRange(packageSpec.TargetFrameworks.Select(e => new ProjectRestoreMetadataFrameworkInfo { FrameworkName = e.FrameworkName, TargetAlias = e.TargetAlias }));
 
             return packageSpec;
         }

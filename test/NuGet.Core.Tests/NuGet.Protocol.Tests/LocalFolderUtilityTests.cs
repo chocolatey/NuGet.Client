@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -1141,7 +1143,7 @@ namespace NuGet.Protocol.Tests
         }
 
         [Theory]
-        [MemberData("GetValidVersions")]
+        [MemberData(nameof(GetValidVersions))]
         public async Task LocalFolderUtility_VerifyPackageCanBeFoundV2_NonNormalizedOnDiskAsync(string versionString)
         {
             using (var root = TestDirectory.Create())
@@ -1169,7 +1171,7 @@ namespace NuGet.Protocol.Tests
         }
 
         [Theory]
-        [MemberData("GetValidVersions")]
+        [MemberData(nameof(GetValidVersions))]
         public async Task LocalFolderUtility_VerifyPackageCanBeFoundV2_NormalizedOnDiskAsync(string versionString)
         {
             using (var root = TestDirectory.Create())
@@ -1198,7 +1200,7 @@ namespace NuGet.Protocol.Tests
         }
 
         [Theory]
-        [MemberData("GetValidVersions")]
+        [MemberData(nameof(GetValidVersions))]
         public async Task LocalFolderUtility_VerifyPackageCanBeFoundV3_NonNormalizedOnDiskAsync(string versionString)
         {
             using (var root = TestDirectory.Create())
@@ -1226,7 +1228,7 @@ namespace NuGet.Protocol.Tests
         }
 
         [Theory]
-        [MemberData("GetValidVersions")]
+        [MemberData(nameof(GetValidVersions))]
         public async Task LocalFolderUtility_VerifyPackageCanBeFoundV3_NormalizedOnDiskAsync(string versionString)
         {
             using (var root = TestDirectory.Create())

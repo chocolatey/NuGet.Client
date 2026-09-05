@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using NuGet.Shared;
@@ -10,6 +12,8 @@ namespace NuGet.ProjectModel
     public class LockFileItem : IEquatable<LockFileItem>
     {
         public static readonly string AliasesProperty = "aliases";
+        public static readonly string CompilerApiVersionProperty = "compilerApiVersion";
+        private static readonly object PropertiesLock = new object();
 
         public LockFileItem(string path)
         {
@@ -18,7 +22,22 @@ namespace NuGet.ProjectModel
 
         public string Path { get; }
 
-        public IDictionary<string, string> Properties { get; } = new Dictionary<string, string>();
+        private Dictionary<string, string> _properties;
+        public IDictionary<string, string> Properties
+        {
+            get
+            {
+                if (_properties == null)
+                {
+                    lock (PropertiesLock)
+                    {
+                        _properties ??= new Dictionary<string, string>();
+                    }
+                }
+
+                return _properties;
+            }
+        }
 
         public override string ToString() => Path;
 
@@ -36,7 +55,18 @@ namespace NuGet.ProjectModel
 
             if (string.Equals(Path, other.Path, StringComparison.OrdinalIgnoreCase))
             {
-                return Properties.OrderedEquals(other.Properties, pair => pair.Key, StringComparer.Ordinal);
+                // Handle null/empty dictionaries (treat them as equal)
+                bool thisEmpty = _properties == null || _properties.Count == 0;
+                bool otherEmpty = other._properties == null || other._properties.Count == 0;
+
+                if (thisEmpty || otherEmpty)
+                {
+                    return thisEmpty && otherEmpty;
+                }
+                else
+                {
+                    return _properties.OrderedEquals(other._properties, pair => pair.Key, StringComparer.Ordinal);
+                }
             }
 
             return false;

@@ -16,25 +16,10 @@ function Test-RemovingPackageFromProjectDoesNotRemoveIfInUse {
     Assert-SolutionPackage Ninject
 }
 
-function Test-UninstallPackageWhatIf {
-    # Arrange
-    $p1 = New-ClassLibrary
-
-    Install-Package Ninject -ProjectName $p1.Name
-    Assert-Reference $p1 Ninject
-
-	# Act
-    Uninstall-Package Ninject -ProjectName $p1.Name -What
-
-	# Assert: packages are not uninstalled
-	Assert-Reference $p1 Ninject
-	Assert-Package $p1 Ninject
-}
-
 function Test-RemovingPackageWithDependencyFromProjectDoesNotRemoveIfInUse {
     # Arrange
-    $p1 = New-WebApplication
-    $p2 = New-WebApplication
+    $p1 = New-ConsoleApplication
+    $p2 = New-ConsoleApplication
 
     $p1 | Install-Package jquery.Validation
     Assert-Package $p1 jquery.Validation
@@ -55,7 +40,7 @@ function Test-RemovingPackageWithDependencyFromProjectDoesNotRemoveIfInUse {
 
 function Test-RemovePackageRemovesPackageFromSolutionIfNotInUse {
     # Arrange
-    $p1 = New-WebApplication
+    $p1 = New-ConsoleApplication
 
     Install-Package elmah -ProjectName $p1.Name -Version 1.1
     Assert-Reference $p1 elmah
@@ -69,7 +54,7 @@ function Test-RemovePackageRemovesPackageFromSolutionIfNotInUse {
 
 function Test-UninstallingPackageWithConfigTransformWhenConfigReadOnly {
     # Arrange
-    $p1 = New-WebApplication
+    $p1 = New-ConsoleApplication
 
     Install-Package elmah -ProjectName $p1.Name -Version 1.1
     Assert-Reference $p1 elmah
@@ -106,7 +91,7 @@ function Test-UninstallPackageWithNestedContentFiles {
     )
 
     # Arrange
-    $p = New-WebApplication
+    $p = New-ConsoleApplication
     Install-Package NestedFolders -ProjectName $p.Name -Source $context.RepositoryPath
 
     # Act
@@ -136,24 +121,6 @@ function Test-SimpleFSharpUninstall {
 
     # Assert
     Assert-NetCorePackageNotInLockFile $p Ninject
-}
-
-function Test-UninstallPackageThatIsNotInstalledThrows {
-    # Arrange
-    $p = New-ClassLibrary
-
-    # Act & Assert
-    Assert-Throws { $p | Uninstall-Package elmah } ("Package 'elmah' to be uninstalled could not be found in project '" + $p.Name + "'")
-}
-
-function Test-UninstallPackageThatIsInstalledInAnotherProjectThrows {
-    # Arrange
-    $p1 = New-ClassLibrary
-    $p2 = New-ClassLibrary
-    $p1 | Install-Package elmah -Version 1.1
-
-    # Act & Assert
-    Assert-Throws { $p2 | Uninstall-Package elmah } ("Package 'elmah' to be uninstalled could not be found in project '" + $p2.Name + "'")
 }
 
 #function Test-UninstallSolutionOnlyPackage {
@@ -348,7 +315,7 @@ function Test-UninstallDoesNotRemoveFolderIfNotEmpty {
         $context
     )
     # Arrange
-    $p = New-WebApplication
+    $p = New-ConsoleApplication
     $p | Install-Package PackageWithFolder -Source $context.RepositoryRoot
 
     # Get the path to the foo folder

@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
@@ -115,7 +117,7 @@ namespace NuGet.VisualStudio.Implementation.Extensibility
 #pragma warning restore CS0618 // Type or member is obsolete
             using var _ = NuGetETW.ExtensibilityEventSource.StartStopEvent(eventName);
 
-            return GetNearestImpl(targetFramework, fallbackTargetFrameworks, frameworks);
+            throw new NotSupportedException();
         }
 
         private FrameworkName GetNearestImpl(FrameworkName targetFramework, IEnumerable<FrameworkName> fallbackTargetFrameworks, IEnumerable<FrameworkName> frameworks)

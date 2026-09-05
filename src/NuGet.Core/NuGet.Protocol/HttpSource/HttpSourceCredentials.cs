@@ -15,20 +15,20 @@ namespace NuGet.Protocol
     public class HttpSourceCredentials : CredentialCache, ICredentials
     {
         public HttpSourceCredentials()
+            : this(credentials: null)
         {
-            Credentials = null;
         }
 
         /// <summary>
         /// Credentials can be changed by other threads, for this reason volatile
         /// is added below so that the value is not cached anywhere.
         /// </summary>
-        private volatile VersionedCredentials _credentials;
+        private volatile VersionedCredentials _credentials = new VersionedCredentials(credentials: null);
 
         /// <summary>
         /// The latest credentials to be used.
         /// </summary>
-        public ICredentials Credentials
+        public ICredentials? Credentials
         {
             get
             {
@@ -62,7 +62,7 @@ namespace NuGet.Protocol
         /// <param name="credentials">
         /// Optional initial credentials. May be null.
         /// </param>
-        public HttpSourceCredentials(ICredentials credentials = null)
+        public HttpSourceCredentials(ICredentials? credentials = null)
         {
             Credentials = credentials;
         }
@@ -70,7 +70,7 @@ namespace NuGet.Protocol
         /// <summary>
         /// Used by the HttpClientHandler to retrieve the current credentials.
         /// </summary>
-        NetworkCredential ICredentials.GetCredential(Uri uri, string authType)
+        NetworkCredential? ICredentials.GetCredential(Uri uri, string authType)
         {
             // Get credentials from the current credential store, if any
             return Credentials?.GetCredential(uri, authType);
@@ -78,13 +78,13 @@ namespace NuGet.Protocol
 
         private class VersionedCredentials
         {
-            public VersionedCredentials(ICredentials credentials)
+            public VersionedCredentials(ICredentials? credentials)
             {
                 Version = Guid.NewGuid();
                 Credentials = credentials;
             }
 
-            public ICredentials Credentials { get; }
+            public ICredentials? Credentials { get; }
             public Guid Version { get; }
         }
     }

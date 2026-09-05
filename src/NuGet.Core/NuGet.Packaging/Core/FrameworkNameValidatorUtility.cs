@@ -1,10 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Runtime.Versioning;
-using System.Text;
-using System.Threading.Tasks;
 using NuGet.Frameworks;
 
 namespace NuGet.Packaging.Rules
@@ -19,7 +14,7 @@ namespace NuGet.Packaging.Rules
 
         internal static bool IsValidFrameworkName(string path)
         {
-            NuGetFramework fx;
+            NuGetFramework? fx;
             try
             {
                 string effectivePath;

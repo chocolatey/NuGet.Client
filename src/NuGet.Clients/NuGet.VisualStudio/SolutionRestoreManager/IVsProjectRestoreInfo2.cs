@@ -11,6 +11,7 @@ namespace NuGet.SolutionRestoreManager
     /// </summary>
     [ComImport]
     [Guid("0D500311-7E7C-49C0-95DA-7A33FFCEE4D6")]
+    [Obsolete]
     public interface IVsProjectRestoreInfo2
     {
         /// <summary>
@@ -27,11 +28,11 @@ namespace NuGet.SolutionRestoreManager
         /// <summary>
         /// Collection of tool references.
         /// </summary>
-        IVsReferenceItems ToolReferences { get; }
+        IVsReferenceItems? ToolReferences { get; }
 
         /// <summary>
         /// Original raw value of TargetFrameworks property as set in a project file.
         /// </summary>
-        string OriginalTargetFrameworks { get; }
+        string? OriginalTargetFrameworks { get; }
     }
 }

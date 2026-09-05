@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,6 +27,8 @@ namespace Test.Utility
         public bool IsHttp => false;
 
         public PackageSource Source => new PackageSource("Test");
+
+        public SourceRepository SourceRepository => throw new NotImplementedException();
 
         public Task<IPackageDownloader> GetPackageDownloaderAsync(
             PackageIdentity packageIdentity,
@@ -104,7 +108,13 @@ namespace Test.Utility
             return new TestPackage(dependencies);
         }
 
+        [Obsolete]
         public Library GetLibrary(LibraryRange libraryRange, NuGetFramework targetFramework)
+        {
+            return GetLibrary(libraryRange, targetFramework, alias: null);
+        }
+
+        public Library GetLibrary(LibraryRange libraryRange, NuGetFramework targetFramework, string alias)
         {
             var packages = _graph.Keys.Where(p => p.Name == libraryRange.Name);
             var identity = packages.FindBestMatch(libraryRange.VersionRange, i => i?.Version);
@@ -151,6 +161,8 @@ namespace Test.Utility
 
             public TestPackage DependsOn(string id, string version, LibraryDependencyTarget target = LibraryDependencyTarget.All, bool versionCentrallyManaged = false, LibraryDependencyReferenceType? libraryDependencyReferenceType = null, LibraryIncludeFlags? privateAssets = null)
             {
+                var suppressParent = privateAssets != null ? privateAssets.Value : LibraryIncludeFlagUtils.DefaultSuppressParent;
+                var referenceType = libraryDependencyReferenceType != null ? libraryDependencyReferenceType.Value : LibraryDependencyReferenceType.Direct;
                 var libraryDependency = new LibraryDependency
                 {
                     LibraryRange =
@@ -160,18 +172,10 @@ namespace Test.Utility
                             VersionRange = VersionRange.Parse(version),
                             TypeConstraint = target
                         },
+                    ReferenceType = referenceType,
+                    SuppressParent = suppressParent,
                     VersionCentrallyManaged = versionCentrallyManaged,
                 };
-
-                if (privateAssets != null)
-                {
-                    libraryDependency.SuppressParent = privateAssets.Value;
-                }
-
-                if (libraryDependencyReferenceType != null)
-                {
-                    libraryDependency.ReferenceType = libraryDependencyReferenceType.Value;
-                }
 
                 _dependencies.Add(libraryDependency);
 

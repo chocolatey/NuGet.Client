@@ -73,7 +73,7 @@ namespace NuGet.Protocol
         /// A method used to validate the response stream. This method should not
         /// dispose the stream and should throw an exception when the content is invalid.
         /// </summary>
-        public Action<Stream> EnsureValidContents { get; set; }
+        public Action<Stream>? EnsureValidContents { get; set; }
 
         /// <summary>
         /// The timeout to use when fetching the <see cref="HttpResponseMessage"/>. Since

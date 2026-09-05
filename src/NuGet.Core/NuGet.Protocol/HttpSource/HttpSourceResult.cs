@@ -10,19 +10,22 @@ namespace NuGet.Protocol
     {
         private bool _disposed;
 
-        public Stream Stream { get; private set; }
+        public Stream? Stream { get; private set; }
         public HttpSourceResultStatus Status { get; }
-        public string CacheFile { get; }
+        public string? CacheFile { get; }
 
         public HttpSourceResult(HttpSourceResultStatus status)
         {
             Status = status;
-            Stream = null;
-            CacheFile = null;
         }
 
-        public HttpSourceResult(HttpSourceResultStatus status, string cacheFileName, Stream stream)
+        public HttpSourceResult(HttpSourceResultStatus status, string? cacheFileName, Stream stream)
         {
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
             Status = status;
             Stream = stream;
             CacheFile = cacheFileName;

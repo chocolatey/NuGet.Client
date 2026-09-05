@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
@@ -21,7 +23,7 @@ namespace NuGet.VisualStudio
         /// <remarks>Can be called from a background thread, if the UI thread is not blocked waiting for this to finish.
         /// See <a href="https://github.com/nuget/home/issues/11476">https://github.com/nuget/home/issues/11476</a></remarks>
         /// <param name="source">
-        /// The package source to install the package from. This value can be <c>null</c>
+        /// The package source to install the package from. This value can be <see langword="null" />
         /// to indicate that the user's configured sources should be used. Otherwise,
         /// this should be the source path as a string. If the user has credentials
         /// configured for a source, this value must exactly match the configured source
@@ -30,7 +32,7 @@ namespace NuGet.VisualStudio
         /// <param name="project">The target project for package installation.</param>
         /// <param name="packageId">The package ID of the package to install.</param>
         /// <param name="version">
-        /// The version of the package to install. <c>null</c> can be provided to
+        /// The version of the package to install. <see langword="null" /> can be provided to
         /// install the latest version of the package.
         /// </param>
         /// <param name="ignoreDependencies">
@@ -46,7 +48,7 @@ namespace NuGet.VisualStudio
         /// <remarks>Can be called from a background thread, if the UI thread is not blocked waiting for this to finish.
         /// See <a href="https://github.com/nuget/home/issues/11476">https://github.com/nuget/home/issues/11476</a></remarks>
         /// <param name="source">
-        /// The package source to install the package from. This value can be <c>null</c>
+        /// The package source to install the package from. This value can be <see langword="null" />
         /// to indicate that the user's configured sources should be used. Otherwise,
         /// this should be the source path as a string. If the user has credentials
         /// configured for a source, this value must exactly match the configured source
@@ -55,7 +57,7 @@ namespace NuGet.VisualStudio
         /// <param name="project">The target project for package installation.</param>
         /// <param name="packageId">The package ID of the package to install.</param>
         /// <param name="version">
-        /// The version of the package to install. <c>null</c> can be provided to
+        /// The version of the package to install. <see langword="null" /> can be provided to
         /// install the latest version of the package.
         /// </param>
         /// <param name="ignoreDependencies">
@@ -71,7 +73,7 @@ namespace NuGet.VisualStudio
         /// <param name="project">The target project for package installation.</param>
         /// <param name="packageId">The package id of the package to install.</param>
         /// <param name="version">
-        /// The version of the package to install. <c>null</c> can be provided to
+        /// The version of the package to install. <see langword="null" /> can be provided to
         /// install the latest version of the package.
         /// </param>
         /// <param name="ignoreDependencies">

@@ -3,10 +3,18 @@
 
 using System;
 using System.Collections.Generic;
+#if NET5_0_OR_GREATER
+using System.Diagnostics.CodeAnalysis;
+#endif
 using System.Linq;
+using System.Text.Json;
 using Newtonsoft.Json.Linq;
+using NuGet.Configuration;
 using NuGet.Packaging;
 using NuGet.Protocol.Core.Types;
+using NuGet.Protocol.Events;
+using NuGet.Protocol.Model;
+using NuGet.Protocol.Utility;
 using NuGet.Versioning;
 
 namespace NuGet.Protocol
@@ -16,16 +24,36 @@ namespace NuGet.Protocol
     /// </summary>
     public class ServiceIndexResourceV3 : INuGetResource
     {
-        private readonly string _json;
+        private string? _json;
+        private readonly ServiceIndexModel? _model;
         private readonly IDictionary<string, List<ServiceIndexEntry>> _index;
         private readonly DateTime _requestTime;
         private static readonly IReadOnlyList<ServiceIndexEntry> _emptyEntries = new List<ServiceIndexEntry>();
         private static readonly SemanticVersion _defaultVersion = new SemanticVersion(0, 0, 0);
 
-        public ServiceIndexResourceV3(JObject index, DateTime requestTime)
+#if NET5_0_OR_GREATER
+        [RequiresUnreferencedCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+        [RequiresDynamicCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+#endif
+        internal ServiceIndexResourceV3(JObject index, DateTime requestTime, PackageSource? packageSource)
         {
+            _ = index ?? throw new ArgumentNullException(nameof(index));
             _json = index.ToString();
-            _index = MakeLookup(index);
+            _index = MakeLookup(index, packageSource);
+            _requestTime = requestTime;
+        }
+
+#if NET5_0_OR_GREATER
+        [RequiresUnreferencedCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+        [RequiresDynamicCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+#endif
+        public ServiceIndexResourceV3(JObject index, DateTime requestTime) : this(index, requestTime, packageSource: null) { }
+
+        internal ServiceIndexResourceV3(ServiceIndexModel model, DateTime requestTime, PackageSource? packageSource)
+        {
+            _ = model ?? throw new ArgumentNullException(nameof(model));
+            _model = model;
+            _index = MakeLookup(model, packageSource);
             _requestTime = requestTime;
         }
 
@@ -50,10 +78,7 @@ namespace NuGet.Protocol
 
         public virtual string Json
         {
-            get
-            {
-                return _json;
-            }
+            get { return _json ??= JsonSerializer.Serialize(_model!, JsonContext.Default.ServiceIndexModel); }
         }
 
         /// <summary>
@@ -78,7 +103,7 @@ namespace NuGet.Protocol
 
             foreach (var type in orderedTypes)
             {
-                List<ServiceIndexEntry> entries;
+                List<ServiceIndexEntry>? entries;
                 if (_index.TryGetValue(type, out entries))
                 {
                     var compatible = GetBestVersionMatchForType(clientVersion, entries);
@@ -112,7 +137,7 @@ namespace NuGet.Protocol
         /// <summary>
         /// Get the best match service URI.
         /// </summary>
-        public virtual Uri GetServiceEntryUri(params string[] orderedTypes)
+        public virtual Uri? GetServiceEntryUri(params string[] orderedTypes)
         {
             var clientVersion = MinClientVersionUtility.GetNuGetClientVersion();
 
@@ -142,22 +167,93 @@ namespace NuGet.Protocol
             return GetServiceEntries(clientVersion, orderedTypes).Select(e => e.Uri).ToList();
         }
 
-        private static IDictionary<string, List<ServiceIndexEntry>> MakeLookup(JObject index)
+        private static IDictionary<string, List<ServiceIndexEntry>> MakeLookup(ServiceIndexModel index, PackageSource? packageSource)
         {
             var result = new Dictionary<string, List<ServiceIndexEntry>>(StringComparer.Ordinal);
 
-            JToken resources;
+            if (index?.Resources is null)
+            {
+                return result;
+            }
+
+            foreach (var resource in index.Resources)
+            {
+                var id = resource.Id;
+                if (string.IsNullOrEmpty(id) || !Uri.TryCreate(id, UriKind.Absolute, out Uri? uri))
+                {
+                    continue;
+                }
+
+                if (packageSource != null && uri.Scheme == Uri.UriSchemeHttp && packageSource.IsHttps)
+                {
+                    ProtocolDiagnostics.RaiseEvent(new ProtocolDiagnosticServiceIndexEntryEvent(source: packageSource.Source, httpsSourceHasHttpResource: true));
+                }
+
+                var clientVersions = new List<SemanticVersion>();
+                if (resource.ClientVersion is null)
+                {
+                    clientVersions.Add(_defaultVersion);
+                }
+                else
+                {
+                    foreach (var versionString in resource.ClientVersion)
+                    {
+                        if (SemanticVersion.TryParse(versionString, out SemanticVersion? semVer))
+                        {
+                            clientVersions.Add(semVer);
+                        }
+                    }
+                }
+
+                foreach (var type in resource.Type)
+                {
+                    foreach (var clientVersion in clientVersions)
+                    {
+                        if (!result.TryGetValue(type, out List<ServiceIndexEntry>? entries))
+                        {
+                            entries = new List<ServiceIndexEntry>();
+                            result.Add(type, entries);
+                        }
+
+                        entries.Add(new ServiceIndexEntry(uri, type, clientVersion));
+                    }
+                }
+            }
+
+#if NET8_0_OR_GREATER
+            foreach (var type in result.Keys)
+#else
+            foreach (var type in result.Keys.ToArray())
+#endif
+            {
+                result[type] = result[type].OrderByDescending(e => e.ClientVersion).ToList();
+            }
+
+            return result;
+        }
+
+        private static IDictionary<string, List<ServiceIndexEntry>> MakeLookup(JObject index, PackageSource? packageSource)
+        {
+            var result = new Dictionary<string, List<ServiceIndexEntry>>(StringComparer.Ordinal);
+
+            JToken? resources;
             if (index.TryGetValue("resources", out resources))
             {
                 foreach (var resource in resources)
                 {
                     var id = GetValues(resource["@id"]).SingleOrDefault();
 
-                    Uri uri;
+                    Uri? uri;
                     if (string.IsNullOrEmpty(id) || !Uri.TryCreate(id, UriKind.Absolute, out uri))
                     {
                         // Skip invalid or missing @ids
                         continue;
+                    }
+
+                    // Capture if the resource is http & the source is https
+                    if (packageSource != null && uri.Scheme == Uri.UriSchemeHttp && packageSource.IsHttps)
+                    {
+                        ProtocolDiagnostics.RaiseEvent(new ProtocolDiagnosticServiceIndexEntryEvent(source: packageSource.Source, httpsSourceHasHttpResource: true));
                     }
 
                     var types = GetValues(resource["@type"]).ToArray();
@@ -175,7 +271,7 @@ namespace NuGet.Protocol
                         // Parse supported versions
                         foreach (var versionString in GetValues(clientVersionToken))
                         {
-                            SemanticVersion version;
+                            SemanticVersion? version;
                             if (SemanticVersion.TryParse(versionString, out version))
                             {
                                 clientVersions.Add(version);
@@ -188,7 +284,7 @@ namespace NuGet.Protocol
                     {
                         foreach (var version in clientVersions)
                         {
-                            List<ServiceIndexEntry> entries;
+                            List<ServiceIndexEntry>? entries;
                             if (!result.TryGetValue(type, out entries))
                             {
                                 entries = new List<ServiceIndexEntry>();
@@ -214,7 +310,11 @@ namespace NuGet.Protocol
         /// Read string values from an array or string.
         /// Returns an empty enumerable if the value is null.
         /// </summary>
-        private static IEnumerable<string> GetValues(JToken token)
+#if NET5_0_OR_GREATER
+        [UnconditionalSuppressMessage("AOT", "IL2026", Justification = "Only called from JObject constructor which is annotated with [RUC]/[RDC].")]
+        [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Only called from JObject constructor which is annotated with [RUC]/[RDC].")]
+#endif
+        private static IEnumerable<string> GetValues(JToken? token)
         {
             if (token?.Type == JTokenType.Array)
             {
@@ -222,13 +322,13 @@ namespace NuGet.Protocol
                 {
                     if (entry.Type == JTokenType.String)
                     {
-                        yield return entry.ToObject<string>();
+                        yield return entry.ToObject<string>()!;
                     }
                 }
             }
             else if (token?.Type == JTokenType.String)
             {
-                yield return token.ToObject<string>();
+                yield return token.ToObject<string>()!;
             }
         }
     }

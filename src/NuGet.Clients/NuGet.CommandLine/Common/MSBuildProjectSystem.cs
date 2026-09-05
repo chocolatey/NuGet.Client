@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -15,8 +17,7 @@ using NuGet.ProjectManagement;
 namespace NuGet.Common
 {
     public sealed class MSBuildProjectSystem
-        : MSBuildUser
-        , IMSBuildProjectSystem
+        : IMSBuildProjectSystem
     {
         private const string TargetName = "EnsureNuGetPackageBuildImports";
 
@@ -27,12 +28,14 @@ namespace NuGet.Common
         private const string TargetPlatformVersionProperty = "TargetPlatformVersion";
         private const string TargetPlatformMinVersionProperty = "TargetPlatformMinVersion";
 
+        private string _msbuildDirectory;
+
         public MSBuildProjectSystem(
             string msbuildDirectory,
             string projectFullPath,
             INuGetProjectContext projectContext)
         {
-            LoadAssemblies(msbuildDirectory);
+            _msbuildDirectory = msbuildDirectory;
 
             ProjectFileFullPath = projectFullPath;
             ProjectFullPath = Path.GetDirectoryName(projectFullPath);
@@ -111,7 +114,7 @@ namespace NuGet.Common
         public Task AddFrameworkReferenceAsync(string name, string packageId)
         {
             // No-op
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         public void AddImport(string targetFullPath, ImportLocation location)
@@ -182,13 +185,13 @@ namespace NuGet.Common
                 new[] { new KeyValuePair<string, string>("HintPath", relativePath),
                         new KeyValuePair<string, string>("Private", "True")});
 
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         public Task BeginProcessingAsync()
         {
             // No-op outside of visual studio, this is implemented in other project systems, like vsmsbuild & website.
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         public void RegisterProcessedFiles(IEnumerable<string> files)
@@ -199,7 +202,7 @@ namespace NuGet.Common
         public Task EndProcessingAsync()
         {
             // No-op outside of visual studio, this is implemented in other project systems, like vsmsbuild & website.
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         public void DeleteDirectory(string path, bool recursive)
@@ -265,7 +268,7 @@ namespace NuGet.Common
 
         public Task<bool> ReferenceExistsAsync(string name)
         {
-            return Task.FromResult(GetReference(name) != null);
+            return TaskResult.Boolean(GetReference(name) != null);
         }
 
         public void RemoveFile(string path)
@@ -319,7 +322,7 @@ namespace NuGet.Common
                 Project.RemoveItem(assemblyReference);
             }
 
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         public string ResolvePath(string path)
@@ -432,28 +435,23 @@ namespace NuGet.Common
 
         private dynamic GetProject(string projectFile)
         {
-            AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler(AssemblyResolve);
-            try
-            {
-                dynamic globalProjectCollection = _projectCollectionType
-                    .GetProperty("GlobalProjectCollection")
-                    .GetMethod
-                    .Invoke(null, Array.Empty<object>());
-                var loadedProjects = globalProjectCollection.GetLoadedProjects(projectFile);
-                if (loadedProjects.Count > 0)
-                {
-                    return loadedProjects[0];
-                }
+            using var msbuildAssemblyResolver = new MSBuildAssemblyResolver(_msbuildDirectory);
 
-                var project = Activator.CreateInstance(
-                    _projectType,
-                    new object[] { projectFile });
-                return project;
-            }
-            finally
+            dynamic globalProjectCollection = msbuildAssemblyResolver.ProjectCollectionType
+                     .GetProperty("GlobalProjectCollection")
+                     .GetMethod
+                     .Invoke(null, Array.Empty<object>());
+            var loadedProjects = globalProjectCollection.GetLoadedProjects(projectFile);
+            if (loadedProjects.Count > 0)
             {
-                AppDomain.CurrentDomain.AssemblyResolve -= new ResolveEventHandler(AssemblyResolve);
+                return loadedProjects[0];
             }
+
+            var project = Activator.CreateInstance(
+                msbuildAssemblyResolver.ProjectType,
+                new object[] { projectFile });
+
+            return project;
         }
     }
 }

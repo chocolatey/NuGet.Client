@@ -3,14 +3,22 @@
 
 using System;
 using System.Collections.Generic;
+#if NET5_0_OR_GREATER
+using System.Diagnostics.CodeAnalysis;
+#endif
 using System.Globalization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
+using NuGet.Protocol.Converters;
 
 namespace NuGet.Protocol
 {
+#if NET5_0_OR_GREATER
+    [UnconditionalSuppressMessage("AOT", "IL2026", Justification = "Legacy Newtonsoft.Json infrastructure; not used in AOT code paths.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "Legacy Newtonsoft.Json infrastructure; not used in AOT code paths.")]
+#endif
     public static class JsonExtensions
     {
         public const int JsonSerializationMaxDepth = 512;
@@ -27,7 +35,9 @@ namespace NuGet.Protocol
                 new StringEnumConverter { NamingStrategy = new CamelCaseNamingStrategy() },
                 new IsoDateTimeConverter { DateTimeStyles = DateTimeStyles.AssumeUniversal },
                 new FingerprintsConverter(),
-                new VersionRangeConverter()
+                new VersionRangeConverter(),
+                new PackageVulnerabilityInfoConverter(),
+                new NuGetFrameworkConverter()
             },
         };
 
@@ -37,6 +47,10 @@ namespace NuGet.Protocol
         /// Serialize object to the JSON.
         /// </summary>
         /// <param name="obj">The object.</param>
+#if NET5_0_OR_GREATER
+        [RequiresUnreferencedCode("Uses Newtonsoft.Json reflection-based serialization.")]
+        [RequiresDynamicCode("Uses Newtonsoft.Json reflection-based serialization.")]
+#endif
         public static string ToJson(this object obj, Formatting formatting = Formatting.None)
         {
             return JsonConvert.SerializeObject(obj, formatting, JsonExtensions.ObjectSerializationSettings);
@@ -47,7 +61,11 @@ namespace NuGet.Protocol
         /// </summary>
         /// <typeparam name="T">Type of object</typeparam>
         /// <param name="json">JSON representation of object</param>
-        public static T FromJson<T>(this string json)
+#if NET5_0_OR_GREATER
+        [RequiresUnreferencedCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+        [RequiresDynamicCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+#endif
+        public static T? FromJson<T>(this string json)
         {
             return JsonConvert.DeserializeObject<T>(json, JsonExtensions.ObjectSerializationSettings);
         }
@@ -58,7 +76,11 @@ namespace NuGet.Protocol
         /// <typeparam name="T">Type of object</typeparam>
         /// <param name="json">JSON representation of object</param>
         /// <param name="settings">The settings.</param>
-        public static T FromJson<T>(this string json, JsonSerializerSettings settings)
+#if NET5_0_OR_GREATER
+        [RequiresUnreferencedCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+        [RequiresDynamicCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+#endif
+        public static T? FromJson<T>(this string json, JsonSerializerSettings settings)
         {
             return JsonConvert.DeserializeObject<T>(json, settings);
         }
@@ -68,7 +90,11 @@ namespace NuGet.Protocol
         /// </summary>
         /// <param name="json">JSON representation of object</param>
         /// <param name="type">The object type.</param>
-        public static object FromJson(this string json, Type type)
+#if NET5_0_OR_GREATER
+        [RequiresUnreferencedCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+        [RequiresDynamicCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+#endif
+        public static object? FromJson(this string json, Type type)
         {
             return JsonConvert.DeserializeObject(json, type, JsonExtensions.ObjectSerializationSettings);
         }
@@ -77,6 +103,10 @@ namespace NuGet.Protocol
         /// Serialize object to JToken.
         /// </summary>
         /// <param name="obj">The object.</param>
+#if NET5_0_OR_GREATER
+        [RequiresUnreferencedCode("Uses Newtonsoft.Json reflection-based serialization.")]
+        [RequiresDynamicCode("Uses Newtonsoft.Json reflection-based serialization.")]
+#endif
         public static JToken ToJToken(this object obj)
         {
             return JToken.FromObject(obj, JsonExtensions.JsonObjectSerializer);
@@ -87,7 +117,11 @@ namespace NuGet.Protocol
         /// </summary>
         /// <typeparam name="T">Type of object.</typeparam>
         /// <param name="jtoken">The JToken to be deserialized.</param>
-        public static T FromJToken<T>(this JToken jtoken)
+#if NET5_0_OR_GREATER
+        [RequiresUnreferencedCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+        [RequiresDynamicCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+#endif
+        public static T? FromJToken<T>(this JToken jtoken)
         {
             return jtoken.ToObject<T>(JsonExtensions.JsonObjectSerializer);
         }
@@ -97,7 +131,11 @@ namespace NuGet.Protocol
         /// </summary>
         /// <param name="jtoken">The JToken to be deserialized.</param>
         /// <param name="type">The object type.</param>
-        public static object FromJToken(this JToken jtoken, Type type)
+#if NET5_0_OR_GREATER
+        [RequiresUnreferencedCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+        [RequiresDynamicCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+#endif
+        public static object? FromJToken(this JToken jtoken, Type type)
         {
             return jtoken.ToObject(type, JsonExtensions.JsonObjectSerializer);
         }
@@ -108,7 +146,11 @@ namespace NuGet.Protocol
         /// <typeparam name="T">Type of property to return.</typeparam>
         /// <param name="jobject">The JObject to be deserialized.</param>
         /// <param name="propertyName">The property name.</param>
-        public static T GetJObjectProperty<T>(this JObject jobject, string propertyName)
+#if NET5_0_OR_GREATER
+        [RequiresUnreferencedCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+        [RequiresDynamicCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+#endif
+        public static T? GetJObjectProperty<T>(this JObject jobject, string propertyName)
         {
             var targetProperty = jobject.GetValue(propertyName: propertyName, comparison: StringComparison.OrdinalIgnoreCase);
             return targetProperty != null ? targetProperty.FromJToken<T>() : default(T);
@@ -122,7 +164,7 @@ namespace NuGet.Protocol
                 return null;
             }
 
-            return (bool)value.Value;
+            return (bool)value.Value!;
         }
     }
 }

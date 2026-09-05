@@ -21,7 +21,7 @@ namespace NuGet.Configuration
         /// <summary>
         /// Occurs when a file is read.
         /// </summary>
-        internal event EventHandler<string> FileRead;
+        internal event EventHandler<string>? FileRead;
 
         /// <inheritdoc cref="IDisposable.Dispose" />
         public void Dispose()
@@ -44,7 +44,7 @@ namespace NuGet.Configuration
         /// <param name="isReadOnly">An optional value indicating whether or not the settings file is read-only.</param>
         /// <returns></returns>
         /// <exception cref="ObjectDisposedException">When the current object has been disposed.</exception>
-        /// <exception cref="ArgumentNullException">When <paramref name="filePath" /> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">When <paramref name="filePath" /> is <see langword="null" />.</exception>
         internal SettingsFile GetOrCreateSettingsFile(string filePath, bool isMachineWide = false, bool isReadOnly = false)
         {
             if (_isDisposed)
@@ -57,6 +57,11 @@ namespace NuGet.Configuration
                 throw new ArgumentNullException(nameof(filePath));
             }
 
+            if (!Path.IsPathRooted(filePath))
+            {
+                throw new ArgumentException("SettingsLoadingContext requires a rooted path", nameof(filePath));
+            }
+
             Lazy<SettingsFile> settingsLazy = _cache.GetOrAdd(
                 filePath,
                 (key) => new Lazy<SettingsFile>(() =>
@@ -64,10 +69,12 @@ namespace NuGet.Configuration
                     var fileInfo = new FileInfo(key);
 
                     // Load the settings file, this will throw an exception if something is wrong with the file
-                    var settingsFile = new SettingsFile(fileInfo.DirectoryName, fileInfo.Name, isMachineWide, isReadOnly);
+                    var settingsFile = new SettingsFile(fileInfo.DirectoryName!, fileInfo.Name, isMachineWide, isReadOnly);
 
                     // Fire the FileRead event so unit tests can detect when a file was actually read versus cached
                     FileRead?.Invoke(this, fileInfo.FullName);
+
+                    if (ConfigurationEventSource.Instance.IsEnabled()) ConfigurationEventSource.Instance.SettingsLoadingContext_FileRead(fileInfo.FullName, isMachineWide ? 1 : 0, isReadOnly ? 1 : 0);
 
                     return settingsFile;
                 }));

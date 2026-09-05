@@ -10,6 +10,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using NuGet.Common;
 
 
 namespace NuGet.Protocol.Plugins
@@ -17,12 +18,13 @@ namespace NuGet.Protocol.Plugins
     /// <summary>
     /// A plugin factory.
     /// </summary>
-    public sealed class PluginFactory : IPluginFactory
+    public class PluginFactory : IPluginFactory
     {
         private bool _isDisposed;
         private readonly IPluginLogger _logger;
         private readonly TimeSpan _pluginIdleTimeout;
         private readonly ConcurrentDictionary<string, Lazy<Task<IPlugin>>> _plugins;
+        private readonly IEnvironmentVariableReader _environmentVariableReader;
 
         /// <summary>
         /// Instantiates a new <see cref="PluginFactory" /> class.
@@ -31,7 +33,23 @@ namespace NuGet.Protocol.Plugins
         /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="pluginIdleTimeout" />
         /// is less than <see cref="Timeout.InfiniteTimeSpan" />.</exception>
         public PluginFactory(TimeSpan pluginIdleTimeout)
+            : this(pluginIdleTimeout, EnvironmentVariableWrapper.Instance)
         {
+        }
+
+        // Parameterless constructor used by Moq to mock this type.
+        [Obsolete("This constructor exists only for Moq via reflection. Do not call directly.", error: true)]
+        internal PluginFactory()
+        {
+            _logger = null!;
+            _plugins = null!;
+            _environmentVariableReader = null!;
+        }
+
+        internal PluginFactory(TimeSpan pluginIdleTimeout, IEnvironmentVariableReader environmentVariableReader)
+        {
+            _environmentVariableReader = environmentVariableReader ?? throw new ArgumentNullException(nameof(environmentVariableReader));
+
             if (pluginIdleTimeout < Timeout.InfiniteTimeSpan)
             {
                 throw new ArgumentOutOfRangeException(
@@ -48,7 +66,7 @@ namespace NuGet.Protocol.Plugins
         /// <summary>
         /// Disposes of this instance.
         /// </summary>
-        public void Dispose()
+        public virtual void Dispose()
         {
             if (_isDisposed)
             {
@@ -67,7 +85,9 @@ namespace NuGet.Protocol.Plugins
                 }
             }
 
-            _logger.Dispose();
+            // Do not dispose of _logger. This factory does not own it: it is the shared, process-wide
+            // PluginLogger.DefaultInstance, which is discarded at the end of the build alongside the plugins that
+            // write to it, and other consumers (Connection, MessageDispatcher) deliberately do not dispose it either.
 
             GC.SuppressFinalize(this);
 
@@ -77,7 +97,7 @@ namespace NuGet.Protocol.Plugins
         /// <summary>
         /// Asynchronously gets an existing plugin instance or creates a new instance and connects to it.
         /// </summary>
-        /// <param name="filePath">The file path of the plugin.</param>
+        /// <param name="pluginFile">A plugin file.</param>
         /// <param name="arguments">Command-line arguments to be supplied to the plugin.</param>
         /// <param name="requestHandlers">Request handlers.</param>
         /// <param name="options">Connection options.</param>
@@ -85,22 +105,22 @@ namespace NuGet.Protocol.Plugins
         /// <returns>A task that represents the asynchronous operation.
         /// The task result (<see cref="Task{TResult}.Result" />) returns a <see cref="Plugin" />
         /// instance.</returns>
-        /// <exception cref="ArgumentException">Thrown if <paramref name="filePath" />
-        /// is either <c>null</c> or empty.</exception>
+        /// <exception cref="ArgumentException">Thrown if <paramref name="pluginFile.Path" />
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="arguments" />
-        /// is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="requestHandlers" />
-        /// is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="options" />
-        /// is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="sessionCancellationToken" />
         /// is cancelled.</exception>
         /// <exception cref="ObjectDisposedException">Thrown if this object is disposed.</exception>
         /// <exception cref="ProtocolException">Thrown if a plugin protocol error occurs.</exception>
         /// <exception cref="PluginException">Thrown for a plugin failure during creation.</exception>
         /// <remarks>This is intended to be called by NuGet client tools.</remarks>
-        public async Task<IPlugin> GetOrCreateAsync(
-            string filePath,
+        public virtual async Task<IPlugin> GetOrCreateAsync(
+            PluginFile pluginFile,
             IEnumerable<string> arguments,
             IRequestHandlers requestHandlers,
             ConnectionOptions options,
@@ -111,9 +131,9 @@ namespace NuGet.Protocol.Plugins
                 throw new ObjectDisposedException(nameof(PluginFactory));
             }
 
-            if (string.IsNullOrEmpty(filePath))
+            if (string.IsNullOrEmpty(pluginFile.Path))
             {
-                throw new ArgumentException(Strings.ArgumentCannotBeNullOrEmpty, nameof(filePath));
+                throw new ArgumentException(Strings.ArgumentCannotBeNullOrEmpty, nameof(pluginFile.Path));
             }
 
             if (arguments == null)
@@ -134,9 +154,9 @@ namespace NuGet.Protocol.Plugins
             sessionCancellationToken.ThrowIfCancellationRequested();
 
             var lazyTask = _plugins.GetOrAdd(
-                filePath,
+                pluginFile.Path,
                 (path) => new Lazy<Task<IPlugin>>(
-                    () => CreatePluginAsync(filePath, arguments, requestHandlers, options, sessionCancellationToken)));
+                    () => CreatePluginAsync(pluginFile, arguments, requestHandlers, options, sessionCancellationToken)));
 
             await lazyTask.Value;
 
@@ -145,40 +165,48 @@ namespace NuGet.Protocol.Plugins
         }
 
         private async Task<IPlugin> CreatePluginAsync(
-            string filePath,
+            PluginFile pluginFile,
             IEnumerable<string> arguments,
             IRequestHandlers requestHandlers,
             ConnectionOptions options,
             CancellationToken sessionCancellationToken)
         {
             var args = string.Join(" ", arguments);
-#if IS_DESKTOP
-            var startInfo = new ProcessStartInfo(filePath)
+
+            ProcessStartInfo startInfo;
+
+            if (pluginFile.RequiresDotnetHost)
             {
-                Arguments = args,
-                UseShellExecute = false,
-                RedirectStandardError = false,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-                WindowStyle = ProcessWindowStyle.Hidden,
-            };
-#else
-            var startInfo = new ProcessStartInfo
+                startInfo = new ProcessStartInfo
+                {
+                    FileName = _environmentVariableReader.GetEnvironmentVariable("DOTNET_HOST_PATH") ??
+                    (NuGet.Common.RuntimeEnvironmentHelper.IsWindows ?
+                    "dotnet.exe" :
+                    "dotnet"),
+                    Arguments = $"\"{pluginFile.Path}\" " + args,
+                    UseShellExecute = false,
+                    RedirectStandardError = false,
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                };
+            }
+            else
             {
-                FileName = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ??
-                           (NuGet.Common.RuntimeEnvironmentHelper.IsWindows ?
-                                "dotnet.exe" :
-                                "dotnet"),
-                Arguments = $"\"{filePath}\" " + args,
-                UseShellExecute = false,
-                RedirectStandardError = false,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-                WindowStyle = ProcessWindowStyle.Hidden,
-            };
-#endif
+                // Execute file directly.
+                startInfo = new ProcessStartInfo(pluginFile.Path)
+                {
+                    Arguments = args,
+                    UseShellExecute = false,
+                    RedirectStandardError = false,
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                };
+            }
+
             var pluginProcess = new PluginProcess(startInfo);
             string pluginId = Plugin.CreateNewId();
 
@@ -186,10 +214,10 @@ namespace NuGet.Protocol.Plugins
             {
                 // Process ID is unavailable until we start the process; however, we want to wire up this event before
                 // attempting to start the process in case the process immediately exits.
-                EventHandler<IPluginProcess> onExited = null;
-                Connection connection = null;
+                EventHandler<IPluginProcess>? onExited = null;
+                Connection? connection = null;
 
-                onExited = (object eventSender, IPluginProcess exitedProcess) =>
+                onExited = (object? eventSender, IPluginProcess exitedProcess) =>
                 {
                     exitedProcess.Exited -= onExited;
 
@@ -219,7 +247,7 @@ namespace NuGet.Protocol.Plugins
                 connection = new Connection(messageDispatcher, sender, receiver, options, _logger);
 
                 var plugin = new Plugin(
-                    filePath,
+                    pluginFile.Path,
                     connection,
                     pluginProcess,
                     isOwnProcess: false,
@@ -287,9 +315,9 @@ namespace NuGet.Protocol.Plugins
         /// The task result (<see cref="Task{TResult}.Result" />) returns a <see cref="Plugin" />
         /// instance.</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="requestHandlers" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="options" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="sessionCancellationToken" />
         /// is cancelled.</exception>
         /// <remarks>This is intended to be called by a plugin.</remarks>
@@ -360,9 +388,7 @@ namespace NuGet.Protocol.Plugins
 
             UnregisterEventHandlers(plugin as Plugin);
 
-            Lazy<Task<IPlugin>> lazyTask;
-
-            if (_plugins.TryRemove(plugin.FilePath, out lazyTask))
+            if (_plugins.TryRemove(plugin.FilePath, out Lazy<Task<IPlugin>>? lazyTask))
             {
                 if (lazyTask.IsValueCreated && lazyTask.Value.Status == TaskStatus.RanToCompletion)
                 {
@@ -381,7 +407,7 @@ namespace NuGet.Protocol.Plugins
             }
         }
 
-        private void OnPluginFaulted(object sender, FaultedPluginEventArgs e)
+        private void OnPluginFaulted(object? sender, FaultedPluginEventArgs e)
         {
             var message = string.Format(
                 CultureInfo.CurrentCulture,
@@ -394,12 +420,12 @@ namespace NuGet.Protocol.Plugins
             Dispose(e.Plugin);
         }
 
-        private void OnPluginExited(object sender, PluginEventArgs e)
+        private void OnPluginExited(object? sender, PluginEventArgs e)
         {
             Dispose(e.Plugin);
         }
 
-        private void OnPluginIdle(object sender, PluginEventArgs e)
+        private void OnPluginIdle(object? sender, PluginEventArgs e)
         {
             if (_logger.IsEnabled)
             {
@@ -437,7 +463,7 @@ namespace NuGet.Protocol.Plugins
             }
         }
 
-        private void UnregisterEventHandlers(Plugin plugin)
+        private void UnregisterEventHandlers(Plugin? plugin)
         {
             if (plugin != null)
             {

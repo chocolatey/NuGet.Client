@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -52,7 +54,7 @@ namespace NuGet.Tests.Apex
                         typeof(NuGetApexConsoleTestService).Assembly.Location, // NuGet.Console.TestContract.dll
                     };
 
-                    foreach(var testAssembly in compositionAssemblies)
+                    foreach (var testAssembly in compositionAssemblies)
                     {
                         _visualStudioHostConfiguration.AddCompositionAssembly(testAssembly);
                     }

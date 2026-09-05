@@ -16,7 +16,7 @@ namespace NuGet.Protocol
         public static async Task<T> StartWithTimeout<T>(
             Func<CancellationToken, Task<T>> getTask,
             TimeSpan timeout,
-            string timeoutMessage,
+            string? timeoutMessage,
             CancellationToken token)
         {
             /*
@@ -58,7 +58,7 @@ namespace NuGet.Protocol
         public static async Task StartWithTimeout(
             Func<CancellationToken, Task> getTask,
             TimeSpan timeout,
-            string timeoutMessage,
+            string? timeoutMessage,
             CancellationToken token)
         {
             await StartWithTimeout(

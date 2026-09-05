@@ -2,6 +2,11 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+#if NET5_0_OR_GREATER
+using System.Diagnostics.CodeAnalysis;
+#endif
+using Newtonsoft.Json.Linq;
+using NuGet.Shared;
 
 namespace NuGet.Protocol.Plugins
 {
@@ -18,7 +23,7 @@ namespace NuGet.Protocol.Plugins
         /// <param name="method">The message method.</param>
         /// <returns>a <see cref="Message" /> instance.</returns>
         /// <exception cref="ArgumentException">Thrown if <paramref name="requestId" />
-        /// is either <c>null</c> or an empty string.</exception>
+        /// is either <see langword="null" /> or an empty string.</exception>
         public static Message Create(
             string requestId,
             MessageType type,
@@ -29,7 +34,7 @@ namespace NuGet.Protocol.Plugins
                 throw new ArgumentException(Strings.ArgumentCannotBeNullOrEmpty, nameof(requestId));
             }
 
-            return new Message(requestId, type, method);
+            return new Message(requestId, type, method, (object?)null);
         }
 
         /// <summary>
@@ -42,8 +47,8 @@ namespace NuGet.Protocol.Plugins
         /// <param name="payload">The message payload.</param>
         /// <returns>a <see cref="Message" /> instance.</returns>
         /// <exception cref="ArgumentException">Thrown if <paramref name="requestId" />
-        /// is either <c>null</c> or an empty string.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="payload" /> is <c>null</c>.</exception>
+        /// is either <see langword="null" /> or an empty string.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="payload" /> is <see langword="null" />.</exception>
         public static Message Create<TPayload>(
             string requestId,
             MessageType type,
@@ -61,9 +66,43 @@ namespace NuGet.Protocol.Plugins
                 throw new ArgumentNullException(nameof(payload));
             }
 
-            var jsonPayload = JsonSerializationUtilities.FromObject(payload);
+            return new Message(requestId, type, method, payload);
+        }
 
-            return new Message(requestId, type, method, jsonPayload);
+        /// <summary>
+        /// Serializes a message's payload to a JSON string.
+        /// Use this instead of accessing the obsolete <see cref="Message.Payload" /> directly.
+        /// </summary>
+        /// <param name="message">The message.</param>
+        /// <returns>A JSON string, or <see langword="null" /> if no payload exists.</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="message" /> is <see langword="null" />.</exception>
+#if NET5_0_OR_GREATER
+        [RequiresUnreferencedCode("Uses Newtonsoft.Json reflection-based serialization.")]
+        [RequiresDynamicCode("Uses Newtonsoft.Json reflection-based serialization.")]
+#endif
+        public static string? SerializePayload(Message message)
+        {
+            if (message == null)
+            {
+                throw new ArgumentNullException(nameof(message));
+            }
+
+            if (message.PayloadObject == null)
+            {
+                return null;
+            }
+
+            if (message.PayloadObject is JObject jobj)
+            {
+                return jobj.ToString(Newtonsoft.Json.Formatting.None);
+            }
+
+            using (var stringWriter = new System.IO.StringWriter())
+            using (var jsonWriter = new Newtonsoft.Json.JsonTextWriter(stringWriter))
+            {
+                JsonSerializationUtilities.Serialize(jsonWriter, message.PayloadObject);
+                return stringWriter.ToString();
+            }
         }
 
         /// <summary>
@@ -72,21 +111,35 @@ namespace NuGet.Protocol.Plugins
         /// <typeparam name="TPayload">The message payload type.</typeparam>
         /// <param name="message">The message.</param>
         /// <returns>The deserialized message payload of type <typeparamref name="TPayload" />
-        /// or <c>null</c> if no payload exists.</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="message" /> is <c>null</c>.</exception>
-        public static TPayload DeserializePayload<TPayload>(Message message)
+        /// or <see langword="null" /> if no payload exists.</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="message" /> is <see langword="null" />.</exception>
+#if NET5_0_OR_GREATER
+        [RequiresUnreferencedCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+        [RequiresDynamicCode("Uses Newtonsoft.Json reflection-based deserialization.")]
+#endif
+        public static TPayload? DeserializePayload<TPayload>(Message message)
         {
             if (message == null)
             {
                 throw new ArgumentNullException(nameof(message));
             }
 
-            if (message.Payload == null)
+            if (message.PayloadObject == null)
             {
-                return default(TPayload);
+                return default;
             }
 
-            return JsonSerializationUtilities.ToObject<TPayload>(message.Payload);
+            if (NuGetFeatureFlags.UseSystemTextJsonDeserializationFeatureSwitch)
+            {
+                return (TPayload)message.PayloadObject;
+            }
+
+            if (message.PayloadObject is Newtonsoft.Json.Linq.JObject jobj)
+            {
+                return JsonSerializationUtilities.ToObject<TPayload>(jobj);
+            }
+
+            return (TPayload)message.PayloadObject;
         }
     }
 }

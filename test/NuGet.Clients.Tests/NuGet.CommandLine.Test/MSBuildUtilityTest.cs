@@ -54,15 +54,16 @@ namespace NuGet.CommandLine.Test
 
         // Test that GetMsBuildDirectoryInternal deals with invalid toolsets (for example ones created from SKUs that don't ship MSBuild like VS Test Agent SKU) See https://github.com/NuGet/Home/issues/5840 for more info
         [Theory]
-        [MemberData("InvalidToolsetData", MemberType = typeof(ToolsetDataSource))]
-        public void HandlesToolsetsWithInvalidPaths(List<MsBuildToolset> toolsets, string expectedPath)
+        [MemberData(nameof(ToolsetDataSource.InvalidToolsetData), MemberType = typeof(ToolsetDataSource))]
+        public void HandlesToolsetsWithInvalidPaths(List<MsBuildToolset> toolsets, string? userVersion, string expectedPath)
         {
             // Arrange
             // Act
+            var orderByDescending = toolsets.OrderByDescending(t => t).ToList();
             var directory = MsBuildUtility.GetMsBuildDirectoryInternal(
-                userVersion: null,
+                userVersion: userVersion,
                 console: null,
-                installedToolsets: toolsets.OrderByDescending(t => t),
+                installedToolsets: orderByDescending,
                 getMsBuildPathInPathVar: (reader) => expectedPath).Path;
 
             // Assert
@@ -104,7 +105,7 @@ namespace NuGet.CommandLine.Test
         }
 
         // Tests that GetMsBuildDirectoryInternal returns path of the toolset whose toolset version matches
-        // the userVersion. Also tests that, when userVersion is just a number, it can be matched with version 
+        // the userVersion. Also tests that, when userVersion is just a number, it can be matched with version
         // userVersion + ".0". And non-numeric/case insensitive tests.
         [Theory]
         [MemberData("VersionMatchData", MemberType = typeof(ToolsetDataSource))]
@@ -153,7 +154,7 @@ namespace NuGet.CommandLine.Test
         [InlineData("15")]
         [InlineData("15.0")]
         [InlineData("14")]
-        public void TestGetMsbuildDirectoryForMonoOnMac(string version)
+        public void TestGetMsbuildDirectoryForMonoOnMac(string? version)
         {
             var os = Environment.GetEnvironmentVariable("OSTYPE");
             if (RuntimeEnvironmentHelper.IsMono && os != null && os.StartsWith("darwin"))
@@ -175,7 +176,7 @@ namespace NuGet.CommandLine.Test
                 }
                 else if (version == null)
                 {
-                    Assert.True(new List<string> { msbuild14, msbuild15 }.Contains(toolset.Path));
+                    Assert.Contains(toolset.Path, new List<string> { msbuild14, msbuild15 });
                 }
             }
         }
@@ -195,7 +196,7 @@ namespace NuGet.CommandLine.Test
                 //    |- 15.1
                 //       |- bin
                 //          |- msbuild.exe
-                // We want the highest version within the VS tree chosen (typically there's only one, but that's the logic 
+                // We want the highest version within the VS tree chosen (typically there's only one, but that's the logic
                 // we'll go with in case there are more).
                 var msBuild15BinPath = Directory.CreateDirectory(Path.Combine(vsPath, "MSBuild", "15.0", "Bin")).FullName;
                 var msBuild151BinPath = Directory.CreateDirectory(Path.Combine(vsPath, "MSBuild", "15.1", "Bin")).FullName;
@@ -242,7 +243,7 @@ namespace NuGet.CommandLine.Test
                 //    |- 15.1
                 //       |- bin
                 //          |- msbuild.exe
-                // We want the highest version within the VS tree chosen (typically there's only one, but that's the logic 
+                // We want the highest version within the VS tree chosen (typically there's only one, but that's the logic
                 // we'll go with in case there are more).
                 var msBuild15BinPath = Directory.CreateDirectory(Path.Combine(vsPath, "MSBuild", "15.0", "Bin")).FullName;
                 var msBuild151BinPath = Directory.CreateDirectory(Path.Combine(vsPath, "MSBuild", "15.1", "Bin")).FullName;
@@ -333,6 +334,59 @@ namespace NuGet.CommandLine.Test
             }
         }
 
+        [SkipMonoTheory] // Mono does not have SxS installations so it's not relevant to get msbuild from the path.
+        [InlineData("arm64", true)]
+        [InlineData("amd64", true)]
+        [InlineData("ARM64", true)]
+        [InlineData("random", false)]
+        public void GetNonArchitectureDirectory_PATHENVWithArchitecture_Succeeds(string architecutre, bool isArchitectureSpecificPath)
+        {
+            using (var vsPath = TestDirectory.Create())
+            {
+                var msBuildNonArchitectureDir = Directory.CreateDirectory(Path.Combine(vsPath, "MSBuild", "Current", "Bin"));
+                var msBuildExeNonArchitecturePath = Path.Combine(msBuildNonArchitectureDir.FullName, "msbuild.exe");
+                File.WriteAllText(msBuildExeNonArchitecturePath, "foo");
+
+                var msBuildArchitectureDir = Directory.CreateDirectory(Path.Combine(msBuildNonArchitectureDir.FullName, architecutre));
+                var msBuildExeArchitecturePath = Path.Combine(msBuildArchitectureDir.FullName, "msbuild.exe");
+                File.WriteAllText(msBuildExeArchitecturePath, "foo");
+
+                // Act;
+                var msBuildPath = MsBuildUtility.GetNonArchitectureDirectory(msBuildExeArchitecturePath);
+
+                // Assert
+                if (isArchitectureSpecificPath)
+                {
+                    Assert.Equal(msBuildNonArchitectureDir.FullName, msBuildPath);
+                }
+                else
+                {
+                    Assert.Equal(msBuildArchitectureDir.FullName, msBuildPath);
+                }
+            }
+        }
+
+        [SkipMono] // Mono does not have SxS installations so it's not relevant to get msbuild from the path.
+        public void GetNonArchitectureDirectory_PATHENVWithArchitecture_Throws()
+        {
+            using (var vsPath = TestDirectory.Create())
+            {
+                var msBuildNonArchitectureDir = Directory.CreateDirectory(Path.Combine(vsPath, "MSBuild", "Current", "Bin"));
+                var msBuildArchitectureDir = Directory.CreateDirectory(Path.Combine(msBuildNonArchitectureDir.FullName, "arm64"));
+                var msBuildExeArchitecturePath = Path.Combine(msBuildArchitectureDir.FullName, "msbuild.exe");
+                File.WriteAllText(msBuildExeArchitecturePath, "foo");
+
+                // Act & Assert
+                CommandException exception = Assert.Throws<CommandException>(
+                    () => MsBuildUtility.GetNonArchitectureDirectory(msBuildExeArchitecturePath));
+
+                Assert.Equal(string.Format(CultureInfo.CurrentCulture,
+                    LocalizedResourceManager.GetString(nameof(NuGetResources.Error_CannotFindNonArchitectureSpecificMsbuild)),
+                    msBuildArchitectureDir.FullName),
+                    exception.Message);
+            }
+        }
+
         [Fact]
         public void CombinePathWithVerboseError_CombinesPaths()
         {
@@ -348,6 +402,69 @@ namespace NuGet.CommandLine.Test
             Assert.Contains(badPath, exception.Message);
         }
 
+        [Fact]
+        public void IsNetCoreMsBuildDirectory_WithRuntimeConfig_ReturnsTrue()
+        {
+            using (var dir = TestDirectory.Create())
+            {
+                File.WriteAllText(Path.Combine(dir, "MSBuild.runtimeconfig.json"), "{}");
+
+                Assert.True(MsBuildUtility.IsNetCoreMsBuildDirectory(dir));
+            }
+        }
+
+        [Fact]
+        public void IsNetCoreMsBuildDirectory_WithRuntimeConfigAndMsBuildExe_ReturnsTrue()
+        {
+            // Even if a future AoT SDK ships MSBuild.exe, the runtimeconfig.json
+            // still marks it as .NET Core, and NuGet.exe cannot load its assemblies.
+            using (var dir = TestDirectory.Create())
+            {
+                File.WriteAllText(Path.Combine(dir, "MSBuild.exe"), "fake");
+                File.WriteAllText(Path.Combine(dir, "MSBuild.runtimeconfig.json"), "{}");
+
+                Assert.True(MsBuildUtility.IsNetCoreMsBuildDirectory(dir));
+            }
+        }
+
+        [Fact]
+        public void IsNetCoreMsBuildDirectory_WithMsBuildExeOnly_ReturnsFalse()
+        {
+            using (var dir = TestDirectory.Create())
+            {
+                File.WriteAllText(Path.Combine(dir, "MSBuild.exe"), "fake");
+
+                Assert.False(MsBuildUtility.IsNetCoreMsBuildDirectory(dir));
+            }
+        }
+
+        [Fact]
+        public void IsNetCoreMsBuildDirectory_EmptyDirectory_ReturnsFalse()
+        {
+            using (var dir = TestDirectory.Create())
+            {
+                Assert.False(MsBuildUtility.IsNetCoreMsBuildDirectory(dir));
+            }
+        }
+
+        [Fact]
+        public void GetMsBuildDirectoryFromMsBuildPath_NetCoreMsBuild_ThrowsCommandException()
+        {
+            using (var dir = TestDirectory.Create())
+            {
+                File.WriteAllText(Path.Combine(dir, "MSBuild.runtimeconfig.json"), "{}");
+
+                CommandException exception = Assert.Throws<CommandException>(
+                    () => MsBuildUtility.GetMsBuildDirectoryFromMsBuildPath(dir, null, null));
+
+                string expectedMessage = string.Format(
+                    CultureInfo.CurrentCulture,
+                    LocalizedResourceManager.GetString(nameof(NuGetResources.Error_MsBuildIsNetCoreMsBuild)),
+                    dir.ToString());
+                Assert.Equal(expectedMessage, exception.Message);
+            }
+        }
+
         public static class ToolsetDataSource
         {
             // Legacy toolsets
@@ -361,32 +478,44 @@ namespace NuGet.CommandLine.Test
             private static readonly MsBuildToolset Toolset15_Mon_ShortVersion = new MsBuildToolset(
                 version: "15.1",
                 path: @"c:\vs\25555.00",
-                installDate: new DateTime(2016, 9, 15));
+                installDate: new DateTime(2016, 9, 15),
+                installationName: "VisualStudio/25555.00");
             private static readonly MsBuildToolset Toolset15_Tue_ShortVersion = new MsBuildToolset(
                 version: "15.1",
                 path: @"c:\vs\25555.02",
-                installDate: new DateTime(2016, 9, 16));
+                installDate: new DateTime(2016, 9, 16),
+                installationName: "VisualStudio/25555.02");
             private static readonly MsBuildToolset Toolset15_Wed_ShortVersion = new MsBuildToolset(
                 version: "15.1",
                 path: @"c:\vs\25555.01",
-                installDate: new DateTime(2016, 9, 17));
+                installDate: new DateTime(2016, 9, 17),
+                installationName: "VisualStudio/25555.01");
 
             private static readonly MsBuildToolset Toolset15_Mon_LongVersion = new MsBuildToolset(
                 version: "15.1.137.25382",
                 path: @"c:\vs\25557.00",
-                installDate: new DateTime(2016, 9, 15));
+                installDate: new DateTime(2016, 9, 15),
+                installationName: "VisualStudio/25557.00");
             private static readonly MsBuildToolset Toolset15_Tue_LongVersion = new MsBuildToolset(
                 version: "15.1.137.25382",
                 path: @"c:\vs\25557.02",
-                installDate: new DateTime(2016, 9, 16));
+                installDate: new DateTime(2016, 9, 16),
+                installationName: "VisualStudio/25555.02");
             private static readonly MsBuildToolset Toolset15_Wed_LongVersion = new MsBuildToolset(
                 version: "15.1.137.25382",
                 path: @"c:\vs\25557.01",
-                installDate: new DateTime(2016, 9, 17));
+                installDate: new DateTime(2016, 9, 17),
+                installationName: "VisualStudio/25555.01");
             private static readonly MsBuildToolset InvalidToolsetVSTest = new MsBuildToolset(
                 version: null,
                 path: null,
-                installDate: new DateTime(2017, 9, 7));
+                installDate: new DateTime(2017, 9, 7),
+                installationName: null);
+            private static readonly MsBuildToolset InvalidToolsetVSTest_Ssms = new MsBuildToolset(
+                version: "17.14.14.31908",
+                path: @"c:\ssms\36221.01",
+                installDate: new DateTime(2025, 7, 2),
+                installationName: "SSMS/21.3.7+36221.1");
 
             // Toolset collections
 
@@ -450,10 +579,17 @@ namespace NuGet.CommandLine.Test
                 Toolset4
             };
 
-            private static List<MsBuildToolset> CombinedToolsets_MsBuild15AndVSTestToolsets = new List<MsBuildToolset> {
+            private static List<MsBuildToolset> CombinedToolsets_MsBuild15AndVSTestToolsets =
+            [
                 Toolset15_Wed_LongVersion,
                 InvalidToolsetVSTest
-            };
+            ];
+
+            private static List<MsBuildToolset> CombinedToolsets_MsBuild15AndSsmsToolsets =
+            [
+                Toolset15_Wed_LongVersion,
+                InvalidToolsetVSTest_Ssms
+            ];
 
             // Test data sets
 
@@ -520,10 +656,11 @@ namespace NuGet.CommandLine.Test
                     new object[] { LegacyToolsets_NonNumericVersion, "0" },
                 };
 
-            private static readonly List<object[]> _invalidToolsetData
-                = new List<object[]>
+            private static readonly TheoryData<List<MsBuildToolset>, string?, string> _invalidToolsetData
+                = new()
                 {
-                    new object[] { CombinedToolsets_MsBuild15AndVSTestToolsets, Toolset15_Wed_LongVersion.Path}
+                    { CombinedToolsets_MsBuild15AndVSTestToolsets, null, Toolset15_Wed_LongVersion.Path },
+                    { CombinedToolsets_MsBuild15AndSsmsToolsets, "latest", Toolset15_Wed_LongVersion.Path },
                 };
 
             private static readonly List<object[]> _highestPathWithLowVersionMatchData
@@ -542,7 +679,7 @@ namespace NuGet.CommandLine.Test
             public static IEnumerable<object[]> IntegerVersionMatchData => _integerVersionMatchData;
             public static IEnumerable<object[]> NonNumericVersionMatchData => _nonNumericVersionMatchData;
             public static IEnumerable<object[]> NonNumericVersionMatchFailureData => _nonNumericVersionMatchFailureData;
-            public static IEnumerable<object[]> InvalidToolsetData => _invalidToolsetData;
+            public static TheoryData<List<MsBuildToolset>, string?, string> InvalidToolsetData => _invalidToolsetData;
             public static IEnumerable<object[]> HighestPathWithLowVersionMatchData => _highestPathWithLowVersionMatchData;
 
         }

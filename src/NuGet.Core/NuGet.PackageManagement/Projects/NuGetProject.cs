@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -58,13 +60,13 @@ namespace NuGet.ProjectManagement
         public virtual Task PreProcessAsync(INuGetProjectContext nuGetProjectContext, CancellationToken token)
         {
             // Do Nothing by default
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         public virtual Task PostProcessAsync(INuGetProjectContext nuGetProjectContext, CancellationToken token)
         {
             // Do Nothing by default
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         public T GetMetadata<T>(string key)

@@ -33,7 +33,7 @@ namespace NuGet.VisualStudio.Internal.Contracts
                 switch (reader.ReadString())
                 {
                     case FloatBehaviorPropertyName:
-                        floatBehavior = options.Resolver.GetFormatter<NuGetVersionFloatBehavior>().Deserialize(ref reader, options);
+                        floatBehavior = options.Resolver.GetFormatter<NuGetVersionFloatBehavior>()!.Deserialize(ref reader, options);
                         break;
 
                     case MinVersionPropertyName:
@@ -51,8 +51,9 @@ namespace NuGet.VisualStudio.Internal.Contracts
             }
 
             Assumes.True(floatBehavior.HasValue);
+            Assumes.NotNull(minVersion);
 
-            return new FloatRange(floatBehavior.Value, minVersion, releasePrefix);
+            return new FloatRange(floatBehavior.Value, minVersion!, releasePrefix);
         }
 
         protected override void SerializeCore(ref MessagePackWriter writer, FloatRange value, MessagePackSerializerOptions options)
@@ -61,7 +62,7 @@ namespace NuGet.VisualStudio.Internal.Contracts
             writer.Write(MinVersionPropertyName);
             NuGetVersionFormatter.Instance.Serialize(ref writer, value.MinVersion, options);
             writer.Write(FloatBehaviorPropertyName);
-            options.Resolver.GetFormatter<NuGetVersionFloatBehavior>().Serialize(ref writer, value.FloatBehavior, options);
+            options.Resolver.GetFormatter<NuGetVersionFloatBehavior>()!.Serialize(ref writer, value.FloatBehavior, options);
             writer.Write(ReleasePrefixPropertyName);
             writer.Write(value.OriginalReleasePrefix);
         }

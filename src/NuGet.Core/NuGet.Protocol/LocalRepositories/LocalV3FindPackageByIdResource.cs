@@ -1,13 +1,13 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
@@ -32,7 +32,7 @@ namespace NuGet.Protocol
 
         private readonly string _source;
         private readonly VersionFolderPathResolver _resolver;
-        private LocalPackageFileCache _packageFileCache;
+        private LocalPackageFileCache? _packageFileCache;
         private readonly Lazy<bool> _rootExists;
         private bool _isFallbackFolder;
 
@@ -74,7 +74,7 @@ namespace NuGet.Protocol
         /// </summary>
         /// <param name="packageSource">A package source.</param>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="packageSource" />
-        /// is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
         public LocalV3FindPackageByIdResource(PackageSource packageSource)
         {
             if (packageSource == null)
@@ -100,9 +100,9 @@ namespace NuGet.Protocol
         /// The task result (<see cref="Task{TResult}.Result" />) returns an
         /// <see cref="IEnumerable{NuGetVersion}" />.</returns>
         /// <exception cref="ArgumentException">Thrown if <paramref name="id" />
-        /// is either <c>null</c> or an empty string.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="cacheContext" /> <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> <c>null</c>.</exception>
+        /// is either <see langword="null" /> or an empty string.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="cacheContext" /> <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> <see langword="null" />.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="cancellationToken" />
         /// is cancelled.</exception>
         public override Task<IEnumerable<NuGetVersion>> GetAllVersionsAsync(
@@ -157,11 +157,11 @@ namespace NuGet.Protocol
         /// The task result (<see cref="Task{TResult}.Result" />) returns an
         /// <see cref="bool" /> indicating whether or not the .nupkg file was copied.</returns>
         /// <exception cref="ArgumentException">Thrown if <paramref name="id" />
-        /// is either <c>null</c> or an empty string.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="version" /> <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="destination" /> <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="cacheContext" /> <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> <c>null</c>.</exception>
+        /// is either <see langword="null" /> or an empty string.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="version" /> <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="destination" /> <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="cacheContext" /> <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> <see langword="null" />.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="cancellationToken" />
         /// is cancelled.</exception>
         public override async Task<bool> CopyNupkgToStreamAsync(
@@ -208,8 +208,20 @@ namespace NuGet.Protocol
 
                     using (var fileStream = File.OpenRead(packagePath))
                     {
+                        var expectedIdentity = new PackageIdentity(id, version);
+                        try
+                        {
+                            HttpStreamValidation.ValidatePackageIdentity(packagePath, fileStream, expectedIdentity);
+                        }
+                        catch (InvalidDataException ex)
+                        {
+                            logger.LogError(ExceptionUtilities.DisplayMessage(ex));
+                            return false;
+                        }
+                        fileStream.Position = 0;
+
                         await fileStream.CopyToAsync(destination, cancellationToken);
-                        ProtocolDiagnostics.RaiseEvent(new ProtocolDiagnosticNupkgCopiedEvent(_source, destination.Length));
+                        ProtocolDiagnostics.RaiseEvent(new ProtocolDiagnosticNupkgCopiedEvent(_source, destination.Length, id));
                         return true;
                     }
                 }
@@ -239,13 +251,13 @@ namespace NuGet.Protocol
         /// The task result (<see cref="Task{TResult}.Result" />) returns an
         /// <see cref="IEnumerable{NuGetVersion}" />.</returns>
         /// <exception cref="ArgumentException">Thrown if <paramref name="id" />
-        /// is either <c>null</c> or an empty string.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="version" /> <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="cacheContext" /> <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> <c>null</c>.</exception>
+        /// is either <see langword="null" /> or an empty string.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="version" /> <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="cacheContext" /> <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> <see langword="null" />.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="cancellationToken" />
         /// is cancelled.</exception>
-        public override Task<FindPackageByIdDependencyInfo> GetDependencyInfoAsync(
+        public override Task<FindPackageByIdDependencyInfo?> GetDependencyInfoAsync(
             string id,
             NuGetVersion version,
             SourceCacheContext cacheContext,
@@ -277,11 +289,9 @@ namespace NuGet.Protocol
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                FindPackageByIdDependencyInfo dependencyInfo = null;
+                FindPackageByIdDependencyInfo? dependencyInfo = null;
                 if (DoesVersionExist(id, version))
                 {
-                    var identity = new PackageIdentity(id, version);
-
                     dependencyInfo = ProcessNuspecReader(
                         id,
                         version,
@@ -291,7 +301,7 @@ namespace NuGet.Protocol
                         });
                 }
 
-                return Task.FromResult(dependencyInfo);
+                return Task.FromResult<FindPackageByIdDependencyInfo?>(dependencyInfo);
             }
             finally
             {
@@ -313,12 +323,12 @@ namespace NuGet.Protocol
         /// <param name="cancellationToken">A cancellation token.</param>
         /// <returns>A task that represents the asynchronous operation.
         /// The task result (<see cref="Task{TResult}.Result" />) returns an <see cref="IPackageDownloader" />.</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="packageIdentity" /> <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="cacheContext" /> <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="packageIdentity" /> <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="cacheContext" /> <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> <see langword="null" />.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="cancellationToken" />
         /// is cancelled.</exception>
-        public override Task<IPackageDownloader> GetPackageDownloaderAsync(
+        public override Task<IPackageDownloader?> GetPackageDownloaderAsync(
             PackageIdentity packageIdentity,
             SourceCacheContext cacheContext,
             ILogger logger,
@@ -344,7 +354,7 @@ namespace NuGet.Protocol
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                IPackageDownloader packageDependency = null;
+                IPackageDownloader? packageDependency = null;
 
                 if (DoesVersionExist(packageIdentity.Id, packageIdentity.Version))
                 {
@@ -354,7 +364,7 @@ namespace NuGet.Protocol
                     packageDependency = new LocalPackageArchiveDownloader(_source, packagePath, matchedPackageIdentity, logger);
                 }
 
-                return Task.FromResult(packageDependency);
+                return Task.FromResult<IPackageDownloader?>(packageDependency);
             }
             finally
             {
@@ -379,10 +389,10 @@ namespace NuGet.Protocol
         /// The task result (<see cref="Task{TResult}.Result" />) returns an
         /// <see cref="IEnumerable{NuGetVersion}" />.</returns>
         /// <exception cref="ArgumentException">Thrown if <paramref name="id" />
-        /// is either <c>null</c> or an empty string.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="version" /> <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="cacheContext" /> <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> <c>null</c>.</exception>
+        /// is either <see langword="null" /> or an empty string.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="version" /> <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="cacheContext" /> <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> <see langword="null" />.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="cancellationToken" />
         /// is cancelled.</exception>
         public override Task<bool> DoesPackageExistAsync(
@@ -472,7 +482,7 @@ namespace NuGet.Protocol
 
         private List<NuGetVersion> GetVersions(string id, SourceCacheContext cacheContext, ILogger logger)
         {
-            List<NuGetVersion> results = null;
+            List<NuGetVersion>? results = null;
 
             Func<string, List<NuGetVersion>> findPackages = (keyId) => GetVersionsCore(keyId, logger);
 
@@ -501,7 +511,7 @@ namespace NuGet.Protocol
                     var versionPart = versionDir.Name;
 
                     // Get the version part and parse it
-                    NuGetVersion version;
+                    NuGetVersion? version;
                     if (!NuGetVersion.TryParse(versionPart, out version))
                     {
                         logger.LogWarning(string.Format(

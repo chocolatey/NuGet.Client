@@ -1,9 +1,10 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -87,12 +88,6 @@ namespace NuGet.Commands
             return result;
         }
 
-        [Obsolete("Do not use this. Use RunPackageBuild() instead as it accounts for the effects of package analysis to the complete operation status.")]
-        public void BuildPackage()
-        {
-            BuildPackage(Path.GetFullPath(Path.Combine(_packArgs.CurrentDirectory, _packArgs.Path)));
-        }
-
         private bool BuildPackage(string path)
         {
             string extension = Path.GetExtension(path);
@@ -113,28 +108,6 @@ namespace NuGet.Commands
         /// </summary>
         /// <param name="builder">The package builder to use.</param>
         /// <param name="outputPath">The package output path.</param>
-        /// <returns>A <see cref="PackageArchiveReader"/> if everything completed succesfully. Throws if a core package validation fails. Returns <see langword="null"/> if a validation rule got elevated from a warning to an error.</returns>
-        /// <exception cref="PackagingException">If a core packaging validation fails.</exception>
-        [Obsolete("Do not use this. Use RunPackageBuild() instead as it accounts for the effects of package analysis to the complete operation status.")]
-        public PackageArchiveReader BuildPackage(PackageBuilder builder, string outputPath = null)
-        {
-            outputPath = outputPath ?? GetOutputPath(builder, _packArgs, false, builder.Version);
-            var successful = BuildPackage(builder, outputPath, symbolsPackage: false);
-            PackageArchiveReader packageArchiveReader = null;
-            if (successful && File.Exists(outputPath))
-            {
-                packageArchiveReader = new PackageArchiveReader(outputPath);
-            }
-            return packageArchiveReader;
-        }
-
-        /// <summary>
-        /// Builds and validates the package.
-        /// If a core validation fails, this method will throw a <see cref="PackagingException"/>.
-        /// If for any other reason the package creation fails (like for example, a validation rule got bumped from warning to an error, this will return <see langword="null"/>.
-        /// </summary>
-        /// <param name="builder">The package builder to use.</param>
-        /// <param name="outputPath">The package output path.</param>
         /// <param name="symbolsPackage">Whether this package is a symbols package. Symbols packages do not undergo validations.</param>
         /// <returns>A <see cref="PackageArchiveReader"/> if everything completed succesfully. Throws if a core package validation fails. Returns <see langword="null"/> if a validation rule got elevated from a warning to an error.</returns>
         /// <exception cref="PackagingException">If a core packaging validation fails.</exception>
@@ -142,6 +115,18 @@ namespace NuGet.Commands
         {
             outputPath = outputPath ?? GetOutputPath(builder, _packArgs, false, builder.Version);
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
+
+            // Warn if the package ID doesn't adhere to the restricted character set (NU5052)
+            if (!symbolsPackage &&
+                _packArgs.UsingMicrosoftNETSdk &&
+                SdkAnalysisLevelMinimums.IsEnabled(_packArgs.SdkAnalysisLevel, _packArgs.UsingMicrosoftNETSdk, SdkAnalysisLevelMinimums.V11_0_100) &&
+                !PackageIdValidator.IsValidPackageId(builder.Id, useRestrictedCharacterSet: true))
+            {
+                _packArgs.Logger.Log(
+                    PackagingLogMessage.CreateWarning(
+                        string.Format(CultureInfo.CurrentCulture, Strings.RestrictedPackageIdWarning, builder.Id),
+                        NuGetLogCode.NU5052));
+            }
 
             // Track if the package file was already present on disk
             bool isExistingPackage = File.Exists(outputPath);
@@ -322,254 +307,16 @@ namespace NuGet.Commands
             ExcludeFiles(builder.Files);
         }
 
-        [Obsolete]
-        public static bool ProcessProjectJsonFile(
-            PackageBuilder builder,
-            string basePath,
-            string id,
-            NuGetVersion version,
-            string suffix,
-            Func<string, string> propertyProvider)
-        {
-            if (basePath == null)
-            {
-                return false;
-            }
-
-            string path = ProjectJsonPathUtilities.GetProjectConfigPath(basePath, Path.GetFileName(basePath));
-            if (File.Exists(path))
-            {
-                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read))
-                {
-                    LoadProjectJsonFile(builder, path, basePath, id, stream, version, suffix);
-                }
-                return true;
-            }
-
-            return false;
-        }
-
-        [Obsolete]
-        private static void LoadProjectJsonFile(
-            PackageBuilder builder,
-            string path,
-            string basePath,
-            string id,
-            Stream stream,
-            NuGetVersion version,
-            string suffix)
-        {
-            PackageSpec spec = JsonPackageSpecReader.GetPackageSpec(stream, id, path, suffix);
-
-            if (id == null)
-            {
-                builder.Id = Path.GetFileName(basePath);
-            }
-            else
-            {
-                builder.Id = id;
-            }
-            if (version != null)
-            {
-                builder.Version = version;
-                builder.HasSnapshotVersion = false;
-            }
-            else if (!spec.IsDefaultVersion)
-            {
-                builder.Version = spec.Version;
-                builder.HasSnapshotVersion = spec.HasVersionSnapshot;
-
-                if (suffix != null && !spec.HasVersionSnapshot)
-                {
-                    builder.Version = new NuGetVersion(
-                        builder.Version.Major,
-                        builder.Version.Minor,
-                        builder.Version.Patch,
-                        builder.Version.Revision,
-                        suffix,
-                        metadata: null);
-                }
-            }
-            if (spec.Title != null)
-            {
-                builder.Title = spec.Title;
-            }
-            if (spec.Description != null)
-            {
-                builder.Description = spec.Description;
-            }
-            if (spec.Copyright != null)
-            {
-                builder.Copyright = spec.Copyright;
-            }
-            if (spec.Authors.Any())
-            {
-                builder.Authors.AddRange(spec.Authors);
-            }
-            if (spec.Owners.Any())
-            {
-                builder.Owners.AddRange(spec.Owners);
-            }
-            Uri tempUri;
-            if (Uri.TryCreate(spec.LicenseUrl, UriKind.Absolute, out tempUri))
-            {
-                builder.LicenseUrl = tempUri;
-            }
-            if (Uri.TryCreate(spec.ProjectUrl, UriKind.Absolute, out tempUri))
-            {
-                builder.ProjectUrl = tempUri;
-            }
-            if (Uri.TryCreate(spec.IconUrl, UriKind.Absolute, out tempUri))
-            {
-                builder.IconUrl = tempUri;
-            }
-            builder.RequireLicenseAcceptance = spec.RequireLicenseAcceptance;
-            if (spec.Summary != null)
-            {
-                builder.Summary = spec.Summary;
-            }
-            if (spec.ReleaseNotes != null)
-            {
-                builder.ReleaseNotes = spec.ReleaseNotes;
-            }
-            if (spec.Language != null)
-            {
-                builder.Language = spec.Language;
-            }
-            if (spec.BuildOptions != null && spec.BuildOptions.OutputName != null)
-            {
-                builder.OutputName = spec.BuildOptions.OutputName;
-            }
-
-            foreach (KeyValuePair<string, string> include in spec.PackInclude)
-            {
-                builder.AddFiles(basePath, include.Value, include.Key);
-            }
-
-            if (spec.PackOptions != null)
-            {
-                if (spec.PackOptions.IncludeExcludeFiles != null)
-                {
-                    string fullExclude;
-                    string filesExclude;
-                    CalculateExcludes(spec.PackOptions.IncludeExcludeFiles, out fullExclude, out filesExclude);
-
-                    if (spec.PackOptions.IncludeExcludeFiles.Include != null)
-                    {
-                        foreach (string include in spec.PackOptions.IncludeExcludeFiles.Include)
-                        {
-                            builder.AddFiles(basePath, include, string.Empty, fullExclude);
-                        }
-                    }
-
-                    if (spec.PackOptions.IncludeExcludeFiles.IncludeFiles != null)
-                    {
-                        foreach (string includeFile in spec.PackOptions.IncludeExcludeFiles.IncludeFiles)
-                        {
-                            string resolvedPath = ResolvePath(new PhysicalPackageFile() { SourcePath = includeFile }, basePath);
-
-                            builder.AddFiles(basePath, includeFile, resolvedPath, filesExclude);
-                        }
-                    }
-                }
-
-                if (spec.PackOptions.Mappings != null)
-                {
-                    foreach (KeyValuePair<string, IncludeExcludeFiles> map in spec.PackOptions.Mappings)
-                    {
-                        string fullExclude;
-                        string filesExclude;
-                        CalculateExcludes(map.Value, out fullExclude, out filesExclude);
-
-                        if (map.Value.Include != null)
-                        {
-                            // Include paths from project.json are glob matching strings.
-                            // Calling AddFiles for "path/**" with an output target of "newpath/"
-                            // should go to "newpath/filename" but instead goes to "newpath/path/filename".
-                            // To get around this, do a WildcardSearch ahead of the AddFiles to get full paths.
-                            // Passing in the target path will then what we want.
-                            foreach (string include in map.Value.Include)
-                            {
-                                IEnumerable<string> matchedFiles = PathResolver.PerformWildcardSearch(basePath, include);
-                                foreach (var matchedFile in matchedFiles)
-                                {
-                                    builder.AddFiles(basePath, matchedFile, map.Key, fullExclude);
-                                }
-                            }
-                        }
-
-                        if (map.Value.IncludeFiles != null)
-                        {
-                            foreach (string include in map.Value.IncludeFiles)
-                            {
-                                builder.AddFiles(basePath, include, map.Key, filesExclude);
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (spec.Tags.Any())
-            {
-                builder.Tags.AddRange(spec.Tags);
-            }
-
-            if (spec.TargetFrameworks.Any())
-            {
-                foreach (TargetFrameworkInformation framework in spec.TargetFrameworks)
-                {
-                    if (framework.FrameworkName.IsUnsupported)
-                    {
-                        throw new PackagingException(
-                            NuGetLogCode.NU5003,
-                            string.Format(
-                                CultureInfo.CurrentCulture,
-                                Strings.Error_InvalidTargetFramework,
-                                framework.FrameworkName));
-                    }
-
-                    builder.TargetFrameworks.Add(framework.FrameworkName);
-                    AddDependencyGroups(framework.Dependencies.Concat(spec.Dependencies), framework.FrameworkName, builder);
-                }
-            }
-            else
-            {
-                if (spec.Dependencies.Any())
-                {
-                    AddDependencyGroups(spec.Dependencies, NuGetFramework.AnyFramework, builder);
-                }
-            }
-
-            builder.PackageTypes = new Collection<PackageType>(spec.PackOptions?.PackageType?.ToList() ?? new List<PackageType>());
-        }
-
-        private static void CalculateExcludes(IncludeExcludeFiles files, out string fullExclude, out string filesExclude)
-        {
-            fullExclude = string.Empty;
-            filesExclude = string.Empty;
-            if (files.Exclude != null &&
-                files.Exclude.Any())
-            {
-                fullExclude = string.Join(";", files.Exclude);
-            }
-
-            if (files.ExcludeFiles != null &&
-                files.ExcludeFiles.Any())
-            {
-                if (!string.IsNullOrEmpty(fullExclude))
-                {
-                    fullExclude += ";";
-                }
-                filesExclude += string.Join(";", files.ExcludeFiles);
-                fullExclude += filesExclude;
-            }
-        }
-
         public static void AddDependencyGroups(
             IEnumerable<LibraryDependency> dependencies,
             NuGetFramework framework,
             PackageBuilder builder)
         {
+            if (dependencies == null)
+            {
+                throw new ArgumentNullException(nameof(dependencies));
+            }
+
             ISet<PackageDependency> packageDependencies = new HashSet<PackageDependency>();
 
             foreach (LibraryDependency dependency in dependencies)
@@ -723,7 +470,11 @@ namespace NuGet.Commands
                     _packArgs.GetPropertyValue,
                     !_packArgs.ExcludeEmptyDirectories,
                     _packArgs.Deterministic,
-                    _packArgs.Logger);
+                    _packArgs.Logger,
+                    _packArgs.Version)
+                {
+                    DeterministicTimestamp = _packArgs.DeterministicTimestamp,
+                };
             }
 
             return new PackageBuilder(
@@ -732,7 +483,11 @@ namespace NuGet.Commands
                 _packArgs.GetPropertyValue,
                 !_packArgs.ExcludeEmptyDirectories,
                 _packArgs.Deterministic,
-                _packArgs.Logger);
+                _packArgs.Logger,
+                _packArgs.Version)
+            {
+                DeterministicTimestamp = _packArgs.DeterministicTimestamp,
+            };
         }
 
         private bool BuildFromProjectFile(string path)
@@ -1031,27 +786,27 @@ namespace NuGet.Commands
         internal void AnalyzePackage(PackageArchiveReader package)
         {
             IEnumerable<IPackageRule> packageRules = Rules;
-            IList<PackagingLogMessage> issues = new List<PackagingLogMessage>();
+            IList<PackagingLogMessage> logMessages = new List<PackagingLogMessage>();
 
             foreach (IPackageRule rule in packageRules)
             {
-                issues.AddRange(rule.Validate(package).OrderBy(p => p.Code.ToString(), StringComparer.CurrentCulture));
+                logMessages.AddRange(rule.Validate(package).OrderBy(p => p.Code.ToString(), StringComparer.CurrentCulture));
             }
 
-            if (issues.Count > 0)
+            if (logMessages.Count > 0)
             {
-                foreach (PackagingLogMessage issue in issues)
+                foreach (PackagingLogMessage logMessage in logMessages)
                 {
-                    PrintPackageIssue(issue);
+                    PrintPackageLogMessage(logMessage);
                 }
             }
         }
 
-        private void PrintPackageIssue(PackagingLogMessage issue)
+        private void PrintPackageLogMessage(PackagingLogMessage message)
         {
-            if (!string.IsNullOrEmpty(issue.Message))
+            if (!string.IsNullOrEmpty(message.Message))
             {
-                _packArgs.Logger.Log(issue);
+                _packArgs.Logger.Log(message);
             }
         }
 

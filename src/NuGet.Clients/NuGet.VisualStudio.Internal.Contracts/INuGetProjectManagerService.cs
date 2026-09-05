@@ -21,11 +21,12 @@ namespace NuGet.VisualStudio.Internal.Contracts
         ValueTask<IInstalledAndTransitivePackages> GetInstalledAndTransitivePackagesAsync(
             IReadOnlyCollection<string> projectIds,
             CancellationToken cancellationToken);
+
         /// <summary>
         /// Obtains the installed and transitive packages from all given projects, optionally including transitive origins for transitive packages.
         /// </summary>
         /// <param name="projectIds">Projects to retrieve installed and transitive packages</param>
-        /// <param name="includeTransitiveOrigins">Set it to <c>true</c> to get transitive origins of each transitive package</param>
+        /// <param name="includeTransitiveOrigins">Set it to <see langword="true" /> to get transitive origins of each transitive package</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>An object with two lists: installed and transitive packages from all projects</returns>
         ValueTask<IInstalledAndTransitivePackages> GetInstalledAndTransitivePackagesAsync(
@@ -39,6 +40,7 @@ namespace NuGet.VisualStudio.Internal.Contracts
             string projectId,
             bool includeUnresolved,
             CancellationToken cancellationToken);
+        ValueTask<bool> IsCentralPackageManagementEnabledAsync(string projectId, CancellationToken cancellationToken);
         ValueTask<IProjectMetadataContextInfo> GetMetadataAsync(string projectId, CancellationToken cancellationToken);
         ValueTask<IProjectContextInfo> GetProjectAsync(string projectId, CancellationToken cancellationToken);
         ValueTask<IReadOnlyCollection<IProjectContextInfo>> GetProjectsAsync(CancellationToken cancellationToken);
@@ -69,7 +71,9 @@ namespace NuGet.VisualStudio.Internal.Contracts
             bool includePrelease,
             DependencyBehavior dependencyBehavior,
             IReadOnlyList<string> packageSourceNames,
-            VersionRange versionRange,
+            VersionRange? versionRange,
+            string? newMappingID,
+            string? newMappingSource,
             CancellationToken cancellationToken);
 
         ValueTask<IReadOnlyList<ProjectAction>> GetUninstallActionsAsync(
@@ -94,7 +98,7 @@ namespace NuGet.VisualStudio.Internal.Contracts
         /// <param name="projectIds">A collection of project ID's</param>
         /// <param name="cancellationToken">Cancellation Token</param>
         /// <returns>A collection with all package folders found in each project assets file, deduplicated</returns>
-        /// <exception cref="ArgumentNullException">If <paramref name="projectIds"/> is <c>null</c></exception>
+        /// <exception cref="ArgumentNullException">If <paramref name="projectIds"/> is <see langword="null" /></exception>
         /// <remarks><see cref="PackageManagement.VisualStudio.IPackageReferenceProject.GetPackageFoldersAsync(CancellationToken)"/></remarks>
         ValueTask<IReadOnlyCollection<string>> GetPackageFoldersAsync(
             IReadOnlyCollection<string> projectIds,

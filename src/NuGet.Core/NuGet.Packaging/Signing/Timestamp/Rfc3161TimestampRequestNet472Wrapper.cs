@@ -1,7 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if IS_SIGNING_SUPPORTED && IS_DESKTOP
+#if IS_DESKTOP
 using System;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -16,10 +16,10 @@ namespace NuGet.Packaging.Signing
         public Rfc3161TimestampRequestNet472Wrapper(
             byte[] messageHash,
             HashAlgorithmName hashAlgorithm,
-            Oid requestedPolicyId,
-            byte[] nonce,
+            Oid? requestedPolicyId,
+            byte[]? nonce,
             bool requestSignerCertificates,
-            X509ExtensionCollection extensions)
+            X509ExtensionCollection? extensions)
         {
             _rfc3161TimestampRequest = new Rfc3161TimestampRequest(
                 messageHash,
@@ -35,7 +35,7 @@ namespace NuGet.Packaging.Signing
             return Task.FromResult(_rfc3161TimestampRequest.SubmitRequest(timestampUri, timeout));
         }
 
-        public byte[] GetNonce()
+        public byte[]? GetNonce()
         {
             return _rfc3161TimestampRequest.GetNonce();
         }

@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System.Collections.Generic;
 using System.Diagnostics;
 using Microsoft.VisualStudio.Language.Intellisense;
@@ -11,13 +13,13 @@ namespace NuGetConsole.Implementation.Console
 {
     internal class WpfConsoleCompletionSource : ObjectWithFactory<WpfConsoleService>, ICompletionSource
     {
-        private ITextBuffer TextBuffer { get; set; }
+        private readonly ITextBuffer _textBuffer;
 
         public WpfConsoleCompletionSource(WpfConsoleService factory, ITextBuffer textBuffer)
             : base(factory)
         {
             UtilityMethods.ThrowIfArgumentNull(textBuffer);
-            this.TextBuffer = textBuffer;
+            this._textBuffer = textBuffer;
         }
 
         private WpfConsole _console;
@@ -28,7 +30,7 @@ namespace NuGetConsole.Implementation.Console
             {
                 if (_console == null)
                 {
-                    TextBuffer.Properties.TryGetProperty<WpfConsole>(typeof(IConsole), out _console);
+                    _textBuffer.Properties.TryGetProperty<WpfConsole>(typeof(IConsole), out _console);
                     Debug.Assert(_console != null);
                 }
 

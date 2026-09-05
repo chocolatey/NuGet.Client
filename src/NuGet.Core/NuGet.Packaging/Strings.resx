@@ -135,18 +135,22 @@
 {1} is the package's identity.
 {2} is the dependency's version range.</comment>
   </data>
+  <data name="ErrorInvalidTimestamp" xml:space="preserve">
+    <value>Invalid timestamp: '{0}'</value>
+  </data>
   <data name="ErrorNullOrEmptyPackageId" xml:space="preserve">
     <value>Null or empty package id</value>
   </data>
   <data name="Log_InstalledPackage" xml:space="preserve">
-    <value>Installed {0} {1} from {2} with content hash {3}.</value>
+    <value>Installed {0} {1} from {2} to {3} with content hash {4}.</value>
     <comment>0 - package id
 1 - package version
 2 - package source
-3 - hex byte string, representing content hash</comment>
+3 - package installed path
+4 - hex byte string, representing content hash</comment>
   </data>
   <data name="FailToLoadPackagesConfig" xml:space="preserve">
-    <value>Fail to load packages.config as XML file. Please check it. </value>
+    <value>Failed to load packages.config as XML file. Check that it is valid.</value>
   </data>
   <data name="MinClientVersionAlreadyExist" xml:space="preserve">
     <value>MinClientVersion already exists in packages.config</value>
@@ -192,7 +196,7 @@
     <value>Unsupported targetFramework value '{0}'.</value>
   </data>
   <data name="PackageMinVersionNotSatisfied" xml:space="preserve">
-    <value>The '{0}' package requires NuGet client version '{1}' or above, but the current NuGet version is '{2}'. To upgrade NuGet, please go to https://docs.nuget.org/consume/installing-nuget</value>
+    <value>The '{0}' package requires NuGet client version '{1}' or above, but the current NuGet version is '{2}'. To upgrade NuGet, go to https://docs.nuget.org/consume/installing-nuget</value>
   </data>
   <data name="UnableToParseClientVersion" xml:space="preserve">
     <value>Unable to parse the current NuGet client version.</value>
@@ -245,10 +249,10 @@
     <comment>0 - Signature friendly name</comment>
   </data>
   <data name="SignedPackageUnableToAccessSignature" xml:space="preserve">
-    <value>The package was not opened correctly to perform signature operations. Please use a Stream-based constructor to have access to signature attributes of the package.</value>
+    <value>The package was not opened correctly to perform signature operations. Use a Stream-based constructor to have access to signature attributes of the package.</value>
   </data>
   <data name="SignedPackageAlreadySigned" xml:space="preserve">
-    <value>The package already contains a signature. Please remove the existing signature before adding a new signature.</value>
+    <value>The package already contains a signature. Remove the existing signature before adding a new signature.</value>
   </data>
   <data name="SignedPackageNotSignedOnRemove" xml:space="preserve">
     <value>The package is not signed. Unable to remove signature from an unsigned package.</value>
@@ -269,6 +273,14 @@
     <value>Valid from: {0} to {1}</value>
     <comment>0 -  start date
 1 - end date</comment>
+  </data>
+  <data name="CertUtilityCertificateCrlUrl" xml:space="preserve">
+    <value>CRL URL: {0}</value>
+    <comment>0 - CRL distribution point URL</comment>
+  </data>
+  <data name="CertUtilityCertificateOcspUrl" xml:space="preserve">
+    <value>OCSP URL: {0}</value>
+    <comment>0 - OCSP responder URL</comment>
   </data>
   <data name="CertUtilityMultipleCertificatesFooter" xml:space="preserve">
     <value>... {0} more.</value>
@@ -559,7 +571,7 @@ Valid from:</comment>
     <value>The stream must be seekable.</value>
   </data>
   <data name="SignedPackagePackageAlreadyCountersigned" xml:space="preserve">
-    <value>The package already contains a repository countersignature. Please remove the existing signature before adding a new repository countersignature.</value>
+    <value>The package already contains a repository countersignature. Remove the existing signature before adding a new repository countersignature.</value>
   </data>
   <data name="RepositoryCountersignatureHasNoCertificate" xml:space="preserve">
     <value>The repository countersignature does not have a signing certificate.</value>
@@ -850,9 +862,6 @@ Valid from:</comment>
     <value>The {0}'s timestamping certificate is not trusted by the trust provider.</value>
     <comment>0 -Signature friendly name</comment>
   </data>
-  <data name="ChainBuilding_UsingDefaultTrustStore" xml:space="preserve">
-    <value>X.509 certificate chain validation will use the default trust store selected by .NET.</value>
-  </data>
   <data name="ChainBuilding_UsingFallbackCertificateBundle" xml:space="preserve">
     <value>X.509 certificate chain validation will use the fallback certificate bundle at '{0}'.</value>
     <comment>{0} is the file path</comment>
@@ -866,5 +875,31 @@ Valid from:</comment>
   </data>
   <data name="InvalidX509StorePurpose" xml:space="preserve">
     <value>Invalid X.509 store purpose.</value>
+  </data>
+  <data name="ChainBuilding_UsingDefaultTrustStoreForCodeSigning" xml:space="preserve">
+    <value>X.509 certificate chain validation will use the default trust store selected by .NET for code signing.</value>
+  </data>
+  <data name="ChainBuilding_UsingDefaultTrustStoreForTimestamping" xml:space="preserve">
+    <value>X.509 certificate chain validation will use the default trust store selected by .NET for timestamping.</value>
+  </data>
+  <data name="UntrustedRoot_WithCertificateBundle" xml:space="preserve">
+    <value>The following X.509 root certificate is untrusted because it is not present in the certificate bundle at {0}.  For more information, see documentation for NU3042.
+    Subject:  {1}
+    Fingerprint (SHA-256):  {2}
+    Certificate (PEM):
+{3}</value>
+    <comment>0 is a file path, 1 is a certificate subject, 2 is a certificate fingerprint, and 3 is a PEM-encoded certificate.</comment>
+  </data>
+  <data name="UntrustedRoot_WithoutCertificateBundle" xml:space="preserve">
+    <value>The following X.509 root certificate is untrusted because no certificate bundle was found.  For more information, see documentation for NU3042.
+    Subject:  {0}
+    Fingerprint (SHA-256):  {1}
+    Certificate (PEM):
+{2}</value>
+    <comment>0 is a certificate subject, 1 is a certificate fingerprint, and 2 is a PEM-encoded certificate.</comment>
+  </data>
+  <data name="ErrorPackageIdentityDoesNotMatch" xml:space="preserve">
+    <value>Expected package {0} {1}, but got package {2} {3}</value>
+    <comment>0 and 2 are package names, and 1 and 3 are versions numbers.</comment>
   </data>
 </root>

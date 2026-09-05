@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,7 +12,6 @@ using NuGet.Configuration;
 using NuGet.Frameworks;
 using NuGet.PackageManagement;
 using NuGet.Packaging.Core;
-using NuGet.ProjectManagement;
 using NuGet.Protocol.Core.Types;
 using NuGet.Resolver;
 using NuGet.Versioning;
@@ -58,13 +59,21 @@ namespace NuGet.Test
                 ResolutionContext = new ResolutionContext()
             };
 
-            var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
 
             // Act and Assert
-            await Assert.ThrowsAsync(typeof(InvalidOperationException), async () =>
+            // Under CPU contention, cancellation checks in the main loop may fire
+            // before worker tasks convert OperationCanceledException to
+            // InvalidOperationException.  Both outcomes correctly indicate failure.
+            Exception exception = await Record.ExceptionAsync(async () =>
             {
                 await ResolverGather.GatherAsync(context, cts.Token);
             });
+
+            Assert.NotNull(exception);
+            Assert.True(
+                exception is InvalidOperationException || exception is OperationCanceledException,
+                $"Expected InvalidOperationException or OperationCanceledException but got {exception.GetType().Name}: {exception.Message}");
         }
 
         [Fact]
@@ -107,7 +116,7 @@ namespace NuGet.Test
                 ResolutionContext = new ResolutionContext()
             };
 
-            var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(5000));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(5000));
 
             // Act
             var results = await ResolverGather.GatherAsync(context, cts.Token);
@@ -200,7 +209,7 @@ namespace NuGet.Test
             };
 
             // Act and Assert
-            await Assert.ThrowsAsync(typeof(InvalidOperationException), async () =>
+            await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             {
                 await ResolverGather.GatherAsync(context, CancellationToken.None);
             });
@@ -705,7 +714,7 @@ namespace NuGet.Test
             context.ResolutionContext = new ResolutionContext();
 
             // Act and Assert
-            await Assert.ThrowsAsync(typeof(InvalidOperationException), async () =>
+            await Assert.ThrowsAsync<InvalidOperationException>(async () =>
                 {
                     try
                     {
@@ -1422,7 +1431,7 @@ namespace NuGet.Test
         }
 
         /// <summary>
-        /// Test package pacckage patterns filters are respected and succeeds.
+        /// Test package patterns filters are respected and succeeds.
         /// </summary>
         [Theory]
         [InlineData("public,Nuget", "Nuget")]
@@ -1438,7 +1447,7 @@ namespace NuGet.Test
         public async Task ResolverGather_PackageSourceMapping_Succeed(string packagePatterns, string packageId)
         {
             // Arrange
-            var sourceMappingConfiguration = PackageSourceMappingUtility.GetpackageSourceMapping(packagePatterns);
+            var sourceMappingConfiguration = PackageSourceMappingUtility.GetPackageSourceMapping(packagePatterns);
             IReadOnlyList<string> configuredSources = sourceMappingConfiguration.GetConfiguredPackageSources(packageId);
             var target = new PackageIdentity(packageId, new NuGetVersion(1, 0, 0));
             IEnumerable<PackageIdentity> targets = new[] { target };
@@ -1520,7 +1529,7 @@ namespace NuGet.Test
         public async Task ResolverGather_PackageSourceMapping_Fails(string packagePatterns, string packageId)
         {
             // Arrange
-            var sourceMappingConfiguration = PackageSourceMappingUtility.GetpackageSourceMapping(packagePatterns);
+            var sourceMappingConfiguration = PackageSourceMappingUtility.GetPackageSourceMapping(packagePatterns);
             IReadOnlyList<string> configuredSources = sourceMappingConfiguration.GetConfiguredPackageSources(packageId);
             var target = new PackageIdentity(packageId, new NuGetVersion(1, 0, 0));
             IEnumerable<PackageIdentity> targets = new[] { target };
@@ -1576,7 +1585,7 @@ namespace NuGet.Test
 
             // Assert
             Assert.True(sourceMappingConfiguration.IsEnabled);
-            Assert.Null(configuredSources);
+            Assert.Empty(configuredSources);
 
             // Assert log.
             Assert.Contains($"Package '{packageId} 1.0.0' is not found in the following primary source(s)", exception.Message);

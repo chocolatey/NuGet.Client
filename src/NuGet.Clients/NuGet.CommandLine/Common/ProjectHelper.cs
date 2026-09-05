@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -26,6 +28,10 @@ namespace NuGet.Common
                 return _supportedProjectExtensions;
             }
         }
+
+        public static bool IsSolutionFile(this string filepath) => filepath.EndsWith(".sln", StringComparison.OrdinalIgnoreCase)
+                   || filepath.EndsWith(".slnf", StringComparison.OrdinalIgnoreCase)
+                   || filepath.EndsWith(".slnx", StringComparison.OrdinalIgnoreCase);
 
         public static bool TryGetProjectFile(string directory, out string projectFile)
         {
@@ -70,7 +76,7 @@ namespace NuGet.Common
 
         private static bool SolutionFileExists(string path)
         {
-            return Directory.GetFiles(path, "*.sln").Any();
+            return Directory.EnumerateFiles(path, "*.*").Any(f => f.IsSolutionFile());
         }
     }
 }

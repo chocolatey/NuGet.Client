@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Xml;
@@ -108,15 +109,28 @@ namespace NuGet.Configuration
             IsMachineWide = isMachineWide;
             IsReadOnly = IsMachineWide || isReadOnly;
 
-            XDocument config = null;
-            ExecuteSynchronized(() =>
+            if (ConfigurationEventSource.Instance.IsEnabled()) ConfigurationEventSource.Instance.SettingsFile_FileReadStart(ConfigFilePath, isMachineWide ? 1 : 0, isReadOnly ? 1 : 0);
+
+            try
             {
-                config = FileSystemUtility.GetOrCreateDocument(CreateDefaultConfig(), ConfigFilePath);
-            });
+                XDocument config = ExecuteSynchronized(() =>
+                {
+                    return FileSystemUtility.GetOrCreateDocument(CreateDefaultConfig(), ConfigFilePath);
+                });
 
-            _xDocument = config;
+                if (config.Root is null)
+                {
+                    throw new InvalidOperationException("The root element of the configuration file is null.");
+                }
 
-            _rootElement = new NuGetConfiguration(_xDocument.Root, origin: this);
+                _xDocument = config;
+
+                _rootElement = new NuGetConfiguration(_xDocument.Root, origin: this);
+            }
+            finally
+            {
+                if (ConfigurationEventSource.Instance.IsEnabled()) ConfigurationEventSource.Instance.SettingsFile_FileReadStop(ConfigFilePath, isMachineWide ? 1 : 0, isReadOnly ? 1 : 0);
+            }
         }
 
         /// <summary>
@@ -124,7 +138,7 @@ namespace NuGet.Configuration
         /// </summary>
         /// <param name="sectionName">name to match sections</param>
         /// <returns>null if no section with the given name was found</returns>
-        public SettingSection GetSection(string sectionName)
+        public SettingSection? GetSection(string sectionName)
         {
             return _rootElement.GetSection(sectionName);
         }
@@ -138,6 +152,11 @@ namespace NuGet.Configuration
         internal void AddOrUpdate(string sectionName, SettingItem item)
         {
             _rootElement.AddOrUpdate(sectionName, item);
+        }
+
+        internal void AddEmptySection(string sectionName)
+        {
+            _rootElement.AddEmptySection(sectionName, this);
         }
 
         /// <summary>
@@ -159,9 +178,10 @@ namespace NuGet.Configuration
         {
             if (IsDirty)
             {
-                ExecuteSynchronized(() =>
+                _ = ExecuteSynchronized(() =>
                 {
                     FileSystemUtility.AddFile(ConfigFilePath, _xDocument.Save);
+                    return 0;
                 });
 
                 IsDirty = false;
@@ -175,7 +195,7 @@ namespace NuGet.Configuration
         /// It should be used only when intended. For most purposes you should be able to use
         /// GetSection(...) instead.
         /// </remarks>
-        internal bool TryGetSection(string sectionName, out SettingSection section)
+        internal bool TryGetSection(string sectionName, [NotNullWhen(true)] out SettingSection? section)
         {
             return _rootElement.Sections.TryGetValue(sectionName, out section);
         }
@@ -191,13 +211,14 @@ namespace NuGet.Configuration
             return new XDocument(configurationElement.AsXNode());
         }
 
-        private void ExecuteSynchronized(Action ioOperation)
+        private T ExecuteSynchronized<T>(Func<T> ioOperation)
         {
+            T? result = default;
             ConcurrencyUtilities.ExecuteWithFileLocked(filePath: ConfigFilePath, action: () =>
             {
                 try
                 {
-                    ioOperation();
+                    result = ioOperation();
                 }
                 catch (InvalidOperationException e)
                 {
@@ -223,6 +244,11 @@ namespace NuGet.Configuration
                         string.Format(CultureInfo.CurrentCulture, Resources.Unknown_Config_Exception, ConfigFilePath, e.Message), e);
                 }
             });
+#pragma warning disable CS8603 // Possible null reference return.
+            // Code isn't designed to work will nullable checks enabled.
+            return result;
+#pragma warning restore CS8603 // Possible null reference return.
         }
+
     }
 }

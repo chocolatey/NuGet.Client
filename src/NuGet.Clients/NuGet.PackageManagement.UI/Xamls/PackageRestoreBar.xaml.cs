@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Globalization;
 using System.IO;
@@ -9,12 +11,15 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using System.Xml.Linq;
 using Microsoft.VisualStudio.ComponentModelHost;
+using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.VisualStudio.Shell;
 using NuGet.Common;
+using NuGet.PackageManagement.UI.Utility;
 using NuGet.PackageManagement.VisualStudio;
 using NuGet.Packaging;
 using NuGet.ProjectManagement;
@@ -67,6 +72,8 @@ namespace NuGet.PackageManagement.UI
         public static readonly DependencyProperty InnerVisibilityProperty =
             DependencyProperty.Register(nameof(InnerVisibility), typeof(Visibility), typeof(PackageRestoreBar), new PropertyMetadata(Visibility.Collapsed));
 
+        public ICommand CopyCommand { get; private set; }
+
         public PackageRestoreBar(INuGetSolutionManagerService solutionManager, IPackageRestoreManager packageRestoreManager, IProjectContextInfo projectContextInfo)
         {
             DataContext = this;
@@ -97,6 +104,8 @@ namespace NuGet.PackageManagement.UI
             // Find storyboards that will be used to smoothly show and hide the restore bar.
             _showRestoreBar = FindResource("ShowSmoothly") as Storyboard;
             _hideRestoreBar = FindResource("HideSmoothly") as Storyboard;
+
+            CopyCommand = new DelegateCommand(ExecuteCopyCommand, CanExecuteCopyCommand, NuGetUIThreadHelper.JoinableTaskFactory);
         }
 
         public void CleanUp()
@@ -126,8 +135,7 @@ namespace NuGet.PackageManagement.UI
 
                         // if the project is PR and there is no restore running, check for missing assets file
                         // otherwise check for missing packages
-                        if (await ExperimentUtility.IsTransitiveOriginExpEnabled.GetValueAsync(CancellationToken.None) &&
-                            _projectContextInfo?.ProjectStyle == ProjectModel.ProjectStyle.PackageReference &&
+                        if (_projectContextInfo?.ProjectStyle == ProjectModel.ProjectStyle.PackageReference &&
                             _solutionRestoreWorker.IsRunning == false &&
                             await GetMissingAssetsFileStatusAsync(_projectContextInfo.ProjectId))
                         {
@@ -264,7 +272,7 @@ namespace NuGet.PackageManagement.UI
                 string solutionDirectory = await _solutionManager.GetSolutionDirectoryAsync(token);
                 await _packageRestoreManager.RestoreMissingPackagesInSolutionAsync(solutionDirectory,
                     this,
-                    new LoggerAdapter(this),
+                    new RestoreBarLogger(this),
                     token);
 
                 if (_restoreException == null)
@@ -371,6 +379,19 @@ namespace NuGet.PackageManagement.UI
                 await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                 StatusMessage.Text = message;
             }).PostOnFailure(nameof(PackageRestoreBar));
+        }
+
+        private void ExecuteCopyCommand(object parameter)
+        {
+            if (CanExecuteCopyCommand(parameter))
+            {
+                Clipboard.SetText(StatusMessage.Text);
+            }
+        }
+
+        private bool CanExecuteCopyCommand(object parameter)
+        {
+            return !string.IsNullOrWhiteSpace(StatusMessage.Text);
         }
     }
 }

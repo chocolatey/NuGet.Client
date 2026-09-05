@@ -13,18 +13,23 @@ namespace NuGet.VisualStudio
 {
     public static class VsMonitorSelectionExtensions
     {
-        public static EnvDTE.Project GetActiveProject(this IVsMonitorSelection vsMonitorSelection)
+        public static EnvDTE.Project? GetActiveProject(this IVsMonitorSelection vsMonitorSelection)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
+            if (vsMonitorSelection == null)
+            {
+                throw new ArgumentNullException(nameof(vsMonitorSelection));
+            }
+
             IntPtr ppHier = IntPtr.Zero;
             uint pitemid;
-            IVsMultiItemSelect ppMIS;
+            IVsMultiItemSelect? ppMIS;
             IntPtr ppSC = IntPtr.Zero;
 
             try
             {
-                IVsHierarchy hierarchy = null;
+                IVsHierarchy? hierarchy = null;
 
                 vsMonitorSelection.GetCurrentSelection(out ppHier, out pitemid, out ppMIS, out ppSC);
                 if (ppHier == IntPtr.Zero)
@@ -35,7 +40,7 @@ namespace NuGet.VisualStudio
                 // multiple items are selected.
                 if (pitemid == (uint)VSConstants.VSITEMID.Selection)
                 {
-                    VSITEMSELECTION[] vsItemSelections = ppMIS.GetSelectedItemsInSingleHierachy();
+                    VSITEMSELECTION[]? vsItemSelections = ppMIS?.GetSelectedItemsInSingleHierachy();
                     if (vsItemSelections != null && vsItemSelections.Length > 0)
                     {
                         VSITEMSELECTION sel = vsItemSelections[0];
@@ -49,7 +54,7 @@ namespace NuGet.VisualStudio
 
                 if (hierarchy != null)
                 {
-                    object project;
+                    object? project;
                     if (hierarchy.GetProperty(VSConstants.VSITEMID_ROOT, (int)__VSHPROPID.VSHPROPID_ExtObject, out project) >= 0)
                     {
                         return project as EnvDTE.Project;

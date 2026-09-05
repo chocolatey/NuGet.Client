@@ -13,7 +13,7 @@ namespace NuGet.ProjectModel
     {
         private readonly byte[] _buffer;
 
-        internal event EventHandler<ArraySegment<byte>> OnFlush;
+        internal event EventHandler<ArraySegment<byte>>? OnFlush;
 
         internal CircularMemoryStream(byte[] buffer) : base(buffer)
         {

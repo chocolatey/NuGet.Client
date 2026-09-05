@@ -19,7 +19,7 @@ namespace NuGet.PackageManagement.VisualStudio {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "17.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Strings {
@@ -250,6 +250,51 @@ namespace NuGet.PackageManagement.VisualStudio {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to One or more NuGet.Config files contain an error..
+        /// </summary>
+        public static string Error_NuGetConfig_InvalidState {
+            get {
+                return ResourceManager.GetString("Error_NuGetConfig_InvalidState", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to A valid local or remote path must be specified..
+        /// </summary>
+        public static string Error_PackageSource_InvalidSource {
+            get {
+                return ResourceManager.GetString("Error_PackageSource_InvalidSource", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The name specified has already been added to the list of available package sources..
+        /// </summary>
+        public static string Error_PackageSource_UniqueName {
+            get {
+                return ResourceManager.GetString("Error_PackageSource_UniqueName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The source specified has already been added to the list of available package sources..
+        /// </summary>
+        public static string Error_PackageSource_UniqueSource {
+            get {
+                return ResourceManager.GetString("Error_PackageSource_UniqueSource", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Error occurred while getting package vulnerability data: {0}.
+        /// </summary>
+        public static string Error_VulnerabilityDataFetch {
+            get {
+                return ResourceManager.GetString("Error_VulnerabilityDataFetch", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Failed to load &apos;{0}&apos;, while updating binding redirects. {1}.
         /// </summary>
         public static string Error_WhileLoadingConfigForBindingRedirects {
@@ -322,6 +367,24 @@ namespace NuGet.PackageManagement.VisualStudio {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Migrating project.json project....
+        /// </summary>
+        public static string Migrating_ProjectJson_Started {
+            get {
+                return ResourceManager.GetString("Migrating_ProjectJson_Started", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Migration Succeeded.
+        /// </summary>
+        public static string Migrating_ProjectJson_Succeeded {
+            get {
+                return ResourceManager.GetString("Migrating_ProjectJson_Succeeded", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The {0} MSBuild property could not be found for project &apos;{1}&apos;..
         /// </summary>
         public static string MSBuildPropertyNotFound {
@@ -376,7 +439,7 @@ namespace NuGet.PackageManagement.VisualStudio {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Solution is not saved. Please save your solution before managing NuGet packages..
+        ///   Looks up a localized string similar to Solution is not saved. Save your solution before managing NuGet packages..
         /// </summary>
         public static string SolutionIsNotSaved {
             get {
@@ -403,7 +466,7 @@ namespace NuGet.PackageManagement.VisualStudio {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The NuGet operation failed due to one or more packages being incompatible with your project. The &apos;{0}&apos; (&apos;{1}&apos;) project framework is deprecated. For more information about how to migrate your projects to a supported framework, please refer to the.
+        ///   Looks up a localized string similar to The NuGet operation failed due to one or more packages being incompatible with your project. The &apos;{0}&apos; (&apos;{1}&apos;) project framework is deprecated. For more information about how to migrate your projects to a supported framework, refer to the.
         /// </summary>
         public static string Text_DeprecatedFramework_DocumentLink_Before {
             get {
@@ -444,6 +507,15 @@ namespace NuGet.PackageManagement.VisualStudio {
         public static string UnsupportedFeedType {
             get {
                 return ResourceManager.GetString("UnsupportedFeedType", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to _Open.
+        /// </summary>
+        public static string VSOptions_Button_Open {
+            get {
+                return ResourceManager.GetString("VSOptions_Button_Open", resourceCulture);
             }
         }
         

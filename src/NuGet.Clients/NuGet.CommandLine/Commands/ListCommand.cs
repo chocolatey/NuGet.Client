@@ -5,9 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using NuGet.CommandLine;
 using NuGet.Commands;
-using NuGet.Protocol.Core.Types;
 
 namespace NuGet.CommandLine
 {
@@ -18,6 +16,7 @@ namespace NuGet.CommandLine
          UsageSummaryResourceName = "ListCommandUsageSummary",
          UsageDescriptionResourceName = "ListCommandUsageDescription",
          UsageExampleResourceName = "ListCommandUsageExamples")]
+    [DeprecatedCommand(typeof(SearchCommand))]
     public class ListCommand : Command
     {
         private readonly List<string> _sources = new List<string>();

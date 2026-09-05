@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Threading.Tasks;
 using NuGet.Common;
@@ -62,7 +64,7 @@ namespace NuGet.ProjectManagement
         public override Task LogAsync(ILogMessage message)
         {
             ProjectLogger.Log(message);
-            return Task.FromResult(0);
+            return TaskResult.Zero;
         }
     }
 }

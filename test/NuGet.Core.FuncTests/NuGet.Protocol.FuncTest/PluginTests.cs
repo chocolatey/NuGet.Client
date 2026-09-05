@@ -1,28 +1,44 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
-using NuGet.Packaging;
 using NuGet.Protocol.Plugins;
+using Xunit.Abstractions;
+
+#if IS_DESKTOP
+using System.Globalization;
+using System.Text.RegularExpressions;
+using NuGet.Packaging;
 using NuGet.Test.Utility;
 using Xunit;
-using Xunit.Abstractions;
 using PluginProtocolConstants = NuGet.Protocol.Plugins.ProtocolConstants;
+#endif
 
 namespace NuGet.Protocol.FuncTest
 {
     public class PluginTests
     {
+        public static bool IsDesktop
+        {
+            get
+            {
+#if IS_DESKTOP
+                return true;
+#else
+                return false;
+#endif
+            }
+        }
+
         private static readonly FileInfo PluginFile;
         private static readonly ushort PortNumber = 11000;
         private static readonly IEnumerable<string> PluginArguments = PluginConstants.PluginArguments
@@ -57,7 +73,7 @@ namespace NuGet.Protocol.FuncTest
             using (var pluginFactory = new PluginFactory(PluginConstants.IdleTimeout))
             {
                 var exception = await Assert.ThrowsAsync<PluginException>(() => pluginFactory.GetOrCreateAsync(
-                    PluginFile.FullName,
+                    new PluginFile(filePath: PluginFile.FullName, state: new Lazy<PluginFileState>(() => PluginFileState.Valid), requiresDotnetHost: !IsDesktop),
                     PluginConstants.PluginArguments.Concat(new[] { "-ThrowException Unhandled" }),
                     new RequestHandlers(),
                     ConnectionOptions.CreateDefault(),
@@ -78,7 +94,7 @@ namespace NuGet.Protocol.FuncTest
             using (var pluginFactory = new PluginFactory(PluginConstants.IdleTimeout))
             {
                 var exception = await Assert.ThrowsAsync<PluginException>(() => pluginFactory.GetOrCreateAsync(
-                    PluginFile.FullName,
+                    new PluginFile(filePath: PluginFile.FullName, state: new Lazy<PluginFileState>(() => PluginFileState.Valid), requiresDotnetHost: !IsDesktop),
                     PluginConstants.PluginArguments.Concat(new[] { "-ThrowException Handled" }),
                     new RequestHandlers(),
                     ConnectionOptions.CreateDefault(),
@@ -99,7 +115,7 @@ namespace NuGet.Protocol.FuncTest
             using (var pluginFactory = new PluginFactory(PluginConstants.IdleTimeout))
             {
                 var exception = await Assert.ThrowsAsync<PluginException>(() => pluginFactory.GetOrCreateAsync(
-                    PluginFile.FullName,
+                    new PluginFile(filePath: PluginFile.FullName, state: new Lazy<PluginFileState>(() => PluginFileState.Valid), requiresDotnetHost: !IsDesktop),
                     PluginConstants.PluginArguments.Concat(new[] { "-Freeze" }),
                     new RequestHandlers(),
                     ConnectionOptions.CreateDefault(),
@@ -120,7 +136,7 @@ namespace NuGet.Protocol.FuncTest
             using (var pluginFactory = new PluginFactory(PluginConstants.IdleTimeout))
             {
                 var exception = await Assert.ThrowsAsync<ProtocolException>(() => pluginFactory.GetOrCreateAsync(
-                    PluginFile.FullName,
+                    new PluginFile(filePath: PluginFile.FullName, state: new Lazy<PluginFileState>(() => PluginFileState.Valid), requiresDotnetHost: !IsDesktop),
                     PluginConstants.PluginArguments.Concat(new[] { "-CauseProtocolException" }),
                     new RequestHandlers(),
                     ConnectionOptions.CreateDefault(),
@@ -175,8 +191,7 @@ namespace NuGet.Protocol.FuncTest
                     MessageMethod.GetOperationClaims,
                     new GetOperationClaimsResponse(new OperationClaim[] { OperationClaim.DownloadPackage }));
 
-                var serviceIndex = JObject.Parse("{}");
-                var payload = new GetOperationClaimsRequest(packageSourceRepository: "a", serviceIndex: serviceIndex);
+                var payload = new GetOperationClaimsRequest(packageSourceRepository: "a", serviceIndexJson: "{}");
 
                 var response = await test.Plugin.Connection.SendRequestAndReceiveResponseAsync<GetOperationClaimsRequest, GetOperationClaimsResponse>(
                     MessageMethod.GetOperationClaims,
@@ -196,8 +211,7 @@ namespace NuGet.Protocol.FuncTest
             {
                 Assert.Equal(PluginProtocolConstants.CurrentVersion, test.Plugin.Connection.ProtocolVersion);
 
-                var serviceIndex = JObject.Parse("{}");
-                var payload = new GetOperationClaimsRequest(packageSourceRepository: "a", serviceIndex: serviceIndex);
+                var payload = new GetOperationClaimsRequest(packageSourceRepository: "a", serviceIndexJson: "{}");
 
                 var stopwatch = Stopwatch.StartNew();
 
@@ -237,8 +251,7 @@ namespace NuGet.Protocol.FuncTest
                     MessageMethod.Initialize,
                     new InitializeResponse(MessageResponseCode.Success));
 
-                var serviceIndex = JObject.Parse("{}");
-                var payload = new GetOperationClaimsRequest(packageSourceRepository: "a", serviceIndex: serviceIndex);
+                var payload = new GetOperationClaimsRequest(packageSourceRepository: "a", serviceIndexJson: "{}");
 
                 string consoleOutput;
 
@@ -315,7 +328,7 @@ namespace NuGet.Protocol.FuncTest
                 var pluginFactory = new PluginFactory(PluginConstants.IdleTimeout);
                 var options = ConnectionOptions.CreateDefault();
                 var plugin = await pluginFactory.GetOrCreateAsync(
-                    PluginFile.FullName,
+                    new PluginFile(filePath: PluginFile.FullName, state: new Lazy<PluginFileState>(() => PluginFileState.Valid), requiresDotnetHost: !IsDesktop),
                     PluginArguments,
                     new RequestHandlers(),
                     options,

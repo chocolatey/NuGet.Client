@@ -16,7 +16,7 @@ namespace NuGet.Protocol
     {
         public FindLocalPackagesResourcePackagesConfig(string root)
         {
-            Root = root;
+            Root = root ?? throw new ArgumentNullException(nameof(root));
         }
 
         public override IEnumerable<LocalPackageInfo> FindPackagesById(string id, ILogger logger, CancellationToken token)
@@ -27,12 +27,12 @@ namespace NuGet.Protocol
             return LocalFolderUtility.GetDistinctPackages(packages);
         }
 
-        public override LocalPackageInfo GetPackage(Uri path, ILogger logger, CancellationToken token)
+        public override LocalPackageInfo? GetPackage(Uri path, ILogger logger, CancellationToken token)
         {
             return LocalFolderUtility.GetPackage(path, logger);
         }
 
-        public override LocalPackageInfo GetPackage(PackageIdentity identity, ILogger logger, CancellationToken token)
+        public override LocalPackageInfo? GetPackage(PackageIdentity identity, ILogger logger, CancellationToken token)
         {
             return LocalFolderUtility.GetPackagesConfigFolderPackage(Root, identity, logger);
         }

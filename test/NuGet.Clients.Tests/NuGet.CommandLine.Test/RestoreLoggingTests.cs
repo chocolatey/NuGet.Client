@@ -14,11 +14,19 @@ using NuGet.Configuration;
 using NuGet.Frameworks;
 using NuGet.Test.Utility;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace NuGet.CommandLine.Test
 {
     public class RestoreLoggingTests
     {
+        private readonly ITestOutputHelper _testOutputHelper;
+
+        public RestoreLoggingTests(ITestOutputHelper testOutputHelper)
+        {
+            _testOutputHelper = testOutputHelper;
+        }
+
         [Fact]
         public async Task RestoreLogging_VerifyNU1605DowngradeWarningAsync()
         {
@@ -43,7 +51,7 @@ namespace NuGet.CommandLine.Test
                 await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, packageX, packageZ1, packageZ2, packageZ1);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 var doc = projectA.GetXML();
 
@@ -51,20 +59,18 @@ namespace NuGet.CommandLine.Test
                 ProjectFileUtils.AddItem(doc,
                     "PackageReference", "z",
                     NuGetFramework.Parse("netcoreapp1.0"),
-                    new Dictionary<string, string>(),
                     new Dictionary<string, string>() { { "Version", "1.*" } });
 
                 // x *
                 ProjectFileUtils.AddItem(doc,
                     "PackageReference", "x",
                     NuGetFramework.Parse("netcoreapp1.0"),
-                    new Dictionary<string, string>(),
                     new Dictionary<string, string>() { { "Version", "*" } });
 
                 doc.Save(projectA.ProjectPath);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -90,8 +96,8 @@ namespace NuGet.CommandLine.Test
             {
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
-
-                var netcoreapp1 = NuGetFramework.Parse("netcoreapp1.0");
+                var targetAlias = "netcoreapp1.0";
+                var netcoreapp1 = NuGetFramework.Parse(targetAlias);
 
                 var projectA = SimpleTestProjectContext.CreateNETCore(
                     "a",
@@ -124,10 +130,10 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageZ2);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
                 var log = projectA.AssetsFile.LogMessages.SingleOrDefault(e => e.Code == NuGetLogCode.NU1608);
 
                 // Assert
@@ -137,7 +143,7 @@ namespace NuGet.CommandLine.Test
                 log.FilePath.Should().Be(projectA.ProjectPath);
                 log.LibraryId.Should().Be("z");
                 log.Level.Should().Be(LogLevel.Warning);
-                log.TargetGraphs.Select(e => string.Join(",", e)).Should().Contain(netcoreapp1.DotNetFrameworkName);
+                log.TargetGraphs.Select(e => string.Join(",", e)).Should().Contain(targetAlias);
                 log.Message.Should().Contain("Detected package version outside of dependency constraint: x 1.0.0 requires z (= 1.0.0) but version z 2.0.0 was resolved.");
             }
         }
@@ -156,9 +162,9 @@ namespace NuGet.CommandLine.Test
                 var logger = new TestLogger();
                 // Set-up command.
                 var request = ProjectTestHelpers.CreateRestoreRequest(
-                        ProjectTestHelpers.GetPackageSpec("Project1", pathContext.SolutionRoot, framework: "net5.0", dependencyName: packageX.Id),
                         pathContext,
-                        logger);
+                        logger,
+                        ProjectTestHelpers.GetPackageSpec("Project1", pathContext.SolutionRoot, framework: "net5.0", dependencyName: packageX.Id));
                 var command = new NuGet.Commands.RestoreCommand(request);
 
                 // Act
@@ -193,14 +199,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act                
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
                 //delete the project.assets file to avoid no-op restore
                 File.Delete(projectA.AssetsFileOutputPath);
                 File.Delete(Path.Combine(pathContext.UserPackagesFolder, packageX.Id, packageX.Version, packageX.Id + NuGetConstants.ManifestExtension));
-                r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeFalse();
@@ -268,10 +274,10 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageY);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeFalse();
@@ -289,7 +295,8 @@ namespace NuGet.CommandLine.Test
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
 
-                var netcoreapp1 = NuGetFramework.Parse("netcoreapp1.0");
+                var targetAlias = "netcoreapp1.0";
+                var netcoreapp1 = NuGetFramework.Parse(targetAlias);
                 var netcoreapp2 = NuGetFramework.Parse("netcoreapp2.0");
 
                 var projectA = SimpleTestProjectContext.CreateNETCore(
@@ -305,10 +312,10 @@ namespace NuGet.CommandLine.Test
                 projectA.AddProjectToAllFrameworks(projectB);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
                 var log = projectA.AssetsFile.LogMessages.SingleOrDefault(e => e.Code == NuGetLogCode.NU1201 && e.TargetGraphs.All(g => !g.Contains("/")));
 
                 // Assert
@@ -317,7 +324,7 @@ namespace NuGet.CommandLine.Test
                 log.FilePath.Should().Be(projectA.ProjectPath);
                 log.LibraryId.Should().Be("b");
                 log.Level.Should().Be(LogLevel.Error);
-                log.TargetGraphs.Should().BeEquivalentTo(new[] { netcoreapp1.DotNetFrameworkName });
+                log.TargetGraphs.Should().BeEquivalentTo(new[] { targetAlias });
                 log.Message.Should().Be("Project b is not compatible with netcoreapp1.0 (.NETCoreApp,Version=v1.0). Project b supports: netcoreapp2.0 (.NETCoreApp,Version=v2.0)");
             }
         }
@@ -331,7 +338,8 @@ namespace NuGet.CommandLine.Test
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
 
-                var netcoreapp1 = NuGetFramework.Parse("netcoreapp1.0");
+                var targetAlias = "netcoreapp1.0";
+                var netcoreapp1 = NuGetFramework.Parse(targetAlias);
 
                 var projectA = SimpleTestProjectContext.CreateNETCore(
                     "a",
@@ -347,10 +355,10 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
                 var log = projectA.AssetsFile.LogMessages.SingleOrDefault(e => e.Code == NuGetLogCode.NU1202 && e.TargetGraphs.All(g => !g.Contains("/")));
 
                 // Assert
@@ -359,7 +367,7 @@ namespace NuGet.CommandLine.Test
                 log.FilePath.Should().Be(projectA.ProjectPath);
                 log.LibraryId.Should().Be("x");
                 log.Level.Should().Be(LogLevel.Error);
-                log.TargetGraphs.Should().BeEquivalentTo(new[] { netcoreapp1.DotNetFrameworkName });
+                log.TargetGraphs.Should().BeEquivalentTo(new[] { targetAlias });
                 log.Message.Should().Be("Package x 1.0.0 is not compatible with netcoreapp1.0 (.NETCoreApp,Version=v1.0). Package x 1.0.0 supports: netcoreapp2.0 (.NETCoreApp,Version=v2.0)");
             }
         }
@@ -372,8 +380,8 @@ namespace NuGet.CommandLine.Test
             {
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
-
-                var netcoreapp1 = NuGetFramework.Parse("netcoreapp1.0");
+                var targetAlias = "netcoreapp1.0";
+                var netcoreapp1 = NuGetFramework.Parse(targetAlias);
 
                 var projectA = SimpleTestProjectContext.CreateNETCore(
                     "a",
@@ -391,10 +399,10 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
                 var log = projectA.AssetsFile.LogMessages.OrderBy(e => e.Message, StringComparer.Ordinal).FirstOrDefault(e => e.Code == NuGetLogCode.NU1203);
 
                 // Assert
@@ -403,7 +411,7 @@ namespace NuGet.CommandLine.Test
                 log.FilePath.Should().Be(projectA.ProjectPath);
                 log.LibraryId.Should().Be("x");
                 log.Level.Should().Be(LogLevel.Error);
-                log.TargetGraphs.Single().Should().Contain(netcoreapp1.DotNetFrameworkName);
+                log.TargetGraphs.Single().Should().Contain(targetAlias);
                 log.Message.Should().Contain("x 1.0.0 provides a compile-time reference assembly for a on .NETCoreApp,Version=v1.0, but there is no run-time assembly compatible with");
             }
         }
@@ -416,8 +424,8 @@ namespace NuGet.CommandLine.Test
             {
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
-
-                var netcoreapp1 = NuGetFramework.Parse("netcoreapp1.0");
+                var targetAlias = "netcoreapp1.0";
+                var netcoreapp1 = NuGetFramework.Parse(targetAlias);
 
                 var projectA = SimpleTestProjectContext.CreateNETCore(
                     "a",
@@ -434,10 +442,10 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
                 var log = projectA.AssetsFile.LogMessages.SingleOrDefault(e => e.Code == NuGetLogCode.NU1108 && e.TargetGraphs.All(g => !g.Contains("/")));
 
                 // Assert
@@ -446,7 +454,7 @@ namespace NuGet.CommandLine.Test
                 log.FilePath.Should().Be(projectA.ProjectPath);
                 log.LibraryId.Should().Be("x");
                 log.Level.Should().Be(LogLevel.Error);
-                log.TargetGraphs.Single().Should().Contain(netcoreapp1.DotNetFrameworkName);
+                log.TargetGraphs.Single().Should().Contain(targetAlias);
                 log.Message.Should().Contain("a -> x 1.0.0 -> y 1.0.0 -> x (>= 1.0.0)");
             }
         }
@@ -459,8 +467,8 @@ namespace NuGet.CommandLine.Test
             {
                 // Set up solution, project, and packages
                 var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
-
-                var netcoreapp1 = NuGetFramework.Parse("netcoreapp1.0");
+                string targetAlias = "netcoreapp1.0";
+                var netcoreapp1 = NuGetFramework.Parse(targetAlias);
 
                 var projectA = SimpleTestProjectContext.CreateNETCore(
                     "a",
@@ -510,10 +518,10 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageY);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
                 var log = projectA.AssetsFile.LogMessages.SingleOrDefault(e => e.Code == NuGetLogCode.NU1107 && e.TargetGraphs.All(g => !g.Contains("/")));
 
                 // Assert
@@ -522,7 +530,7 @@ namespace NuGet.CommandLine.Test
                 log.FilePath.Should().Be(projectA.ProjectPath);
                 log.LibraryId.Should().Be("z");
                 log.Level.Should().Be(LogLevel.Error);
-                log.TargetGraphs.Single().Should().Contain(netcoreapp1.DotNetFrameworkName);
+                log.TargetGraphs.Single().Should().Contain(targetAlias);
                 log.Message.Should().Contain("Version conflict detected for z");
                 log.Message.Should().Contain("a -> y 1.0.0 -> z (= 2.0.0)");
                 log.Message.Should().Contain("a -> x 1.0.0 -> z (= 1.0.0).");
@@ -591,10 +599,10 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageZ1);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -634,14 +642,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -684,14 +692,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeFalse();
@@ -739,14 +747,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -795,14 +803,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeFalse();
@@ -846,14 +854,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -899,14 +907,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -950,14 +958,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeFalse();
@@ -1001,14 +1009,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -1052,14 +1060,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeFalse();
@@ -1101,14 +1109,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -1152,14 +1160,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -1203,14 +1211,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToFramework("net45", packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -1252,14 +1260,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -1304,14 +1312,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -1355,14 +1363,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -1403,14 +1411,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -1453,14 +1461,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeFalse();
@@ -1508,14 +1516,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -1564,14 +1572,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeFalse();
@@ -1615,14 +1623,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -1668,14 +1676,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -1719,14 +1727,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeFalse();
@@ -1770,14 +1778,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -1821,14 +1829,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeFalse();
@@ -1870,14 +1878,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -1919,14 +1927,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -1971,14 +1979,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -2023,14 +2031,14 @@ namespace NuGet.CommandLine.Test
                 projectA.AddPackageToAllFrameworks(packageX);
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX9);
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeTrue();
@@ -2058,12 +2066,12 @@ namespace NuGet.CommandLine.Test
                 projectA.Properties.Add("RestorePackagesWithLockFile", "false");
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 File.Create(projectA.NuGetLockFileOutputPath).Close();
 
                 // Act
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeFalse();
@@ -2105,20 +2113,20 @@ namespace NuGet.CommandLine.Test
                 projectA.Properties.Add("RestorePackagesWithLockFile", "true");
 
                 solution.Projects.Add(projectA);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 await SimpleTestPackageUtility.CreateFolderFeedV3Async(
                     pathContext.PackageSource,
                     packageX, packageY);
 
-                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
+                var r = Util.RestoreSolution(pathContext, expectedExitCode: 0, testOutputHelper: _testOutputHelper);
 
                 projectA.AddPackageToAllFrameworks(packageY);
                 projectA.Properties.Add("RestoreLockedMode", "true");
                 projectA.Save();
 
                 // Act
-                r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
+                r = Util.RestoreSolution(pathContext, expectedExitCode: 1, testOutputHelper: _testOutputHelper);
 
                 // Assert
                 r.Success.Should().BeFalse();

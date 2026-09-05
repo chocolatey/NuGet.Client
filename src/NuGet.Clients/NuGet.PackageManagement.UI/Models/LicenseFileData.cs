@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System.ComponentModel;
 using System.Windows.Documents;
 
@@ -8,8 +10,8 @@ namespace NuGet.PackageManagement.UI
 {
     public class LicenseFileData : INotifyPropertyChanged
     {
-        private string _header { get; set; }
-        private FlowDocument _content { get; set; }
+        private string _header;
+        private FlowDocument _content;
 
         public string LicenseHeader
         {

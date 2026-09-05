@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.ComponentModel.Composition;
 using System.Diagnostics;
@@ -8,7 +10,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell.Interop;
-using NuGet.Common;
 using NuGet.VisualStudio;
 using NuGetConsole;
 using NuGetConsole.Implementation;
@@ -43,10 +44,6 @@ namespace NuGet.Console.TestContract
             }
 
             return powershellConsole?.ActiveHostInfo?.WpfConsole;
-        }
-
-        public NuGetApexConsoleTestService()
-        {
         }
 
         public ApexTestConsole GetApexTestConsole()

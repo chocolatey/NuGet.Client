@@ -44,6 +44,8 @@ The general rule we follow is "use Visual Studio defaults".
 
 1. Avoid more than one empty line at any time. For example, do not have two blank lines between members of a type.
 
+1. Avoid lines of code longer than 120 characters.
+
 1. Avoid spurious free spaces. For example avoid `if (someVar == 0)...`, where the dots mark the spurious free spaces. Consider enabling "View White Space (Ctrl+R, Ctrl+W)" or "Edit -> Advanced -> View White Space" if using Visual Studio to aid detection.
 
 1. If a file happens to differ in style from these guidelines (e.g. private members are named `m_member` rather than `_member`), the existing style in that file takes precedence. Changes/refactorings are possible, but depending on the complexity, change frequency of the file, might need to be considered on their own merits in a separate pull request.
@@ -239,9 +241,146 @@ For example the following are correct:
     }
     ```
 
-Exceptions are allowed when multiple type names coming from different namespaces are available.
+    Exceptions are allowed when multiple type names coming from different namespaces are available.
+
+1. Do not use `as` to cast types
+
+   These are correct:
+
+   ```cs
+   ListItem item = (ListItem)selectedItem; // InvalidCastException if wrong type
+   string name = item.Name;
+   ```
+
+   ```cs
+   if (obj is Type1 t1)
+   {
+       return t1.Value;
+   }
+   else if (obj is Type2 t2)
+   {
+       return t2.Value;
+   }
+   else
+   {
+        throw new InvalidOperationException($"Unexpected type {sender.GetType().Name}");
+   }
+   ```
+
+   This is incorrect:
+
+   ```cs
+   ListItem item = selectedItem as ListItem;
+   string name = item.Name; // NullReferenceException if selectedItem was not ListItem
+   ```
+
+1. All new files added to the project must be nullable enabled. `#nullable disable` is not allowed in new files.
 
 Many of the guidelines, wherever possible, and potentially some not listed here, are enforced by an [EditorConfig](https://editorconfig.org "EditorConfig homepage") file (`.editorconfig`) at the root of the repository.
+
+## Prefer Immutability and Non-Null Types
+
+When writing new code or refactoring existing code, prefer types that are immutable and non-null. Immutable objects are easier to reason about, thread-safe by construction, and enable compiler optimizations — the JIT can cache property reads, skip defensive copies for readonly structs, and in some cases eliminate bounds checks. Non-null types make illegal states unrepresentable and push error detection from runtime to compile time.
+
+### Property accessor guidelines
+
+Use the most restrictive accessor that the code actually needs:
+
+| Scenario | Pattern | Example |
+|---|---|---|
+| Must be provided, immutable after creation | `required init` | `public required string Id { get; init; }` |
+| Optional at creation, immutable after | `init` | `public bool Listed { get; init; }` |
+| Collection, never replaced | get-only + inline init | `public IList<Item> Items { get; } = new List<Item>();` |
+| Truly mutable state | `set` | `public int RetryCount { get; set; }` |
+
+Think of it as a spectrum: **`required init`** > **`init`** > **`set`**. Use the most restrictive accessor that works.
+
+- **`{ get; init; }`** over `{ get; set; }` for properties set only at construction time. This is especially valuable for data-carrying types (DTOs, info objects, result types).
+- **`{ get; }` (get-only)** for collection properties initialized inline. There's no reason to expose a setter if the collection itself is never replaced, only mutated via `.Add()`.
+- **`required`** over accepting `null!` initializers for properties that must be provided. `required init` enforces that callers set the value, and the value is immutable once set.
+- **`readonly` fields** wherever the field isn't reassigned after construction. (This is already mentioned in the C# Coding Style section above, but bears repeating in this context.)
+
+### Non-null bias
+
+Default to non-null types. Only mark a type as nullable (`?`) when the value is genuinely optional — configuration, cache misses, "not found" semantics. Don't replace null with sentinel values (`string.Empty`, `Array.Empty<T>()`) if downstream code would silently misbehave — empty should not become the new null.
+
+### Null-forgiving operator (`!`)
+
+Every use of the null-forgiving operator (`!`) must be justified. A bare `!` suppresses the compiler's null analysis and, if the assumption is ever wrong, produces a `NullReferenceException` with no indication of where the null originated. Prefer one of these alternatives, in order:
+
+1. **Restructure so `!` is unnecessary.** Change the return type, field type, or control flow so the compiler can prove non-null on its own (e.g., return `Task<T>` instead of setting a field, use `required` properties, use `[NotNullWhen]`).
+2. **Use `?? throw`.** When a value should never be null but the compiler can't verify it, fail fast with a descriptive exception:
+
+   ```cs
+   var requestUri = request.RequestUri
+       ?? throw new ArgumentException("request.RequestUri must not be null");
+   ```
+
+3. **Use `!` with a comment explaining why it is safe.** Reserve this for cases where the alternatives above are impractical — for example, a field that is guaranteed non-null by construction but set to `null!` in `Dispose`:
+
+   ```cs
+   _httpContent = null!; // Release reference without disposing; field is never read after Dispose.
+   ```
+
+Do not use `!` merely to silence a warning. If you cannot explain why the value is guaranteed non-null, make the type nullable and let callers handle it.
+
+### Getting or Setting Environment Variables
+
+Environment variables apply to the entire process and are considered static state which can cause test issues since multiple tests can be running in parallel reading or updating the same variable.
+All components that use environment variables should use the `IEnvironmentVariableReader` interface.
+
+**NOTE:** It's preferred that any projects that are part of the NuGet Client SDK do not use environment variables directly.
+Instead, we prefer method parameters or class properties that developers using our packages can use themselves, and read the environment variable in the code not part of packages that we publish.
+
+An instance type should have a public constructor and an internal constructor which accepts an environment variable provider:
+
+```cs
+public class SomeClass
+{
+    private readonly IEnvironmentVariableReader _environmentVariableProvider;
+
+    public SomeClass()
+        : this(EnvironmentVariableWrapper.Instance)
+    {
+    }
+
+    internal SomeClass(IEnvironmentVariableReader environmentVariableProvider)
+    {
+        _environmentVariableProvider = environmentVariableProvider ?? throw new ArgumentNullException(nameof(environmentVariableProvider));
+    }
+
+    public string DetermineSomeValue()
+    {
+        return _environmentVariableProvider.GetEnvironmentVariable("SomeVariable");
+    }
+}
+```
+
+Public static methods should have an internal overload that accepts an `IEnvironmentVariableReader`:
+```cs
+public static string DetermineSomeValue()
+{
+    return DetermineSomeValue(EnvironmentVariableWrapper.Instance);
+}
+
+internal static string DetermineSomeValue(IEnvironmentVariableReader environmentVariableProvider)
+{
+    return environmentVariableProvider.GetEnvironmentVariable("SomeVariable");
+}
+```
+
+The `EnvironmentVariableWrapper.Instance` is the default implementation of `IEnvironmentVariableReader` which uses `Environment.GetEnvironmentVariable`.
+
+We try to avoid setting environment variables in our product, if setting an environment variable is necessary, please seek an exception and add a `#pragma warning disable RS0030` to your call:
+
+```cs
+public void MyMethod()
+{
+    #pragma warning disable RS0030 // Do not used banned APIs (Give a reason for you exception)
+    Environment.SetEnvironmentVariable("SomeVariable", "SomeValue");
+    #pragma warning restore RS0030 // Do not used banned APIs
+})
+```
 
 ### When to use internals vs. public and when to use InternalsVisibleTo
 
@@ -466,7 +605,8 @@ Assert.Equal(
 
 #### Test assertions
 
-Both xunit.net and FluentAssertions are allowed. FluentAssertions do not truncate the equality messages, thus sometimes making it easier to diagnose the failure.
+Both [xunit.net](https://xunit.net/#documentation) and [AwesomeAssertions](https://awesomeassertions.org/) are allowed.
+AwesomeAssertions do not truncate the equality messages, thus sometimes making it easier to diagnose the failure.
 Both of these will make the tests a lot more readable and also allow the test runner report the best possible errors. For example, these are bad:
 
 ```cs
@@ -496,7 +636,7 @@ Assert.Equal("abc123", someString);
 Assert.Equal(list1, list2, StringComparer.OrdinalIgnoreCase);
 ```
 
-Some places where FluentAssetion shine are:
+Some places where AwesomeAssertions shine are:
 
 ```cs
 
@@ -505,9 +645,9 @@ RestoreResult restoreResult = await RestoreRunner.RestoreAsync(restoreRequest);
 // xunit assertions
 Assert.True(restoreResult.Success);
 
-// fluent assertions
-
+// AwesomeAssertions
 restoreResult.Success.Should().BeTrue(because: restoreResult.AllOutput);
+
 ```
 
 #### Parallel tests

@@ -3,7 +3,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Collections.Immutable;
 using NuGet.Common;
 using NuGet.Shared;
 
@@ -42,12 +42,6 @@ namespace NuGet.ProjectModel
             WarningsNotAsErrors = new HashSet<NuGetLogCode>();
         }
 
-        [Obsolete("Use the constructor with 4 instead.")]
-        public WarningProperties(ISet<NuGetLogCode> warningsAsErrors, ISet<NuGetLogCode> noWarn, bool allWarningsAsErrors)
-            : this(warningsAsErrors, noWarn, allWarningsAsErrors, new HashSet<NuGetLogCode>())
-        {
-        }
-
         public WarningProperties(ISet<NuGetLogCode> warningsAsErrors, ISet<NuGetLogCode> noWarn, bool allWarningsAsErrors, ISet<NuGetLogCode> warningsNotAsErrors)
         {
             WarningsAsErrors = warningsAsErrors ?? throw new ArgumentNullException(nameof(warningsAsErrors));
@@ -61,19 +55,19 @@ namespace NuGet.ProjectModel
             var hashCode = new HashCodeCombiner();
 
             hashCode.AddObject(AllWarningsAsErrors);
-            hashCode.AddSequence(WarningsAsErrors.OrderBy(e => e));
-            hashCode.AddSequence(NoWarn.OrderBy(e => e));
-            hashCode.AddSequence(WarningsNotAsErrors.OrderBy(e => e));
+            hashCode.AddUnorderedSequence(WarningsAsErrors);
+            hashCode.AddUnorderedSequence(NoWarn);
+            hashCode.AddUnorderedSequence(WarningsNotAsErrors);
 
             return hashCode.CombinedHash;
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return Equals(obj as WarningProperties);
         }
 
-        public bool Equals(WarningProperties other)
+        public bool Equals(WarningProperties? other)
         {
             if (other == null)
             {
@@ -99,24 +93,15 @@ namespace NuGet.ProjectModel
         /// <summary>
         /// Create warning properties from the msbuild property strings.
         /// </summary>
-        public static WarningProperties GetWarningProperties(string treatWarningsAsErrors, string warningsAsErrors, string noWarn, string warningsNotAsErrors)
+        public static WarningProperties GetWarningProperties(string? treatWarningsAsErrors, string? warningsAsErrors, string? noWarn, string? warningsNotAsErrors)
         {
             return GetWarningProperties(treatWarningsAsErrors, MSBuildStringUtility.GetNuGetLogCodes(warningsAsErrors), MSBuildStringUtility.GetNuGetLogCodes(noWarn), MSBuildStringUtility.GetNuGetLogCodes(warningsNotAsErrors));
         }
 
         /// <summary>
-        /// Create warning properties from the msbuild property strings.
-        /// </summary>
-        [Obsolete]
-        public static WarningProperties GetWarningProperties(string treatWarningsAsErrors, string warningsAsErrors, string noWarn)
-        {
-            return GetWarningProperties(treatWarningsAsErrors, MSBuildStringUtility.GetNuGetLogCodes(warningsAsErrors), MSBuildStringUtility.GetNuGetLogCodes(noWarn));
-        }
-
-        /// <summary>
         /// Create warning properties from NuGetLogCode collection.
         /// </summary>
-        public static WarningProperties GetWarningProperties(string treatWarningsAsErrors, IEnumerable<NuGetLogCode> warningsAsErrors, IEnumerable<NuGetLogCode> noWarn, IEnumerable<NuGetLogCode> warningsNotAsErrors)
+        public static WarningProperties GetWarningProperties(string? treatWarningsAsErrors, ImmutableArray<NuGetLogCode> warningsAsErrors, ImmutableArray<NuGetLogCode> noWarn, ImmutableArray<NuGetLogCode> warningsNotAsErrors)
         {
             var props = new WarningProperties()
             {
@@ -127,15 +112,6 @@ namespace NuGet.ProjectModel
             props.NoWarn.UnionWith(noWarn);
             props.WarningsNotAsErrors.UnionWith(warningsNotAsErrors);
             return props;
-        }
-
-        /// <summary>
-        /// Create warning properties from NuGetLogCode collection.
-        /// </summary>
-        [Obsolete]
-        public static WarningProperties GetWarningProperties(string treatWarningsAsErrors, IEnumerable<NuGetLogCode> warningsAsErrors, IEnumerable<NuGetLogCode> noWarn)
-        {
-            return GetWarningProperties(treatWarningsAsErrors, warningsAsErrors, noWarn, Enumerable.Empty<NuGetLogCode>());
         }
     }
 }

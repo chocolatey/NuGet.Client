@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Globalization;
@@ -40,7 +42,7 @@ namespace NuGet.CommandLine
         public HelpCommand(ICommandManager commandManager)
         {
             _commandManager = commandManager;
-            _commandExe = Assembly.GetExecutingAssembly().GetName().Name;
+            _commandExe = typeof(HelpCommand).Assembly.GetName().Name;
         }
 
         public override void ExecuteCommand()
@@ -144,6 +146,12 @@ namespace NuGet.CommandLine
 
                 foreach (KeyValuePair<OptionAttribute, PropertyInfo> o in options)
                 {
+                    if (o.Key.IsHidden)
+                    {
+                        // If the option is supposed to be hidden, skip it
+                        continue;
+                    }
+
                     if (TypeHelper.IsMultiValuedProperty(o.Value))
                     {
                         Console.Write(string.Format(CultureInfo.CurrentCulture, $"-{{0, -{maxOptionWidth + 2}}} +", o.Value.Name));

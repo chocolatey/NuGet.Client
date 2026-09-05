@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Linq;
 using System.Threading;
@@ -126,7 +128,7 @@ namespace NuGet.Protocol.Plugins.Tests
                         x => x.SendAsync(
                             It.Is<Message>(m => m.Type == MessageType.Cancel),
                             It.IsAny<CancellationToken>()))
-                    .Returns(Task.FromResult(0));
+                    .Returns(Task.CompletedTask);
 
                 var requestHandler = new Mock<IRequestHandler>(MockBehavior.Strict);
 
@@ -140,7 +142,7 @@ namespace NuGet.Protocol.Plugins.Tests
                         {
                             handledEvent.Set();
                         })
-                    .Returns(Task.FromResult(0));
+                    .Returns(Task.CompletedTask);
 
                 var request = MessageUtilities.Create(
                     test.RequestId,
@@ -194,11 +196,10 @@ namespace NuGet.Protocol.Plugins.Tests
             {
                 var exception = Assert.Throws<ArgumentNullException>(
                     () => test.Context.BeginFaultAsync(
-                        new Message(
+                        MessageUtilities.Create(
                             test.RequestId,
                             MessageType.Request,
-                            MessageMethod.GetOperationClaims,
-                            payload: null),
+                            MessageMethod.GetOperationClaims),
                         exception: null));
 
                 Assert.Equal("exception", exception.ParamName);
@@ -221,14 +222,13 @@ namespace NuGet.Protocol.Plugins.Tests
 
                             sentEvent.Set();
                         })
-                    .Returns(Task.FromResult(0));
+                    .Returns(Task.CompletedTask);
 
                 test.Context.BeginFaultAsync(
-                    new Message(
+                    MessageUtilities.Create(
                         test.RequestId,
                         MessageType.Request,
-                        MessageMethod.GetOperationClaims,
-                        payload: null),
+                        MessageMethod.GetOperationClaims),
                     new Exception("test"));
 
                 sentEvent.Wait();
@@ -270,11 +270,10 @@ namespace NuGet.Protocol.Plugins.Tests
             {
                 var exception = Assert.Throws<ArgumentNullException>(
                     () => test.Context.BeginResponseAsync(
-                        new Message(
+                        MessageUtilities.Create(
                             test.RequestId,
                             MessageType.Progress,
-                            MessageMethod.GetOperationClaims,
-                            payload: null),
+                            MessageMethod.GetOperationClaims),
                         requestHandler: null,
                         responseHandler: Mock.Of<IResponseHandler>()));
 
@@ -289,11 +288,10 @@ namespace NuGet.Protocol.Plugins.Tests
             {
                 var exception = Assert.Throws<ArgumentNullException>(
                     () => test.Context.BeginResponseAsync(
-                        new Message(
+                        MessageUtilities.Create(
                             test.RequestId,
                             type: MessageType.Progress,
-                            method: MessageMethod.GetOperationClaims,
-                            payload: null),
+                            method: MessageMethod.GetOperationClaims),
                         requestHandler: Mock.Of<IRequestHandler>(),
                         responseHandler: null));
 
@@ -319,14 +317,13 @@ namespace NuGet.Protocol.Plugins.Tests
                         {
                             handledEvent.Set();
                         })
-                    .Returns(Task.FromResult(0));
+                    .Returns(Task.CompletedTask);
 
                 test.Context.BeginResponseAsync(
-                    new Message(
+                    MessageUtilities.Create(
                         test.RequestId,
                         MessageType.Request,
-                        MessageMethod.GetOperationClaims,
-                        payload: null),
+                        MessageMethod.GetOperationClaims),
                     requestHandler.Object,
                     Mock.Of<IResponseHandler>());
 
@@ -365,14 +362,13 @@ namespace NuGet.Protocol.Plugins.Tests
 
                             sentEvent.Set();
                         })
-                    .Returns(Task.FromResult(0));
+                    .Returns(Task.CompletedTask);
 
                 test.Context.BeginResponseAsync(
-                    new Message(
+                    MessageUtilities.Create(
                         test.RequestId,
                         MessageType.Request,
-                        MessageMethod.GetOperationClaims,
-                        payload: null),
+                        MessageMethod.GetOperationClaims),
                     requestHandler.Object,
                     Mock.Of<IResponseHandler>());
 

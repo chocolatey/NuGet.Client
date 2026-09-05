@@ -10,6 +10,16 @@ namespace NuGet.Protocol
     {
         public HttpCacheResult(TimeSpan maxAge, string newFile, string cacheFule)
         {
+            if (newFile == null)
+            {
+                throw new ArgumentNullException(nameof(newFile));
+            }
+
+            if (cacheFule == null)
+            {
+                throw new ArgumentNullException(nameof(cacheFule));
+            }
+
             MaxAge = maxAge;
             NewFile = newFile;
             CacheFile = cacheFule;
@@ -18,6 +28,6 @@ namespace NuGet.Protocol
         public TimeSpan MaxAge { get; }
         public string NewFile { get; }
         public string CacheFile { get; }
-        public Stream Stream { get; set; }
+        public Stream? Stream { get; set; }
     }
 }

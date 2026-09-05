@@ -48,7 +48,7 @@ namespace NuGet.Packaging.Core
                     range = VersionRange.Parse(versionNode.Value);
                 }
 
-                yield return new PackageDependency(node.Attribute(XName.Get(Id)).Value, range);
+                yield return new PackageDependency(node.Attribute(XName.Get(Id))!.Value, range);
             }
 
             yield break;

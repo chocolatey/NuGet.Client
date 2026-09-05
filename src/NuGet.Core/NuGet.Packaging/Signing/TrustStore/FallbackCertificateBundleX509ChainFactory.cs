@@ -4,6 +4,7 @@
 #if NET5_0_OR_GREATER
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -26,8 +27,8 @@ namespace NuGet.Packaging.Signing
 
         internal static bool TryCreate(
             X509StorePurpose storePurpose,
-            string fileName,
-            out FallbackCertificateBundleX509ChainFactory factory)
+            string? fileName,
+            [NotNullWhen(returnValue: true)] out FallbackCertificateBundleX509ChainFactory? factory)
         {
             factory = null;
 
@@ -58,10 +59,12 @@ namespace NuGet.Packaging.Signing
 
         private static string GetThisAssemblyDirectoryPath()
         {
-            string location = typeof(FallbackCertificateBundleX509ChainFactory).Assembly.Location;
-            FileInfo thisAssembly = new(location);
+            if (AppContext.GetData("Microsoft.DotNet.Sdk.Root") is string sdkRoot && sdkRoot.Length > 0)
+            {
+                return sdkRoot;
+            }
 
-            return thisAssembly.DirectoryName;
+            return AppContext.BaseDirectory;
         }
     }
 }

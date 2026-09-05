@@ -12,11 +12,11 @@ namespace NuGet.Protocol.Core.Types
     public class SymbolPackageUpdateResourceV3 : INuGetResource
     {
 
-        private HttpSource _httpSource;
+        private HttpSource? _httpSource;
         private string _source;
 
         public SymbolPackageUpdateResourceV3(string source,
-            HttpSource httpSource)
+            HttpSource? httpSource)
         {
             _source = source;
             _httpSource = httpSource;

@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using Microsoft.Internal.VisualStudio.Diagnostics;
 
@@ -14,7 +16,7 @@ namespace NuGet.VisualStudio.Telemetry
         {
             if (VsEtwLogging.IsProviderEnabled(VsEtwKeywords.Ide, VsEtwLevel.Information))
             {
-                var fullName = (VSTelemetrySession.VSEventNamePrefix + activityName).ToLowerInvariant().Replace('/', '_');
+                var fullName = (VSTelemetrySession.VSEventNamePrefix + activityName).ToLowerInvariant();
                 _activity = VsEtwLogging.CreateActivity(fullName, VsEtwKeywords.Ide, VsEtwLevel.Information);
             }
         }

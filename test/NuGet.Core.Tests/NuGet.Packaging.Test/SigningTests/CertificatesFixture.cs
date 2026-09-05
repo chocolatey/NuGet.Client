@@ -4,8 +4,8 @@
 using System;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
 using NuGet.Packaging.Signing;
-using Test.Utility.Signing;
 
 namespace NuGet.Packaging.Test
 {
@@ -99,23 +99,9 @@ namespace NuGet.Packaging.Test
         internal X509Certificate2 GetRsaSsaPssCertificate() => Clone(_rsaSsaPssCertificate);
         internal X509Certificate2 GetSelfIssuedCertificate() => Clone(_selfIssuedCertificate);
 
-        internal DisposableList<X509Certificate2> GetCyclicCertificateChain()
-        {
-            var list = new DisposableList<X509Certificate2>();
-
-            foreach (var certificate in _cyclicChain)
-            {
-                list.Add(Clone(certificate));
-            }
-
-            return list;
-        }
-
         private static X509Certificate2 Clone(X509Certificate2 certificate)
         {
-            var bytes = certificate.Export(X509ContentType.Pkcs12);
-
-            return new X509Certificate2(bytes);
+            return new X509Certificate2(certificate);
         }
     }
 }

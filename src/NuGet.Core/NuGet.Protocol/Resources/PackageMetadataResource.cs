@@ -24,7 +24,7 @@ namespace NuGet.Protocol.Core.Types
         /// <summary>
         /// Return package metadata for the input PackageIdentity
         /// </summary>
-        public abstract Task<IPackageSearchMetadata> GetMetadataAsync(
+        public abstract Task<IPackageSearchMetadata?> GetMetadataAsync(
             PackageIdentity package,
             SourceCacheContext sourceCacheContext,
             Common.ILogger log,

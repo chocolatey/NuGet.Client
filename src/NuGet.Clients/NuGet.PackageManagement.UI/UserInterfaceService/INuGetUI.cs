@@ -5,8 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using NuGet.PackageManagement.UI.ViewModels;
 using NuGet.PackageManagement.VisualStudio;
-using NuGet.Packaging.Core;
 using NuGet.ProjectManagement;
 using NuGet.Resolver;
 using NuGet.VisualStudio;
@@ -33,6 +33,7 @@ namespace NuGet.PackageManagement.UI
         void LaunchExternalLink(Uri url);
 
         void LaunchNuGetOptionsDialog(OptionsPage optionsPageToOpen);
+        void LaunchNuGetOptionsDialog(PackageSourceMappingActionViewModel packageSourceMappingActionViewModel);
 
         /// <summary>
         /// Displays the preview window with options to accept or cancel
@@ -59,6 +60,8 @@ namespace NuGet.PackageManagement.UI
         /// </summary>
         INuGetUIContext UIContext { get; }
 
+        INuGetUILogger UILogger { get; }
+
         /// <summary>
         /// A project context used for NuGet operations
         /// </summary>
@@ -82,7 +85,7 @@ namespace NuGet.PackageManagement.UI
         /// <summary>
         /// Package currently selected in the UI
         /// </summary>
-        PackageIdentity SelectedPackage { get; }
+        string SelectedPackageId { get; set; }
 
         /// <summary>
         /// Reports that an error has occurred.

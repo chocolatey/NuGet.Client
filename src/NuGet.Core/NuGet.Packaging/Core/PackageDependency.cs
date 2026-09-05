@@ -4,6 +4,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 using NuGet.Versioning;
 
 namespace NuGet.Packaging.Core
@@ -19,6 +21,7 @@ namespace NuGet.Packaging.Core
         /// <summary>
         /// Dependency package Id
         /// </summary>
+        [JsonPropertyName("id")]
         public string Id { get; }
 
         /// <summary>
@@ -34,6 +37,8 @@ namespace NuGet.Packaging.Core
         /// <summary>
         /// Range of versions allowed for the depenency
         /// </summary>
+        [JsonProperty(PropertyName = "range")]
+        [JsonPropertyName("range")]
         public VersionRange VersionRange
         {
             get { return _versionRange; }
@@ -44,16 +49,18 @@ namespace NuGet.Packaging.Core
         {
         }
 
-        public PackageDependency(string id, VersionRange versionRange)
+        [Newtonsoft.Json.JsonConstructor]
+        [System.Text.Json.Serialization.JsonConstructor]
+        public PackageDependency(string id, VersionRange? versionRange)
             : this(id, versionRange, include: null, exclude: null)
         {
         }
 
         public PackageDependency(
             string id,
-            VersionRange versionRange,
-            IReadOnlyList<string> include,
-            IReadOnlyList<string> exclude)
+            VersionRange? versionRange,
+            IReadOnlyList<string>? include,
+            IReadOnlyList<string>? exclude)
         {
             if (string.IsNullOrEmpty(id))
             {
@@ -66,12 +73,12 @@ namespace NuGet.Packaging.Core
             Exclude = exclude ?? EmptyList;
         }
 
-        public bool Equals(PackageDependency other)
+        public bool Equals(PackageDependency? other)
         {
             return PackageDependencyComparer.Default.Equals(this, other);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             var dependency = obj as PackageDependency;
 

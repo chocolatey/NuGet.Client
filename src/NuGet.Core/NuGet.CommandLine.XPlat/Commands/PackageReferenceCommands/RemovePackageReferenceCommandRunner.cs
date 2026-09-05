@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable enable
+
 using System.Globalization;
 using System.Threading.Tasks;
 using NuGet.Credentials;
@@ -21,7 +23,7 @@ namespace NuGet.CommandLine.XPlat
             //Setup the Credential Service - This allows the msbuild sdk resolver to auth if needed.
             DefaultCredentialServiceUtility.SetupDefaultCredentialService(packageReferenceArgs.Logger, !packageReferenceArgs.Interactive);
 
-            var libraryDependency = new LibraryDependency
+            var libraryDependency = new LibraryDependency()
             {
                 LibraryRange = new LibraryRange(
                     name: packageReferenceArgs.PackageId,
@@ -32,7 +34,7 @@ namespace NuGet.CommandLine.XPlat
             // Remove reference from the project
             var result = msBuild.RemovePackageReference(packageReferenceArgs.ProjectPath, libraryDependency);
 
-            return Task.FromResult(result);
+            return TaskResult.Integer(result);
         }
     }
 }

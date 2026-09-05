@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#nullable enable
-
 using System;
 using System.Collections.Generic;
 using Microsoft.Internal.VisualStudio.PlatformUI;
@@ -68,7 +66,7 @@ namespace NuGet.VisualStudio.SolutionExplorer
             return result;
         }
 
-        public string? FullPath => Target.TryResolvePackagePath(Library.Name, Library.Version, out string? fullPath)
+        public string? FullPath => Library.Version is not null && Target.TryResolvePackagePath(Library.Name, Library.Version, out string? fullPath)
             ? System.IO.Path.GetFullPath(System.IO.Path.Combine(fullPath, Path))
             : null;
 

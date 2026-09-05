@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -30,7 +32,7 @@ namespace NuGet.ProjectManagement
         {
             get
             {
-                if (UsingPackagesProjectNameConfigPath)
+                if (_usingPackagesProjectNameConfigPath)
                 {
                     return PackagesProjectNameConfigPath;
                 }
@@ -38,7 +40,7 @@ namespace NuGet.ProjectManagement
             }
         }
 
-        private bool UsingPackagesProjectNameConfigPath { get; set; }
+        private bool _usingPackagesProjectNameConfigPath;
 
         /// <summary>
         /// Represents the full path to "packages.config"
@@ -194,11 +196,11 @@ namespace NuGet.ProjectManagement
             }
 
             var installedPackagesList = GetInstalledPackagesList();
-            var packageReference = installedPackagesList.Where(p => p.PackageIdentity.Equals(packageIdentity)).FirstOrDefault();
+            var packageReference = installedPackagesList.FirstOrDefault(p => p.PackageIdentity.Equals(packageIdentity));
             if (packageReference == null)
             {
                 nuGetProjectContext.Log(MessageLevel.Warning, Strings.PackageDoesNotExisttInPackagesConfig, packageIdentity, Path.GetFileName(FullPath));
-                return Task.FromResult(false);
+                return TaskResult.False;
             }
 
             try
@@ -206,7 +208,7 @@ namespace NuGet.ProjectManagement
                 if (installedPackagesList.Any())
                 {
                     // Matching packageReference is found and is the only entry
-                    // Then just delete the packages.config file 
+                    // Then just delete the packages.config file
                     if (installedPackagesList.Count == 1 && nuGetProjectContext.ActionType == NuGetActionType.Uninstall)
                     {
                         FileSystemUtility.DeleteFile(FullPath, nuGetProjectContext);
@@ -231,7 +233,7 @@ namespace NuGet.ProjectManagement
             }
 
             nuGetProjectContext.Log(MessageLevel.Info, Strings.RemovedPackageFromPackagesConfig, packageIdentity, Path.GetFileName(FullPath));
-            return Task.FromResult(true);
+            return TaskResult.True;
         }
 
         public override Task<IEnumerable<PackageReference>> GetInstalledPackagesAsync(CancellationToken token)
@@ -306,16 +308,16 @@ namespace NuGet.ProjectManagement
 
         private void UpdateFullPath()
         {
-            if (UsingPackagesProjectNameConfigPath
+            if (_usingPackagesProjectNameConfigPath
                 && !File.Exists(PackagesProjectNameConfigPath)
                 && File.Exists(PackagesConfigPath))
             {
-                UsingPackagesProjectNameConfigPath = false;
+                _usingPackagesProjectNameConfigPath = false;
             }
             else if (!File.Exists(PackagesConfigPath)
                      && File.Exists(PackagesProjectNameConfigPath))
             {
-                UsingPackagesProjectNameConfigPath = true;
+                _usingPackagesProjectNameConfigPath = true;
             }
         }
 

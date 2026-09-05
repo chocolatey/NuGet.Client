@@ -53,7 +53,7 @@ namespace NuGet.Protocol
             return packages.Select(p => V2FeedUtilities.CreatePackageSearchResult(p, metadataCache, filter, _feedParser, log, token)).ToList();
         }
 
-        public override async Task<IPackageSearchMetadata> GetMetadataAsync(
+        public override async Task<IPackageSearchMetadata?> GetMetadataAsync(
             PackageIdentity package,
             SourceCacheContext sourceCacheContext,
             Common.ILogger log,

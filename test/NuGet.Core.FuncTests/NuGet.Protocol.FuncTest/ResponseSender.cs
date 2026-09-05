@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Concurrent;
 using System.IO;
@@ -60,7 +62,7 @@ namespace NuGet.Protocol.FuncTest
                 }
             }
 
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         internal Task SendAsync<TPayload>(MessageType type, MessageMethod method, TPayload payload)
@@ -75,7 +77,7 @@ namespace NuGet.Protocol.FuncTest
 
             _responses.Add(response);
 
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         private static string Serialize(object value)

@@ -1,12 +1,15 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using FluentAssertions;
 using Moq;
 using NuGet.Common;
 using NuGet.Configuration;
@@ -476,6 +479,71 @@ namespace NuGet.PackageManagement
         }
 
         [Fact]
+        public async Task GetDownloadResourceResultAsync_WithSourceMappingFound_PackageDownloaded()
+        {
+            // Arrange
+            var sourceRepositoryProvider = TestSourceRepositoryUtility.CreateSourceRepositoryProvider(new[]
+            {
+                TestSourceRepositoryUtility.V3PackageSource,
+                TestSourceRepositoryUtility.V2PackageSource,
+            });
+
+            string packageId = "jQuery.Validation";
+            string packagePatterns = $"{TestSourceRepositoryUtility.V3PackageSource.Name},jQuery.*|{TestSourceRepositoryUtility.V2PackageSource.Name},jQuery.* ";
+            var packageIdentity = new PackageIdentity(packageId, new NuGetVersion("1.19.5"));
+            PackageSourceMapping packageSourceMapping = PackageSourceMappingUtility.GetPackageSourceMapping(packagePatterns);
+
+            // Act
+            using (var cacheContext = new SourceCacheContext())
+            using (var packagesDirectory = TestDirectory.Create())
+            using (var downloadResult = await PackageDownloader.GetDownloadResourceResultAsync(
+                sourceRepositoryProvider.GetRepositories(),
+                packageIdentity,
+                new PackageDownloadContext(cacheContext, directDownloadDirectory: null, directDownload: false, packageSourceMapping),
+                packagesDirectory,
+                NullLogger.Instance,
+                CancellationToken.None))
+            {
+                var targetPackageStream = downloadResult.PackageStream;
+
+                // Assert
+                Assert.True(targetPackageStream.CanSeek);
+            }
+        }
+
+        [Fact]
+        public async Task GetDownloadResourceResultAsync_WithSourceMappingNotFound_PackageNotFound()
+        {
+            // Arrange
+            var sourceRepositoryProvider = TestSourceRepositoryUtility.CreateSourceRepositoryProvider(new[]
+            {
+                TestSourceRepositoryUtility.V3PackageSource,
+                TestSourceRepositoryUtility.V2PackageSource,
+            });
+
+            string mappedPackageId = "jQuery";
+            string notMappedPackageId = "jQuery.Validation";
+            string notMappedPackageVersion = "1.19.5";
+            string packagePatterns = $"{TestSourceRepositoryUtility.V3PackageSource.Name},{mappedPackageId}|{TestSourceRepositoryUtility.V2PackageSource.Name},{mappedPackageId}";
+            var notFoundPackageIdentity = new PackageIdentity(notMappedPackageId, new NuGetVersion(notMappedPackageVersion));
+            PackageSourceMapping packageSourceMapping = PackageSourceMappingUtility.GetPackageSourceMapping(packagePatterns);
+
+            // Act
+            using var cacheContext = new SourceCacheContext();
+            using var packagesDirectory = TestDirectory.Create();
+            var exception = await Assert.ThrowsAsync<FatalProtocolException>(
+                () => PackageDownloader.GetDownloadResourceResultAsync(
+                    sourceRepositoryProvider.GetRepositories(),
+                    notFoundPackageIdentity,
+                    new PackageDownloadContext(cacheContext, directDownloadDirectory: null, directDownload: false, packageSourceMapping),
+                    packagesDirectory,
+                    NullLogger.Instance,
+                    CancellationToken.None));
+
+            Assert.Contains($"Unable to find version '{notMappedPackageVersion}' of package '{notMappedPackageId}'.", exception.Message);
+        }
+
+        [Fact]
         public async Task GetDownloadResourceResultAsync_MultipleSources_IncludesTaskStatusInException()
         {
             using (var test = new PackageDownloaderTest())
@@ -556,6 +624,32 @@ namespace NuGet.PackageManagement
                 Assert.Equal(DownloadResourceResultStatus.AvailableWithoutStream, actualResult.Status);
                 Assert.Same(expectedResult, actualResult);
             }
+        }
+
+        [Fact]
+        public async Task GetDownloadResourceResultAsync_InvalidPackageId_Throws()
+        {
+            // Arrange
+            using TestDirectory testDirectory = TestDirectory.Create();
+            using FileSystemBackedV3MockServer server = new FileSystemBackedV3MockServer(testDirectory.Path);
+            server.Start();
+            PackageSource packageSource = new PackageSource(server.ServiceIndexUri, "http-source")
+            {
+                AllowInsecureConnections = true
+            };
+            var repo = Repository.Factory.GetCoreV3(packageSource);
+            var downloadResource = await repo.GetResourceAsync<DownloadResource>(CancellationToken.None);
+            string id = "../contoso";
+
+            // Act & Assert
+            var exception = await Assert.ThrowsAsync<InvalidPackageIdException>(() => downloadResource.GetDownloadResourceResultAsync(
+                new PackageIdentity(id, NuGetVersion.Parse("1.0.0")),
+                new PackageDownloadContext(new SourceCacheContext()),
+                "",
+                NullLogger.Instance,
+                CancellationToken.None));
+            server.Stop();
+            exception.Message.Should().Contain(string.Format("Invalid package id : `{0}`", id));
         }
 
         private static async Task VerifyDirectDownloadSkipsGlobalPackagesFolderAsync(

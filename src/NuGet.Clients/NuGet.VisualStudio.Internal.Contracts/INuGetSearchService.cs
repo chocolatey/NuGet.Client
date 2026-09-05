@@ -67,12 +67,6 @@ namespace NuGet.VisualStudio.Internal.Contracts
             bool isTransitive,
             CancellationToken cancellationToken);
 
-        ValueTask<PackageDeprecationMetadataContextInfo?> GetDeprecationMetadataAsync(
-            PackageIdentity identity,
-            IReadOnlyCollection<PackageSourceContextInfo> packageSources,
-            bool includePrerelease,
-            CancellationToken cancellationToken);
-
         ValueTask<IReadOnlyCollection<PackageSearchMetadataContextInfo>> GetPackageMetadataListAsync(
             string id,
             IReadOnlyCollection<PackageSourceContextInfo> packageSources,
@@ -85,5 +79,14 @@ namespace NuGet.VisualStudio.Internal.Contracts
             IReadOnlyCollection<PackageSourceContextInfo> packageSources,
             bool includePrerelease,
             CancellationToken cancellationToken);
+
+        Task<IReadOnlyList<SourceRepository>> GetAllPackageFoldersAsync(
+            IReadOnlyCollection<IProjectContextInfo> projectContextInfos,
+            CancellationToken cancellationToken);
+
+        void ClearFromCache(
+            string id,
+            IReadOnlyCollection<PackageSourceContextInfo> packageSources,
+            bool includePrerelease);
     }
 }

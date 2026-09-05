@@ -16,16 +16,12 @@ namespace NuGet.PackageManagement.VisualStudio
         IProjectSystemCapabilities
     {
         private readonly IVsProjectAdapter _vsProjectAdapter;
-        private readonly IVsProjectThreadingService _threadingService;
 
         public bool SupportsPackageReferences => false;
 
         public bool NominatesOnSolutionLoad => false;
 
         #region INuGetProjectServices
-
-        public IProjectBuildProperties BuildProperties => _vsProjectAdapter.BuildProperties;
-
         public IProjectSystemCapabilities Capabilities => this;
 
         public IProjectSystemReferencesReader ReferencesReader { get; }
@@ -47,8 +43,6 @@ namespace NuGet.PackageManagement.VisualStudio
             Assumes.Present(threadingService);
 
             _vsProjectAdapter = vsProjectAdapter;
-            _threadingService = threadingService;
-
             ProjectSystem = new VsCoreProjectSystem(_vsProjectAdapter);
             ReferencesReader = new VsCoreProjectSystemReferenceReader(vsProjectAdapter, threadingService);
             ScriptService = new VsProjectScriptHostService(vsProjectAdapter, _scriptExecutor);

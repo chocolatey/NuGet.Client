@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -28,8 +30,8 @@ namespace NuGet.Protocol.Tests
             var metaData = new PackageSearchMetadataV2Feed(testPackage);
 
             // Assert
-            Assert.True(metaData.Authors.Equals("James Newkirk, Brad Wilson"));
-            Assert.True(metaData.Owners.Equals(""));
+            Assert.Equal(metaData.Authors, "James Newkirk, Brad Wilson");
+            Assert.Equal(metaData.Owners, "");
             Assert.Equal("https://raw.githubusercontent.com/xunit/media/master/logo-512-transparent.png", metaData.IconUrl.AbsoluteUri);
             Assert.Equal("https://github.com/xunit/xunit", metaData.LicenseUrl.AbsoluteUri);
             Assert.Null(metaData.ProjectUrl);

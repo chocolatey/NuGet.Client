@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if IS_SIGNING_SUPPORTED
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,6 +8,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Configuration.Test;
@@ -37,7 +36,7 @@ namespace NuGet.Packaging.FuncTest
             _trustedRepoTestCert.Dispose();
         }
 
-        [CIOnlyTheory]
+        [NetFxCIOnlyTheory]
         [InlineData(SigningTestType.Author, "accept", true, 0)]
         [InlineData(SigningTestType.Author, "require", false, 1)]
         [InlineData(SigningTestType.RepositoryPrimary, "accept", true, 0)]
@@ -92,7 +91,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyTheory]
+        [NetFxCIOnlyTheory]
         [InlineData(SigningTestType.Author, "accept", true, 0, 1)]
         [InlineData(SigningTestType.Author, "require", false, 1, 0)]
         [InlineData(SigningTestType.RepositoryPrimary, "accept", true, 0, 1)]
@@ -153,7 +152,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyTheory]
+        [NetFxCIOnlyTheory]
         [InlineData(SigningTestType.Author, SignaturePlacement.PrimarySignature, "accept")]
         [InlineData(SigningTestType.Author, SignaturePlacement.PrimarySignature, "require")]
         [InlineData(SigningTestType.RepositoryPrimary, SignaturePlacement.PrimarySignature, "accept")]
@@ -224,7 +223,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyTheory]
+        [NetFxCIOnlyTheory]
         [InlineData(SigningTestType.RepositoryPrimary, "accept")]
         [InlineData(SigningTestType.RepositoryPrimary, "require")]
         [InlineData(SigningTestType.RepositoryCountersigned, "accept")]
@@ -284,7 +283,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyTheory]
+        [NetFxCIOnlyTheory]
         [InlineData(SigningTestType.RepositoryPrimary, "accept", true, 0, 1)]
         [InlineData(SigningTestType.RepositoryPrimary, "require", false, 1, 0)]
         [InlineData(SigningTestType.RepositoryCountersigned, "accept", true, 0, 1)]
@@ -344,7 +343,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyTheory]
+        [NetFxCIOnlyTheory]
         [InlineData(SigningTestType.RepositoryPrimary, "accept", true, 0, 1)]
         [InlineData(SigningTestType.RepositoryPrimary, "require", false, 1, 0)]
         [InlineData(SigningTestType.RepositoryCountersigned, "accept", true, 0, 1)]
@@ -438,4 +437,3 @@ namespace NuGet.Packaging.FuncTest
     }
 }
 
-#endif

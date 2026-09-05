@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -114,7 +116,7 @@ namespace NuGet.Resolver
             IEnumerable<PackageSource> packageSources)
         {
             var message = new StringBuilder();
-            var problemPackage = solution.Where(package => StringComparer.OrdinalIgnoreCase.Equals(package.Id, problemPackageId)).FirstOrDefault();
+            var problemPackage = solution.FirstOrDefault(package => StringComparer.OrdinalIgnoreCase.Equals(package.Id, problemPackageId));
 
             // List the package that has an issue, and all packages dependant on the package.
             var dependantPackages = solution.Where(package => package.FindDependencyRange(problemPackageId) != null &&

@@ -7,12 +7,17 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
-using System.Xml.Schema;
 using NuGet.Common;
 using NuGet.Packaging.Core;
 using NuGet.Packaging.PackageCreation.Resources;
 using NuGet.Packaging.Xml;
 using static NuGet.Shared.XmlUtility;
+using NuGet.Versioning;
+
+
+#if !IS_CORECLR
+using System.Xml.Schema;
+#endif
 
 namespace NuGet.Packaging
 {
@@ -23,7 +28,7 @@ namespace NuGet.Packaging
         {
         }
 
-        public Manifest(ManifestMetadata metadata, ICollection<ManifestFile> files)
+        public Manifest(ManifestMetadata metadata, ICollection<ManifestFile>? files)
         {
             if (metadata == null)
             {
@@ -98,7 +103,7 @@ namespace NuGet.Packaging
                     Files.Any() ?
                         new XElement(schemaNamespace + "files",
                             Files.Select(file => new XElement(schemaNamespace + "file",
-                                new XAttribute("src", file.Source),
+                                new XAttribute("src", file.Source!),
                                 file.Target != null ? new XAttribute("target", file.Target) : null,
                                 file.Exclude != null ? new XAttribute("exclude", file.Exclude) : null))) : null)).Save(stream);
         }
@@ -108,7 +113,12 @@ namespace NuGet.Packaging
             return ReadFrom(stream, null, validateSchema);
         }
 
-        public static Manifest ReadFrom(Stream stream, Func<string, string> propertyProvider, bool validateSchema)
+        public static Manifest ReadFrom(Stream stream, Func<string, string>? propertyProvider, bool validateSchema)
+        {
+            return ReadFrom(stream, propertyProvider, validateSchema, overrideVersion: null);
+        }
+
+        public static Manifest ReadFrom(Stream stream, Func<string, string>? propertyProvider, bool validateSchema, NuGetVersion? overrideVersion)
         {
             XDocument document;
             if (propertyProvider == null)
@@ -140,6 +150,11 @@ namespace NuGet.Packaging
             // Deserialize it
             var manifest = ManifestReader.ReadManifest(document);
 
+            if (overrideVersion != null)
+            {
+                manifest.Metadata.Version = overrideVersion;
+            }
+
             // Validate before returning
             Validate(manifest);
 
@@ -149,7 +164,7 @@ namespace NuGet.Packaging
         private static string GetSchemaNamespace(XDocument document)
         {
             string schemaNamespace = ManifestSchemaUtility.SchemaVersionV1;
-            var rootNameSpace = document.Root.Name.Namespace;
+            var rootNameSpace = document.Root!.Name.Namespace;
             if (rootNameSpace != null && !String.IsNullOrEmpty(rootNameSpace.NamespaceName))
             {
                 schemaNamespace = rootNameSpace.NamespaceName;
@@ -210,7 +225,7 @@ namespace NuGet.Packaging
                 }
 
                 // Get the package id from the metadata node
-                string packageId = GetPackageId(metadata);
+                string? packageId = GetPackageId(metadata);
 
                 // If the schema of the document doesn't match any of our known schemas
                 if (!ManifestSchemaUtility.IsKnownSchema(document.Root.Name.Namespace.NamespaceName))
@@ -225,7 +240,8 @@ namespace NuGet.Packaging
 #endif
         }
 
-        private static string GetPackageId(XElement metadataElement)
+#if !IS_CORECLR 
+        private static string? GetPackageId(XElement metadataElement)
         {
             XName idName = XName.Get("id", metadataElement.Document.Root.Name.NamespaceName);
             XElement element = metadataElement.Element(idName);
@@ -245,6 +261,7 @@ namespace NuGet.Packaging
 
             return document.Root.Element(metadataName);
         }
+#endif
 
         public static void Validate(Manifest manifest)
         {

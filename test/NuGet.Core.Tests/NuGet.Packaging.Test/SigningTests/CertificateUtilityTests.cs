@@ -1,15 +1,15 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using NuGet.Common;
 using NuGet.Packaging.Signing;
-using NuGet.Test.Utility;
-using Org.BouncyCastle.Asn1.X509;
-using Test.Utility.Signing;
 using Xunit;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
+using FluentAssertions;
 
 namespace NuGet.Packaging.Test
 {
@@ -124,14 +124,14 @@ namespace NuGet.Packaging.Test
             using (var intermediateCertificate = SigningTestUtility.GetCertificate("intermediate.crt"))
             using (var leafCertificate = SigningTestUtility.GetCertificate("leaf.crt"))
             {
-                var chain = chainHolder.Chain;
+                IX509Chain chain = chainHolder.Chain2;
 
                 chain.ChainPolicy.ExtraStore.Add(rootCertificate);
                 chain.ChainPolicy.ExtraStore.Add(intermediateCertificate);
 
                 chain.Build(leafCertificate);
 
-                using (var certificateChain = CertificateChainUtility.GetCertificateChain(chain))
+                using (IX509CertificateChain certificateChain = CertificateChainUtility.GetCertificateChain(chain.PrivateReference))
                 {
                     Assert.Equal(3, certificateChain.Count);
                     Assert.Equal(leafCertificate.Thumbprint, certificateChain[0].Thumbprint);
@@ -215,7 +215,7 @@ namespace NuGet.Packaging.Test
             using (var certificate = SigningTestUtility.GenerateCertificate("test",
                 generator =>
                 {
-                    var usages = new OidCollection { new Oid(TestOids.IdKpEmailProtection) };
+                    var usages = new OidCollection { TestOids.EmailProtectionEku };
 
                     generator.Extensions.Add(
                         new X509EnhancedKeyUsageExtension(
@@ -234,7 +234,7 @@ namespace NuGet.Packaging.Test
             using (var certificate = SigningTestUtility.GenerateCertificate("test",
                 generator =>
                 {
-                    var usages = new OidCollection { new Oid(TestOids.IdKpEmailProtection), new Oid(TestOids.AnyExtendedKeyUsage) };
+                    var usages = new OidCollection { TestOids.EmailProtectionEku, TestOids.AnyEku };
 
                     generator.Extensions.Add(
                         new X509EnhancedKeyUsageExtension(
@@ -331,8 +331,7 @@ namespace NuGet.Packaging.Test
         {
             using (var certificate = _fixture.GetDefaultCertificate())
             {
-                Assert.Throws(typeof(ArgumentException),
-                    () => CertificateUtility.GetHashString(certificate, Common.HashAlgorithmName.Unknown));
+                Assert.Throws<ArgumentException>(() => CertificateUtility.GetHashString(certificate, Common.HashAlgorithmName.Unknown));
             }
         }
 
@@ -341,10 +340,36 @@ namespace NuGet.Packaging.Test
         {
             using (var certificate = _fixture.GetDefaultCertificate())
             {
-                Assert.Throws(typeof(ArgumentException),
-                    () => CertificateUtility.GetHashString(certificate, (Common.HashAlgorithmName)46));
+                Assert.Throws<ArgumentException>(() => CertificateUtility.GetHashString(certificate, (Common.HashAlgorithmName)46));
             }
         }
+
+        [Theory]
+        [InlineData("ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234", Common.HashAlgorithmName.SHA1)]
+        [InlineData("ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234", Common.HashAlgorithmName.SHA256)]
+        [InlineData("ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234", Common.HashAlgorithmName.SHA384)]
+        [InlineData("ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234ABCD1234", Common.HashAlgorithmName.SHA512)]
+        public void TryDeduceHashAlgorithm_ValidInputs_ReturnsCorrectAlgorithm(string certificateFingerprint, Common.HashAlgorithmName expectedAlgorithm)
+        {
+            bool result = CertificateUtility.TryDeduceHashAlgorithm(certificateFingerprint, out Common.HashAlgorithmName hashAlgorithmName);
+
+            Assert.True(result);
+            Assert.Equal(expectedAlgorithm, hashAlgorithmName);
+        }
+
+        [Theory]
+        [InlineData("GHIJKLMNOPQRSTUVWXYZ")] // Non-hex characters
+        [InlineData("ABCD")]
+        [InlineData(null)]
+        [InlineData("")]
+        public void TryDeduceHashAlgorithm_InvalidInputs_ReturnsFalse(string certificateFingerprint)
+        {
+            bool result = CertificateUtility.TryDeduceHashAlgorithm(certificateFingerprint, out Common.HashAlgorithmName hashAlgorithmName);
+
+            Assert.False(result);
+            Assert.Equal(Common.HashAlgorithmName.Unknown, hashAlgorithmName);
+        }
+
 
         private static int GetExtendedKeyUsageCount(X509Certificate2 certificate)
         {
@@ -357,6 +382,122 @@ namespace NuGet.Packaging.Test
             }
 
             return 0;
+        }
+
+        [Fact]
+        public void GetCrlDistributionPointUrls_WithNoExtension_ReturnsEmpty()
+        {
+            using (var certificate = SigningTestUtility.GenerateCertificate("test", generator => { }))
+            {
+                var urls = CertificateUtility.GetCrlDistributionPointUrls(certificate);
+
+                Assert.Empty(urls);
+            }
+        }
+
+        [Fact]
+        public void GetCrlDistributionPointUrls_WithExtension_ReturnsUrls()
+        {
+            using (var certificate = SigningTestUtility.GenerateCertificate("test",
+                generator =>
+                {
+                    generator.Extensions.Add(
+                        CertificateRevocationListBuilder.BuildCrlDistributionPointExtension(
+                            new[] { "http://crl.example.com/test.crl", "http://crl2.example.com/test.crl" }));
+                }))
+            {
+                var urls = CertificateUtility.GetCrlDistributionPointUrls(certificate);
+
+                Assert.Equal(2, urls.Count);
+                Assert.Equal("http://crl.example.com/test.crl", urls[0]);
+                Assert.Equal("http://crl2.example.com/test.crl", urls[1]);
+            }
+        }
+
+        [Fact]
+        public void GetCrlDistributionPointUrls_WithInvalidDerEncoding_ReturnsError()
+        {
+            using (var certificate = SigningTestUtility.GenerateCertificate("test",
+                generator =>
+                {
+                    // Create an extension with invalid DER-encoded data
+                    // This will cause DerSequenceReader to throw a CryptographicException
+                    var invalidData = new byte[] { 0xFF, 0xFF, 0xFF }; // Invalid DER structure
+                    var ext = new X509Extension("2.5.29.31", invalidData, critical: false);
+                    generator.Extensions.Add(ext);
+                }))
+            {
+                var urls = CertificateUtility.GetCrlDistributionPointUrls(certificate);
+
+                urls.Should().HaveCount(1);
+                urls[0].Should().Be(NuGet.Packaging.Signing.DerEncoding.SR.Cryptography_Der_Invalid_Encoding);
+            }
+        }
+
+        [Fact]
+        public void GetOcspUrls_WithNoExtension_ReturnsEmpty()
+        {
+            using (var certificate = SigningTestUtility.GenerateCertificate("test", generator => { }))
+            {
+                var urls = CertificateUtility.GetOcspUrls(certificate);
+
+                Assert.Empty(urls);
+            }
+        }
+
+        [Fact]
+        public void GetOcspUrls_WithExtension_ReturnsUrl()
+        {
+            using (var certificate = SigningTestUtility.GenerateCertificate("test",
+                generator =>
+                {
+                    generator.Extensions.Add(
+                        new Microsoft.Internal.NuGet.Testing.SignedPackages.X509AuthorityInformationAccessExtension(
+                            new Uri("http://ocsp.example.com"), caIssuersUrl: null));
+                }))
+            {
+                var urls = CertificateUtility.GetOcspUrls(certificate);
+
+                Assert.Single(urls);
+                Assert.Equal("http://ocsp.example.com", urls[0]);
+            }
+        }
+
+        [Fact]
+        public void GetOcspUrls_WithCaIssuersOnly_ReturnsEmpty()
+        {
+            using (var certificate = SigningTestUtility.GenerateCertificate("test",
+                generator =>
+                {
+                    generator.Extensions.Add(
+                        new Microsoft.Internal.NuGet.Testing.SignedPackages.X509AuthorityInformationAccessExtension(
+                            ocspResponderUrl: null, caIssuersUrl: new Uri("http://ca.example.com/cert.crt")));
+                }))
+            {
+                var urls = CertificateUtility.GetOcspUrls(certificate);
+
+                Assert.Empty(urls);
+            }
+        }
+
+        [Fact]
+        public void GetOcspUrls_WithInvalidDerEncoding_ReturnsError()
+        {
+            using (var certificate = SigningTestUtility.GenerateCertificate("test",
+                generator =>
+                {
+                    // Create an extension with invalid DER-encoded data
+                    // This will cause DerSequenceReader to throw a CryptographicException
+                    var invalidData = new byte[] { 0xFF, 0xFF, 0xFF }; // Invalid DER structure
+                    var ext = new X509Extension("1.3.6.1.5.5.7.1.1", invalidData, critical: false);
+                    generator.Extensions.Add(ext);
+                }))
+            {
+                var urls = CertificateUtility.GetOcspUrls(certificate);
+
+                urls.Should().HaveCount(1);
+                urls[0].Should().Be(NuGet.Packaging.Signing.DerEncoding.SR.Cryptography_Der_Invalid_Encoding);
+            }
         }
     }
 }

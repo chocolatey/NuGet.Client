@@ -11,22 +11,24 @@ namespace NuGet.SolutionRestoreManager
     /// </summary>
     [ComImport]
     [Guid("9a1e969a-3e1e-4764-a48b-b823fe716fab")]
+    [Obsolete]
     public interface IVsTargetFrameworkInfo
     {
         /// <summary>
         /// Target framework name in full format.
         /// </summary>
+        /// <remarks>No longer used. TargetFrameworkMoniker is now retrieved from the Properties property.</remarks>
         string TargetFrameworkMoniker { get; }
 
         /// <summary>
         /// Collection of project references.
         /// </summary>
-        IVsReferenceItems ProjectReferences { get; }
+        IVsReferenceItems? ProjectReferences { get; }
 
         /// <summary>
         /// Collection of package references.
         /// </summary>
-        IVsReferenceItems PackageReferences { get; }
+        IVsReferenceItems? PackageReferences { get; }
 
         /// <summary>
         /// Collection of project level properties evaluated per each Target Framework,

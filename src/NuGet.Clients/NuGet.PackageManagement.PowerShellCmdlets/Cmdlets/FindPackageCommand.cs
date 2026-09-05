@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -173,7 +175,7 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
             {
                 if (packageIds.Any())
                 {
-                    var packageId = packageIds.Where(p => string.Equals(p, Id, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                    var packageId = packageIds.FirstOrDefault(p => string.Equals(p, Id, StringComparison.OrdinalIgnoreCase));
                     if (!string.IsNullOrEmpty(packageId))
                     {
                         var package = GetPowerShellPackageFromRemoteSource(packageId);

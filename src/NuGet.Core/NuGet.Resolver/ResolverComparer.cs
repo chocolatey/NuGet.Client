@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -31,7 +33,7 @@ namespace NuGet.Resolver
 
             _installedVersions = new Dictionary<string, NuGetVersion>();
 
-            if (_installedVersions != null)
+            if (_preferredVersions != null)
             {
                 foreach (var package in _preferredVersions)
                 {

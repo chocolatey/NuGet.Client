@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
@@ -27,8 +29,10 @@ using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 using NuGet.VisualStudio;
 using NuGet.VisualStudio.Common.Telemetry.PowerShell;
+using NuGet.VisualStudio.Services;
 using NuGet.VisualStudio.Telemetry;
 using IAsyncServiceProvider = Microsoft.VisualStudio.Shell.IAsyncServiceProvider;
+using Project = EnvDTE.Project;
 using Task = System.Threading.Tasks.Task;
 
 namespace NuGet.PackageManagement.VisualStudio
@@ -42,6 +46,8 @@ namespace NuGet.PackageManagement.VisualStudio
         private const string VSNuGetClientName = "NuGet VS VSIX";
 
         private readonly INuGetLockService _initLock;
+        private readonly Lazy<IProjectJsonToPackageReferenceMigratorExt> _projectJsonMigrator;
+        private readonly Lazy<INuGetUILogger> _outputConsoleLogger;
         private readonly ReentrantSemaphore _semaphoreLock = ReentrantSemaphore.Create(1, NuGetUIThreadHelper.JoinableTaskFactory.Context, ReentrantSemaphore.ReentrancyMode.Freeform);
 
         private SolutionEvents _solutionEvents;
@@ -137,7 +143,9 @@ namespace NuGet.PackageManagement.VisualStudio
             Common.ILogger logger,
             Lazy<ISettings> settings,
             INuGetFeatureFlagService featureFlagService,
-            JoinableTaskContext joinableTaskContext)
+            JoinableTaskContext joinableTaskContext,
+            Lazy<IProjectJsonToPackageReferenceMigratorExt> projectJsonMigrator,
+            Lazy<INuGetUILogger> outputConsoleLogger)
             : this(AsyncServiceProvider.GlobalProvider,
                    projectSystemCache,
                    projectSystemFactory,
@@ -146,7 +154,9 @@ namespace NuGet.PackageManagement.VisualStudio
                    logger,
                    settings,
                    featureFlagService,
-                   joinableTaskContext)
+                   joinableTaskContext,
+                   projectJsonMigrator,
+                   outputConsoleLogger)
         { }
 
 
@@ -159,7 +169,9 @@ namespace NuGet.PackageManagement.VisualStudio
             ILogger logger,
             Lazy<ISettings> settings,
             INuGetFeatureFlagService featureFlagService,
-            JoinableTaskContext joinableTaskContext)
+            JoinableTaskContext joinableTaskContext,
+            Lazy<IProjectJsonToPackageReferenceMigratorExt> projectJsonMigrator,
+            Lazy<INuGetUILogger> outputConsoleLogger)
         {
             Assumes.Present(asyncServiceProvider);
             Assumes.Present(projectSystemCache);
@@ -170,6 +182,8 @@ namespace NuGet.PackageManagement.VisualStudio
             Assumes.Present(settings);
             Assumes.Present(featureFlagService);
             Assumes.Present(joinableTaskContext);
+            Assumes.Present(projectJsonMigrator);
+            Assumes.Present(outputConsoleLogger);
 
             _asyncServiceProvider = asyncServiceProvider;
             _projectSystemCache = projectSystemCache;
@@ -180,6 +194,8 @@ namespace NuGet.PackageManagement.VisualStudio
             _settings = settings;
             _featureFlagService = featureFlagService;
             _initLock = new NuGetLockService(joinableTaskContext);
+            _projectJsonMigrator = projectJsonMigrator;
+            _outputConsoleLogger = outputConsoleLogger;
             _dte = new(() => asyncServiceProvider.GetDTEAsync(), NuGetUIThreadHelper.JoinableTaskFactory);
             _asyncVSSolution = new(() => asyncServiceProvider.GetServiceAsync<SVsSolution, IVsSolution>(), NuGetUIThreadHelper.JoinableTaskFactory);
         }
@@ -440,24 +456,10 @@ namespace NuGet.PackageManagement.VisualStudio
 
             var isSupported = false;
 
-            if (await _featureFlagService.IsFeatureEnabledAsync(NuGetFeatureFlagConstants.NuGetSolutionCacheInitilization))
+            var ivsSolution = await _asyncVSSolution.GetValueAsync();
+            if (IsSolutionOpenFromVSSolution(ivsSolution))
             {
-                var ivsSolution = await _asyncVSSolution.GetValueAsync();
-                if (IsSolutionOpenFromVSSolution(ivsSolution))
-                {
-                    return VsHierarchyUtility.AreAnyLoadedProjectsNuGetCompatible(ivsSolution);
-                }
-            }
-            else
-            {
-                // first check with DTE, and if we find any supported project, then return immediately.
-                var dte = await _dte.GetValueAsync();
-
-                foreach (Project project in await EnvDTESolutionUtility.GetAllEnvDTEProjectsAsync(dte))
-                {
-                    isSupported = true;
-                    break;
-                }
+                return VsHierarchyUtility.AreAnyLoadedProjectsNuGetCompatible(ivsSolution);
             }
 
             return isSupported;
@@ -535,15 +537,20 @@ namespace NuGet.PackageManagement.VisualStudio
             }
 
             // Check if user unchecks the "Tools - Options - Project & Soltuions - Save new projects when created" option
+#pragma warning disable CS0618 // Type or member is obsolete
             value = GetVSSolutionProperty((int)(__VSPROPID2.VSPROPID_DeferredSaveSolution));
+#pragma warning restore CS0618 // Type or member is obsolete
             return (bool)value;
         }
 
         private static object GetVSSolutionProperty(IVsSolution vsSolution, int propId)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            ErrorHandler.ThrowOnFailure(vsSolution.GetProperty(propId, out object value));
-            return value;
+            if (ErrorHandler.Succeeded(vsSolution.GetProperty(propId, out object value)))
+            {
+                return value;
+            }
+            return null;
         }
 
         private object GetVSSolutionProperty(int propId)
@@ -740,6 +747,39 @@ namespace NuGet.PackageManagement.VisualStudio
             }
         }
 
+        private async Task<IVsProjectJsonToPackageReferenceMigrateResult> ExecuteUpgradeProjectJsonNuGetProjectCommandAsync(NuGetProject nuGetProject, IVsProjectAdapter vsProjectAdapter)
+        {
+            IVsProjectJsonToPackageReferenceMigrateResult migrationResult = null;
+
+            _outputConsoleLogger.Value.Log(MessageLevel.Info, message: Strings.Migrating_ProjectJson_Started);
+
+            string projectFullPath = string.Empty;
+            if (nuGetProject.TryGetMetadata(NuGetProjectMetadataKeys.FullPath, out string valuePath))
+            {
+                projectFullPath = valuePath;
+            }
+
+            _outputConsoleLogger.Value.Log(MessageLevel.Info, message: projectFullPath);
+
+            var result = await _projectJsonMigrator.Value.MigrateProjectJsonToPackageReferenceAsync(nuGetProject, vsProjectAdapter);
+
+            if (result is IVsProjectJsonToPackageReferenceMigrateResult migratorResult)
+            {
+                migrationResult = migratorResult;
+
+                if (!migrationResult.IsSuccess)
+                {
+                    _outputConsoleLogger.Value.ReportError(new LogMessage(LogLevel.Error, message: migrationResult.ErrorMessage));
+                }
+                else
+                {
+                    _outputConsoleLogger.Value.Log(MessageLevel.Info, message: Strings.Migrating_ProjectJson_Succeeded);
+                }
+            }
+
+            return migrationResult;
+        }
+
         private async Task EnsureNuGetAndVsProjectAdapterCacheAsync()
         {
             await _initLock.ExecuteNuGetOperationAsync(async () =>
@@ -750,48 +790,28 @@ namespace NuGet.PackageManagement.VisualStudio
                 {
                     try
                     {
-                        if (await _featureFlagService.IsFeatureEnabledAsync(NuGetFeatureFlagConstants.NuGetSolutionCacheInitilization))
+                        IVsSolution ivsSolution = await _asyncVSSolution.GetValueAsync();
+                        foreach (var hierarchy in VsHierarchyUtility.GetAllLoadedProjects(ivsSolution))
                         {
-                            IVsSolution ivsSolution = await _asyncVSSolution.GetValueAsync();
-                            foreach (var hierarchy in VsHierarchyUtility.GetAllLoadedProjects(ivsSolution))
+                            try
                             {
-                                try
-                                {
-                                    var vsProjectAdapter = await _vsProjectAdapterProvider.CreateAdapterForFullyLoadedProjectAsync(hierarchy);
-                                    await AddVsProjectAdapterToCacheAsync(vsProjectAdapter);
-                                }
-                                catch (Exception e)
-                                {
-                                    // Ignore failed projects.
-                                    _logger.LogWarning($"The project {VsHierarchyUtility.GetProjectPath(hierarchy)} failed to initialize as a NuGet project.");
-                                    _logger.LogError(e.ToString());
-                                }
+                                IVsProjectAdapter vsProjectAdapter = await _vsProjectAdapterProvider.CreateAdapterForFullyLoadedProjectAsync(hierarchy);
+                                NuGetProject nuGetProject = await AddVsProjectAdapterToCacheAsync(vsProjectAdapter);
 
-                                // Consider that the cache is initialized only when there are any projects to add.
-                                _cacheInitialized = true;
+                                if (nuGetProject is ProjectJsonNuGetProject projectJsonNuGetProject)
+                                {
+                                    await MigrateProjectJsonAsync(projectJsonNuGetProject, hierarchy, vsProjectAdapter);
+                                }
                             }
-                        }
-                        else
-                        {
-                            var dte = await _dte.GetValueAsync();
-
-                            foreach (var project in await EnvDTESolutionUtility.GetAllEnvDTEProjectsAsync(dte))
+                            catch (Exception e)
                             {
-                                try
-                                {
-                                    var vsProjectAdapter = await _vsProjectAdapterProvider.CreateAdapterForFullyLoadedProjectAsync(project);
-                                    await AddVsProjectAdapterToCacheAsync(vsProjectAdapter);
-                                }
-                                catch (Exception e)
-                                {
-                                    // Ignore failed projects.
-                                    _logger.LogWarning($"The project {project.Name} failed to initialize as a NuGet project.");
-                                    _logger.LogError(e.ToString());
-                                }
-
-                                // Consider that the cache is initialized only when there are any projects to add.
-                                _cacheInitialized = true;
+                                // Ignore failed projects.
+                                _logger.LogWarning($"The project {VsHierarchyUtility.GetProjectPath(hierarchy)} failed to initialize as a NuGet project.");
+                                _logger.LogError(e.ToString());
                             }
+
+                            // Consider that the cache is initialized only when there are any projects to add.
+                            _cacheInitialized = true;
                         }
 
                         await SetDefaultProjectNameAsync();
@@ -808,7 +828,26 @@ namespace NuGet.PackageManagement.VisualStudio
             }, CancellationToken.None);
         }
 
-        private async Task AddVsProjectAdapterToCacheAsync(IVsProjectAdapter vsProjectAdapter)
+        private async Task MigrateProjectJsonAsync(ProjectJsonNuGetProject projectJsonNuGetProject, IVsHierarchy hierarchy, IVsProjectAdapter vsProjectAdapter)
+        {
+            IVsProjectJsonToPackageReferenceMigrateResult migrationResult = await
+                ExecuteUpgradeProjectJsonNuGetProjectCommandAsync(projectJsonNuGetProject, vsProjectAdapter);
+
+            if (migrationResult is not null && migrationResult.IsSuccess)
+            {
+                string projectJsonUniqueName = null;
+
+                // Refresh the adapter in the cache after migration.
+                if (projectJsonNuGetProject.TryGetMetadata(NuGetProjectMetadataKeys.UniqueName, out projectJsonUniqueName))
+                {
+                    // AddVsProjectAdapterToCacheAsync replaces the project when it already exists, so no need to remove.
+                    IVsProjectAdapter vsProjectAdapterMigrated = await _vsProjectAdapterProvider.CreateAdapterForFullyLoadedProjectAsync(hierarchy);
+                    await AddVsProjectAdapterToCacheAsync(vsProjectAdapterMigrated);
+                }
+            }
+        }
+
+        private async Task<NuGetProject> AddVsProjectAdapterToCacheAsync(IVsProjectAdapter vsProjectAdapter)
         {
             _projectSystemCache.TryGetProjectNameByShortName(vsProjectAdapter.ProjectName, out var oldProjectName);
 
@@ -836,6 +875,8 @@ namespace NuGet.PackageManagement.VisualStudio
                     oldProjectName.CustomUniqueName :
                     newProjectName.ShortName;
             }
+
+            return nuGetProject;
         }
 
         private void RemoveVsProjectAdapterFromCache(string name)
@@ -909,13 +950,13 @@ namespace NuGet.PackageManagement.VisualStudio
             }
         }
 
-        private async Task<NuGetProject> CreateNuGetProjectAsync(IVsProjectAdapter project, INuGetProjectContext projectContext = null)
+        private Task<NuGetProject> CreateNuGetProjectAsync(IVsProjectAdapter project, INuGetProjectContext projectContext = null)
         {
             var context = new ProjectProviderContext(
                 projectContext ?? EmptyNuGetProjectContext,
                 () => PackagesFolderPathUtility.GetPackagesFolderPath(this, _settings.Value));
 
-            return await _projectSystemFactory.TryCreateNuGetProjectAsync(project, context);
+            return _projectSystemFactory.TryCreateNuGetProjectAsync(project, context);
         }
 
         internal async Task<IDictionary<string, List<IVsProjectAdapter>>> GetDependentProjectsDictionaryAsync()
@@ -1086,16 +1127,11 @@ namespace NuGet.PackageManagement.VisualStudio
 
             _projectSystemCache.TryGetProjectNames(projectName, out var projectNames);
 
-            RemoveVsProjectAdapterFromCache(projectName);
-
-            var context = new ProjectProviderContext(
-                EmptyNuGetProjectContext,
-                () => PackagesFolderPathUtility.GetPackagesFolderPath(this, _settings.Value));
-
+            // AddProject replaces the project when it already exists, so no need to remove.
             var nuGetProject = await _projectSystemFactory.CreateNuGetProjectAsync<LegacyPackageReferenceProject>(
-                vsProjectAdapter, context);
+                vsProjectAdapter, optionalContext: null);
 
-            var added = _projectSystemCache.AddProject(projectNames, vsProjectAdapter, nuGetProject);
+            _projectSystemCache.AddProject(projectNames, vsProjectAdapter, nuGetProject);
 
             if (DefaultNuGetProjectName == null)
             {

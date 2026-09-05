@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
@@ -44,8 +46,11 @@ namespace NuGet.VisualStudio
             {
                 var featureFlagService = await _ivsFeatureFlags.GetValueAsync();
                 await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                featureEnabled = featureFlagService.IsFeatureEnabled(featureFlag.Name, defaultValue: featureFlag.DefaultState);
-                _featureFlagCache.Add(featureFlag.Name, featureEnabled);
+                if (!_featureFlagCache.TryGetValue(featureFlag.Name, out featureEnabled))
+                {
+                    featureEnabled = featureFlagService.IsFeatureEnabled(featureFlag.Name, defaultValue: featureFlag.DefaultState);
+                    _featureFlagCache[featureFlag.Name] = featureEnabled;
+                }
             }
             return !isFeatureForcedDisabled && (isFeatureForcedEnabled || featureEnabled);
         }

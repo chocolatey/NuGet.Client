@@ -1,7 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -9,6 +8,7 @@ using System.Threading.Tasks;
 using Moq;
 using NuGet.Common;
 using NuGet.Protocol.Core.Types;
+using NuGet.Shared;
 using Test.Utility;
 using Xunit;
 
@@ -16,8 +16,21 @@ namespace NuGet.Protocol.Tests
 {
     public class AutoCompleteResourceV2FeedTests
     {
-        [Fact]
-        public async Task AutoCompleteResourceV2Feed_IdStartsWith()
+        private static AutoCompleteResourceV2Feed CreateAutoCompleteResource(
+            HttpSourceResource httpSourceResource,
+            string serviceAddress,
+            Configuration.PackageSource packageSource,
+            string useStj)
+        {
+            var envReader = new Mock<IEnvironmentVariableReader>();
+            envReader.Setup(e => e.GetEnvironmentVariable(NuGetFeatureFlags.UseSystemTextJsonDeserializationEnvVar)).Returns(useStj);
+            return new AutoCompleteResourceV2Feed(httpSourceResource, serviceAddress.TrimEnd('/'), packageSource, envReader.Object);
+        }
+
+        [Theory]
+        [InlineData("true")]
+        [InlineData("false")]
+        public async Task AutoCompleteResourceV2Feed_IdStartsWith(string useStj)
         {
             // Arrange
             var serviceAddress = ProtocolUtility.CreateServiceAddress();
@@ -28,8 +41,8 @@ namespace NuGet.Protocol.Tests
             responses.Add(serviceAddress, string.Empty);
 
             var repo = StaticHttpHandler.CreateSource(serviceAddress, Repository.Provider.GetCoreV3(), responses);
-
-            var autoCompleteResource = await repo.GetResourceAsync<AutoCompleteResource>();
+            var httpSourceResource = await repo.GetResourceAsync<HttpSourceResource>(CancellationToken.None);
+            var autoCompleteResource = CreateAutoCompleteResource(httpSourceResource!, serviceAddress, repo.PackageSource, useStj);
 
             // Act
             var result = await autoCompleteResource.IdStartsWith("Azure", false, NullLogger.Instance, CancellationToken.None);
@@ -38,8 +51,10 @@ namespace NuGet.Protocol.Tests
             Assert.Equal(30, result.Count());
         }
 
-        [Fact]
-        public async Task AutoCompleteResourceV2Feed_VersionStartsWith()
+        [Theory]
+        [InlineData("true")]
+        [InlineData("false")]
+        public async Task AutoCompleteResourceV2Feed_VersionStartsWith(string useStj)
         {
             // Arrange
             var serviceAddress = ProtocolUtility.CreateServiceAddress();
@@ -50,8 +65,8 @@ namespace NuGet.Protocol.Tests
             responses.Add(serviceAddress, string.Empty);
 
             var repo = StaticHttpHandler.CreateSource(serviceAddress, Repository.Provider.GetCoreV3(), responses);
-
-            var autoCompleteResource = await repo.GetResourceAsync<AutoCompleteResource>();
+            var httpSourceResource = await repo.GetResourceAsync<HttpSourceResource>(CancellationToken.None);
+            var autoCompleteResource = CreateAutoCompleteResource(httpSourceResource!, serviceAddress, repo.PackageSource, useStj);
 
             // Act
             var result = await autoCompleteResource.VersionStartsWith("xunit", "1", false, NullSourceCacheContext.Instance, NullLogger.Instance, CancellationToken.None);
@@ -60,8 +75,10 @@ namespace NuGet.Protocol.Tests
             Assert.Equal(6, result.Count());
         }
 
-        [Fact]
-        public async Task AutoCompleteResourceV2Feed_VersionStartsWithInvalidId()
+        [Theory]
+        [InlineData("true")]
+        [InlineData("false")]
+        public async Task AutoCompleteResourceV2Feed_VersionStartsWithInvalidId(string useStj)
         {
             // Arrange
             var serviceAddress = ProtocolUtility.CreateServiceAddress();
@@ -71,8 +88,8 @@ namespace NuGet.Protocol.Tests
             responses.Add(serviceAddress, string.Empty);
 
             var repo = StaticHttpHandler.CreateSource(serviceAddress, Repository.Provider.GetCoreV3(), responses);
-
-            var autoCompleteResource = await repo.GetResourceAsync<AutoCompleteResource>();
+            var httpSourceResource = await repo.GetResourceAsync<HttpSourceResource>(CancellationToken.None);
+            var autoCompleteResource = CreateAutoCompleteResource(httpSourceResource!, serviceAddress, repo.PackageSource, useStj);
 
             // Act
             var result = await autoCompleteResource.VersionStartsWith("azure", "1", false, NullSourceCacheContext.Instance, NullLogger.Instance, CancellationToken.None);

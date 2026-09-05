@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -153,14 +155,20 @@ namespace NuGet.VisualStudio.Implementation.Extensibility
 
             var packageSpec = packageSpecs.Single(s => s.RestoreMetadata.ProjectStyle == ProjectModel.ProjectStyle.PackageReference || s.RestoreMetadata.ProjectStyle == ProjectModel.ProjectStyle.ProjectJson);
             var packagesPath = VSRestoreSettingsUtilities.GetPackagesPath(_settings, packageSpec);
-            FallbackPackagePathResolver pathResolver = new FallbackPackagePathResolver(packagesPath, VSRestoreSettingsUtilities.GetFallbackFolders(_settings, packageSpec));
+
+            // Resolving installed package paths tolerates a missing fallback folder, unlike restore.
+            // Filter out folders that don't exist on disk; the resolver would otherwise throw.
+            var fallbackFolders = VSRestoreSettingsUtilities.GetFallbackFolders(_settings, packageSpec)
+                .Where(Directory.Exists)
+                .ToList();
+            FallbackPackagePathResolver pathResolver = new FallbackPackagePathResolver(packagesPath, fallbackFolders);
 
             IReadOnlyCollection<PackageReference> directPackages;
             IReadOnlyCollection<PackageReference> transitivePackages;
 
             if (project is IPackageReferenceProject packageReferenceProject)
             {
-                var installed = await packageReferenceProject.GetInstalledAndTransitivePackagesAsync(cancellationToken);
+                var installed = await packageReferenceProject.GetInstalledAndTransitivePackagesAsync(includeTransitiveOrigins: false, cancellationToken);
                 directPackages = installed.InstalledPackages;
                 transitivePackages = installed.TransitivePackages;
             }

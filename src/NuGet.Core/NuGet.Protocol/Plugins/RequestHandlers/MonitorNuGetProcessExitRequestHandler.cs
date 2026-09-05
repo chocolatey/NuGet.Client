@@ -4,6 +4,9 @@
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+#if NET5_0_OR_GREATER
+using System.Diagnostics.CodeAnalysis;
+#endif
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -24,7 +27,7 @@ namespace NuGet.Protocol.Plugins
         /// Initializes a new <see cref="MonitorNuGetProcessExitRequestHandler" /> class.
         /// </summary>
         /// <param name="plugin">A plugin.</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="plugin" /> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="plugin" /> is <see langword="null" />.</exception>
         public MonitorNuGetProcessExitRequestHandler(IPlugin plugin)
         {
             if (plugin == null)
@@ -63,10 +66,14 @@ namespace NuGet.Protocol.Plugins
         /// <param name="cancellationToken">A cancellation token.</param>
         /// <returns>A task that represents the asynchronous operation.</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="connection" />
-        /// is <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="request" /> is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="request" /> is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="responseHandler" />
-        /// is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
+#if NET5_0_OR_GREATER
+        [UnconditionalSuppressMessage("AOT", "IL2026", Justification = "PayloadObject is always a typed object (not JObject) in these scenarios; the reflection code path is not reached.")]
+        [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "PayloadObject is always a typed object (not JObject) in these scenarios; the reflection code path is not reached.")]
+#endif
         public async Task HandleResponseAsync(
             IConnection connection,
             Message request,
@@ -90,9 +97,10 @@ namespace NuGet.Protocol.Plugins
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            var monitorRequest = MessageUtilities.DeserializePayload<MonitorNuGetProcessExitRequest>(request);
+            // Deserialized payload is non-null for well-formed handler requests.
+            var monitorRequest = MessageUtilities.DeserializePayload<MonitorNuGetProcessExitRequest>(request)!;
 
-            Process process = null;
+            Process? process = null;
 
             try
             {
@@ -122,7 +130,7 @@ namespace NuGet.Protocol.Plugins
             await responseHandler.SendResponseAsync(request, response, cancellationToken);
         }
 
-        private void OnProcessExited(object sender, EventArgs e)
+        private void OnProcessExited(object? sender, EventArgs e)
         {
             _plugin.Close();
         }

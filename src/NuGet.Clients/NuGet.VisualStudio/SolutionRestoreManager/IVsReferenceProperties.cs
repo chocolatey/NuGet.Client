@@ -12,6 +12,7 @@ namespace NuGet.SolutionRestoreManager
     /// </summary>
     [ComImport]
     [Guid("29f7a567-9957-43fe-b45d-6ef69049742a")]
+    [Obsolete]
     public interface IVsReferenceProperties : IEnumerable
     {
         /// <summary>
@@ -24,6 +25,6 @@ namespace NuGet.SolutionRestoreManager
         /// </summary>
         /// <param name="index">Property name or index.</param>
         /// <returns>Property matching index.</returns>
-        IVsReferenceProperty Item(object index);
+        IVsReferenceProperty? Item(object index);
     }
 }

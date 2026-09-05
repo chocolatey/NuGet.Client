@@ -8,7 +8,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Numerics;
 using System.Security.Cryptography;
-using System.Text;
 
 namespace NuGet.Packaging.Signing.DerEncoding
 {
@@ -139,8 +138,6 @@ namespace NuGet.Packaging.Signing.DerEncoding
         /// <returns>The encoded segments { tag, length, value }</returns>
         internal static byte[][] SegmentedEncodeUnsignedInteger(byte[] bigEndianBytes)
         {
-            Debug.Assert(bigEndianBytes != null);
-
             return SegmentedEncodeUnsignedInteger(bigEndianBytes, 0, bigEndianBytes.Length);
         }
 
@@ -153,7 +150,6 @@ namespace NuGet.Packaging.Signing.DerEncoding
         /// <returns>The encoded segments { tag, length, value }</returns>
         internal static byte[][] SegmentedEncodeUnsignedInteger(byte[] bigEndianBytes, int offset, int count)
         {
-            Debug.Assert(bigEndianBytes != null);
             Debug.Assert(offset >= 0);
             Debug.Assert(count > 0);
             Debug.Assert(bigEndianBytes.Length > 0);
@@ -237,9 +233,9 @@ namespace NuGet.Packaging.Signing.DerEncoding
             Debug.Assert(data != null);
             Debug.Assert(unusedBits >= 0);
             Debug.Assert(unusedBits <= 7);
-            Debug.Assert(unusedBits == 0 || data.Length > 0);
+            Debug.Assert(unusedBits == 0 || data!.Length > 0);
 
-            byte[] encodedData = new byte[data.Length + 1];
+            byte[] encodedData = new byte[data!.Length + 1];
 
             // Copy data to encodedData, but leave a one byte gap for unusedBits.
             Buffer.BlockCopy(data, 0, encodedData, 1, data.Length);
@@ -314,7 +310,7 @@ namespace NuGet.Packaging.Signing.DerEncoding
 
             int lastSetBit = -1;
 
-            int lastBitProvided = (bigEndianBytes.Length * 8) - 1;
+            int lastBitProvided = (bigEndianBytes!.Length * 8) - 1;
             int lastPossibleBit = Math.Min(lastBitProvided, namedBitsCount - 1);
 
             for (int currentBit = lastPossibleBit; currentBit >= 0; currentBit--)
@@ -406,7 +402,7 @@ namespace NuGet.Packaging.Signing.DerEncoding
             return new byte[][]
             {
                 new byte[] { (byte)DerSequenceReader.DerTag.OctetString },
-                EncodeLength(data.Length),
+                EncodeLength(data!.Length),
                 data,
             };
         }
@@ -431,12 +427,10 @@ namespace NuGet.Packaging.Signing.DerEncoding
         /// <returns>The encoded segments { tag, length, value }</returns>
         internal static byte[][] SegmentedEncodeOid(Oid oid)
         {
-            Debug.Assert(oid != null);
-
             // All exceptions past this point should just be "CryptographicException", because that's
             // how they'd come back from Desktop/Windows, since it was a non-success result of calling
             // CryptEncodeObject.
-            string oidValue = oid.Value;
+            string oidValue = oid.Value!;
 
             return SegmentedEncodeOid(oidValue);
         }
@@ -522,7 +516,7 @@ namespace NuGet.Packaging.Signing.DerEncoding
         {
             Debug.Assert(chars != null);
 
-            return SegmentedEncodeUtf8String(chars, 0, chars.Length);
+            return SegmentedEncodeUtf8String(chars!, 0, chars!.Length);
         }
 
         /// <summary>
@@ -536,7 +530,7 @@ namespace NuGet.Packaging.Signing.DerEncoding
         {
             Debug.Assert(chars != null);
             Debug.Assert(offset >= 0);
-            Debug.Assert(offset <= chars.Length);
+            Debug.Assert(offset <= chars!.Length);
             Debug.Assert(count >= 0);
             Debug.Assert(count <= chars.Length - offset);
 
@@ -571,7 +565,7 @@ namespace NuGet.Packaging.Signing.DerEncoding
         {
             Debug.Assert(items != null);
 
-            byte[] data = ConcatenateArrays(items);
+            byte[] data = ConcatenateArrays(items!);
 
             return new byte[][]
             {
@@ -594,7 +588,7 @@ namespace NuGet.Packaging.Signing.DerEncoding
             Debug.Assert(items != null);
             Debug.Assert(contextId >= 0 && contextId <= 30);
 
-            byte[] data = ConcatenateArrays(items);
+            byte[] data = ConcatenateArrays(items!);
 
             byte tagId = (byte)(
                 DerSequenceReader.ConstructedFlag |
@@ -619,7 +613,7 @@ namespace NuGet.Packaging.Signing.DerEncoding
         {
             Debug.Assert(items != null);
 
-            byte[][][] sortedItems = (byte[][][])items.Clone();
+            byte[][][] sortedItems = (byte[][][])items!.Clone();
             Array.Sort(sortedItems, AsnSetValueComparer.Instance);
             byte[] data = ConcatenateArrays(sortedItems);
 
@@ -643,7 +637,7 @@ namespace NuGet.Packaging.Signing.DerEncoding
         {
             Debug.Assert(items != null);
 
-            byte[] data = ConcatenateArrays(items);
+            byte[] data = ConcatenateArrays(items!);
 
             return new byte[][]
             {
@@ -659,14 +653,14 @@ namespace NuGet.Packaging.Signing.DerEncoding
         /// </summary>
         /// <param name="chars">The characters to test.</param>
         /// <returns>
-        /// <c>true</c> if all of the characters in <paramref name="chars"/> are valid PrintableString characters,
-        /// <c>false</c> otherwise.
+        /// <see langword="true" /> if all of the characters in <paramref name="chars"/> are valid PrintableString characters,
+        /// <see langword="false" /> otherwise.
         /// </returns>
         internal static bool IsValidPrintableString(char[] chars)
         {
             Debug.Assert(chars != null);
 
-            return IsValidPrintableString(chars, 0, chars.Length);
+            return IsValidPrintableString(chars!, 0, chars!.Length);
         }
 
         /// <summary>
@@ -677,14 +671,14 @@ namespace NuGet.Packaging.Signing.DerEncoding
         /// <param name="offset">The starting character position within <paramref name="chars"/>.</param>
         /// <param name="count">The number of characters from <paramref name="chars"/> to read.</param>
         /// <returns>
-        /// <c>true</c> if all of the indexed characters in <paramref name="chars"/> are valid PrintableString
-        /// characters, <c>false</c> otherwise.
+        /// <see langword="true" /> if all of the indexed characters in <paramref name="chars"/> are valid PrintableString
+        /// characters, <see langword="false" /> otherwise.
         /// </returns>
         internal static bool IsValidPrintableString(char[] chars, int offset, int count)
         {
             Debug.Assert(chars != null);
             Debug.Assert(offset >= 0);
-            Debug.Assert(offset <= chars.Length);
+            Debug.Assert(offset <= chars!.Length);
             Debug.Assert(count >= 0);
             Debug.Assert(count <= chars.Length - offset);
 
@@ -710,7 +704,7 @@ namespace NuGet.Packaging.Signing.DerEncoding
         {
             Debug.Assert(chars != null);
 
-            return SegmentedEncodePrintableString(chars, 0, chars.Length);
+            return SegmentedEncodePrintableString(chars!, 0, chars!.Length);
         }
 
         /// <summary>
@@ -724,7 +718,7 @@ namespace NuGet.Packaging.Signing.DerEncoding
         {
             Debug.Assert(chars != null);
             Debug.Assert(offset >= 0);
-            Debug.Assert(offset <= chars.Length);
+            Debug.Assert(offset <= chars!.Length);
             Debug.Assert(count >= 0);
             Debug.Assert(count <= chars.Length);
             Debug.Assert(offset + count <= chars.Length);
@@ -760,7 +754,7 @@ namespace NuGet.Packaging.Signing.DerEncoding
         {
             Debug.Assert(chars != null);
 
-            return SegmentedEncodeIA5String(chars, 0, chars.Length);
+            return SegmentedEncodeIA5String(chars!, 0, chars!.Length);
         }
 
         /// <summary>
@@ -774,7 +768,7 @@ namespace NuGet.Packaging.Signing.DerEncoding
         {
             Debug.Assert(chars != null);
             Debug.Assert(offset >= 0);
-            Debug.Assert(offset <= chars.Length);
+            Debug.Assert(offset <= chars!.Length);
             Debug.Assert(count >= 0);
             Debug.Assert(count <= chars.Length);
             Debug.Assert(offset + count <= chars.Length);
@@ -955,13 +949,13 @@ namespace NuGet.Packaging.Signing.DerEncoding
             foreach (byte[][] segments in items)
             {
                 Debug.Assert(segments != null);
-                Debug.Assert(segments.Length == 3);
+                Debug.Assert(segments!.Length == 3);
 
                 foreach (byte[] segment in segments)
                 {
                     Debug.Assert(segment != null);
 
-                    Buffer.BlockCopy(segment, 0, encodedSequence, writeStart, segment.Length);
+                    Buffer.BlockCopy(segment!, 0, encodedSequence, writeStart, segment!.Length);
                     writeStart += segment.Length;
                 }
             }
@@ -1107,11 +1101,11 @@ namespace NuGet.Packaging.Signing.DerEncoding
         {
             public static AsnSetValueComparer Instance { get; } = new AsnSetValueComparer();
 
-            public int Compare(byte[][] x, byte[][] y)
+            public int Compare(byte[][]? x, byte[][]? y)
             {
                 Debug.Assert(x != null && y != null, "Comparing one more more null values");
-                Debug.Assert(x.Length == 3, $"x.Length is {x.Length} when it should be 3");
-                Debug.Assert(y.Length == 3, $"y.Length is {y.Length} when it should be 3");
+                Debug.Assert(x!.Length == 3, $"x.Length is {x.Length} when it should be 3");
+                Debug.Assert(y!.Length == 3, $"y.Length is {y.Length} when it should be 3");
 
                 // ITU-T X.690 11.6 Set-of components (CER/DER)
                 // The encodings of the component values of a set-of value shall appear in
@@ -1170,7 +1164,7 @@ namespace NuGet.Packaging.Signing.DerEncoding
                 return 0;
             }
 
-            public int Compare(object x, object y)
+            public int Compare(object? x, object? y)
             {
                 return Compare(x as byte[][], y as byte[][]);
             }

@@ -95,6 +95,8 @@ namespace NuGet.Protocol
 
         public string BuildFindPackagesByIdUri(string id)
         {
+            PackageIdValidator.Validate(id);
+
             var uri = string.Format(
                 CultureInfo.InvariantCulture,
                 FindPackagesByIdFormat,
@@ -115,6 +117,8 @@ namespace NuGet.Protocol
                 throw new ArgumentException(nameof(package.Version));
             }
 
+            PackageIdValidator.Validate(package.Id);
+
             var uri = string.Format(
                 CultureInfo.InvariantCulture,
                 GetSpecificPackageFormat,
@@ -125,7 +129,7 @@ namespace NuGet.Protocol
         }
 
         public string BuildGetPackagesUri(
-            string searchTerm,
+            string? searchTerm,
             SearchFilter filters,
             int? skip,
             int? take)
@@ -192,7 +196,7 @@ namespace NuGet.Protocol
             return builder.ToString();
         }
 
-        private string BuildTop(int? top)
+        private string? BuildTop(int? top)
         {
             if (!top.HasValue)
             {
@@ -202,7 +206,7 @@ namespace NuGet.Protocol
             return string.Format(CultureInfo.InvariantCulture, TopFormat, top);
         }
 
-        private string BuildSkip(int? skip)
+        private string? BuildSkip(int? skip)
         {
             if (!skip.HasValue)
             {
@@ -212,9 +216,9 @@ namespace NuGet.Protocol
             return string.Format(CultureInfo.InvariantCulture, SkipFormat, skip);
         }
 
-        private string BuildFilter(string searchTerm, SearchFilterType? searchFilterType)
+        private string? BuildFilter(string? searchTerm, SearchFilterType? searchFilterType)
         {
-            var pieces = new List<string>
+            var pieces = new List<string?>
             {
                 BuildFieldSearchFilter(searchTerm),
                 BuildPropertyFilter(searchFilterType)
@@ -233,9 +237,9 @@ namespace NuGet.Protocol
             return string.Format(CultureInfo.InvariantCulture, FilterFormat, filter);
         }
 
-        private string BuildOrderBy(SearchOrderBy? searchOrderBy)
+        private string? BuildOrderBy(SearchOrderBy? searchOrderBy)
         {
-            string orderBy;
+            string? orderBy;
             switch (searchOrderBy)
             {
                 case SearchOrderBy.Id:
@@ -258,9 +262,9 @@ namespace NuGet.Protocol
             return orderBy;
         }
 
-        private string BuildPropertyFilter(SearchFilterType? searchFilterType)
+        private string? BuildPropertyFilter(SearchFilterType? searchFilterType)
         {
-            string filter;
+            string? filter;
             switch (searchFilterType)
             {
                 case SearchFilterType.IsLatestVersion:
@@ -281,7 +285,7 @@ namespace NuGet.Protocol
             return filter;
         }
 
-        private string BuildFieldSearchFilter(string searchTerm)
+        private string? BuildFieldSearchFilter(string? searchTerm)
         {
             if (searchTerm == null)
             {

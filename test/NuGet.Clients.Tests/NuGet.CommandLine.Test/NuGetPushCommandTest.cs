@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -8,6 +10,8 @@ using System.Net;
 using System.Security.Principal;
 using System.Text;
 using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
+using Newtonsoft.Json.Linq;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Test.Utility;
@@ -38,8 +42,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    string.Join(" ", args),
-                    true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(0, result.ExitCode);
@@ -74,8 +77,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    string.Join(" ", args),
-                    true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(0, result.ExitCode);
@@ -113,8 +115,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     nugetexe,
                     packageDirectory,
-                    string.Join(" ", args),
-                    true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(0, result.ExitCode);
@@ -153,8 +154,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     nugetexe,
                     packageDirectory,
-                    string.Join(" ", args),
-                    true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(0, result.ExitCode);
@@ -190,8 +190,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     nugetexe,
                     packageDirectory,
-                    string.Join(" ", args),
-                    true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(0, result.ExitCode);
@@ -219,8 +218,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    string.Join(" ", args),
-                    true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(0, result.ExitCode);
@@ -247,8 +245,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                                 nugetexe,
                                 Directory.GetCurrentDirectory(),
-                                string.Join(" ", args),
-                                true);
+                                string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(0, result.ExitCode);
@@ -265,6 +262,7 @@ namespace NuGet.CommandLine.Test
             using (var packageDirectory = TestDirectory.Create())
             {
                 // Arrange
+                using SimpleTestPathContext pathContext = new SimpleTestPathContext();
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
                 string outputFileName = Path.Combine(packageDirectory, "t1.nupkg");
 
@@ -281,14 +279,14 @@ namespace NuGet.CommandLine.Test
 
                         return HttpStatusCode.Created;
                     });
+                    pathContext.Settings.AddSource("http-feed", $"{server.Uri}push", allowInsecureConnectionsValue: "true");
                     server.Start();
 
                     // Act
                     var result = CommandRunner.Run(
                                     nugetexe,
-                                    Directory.GetCurrentDirectory(),
-                                    $"push {packageFileName} -Source {server.Uri}push",
-                                    true);
+                                    pathContext.WorkingDirectory,
+                                    $"push {packageFileName} -Source {server.Uri}push");
                     server.Stop();
 
                     // Assert
@@ -310,6 +308,7 @@ namespace NuGet.CommandLine.Test
             // Arrange
             using (var packageDirectory = TestDirectory.Create())
             {
+                using SimpleTestPathContext pathContext = new SimpleTestPathContext();
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
                 using (var server = new MockServer())
                 {
@@ -317,7 +316,7 @@ namespace NuGet.CommandLine.Test
                     server.Put.Add("/push", r => HttpStatusCode.Created);
 
                     server.AddServerWarnings(serverWarnings);
-
+                    pathContext.Settings.AddSource("http-feed", $"{server.Uri}push", allowInsecureConnectionsValue: "true");
                     server.Start();
 
                     // Act
@@ -325,9 +324,8 @@ namespace NuGet.CommandLine.Test
                     {"push", packageFileName, "-Source", server.Uri + "push", "-Apikey", "token"};
                     var result = CommandRunner.Run(
                         nugetexe,
-                        Directory.GetCurrentDirectory(),
-                        string.Join(" ", args),
-                        true);
+                        pathContext.WorkingDirectory,
+                        string.Join(" ", args));
                     server.Stop();
 
                     // Assert
@@ -354,20 +352,21 @@ namespace NuGet.CommandLine.Test
             using (MockServer server = new MockServer())
             {
                 // Arrange
+                using SimpleTestPathContext pathContext = new SimpleTestPathContext();
                 string packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
                 string symbolFileName = packageFileName.Replace(".nupkg", ".symbols.nupkg");
                 File.WriteAllText(symbolFileName, "This must be invalid so symbols would fail if they were actually pushed");
 
                 server.Get.Add("/push", r => "OK");
                 server.Put.Add("/push", r => HttpStatusCode.Created);
+                pathContext.Settings.AddSource("http-feed", $"{server.Uri}push", allowInsecureConnectionsValue: "true");
                 server.Start();
 
                 // Act
                 CommandRunnerResult result = CommandRunner.Run(
                     Util.GetNuGetExePath(),
-                    Directory.GetCurrentDirectory(),
-                    $"push {packageFileName} -Source {server.Uri}push -NoSymbols",
-                    waitForExit: true);
+                    pathContext.WorkingDirectory,
+                    $"push {packageFileName} -Source {server.Uri}push -NoSymbols");
 
                 // Assert
                 Assert.Equal(0, result.ExitCode);
@@ -383,6 +382,7 @@ namespace NuGet.CommandLine.Test
             using (var server = new MockServer())
             {
                 // Arrange
+                using SimpleTestPathContext pathContext = new SimpleTestPathContext();
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
                 var symbolFileName = packageFileName.Replace(".nupkg", ".symbols.nupkg");
                 File.Copy(packageFileName, symbolFileName);
@@ -402,7 +402,7 @@ namespace NuGet.CommandLine.Test
                         ? HttpStatusCode.Created
                         : HttpStatusCode.Unauthorized;
                 });
-
+                pathContext.Settings.AddSource("http-feed", $"{server.Uri}push", allowInsecureConnectionsValue: "true");
                 server.Start();
 
                 var pushUri = $"{server.Uri}push";
@@ -411,9 +411,8 @@ namespace NuGet.CommandLine.Test
                 // Act
                 CommandRunnerResult result = CommandRunner.Run(
                     Util.GetNuGetExePath(),
-                    Directory.GetCurrentDirectory(),
-                    $"push {packageFileName} -Source {pushUri} -SymbolSource {pushSymbolsUri} -ApiKey PushKey -SymbolApiKey PushSymbolsKey",
-                    waitForExit: true);
+                    pathContext.WorkingDirectory,
+                    $"push {packageFileName} -Source {pushUri} -SymbolSource {pushSymbolsUri} -ApiKey PushKey -SymbolApiKey PushSymbolsKey");
 
                 // Assert
                 Assert.True(0 == result.ExitCode, result.AllOutput);
@@ -444,8 +443,7 @@ namespace NuGet.CommandLine.Test
                 CommandRunnerResult result = CommandRunner.Run(
                     Util.GetNuGetExePath(),
                     Directory.GetCurrentDirectory(),
-                    $"push {packageFileName} -Source {pushSource} -SymbolSource {pushSymbolsSource}",
-                    waitForExit: true);
+                    $"push {packageFileName} -Source {pushSource} -SymbolSource {pushSymbolsSource}");
 
                 // Assert
                 Assert.Equal(0, result.ExitCode);
@@ -485,8 +483,7 @@ namespace NuGet.CommandLine.Test
                 CommandRunnerResult result = CommandRunner.Run(
                     Util.GetNuGetExePath(),
                     packageDirectory,
-                    $"push {packageFileName} -Source pushSource -SymbolSource pushSymbolsSource",
-                    waitForExit: true);
+                    $"push {packageFileName} -Source pushSource -SymbolSource pushSymbolsSource");
 
                 // Assert
                 Assert.Equal(0, result.ExitCode);
@@ -496,28 +493,29 @@ namespace NuGet.CommandLine.Test
             }
         }
 
-        [Fact]
+        [Fact(Skip = "https://github.com/NuGet/Home/issues/13864")]
         public void PushCommand_PushTimeoutErrorMessage()
         {
             using (TestDirectory packageDirectory = TestDirectory.Create())
             using (MockServer server = new MockServer())
             {
                 // Arrange
+                using SimpleTestPathContext pathContext = new SimpleTestPathContext();
                 string packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
                 server.Get.Add("/push", r => "OK");
                 server.Put.Add("/push", r =>
                 {
-                    System.Threading.Thread.Sleep(2000);
+                    System.Threading.Thread.Sleep(TimeSpan.FromSeconds(10));
                     return HttpStatusCode.Created;
                 });
+                pathContext.Settings.AddSource("http-feed", $"{server.Uri}push", allowInsecureConnectionsValue: "true");
                 server.Start();
 
                 // Act
                 CommandRunnerResult result = CommandRunner.Run(
                     Util.GetNuGetExePath(),
-                    Directory.GetCurrentDirectory(),
-                    $"push {packageFileName} -Source {server.Uri}push -Timeout 1",
-                    waitForExit: true);
+                    pathContext.WorkingDirectory,
+                    $"push {packageFileName} -Source {server.Uri}push -Timeout 3");
 
                 // Assert
                 Assert.Equal(1, result.ExitCode);
@@ -534,6 +532,7 @@ namespace NuGet.CommandLine.Test
             using (var packageDirectory = TestDirectory.Create())
             {
                 // Arrange
+                using SimpleTestPathContext pathContext = new SimpleTestPathContext();
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
                 string outputFileName = Path.Combine(packageDirectory, "t1.nupkg");
 
@@ -556,15 +555,15 @@ namespace NuGet.CommandLine.Test
 
                         return HttpStatusCode.Created;
                     });
+                    pathContext.Settings.AddSource("http-feed", $"{server.Uri}redirect", allowInsecureConnectionsValue: "true");
                     server.Start();
 
                     // Act
                     string[] args = new string[] { "push", packageFileName, "-Source", server.Uri + "redirect" };
                     var result = CommandRunner.Run(
                         nugetexe,
-                        Directory.GetCurrentDirectory(),
-                        string.Join(" ", args),
-                        true);
+                        pathContext.WorkingDirectory,
+                        string.Join(" ", args));
                     server.Stop();
 
                     // Assert
@@ -604,8 +603,7 @@ namespace NuGet.CommandLine.Test
                     var result = CommandRunner.Run(
                         nugetexe,
                         Directory.GetCurrentDirectory(),
-                        string.Join(" ", args),
-                        true);
+                        string.Join(" ", args));
                     server.Stop();
 
                     // Assert
@@ -637,8 +635,7 @@ namespace NuGet.CommandLine.Test
                     var result = CommandRunner.Run(
                         nugetexe,
                         Directory.GetCurrentDirectory(),
-                        string.Join(" ", args),
-                        true);
+                        string.Join(" ", args));
                     server.Stop();
 
                     // Assert
@@ -680,20 +677,19 @@ namespace NuGet.CommandLine.Test
                         nugetexe,
                         packageDirectory,
                         args,
-                        waitForExit: true,
                         timeOutInMilliseconds: 10000);
                     server.Stop();
 
                     // Assert
                     Assert.NotEqual(0, r1.ExitCode);
-                    Assert.Contains("Please provide credentials for:", r1.Output);
+                    Assert.Contains("Provide credentials for:", r1.Output);
                     Assert.Contains("UserName:", r1.Output);
                 }
             }
         }
 
         // Test push command to a server using basic authentication.
-        [SkipMono]
+        [Fact(Skip = "https://github.com/NuGet/Home/issues/13721")]
         public void PushCommand_PushToServerBasicAuth()
         {
             var nugetexe = Util.GetNuGetExePath();
@@ -704,12 +700,12 @@ namespace NuGet.CommandLine.Test
             using (var packageDirectory = TestDirectory.Create())
             {
                 // Arrange
+                using SimpleTestPathContext pathContext = new SimpleTestPathContext();
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
                 string outputFileName = Path.Combine(packageDirectory, "t1.nupkg");
 
-                using (var server = new MockServer())
+                using (var server = new MockServer(AuthenticationSchemes.Basic))
                 {
-                    server.Listener.AuthenticationSchemes = AuthenticationSchemes.Basic;
                     server.Put.Add("/nuget", r => new Action<HttpListenerResponse>(res =>
                     {
                         var h = r.Headers["Authorization"];
@@ -726,6 +722,7 @@ namespace NuGet.CommandLine.Test
                             res.StatusCode = (int)HttpStatusCode.Unauthorized;
                         }
                     }));
+                    pathContext.Settings.AddSource("http-feed", $"{server.Uri}nuget", allowInsecureConnectionsValue: "true");
                     server.Start();
 
                     // Act
@@ -733,9 +730,8 @@ namespace NuGet.CommandLine.Test
                         " -Source " + server.Uri + "nuget";
                     var r1 = CommandRunner.Run(
                         nugetexe,
-                        packageDirectory,
+                        pathContext.WorkingDirectory,
                         args,
-                        waitForExit: true,
                         timeOutInMilliseconds: 10000,
                         inputAction: (w) =>
                         {
@@ -787,9 +783,8 @@ namespace NuGet.CommandLine.Test
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
                 string outputFileName = Path.Combine(packageDirectory, "t1.nupkg");
 
-                using (var server = new MockServer())
+                using (var server = new MockServer(AuthenticationSchemes.Basic))
                 {
-                    server.Listener.AuthenticationSchemes = AuthenticationSchemes.Basic;
                     server.Put.Add("/nuget", r => new Action<HttpListenerResponse>(res =>
                     {
                         var h = r.Headers["Authorization"];
@@ -815,7 +810,6 @@ namespace NuGet.CommandLine.Test
                         nugetexe,
                         packageDirectory,
                         args,
-                        waitForExit: true,
                         timeOutInMilliseconds: 10000,
                         inputAction: (w) =>
                         {
@@ -863,17 +857,18 @@ namespace NuGet.CommandLine.Test
             using (var packageDirectory = TestDirectory.Create())
             {
                 // Arrange
+                using SimpleTestPathContext pathContext = new SimpleTestPathContext();
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
                 string outputFileName = Path.Combine(packageDirectory, "t1.nupkg");
 
-                using (var server = new MockServer())
+                using (var server = new MockServer(AuthenticationSchemes.IntegratedWindowsAuthentication))
                 {
-                    server.Listener.AuthenticationSchemes = AuthenticationSchemes.IntegratedWindowsAuthentication;
                     server.Put.Add("/nuget", r => new Action<HttpListenerResponse, IPrincipal>((res, user) =>
                     {
                         putUser = user;
                         res.StatusCode = (int)HttpStatusCode.OK;
                     }));
+                    pathContext.Settings.AddSource("http-feed", $"{server.Uri}nuget", allowInsecureConnectionsValue: "true");
                     server.Start();
 
                     // Act
@@ -881,9 +876,8 @@ namespace NuGet.CommandLine.Test
                         " -Source " + server.Uri + "nuget";
                     var r1 = CommandRunner.Run(
                         nugetexe,
-                        packageDirectory,
+                        pathContext.WorkingDirectory,
                         args,
-                        waitForExit: true,
                         timeOutInMilliseconds: 10000);
                     server.Stop();
 
@@ -909,15 +903,15 @@ namespace NuGet.CommandLine.Test
             {
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
                 string outputFileName = Path.Combine(packageDirectory, "t1.nupkg");
-
-                using (var server = new MockServer())
+                using SimpleTestPathContext pathContext = new SimpleTestPathContext();
+                using (var server = new MockServer(AuthenticationSchemes.IntegratedWindowsAuthentication))
                 {
-                    server.Listener.AuthenticationSchemes = AuthenticationSchemes.IntegratedWindowsAuthentication;
                     server.Put.Add("/nuget", r => new Action<HttpListenerResponse, IPrincipal>((res, user) =>
                     {
                         putUser = user;
                         res.StatusCode = (int)HttpStatusCode.OK;
                     }));
+                    pathContext.Settings.AddSource("http-feed", $"{server.Uri}nuget", allowInsecureConnectionsValue: "true");
                     server.Start();
 
                     // Act
@@ -925,9 +919,8 @@ namespace NuGet.CommandLine.Test
                         " -Source " + server.Uri + "nuget -DisableBuffering";
                     var r1 = CommandRunner.Run(
                         nugetexe,
-                        packageDirectory,
+                        pathContext.WorkingDirectory,
                         args,
-                        waitForExit: true,
                         timeOutInMilliseconds: 10000);
                     server.Stop();
 
@@ -942,7 +935,7 @@ namespace NuGet.CommandLine.Test
         }
 
         // Test push command to a server using Plugin credential provider
-        [SkipMono]
+        [Fact(Skip = "https://github.com/NuGet/Home/issues/13721")]
         public void PushCommand_PushToServer_GetCredentialFromPlugin()
         {
             var nugetexe = Util.GetNuGetExePath();
@@ -954,13 +947,13 @@ namespace NuGet.CommandLine.Test
             using (var packageDirectory = TestDirectory.Create())
             {
                 // Arrange
+                using SimpleTestPathContext pathContext = new SimpleTestPathContext();
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
                 string outputFileName = Path.Combine(packageDirectory, "t1.nupkg");
 
-                using (var server = new MockServer())
+                using (var server = new MockServer(AuthenticationSchemes.Basic))
                 {
                     var credentialForPutRequest = new List<string>();
-                    server.Listener.AuthenticationSchemes = AuthenticationSchemes.Basic;
                     server.Put.Add("/nuget", r => new Action<HttpListenerResponse>(res =>
                     {
                         var h = r.Headers["Authorization"];
@@ -977,15 +970,15 @@ namespace NuGet.CommandLine.Test
                             res.StatusCode = (int)HttpStatusCode.Unauthorized;
                         }
                     }));
+                    pathContext.Settings.AddSource("http-feed", $"{server.Uri}nuget", allowInsecureConnectionsValue: "true");
                     server.Start();
 
                     // Act
                     var args = $"push {packageFileName} -Source {server.Uri}nuget";
                     var r1 = CommandRunner.Run(
                         nugetexe,
-                        packageDirectory,
+                        pathContext.WorkingDirectory,
                         args,
-                        waitForExit: true,
                         timeOutInMilliseconds: 10000,
                         inputAction: (w) =>
                         {
@@ -1023,10 +1016,9 @@ namespace NuGet.CommandLine.Test
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
                 string outputFileName = Path.Combine(packageDirectory, "t1.nupkg");
 
-                using (var server = new MockServer())
+                using (var server = new MockServer(AuthenticationSchemes.Basic))
                 {
                     var credentialForPutRequest = new List<string>();
-                    server.Listener.AuthenticationSchemes = AuthenticationSchemes.Basic;
                     server.Put.Add("/nuget", r => new Action<HttpListenerResponse>(res =>
                     {
                         var h = r.Headers["Authorization"];
@@ -1050,7 +1042,6 @@ namespace NuGet.CommandLine.Test
                         nugetexe,
                         packageDirectory,
                         args,
-                        waitForExit: true,
                         timeOutInMilliseconds: 10000,
                         inputAction: (w) =>
                         {
@@ -1076,7 +1067,7 @@ namespace NuGet.CommandLine.Test
         }
 
         // Test Plugin credential provider can have large std output without stop responding.
-        [SkipMono]
+        [SkipMono(Skip = "https://github.com/NuGet/Home/issues/13464")]
         public void PushCommand_PushToServer_DoesNotDeadLockWhenSTDOutLarge()
         {
             var nugetexe = Util.GetNuGetExePath();
@@ -1088,12 +1079,12 @@ namespace NuGet.CommandLine.Test
             using (var packageDirectory = TestDirectory.Create())
             {
                 // Arrange
+                using SimpleTestPathContext pathContext = new SimpleTestPathContext();
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
                 string outputFileName = Path.Combine(packageDirectory, "t1.nupkg");
 
-                using (var server = new MockServer())
+                using (var server = new MockServer(AuthenticationSchemes.Basic))
                 {
-                    server.Listener.AuthenticationSchemes = AuthenticationSchemes.Basic;
                     server.Put.Add("/nuget", r => new Action<HttpListenerResponse>(res =>
                     {
                         var h = r.Headers["Authorization"];
@@ -1110,6 +1101,7 @@ namespace NuGet.CommandLine.Test
                             res.StatusCode = (int)HttpStatusCode.Unauthorized;
                         }
                     }));
+                    pathContext.Settings.AddSource("http-feed", $"{server.Uri}nuget", allowInsecureConnectionsValue: "true");
                     server.Start();
                     var longPassword = new string('a', 10000);
 
@@ -1117,9 +1109,8 @@ namespace NuGet.CommandLine.Test
                     var args = $"push {packageFileName} -Source {server.Uri}nuget";
                     var r1 = CommandRunner.Run(
                         nugetexe,
-                        packageDirectory,
+                        pathContext.WorkingDirectory,
                         args,
-                        waitForExit: true,
                         timeOutInMilliseconds: 10000,
                         inputAction: (w) =>
                         {
@@ -1157,9 +1148,8 @@ namespace NuGet.CommandLine.Test
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
                 string outputFileName = Path.Combine(packageDirectory, "t1.nupkg");
 
-                using (var server = new MockServer())
+                using (var server = new MockServer(AuthenticationSchemes.Basic))
                 {
-                    server.Listener.AuthenticationSchemes = AuthenticationSchemes.Basic;
                     server.Get.Add("/nuget", r =>
                     {
                         var h = r.Headers["Authorization"];
@@ -1182,7 +1172,6 @@ namespace NuGet.CommandLine.Test
                         nugetexe,
                         packageDirectory,
                         args,
-                        waitForExit: true,
                         timeOutInMilliseconds: 10000,
                         inputAction: (w) =>
                         {
@@ -1229,9 +1218,8 @@ namespace NuGet.CommandLine.Test
                 var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
                 string outputFileName = Path.Combine(packageDirectory, "t1.nupkg");
 
-                using (var server = new MockServer())
+                using (var server = new MockServer(AuthenticationSchemes.Basic))
                 {
-                    server.Listener.AuthenticationSchemes = AuthenticationSchemes.Basic;
                     server.Get.Add("/nuget", r =>
                     {
                         var h = r.Headers["Authorization"];
@@ -1254,7 +1242,6 @@ namespace NuGet.CommandLine.Test
                         nugetexe,
                         packageDirectory,
                         args,
-                        waitForExit: true,
                         timeOutInMilliseconds: 10000,
                         inputAction: (w) =>
                         {
@@ -1336,7 +1323,7 @@ namespace NuGet.CommandLine.Test
 
                             return HttpStatusCode.Created;
                         });
-
+                        pathContext.Settings.AddSource("http-feed", $"{serverV3.Uri}index.json", allowInsecureConnectionsValue: "true");
                         serverV3.Start();
                         serverV2.Start();
 
@@ -1352,8 +1339,7 @@ namespace NuGet.CommandLine.Test
                         var result = CommandRunner.Run(
                                         nugetexe,
                                         pathContext.SolutionRoot,
-                                        string.Join(" ", args),
-                                        true);
+                                        string.Join(" ", args));
                         serverV2.Stop();
                         serverV3.Stop();
 
@@ -1400,15 +1386,15 @@ namespace NuGet.CommandLine.Test
 
                         throw new Exception("This test needs to be updated to support: " + path);
                     });
-
+                    PackageSource source = new PackageSource($"{serverV3.Uri}index.json", "http-feed");
+                    pathContext.Settings.AddSource(source.Name, source.Source, allowInsecureConnectionsValue: "true");
                     serverV3.Start();
 
                     // Act
                     var result = CommandRunner.Run(
                                     nugetexe,
-                                    pathContext.SolutionRoot,
-                                    $"push {packageFileName} -Source {serverV3.Uri}index.json",
-                                    true);
+                                    pathContext.WorkingDirectory,
+                                    $"push {packageFileName} -Source {source.Source}");
 
                     serverV3.Stop();
 
@@ -1417,8 +1403,7 @@ namespace NuGet.CommandLine.Test
 
                     var expectedOutput =
                         string.Format(
-                      "ERROR: This version of nuget.exe does not support updating packages to package source '{0}'.",
-                      serverV3.Uri + "index.json");
+                      "ERROR: This version of nuget.exe does not support updating packages to package source '{0}'.", source.Name);
 
                     // Verify that the output contains the expected output
                     Assert.True(result.Errors.Contains(expectedOutput));
@@ -1459,7 +1444,7 @@ namespace NuGet.CommandLine.Test
 
                         throw new Exception("This test needs to be updated to support: " + path);
                     });
-
+                    pathContext.Settings.AddSource("http-feed", $"{serverV3.Uri}index.json", allowInsecureConnectionsValue: "true");
                     serverV3.Start();
 
                     // Act
@@ -1474,8 +1459,7 @@ namespace NuGet.CommandLine.Test
                     var result = CommandRunner.Run(
                                     nugetexe,
                                     pathContext.SolutionRoot,
-                                    string.Join(" ", args),
-                                    true);
+                                    string.Join(" ", args));
 
                     serverV3.Stop();
 
@@ -1516,15 +1500,14 @@ namespace NuGet.CommandLine.Test
 
                         return HttpStatusCode.Created;
                     });
-
+                    pathContext.Settings.AddSource("http-feed", $"{server.Uri}nuget", allowInsecureConnectionsValue: "true");
                     server.Start();
 
                     // Act
                     var result = CommandRunner.Run(
                         NuGetExePath,
                         pathContext.SolutionRoot,
-                        $"push {packageFileName} {testApiKey} -Source {server.Uri}nuget -NonInteractive",
-                        waitForExit: true);
+                        $"push {packageFileName} {testApiKey} -Source {server.Uri}nuget -NonInteractive");
 
                     server.Stop();
 
@@ -1579,7 +1562,7 @@ namespace NuGet.CommandLine.Test
 
                         return HttpStatusCode.Created;
                     });
-
+                    pathContext.Settings.AddSource("http-feed", $"{serverV3.Uri}index.json", allowInsecureConnectionsValue: "true");
                     serverV3.Start();
 
                     // Act
@@ -1598,8 +1581,7 @@ namespace NuGet.CommandLine.Test
                     var result = CommandRunner.Run(
                         NuGetExePath,
                         pathContext.SolutionRoot,
-                        string.Join(" ", args),
-                        waitForExit: true);
+                        string.Join(" ", args));
 
                     serverV3.Stop();
 
@@ -1663,7 +1645,7 @@ namespace NuGet.CommandLine.Test
                     var settings = pathContext.Settings;
                     var source = serverV3.Uri + "index.json";
                     var packageSourcesSection = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
-                    SimpleTestSettingsContext.AddEntry(packageSourcesSection, $"nuget.org", source);
+                    SimpleTestSettingsContext.AddEntry(packageSourcesSection, $"nuget.org", source, "allowInsecureConnections", "true");
 
                     var configKey = string.Format(configKeyFormatString, serverV3.Uri);
                     var configValue = Configuration.EncryptionUtility.EncryptString(testApiKey);
@@ -1686,8 +1668,7 @@ namespace NuGet.CommandLine.Test
                     var result = CommandRunner.Run(
                         NuGetExePath,
                         pathContext.SolutionRoot,
-                        string.Join(" ", args),
-                        waitForExit: true);
+                        string.Join(" ", args));
 
                     serverV3.Stop();
 
@@ -1764,7 +1745,7 @@ namespace NuGet.CommandLine.Test
                     var settings = pathContext.Settings;
                     var source = serverV3.Uri + "index.json";
                     var packageSourcesSection = SimpleTestSettingsContext.GetOrAddSection(settings.XML, ConfigurationConstants.PackageSources);
-                    SimpleTestSettingsContext.AddEntry(packageSourcesSection, $"contoso.org", source);
+                    SimpleTestSettingsContext.AddEntry(packageSourcesSection, $"contoso.org", source, "allowInsecureConnections", "true");
 
                     // set api key
                     var configKey = string.Format(configKeyFormatString, serverV3.Uri);
@@ -1783,8 +1764,7 @@ namespace NuGet.CommandLine.Test
                     var result = CommandRunner.Run(
                         NuGetExePath,
                         pathContext.SolutionRoot,
-                        $"push {packageFileName} -Source contoso.org -SymbolSource {pushSymbolsUri} -ConfigFile {settings.ConfigPath}",
-                        waitForExit: true);
+                        $"push {packageFileName} -Source contoso.org -SymbolSource {pushSymbolsUri} -ConfigFile {settings.ConfigPath}");
 
                     serverV3.Stop();
 
@@ -1863,7 +1843,7 @@ namespace NuGet.CommandLine.Test
                     var settings = pathContext.Settings;
                     var source = serverV3.Uri + "index.json";
                     var packageSourcesSection = SimpleTestSettingsContext.GetOrAddSection(settings.XML, ConfigurationConstants.PackageSources);
-                    SimpleTestSettingsContext.AddEntry(packageSourcesSection, $"contoso.org", source);
+                    SimpleTestSettingsContext.AddEntry(packageSourcesSection, $"contoso.org", source, "allowInsecureConnections", "true");
                     settings.Save();
 
                     // set symbol api key
@@ -1878,8 +1858,7 @@ namespace NuGet.CommandLine.Test
                     var result = CommandRunner.Run(
                         NuGetExePath,
                         pathContext.SolutionRoot,
-                        $"push {packageFileName} -Source contoso.org -SymbolSource {pushSymbolsUri} -ConfigFile {settings.ConfigPath} -ApiKey {testApiKey}",
-                        waitForExit: true);
+                        $"push {packageFileName} -Source contoso.org -SymbolSource {pushSymbolsUri} -ConfigFile {settings.ConfigPath} -ApiKey {testApiKey}");
 
                     serverV3.Stop();
 
@@ -1960,7 +1939,7 @@ namespace NuGet.CommandLine.Test
                     var settings = pathContext.Settings;
                     var source = serverV3.Uri + "index.json";
                     var packageSourcesSection = SimpleTestSettingsContext.GetOrAddSection(settings.XML, ConfigurationConstants.PackageSources);
-                    SimpleTestSettingsContext.AddEntry(packageSourcesSection, $"contoso.org", source);
+                    SimpleTestSettingsContext.AddEntry(packageSourcesSection, $"contoso.org", source, "allowInsecureConnections", "true");
                     settings.Save();
 
                     // set api key
@@ -1974,8 +1953,7 @@ namespace NuGet.CommandLine.Test
                     var result = CommandRunner.Run(
                         NuGetExePath,
                         pathContext.SolutionRoot,
-                        $"push {packageFileName} -Source contoso.org -SymbolSource {pushSymbolsUri} -ConfigFile {settings.ConfigPath} -SymbolApiKey {testSymbolApiKey}",
-                        waitForExit: true);
+                        $"push {packageFileName} -Source contoso.org -SymbolSource {pushSymbolsUri} -ConfigFile {settings.ConfigPath} -SymbolApiKey {testSymbolApiKey}");
 
                     serverV3.Stop();
 
@@ -1987,6 +1965,96 @@ namespace NuGet.CommandLine.Test
                     Assert.Contains($"PUT {pushSymbolsUri}", result.Output);
                     Assert.Contains($"Created {pushSymbolsUri}", result.Output);
                     AssertFileEqual(packageFileName, outputFileName);
+                }
+            }
+        }
+
+        [Fact]
+        public void PushCommand_PushToServerV3_ApiKeyFromConfig_WithSymbols_FallbackToApiKeyForSymbolSource()
+        {
+            var testApiKey = Guid.NewGuid().ToString();
+
+            using (var pathContext = new SimpleTestPathContext())
+            {
+                // Arrange
+                var packagesDirectory = Path.Combine(pathContext.WorkingDirectory, "repo");
+                var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packagesDirectory);
+                var symbolFileName = packageFileName.Replace(".nupkg", ".snupkg");
+                File.Copy(packageFileName, symbolFileName);
+
+                using (var serverV3 = new MockServer())
+                {
+                    // Server setup
+                    var indexJson = Util.CreateIndexJson();
+
+                    Util.AddFlatContainerResource(indexJson, serverV3);
+                    Util.AddPublishResource(indexJson, serverV3);
+                    var resource = new JObject
+                    {
+                        { "@id", $"{serverV3.Uri}symbols" },
+                        { "@type", "SymbolPackagePublish/4.9.0" }
+                    };
+                    (indexJson["resources"] as JArray)!.Add(resource);
+
+                    serverV3.Get.Add("/index.json", r =>
+                    {
+                        return new Action<HttpListenerResponse>(response =>
+                        {
+                            response.StatusCode = 200;
+                            response.ContentType = "text/javascript";
+                            MockServer.SetResponseContent(response, indexJson.ToString());
+                        });
+                    });
+
+                    serverV3.Get.Add("/push", r => "OK");
+                    serverV3.Put.Add("/push", r =>
+                    {
+                        return r.Headers[ApiKeyHeader] == testApiKey
+                            ? HttpStatusCode.Created
+                            : HttpStatusCode.Unauthorized;
+                    });
+
+                    serverV3.Get.Add("/symbols", r => "OK");
+                    serverV3.Put.Add("/symbols", r =>
+                    {
+                        return r.Headers[ApiKeyHeader] == testApiKey
+                            ? HttpStatusCode.Created
+                            : HttpStatusCode.Unauthorized;
+                    });
+
+                    serverV3.Start();
+                    var pushUri = $"{serverV3.Uri}push";
+                    var pushSymbolsUri = $"{serverV3.Uri}symbols";
+
+                    // Add source into NuGet.Config file
+                    var settings = pathContext.Settings;
+                    var source = serverV3.Uri + "index.json";
+                    var packageSourcesSection = SimpleTestSettingsContext.GetOrAddSection(settings.XML, ConfigurationConstants.PackageSources);
+                    SimpleTestSettingsContext.AddEntry(packageSourcesSection, $"contoso.org", source, "allowInsecureConnections", "true");
+                    settings.Save();
+
+                    // set api key
+                    var configKey = $"{serverV3.Uri}index.json";
+                    var configValue = Configuration.EncryptionUtility.EncryptString(testApiKey);
+                    var apikeysSection = SimpleTestSettingsContext.GetOrAddSection(settings.XML, ConfigurationConstants.ApiKeys);
+                    SimpleTestSettingsContext.AddEntry(apikeysSection, configKey, configValue);
+                    settings.Save();
+
+                    // Act
+                    var result = CommandRunner.Run(
+                        NuGetExePath,
+                        pathContext.SolutionRoot,
+                        $"push {packageFileName} -Source contoso.org -ConfigFile {settings.ConfigPath}");
+
+                    serverV3.Stop();
+
+                    // Assert
+                    Assert.True(0 == result.ExitCode, $"{result.Output} {result.Errors}");
+                    Assert.Contains("Your package was pushed.", result.Output);
+                    Assert.Contains($"PUT {pushUri}", result.Output);
+                    Assert.Contains($"Created {pushUri}", result.Output);
+                    Assert.Contains($"PUT {pushSymbolsUri}", result.Output);
+                    Assert.Contains($"Created {pushSymbolsUri}", result.Output);
                 }
             }
         }
@@ -2054,15 +2122,14 @@ namespace NuGet.CommandLine.Test
                     var settings = pathContext.Settings;
                     var source = serverV3.Uri + "index.json";
                     var packageSourcesSection = SimpleTestSettingsContext.GetOrAddSection(settings.XML, ConfigurationConstants.PackageSources);
-                    SimpleTestSettingsContext.AddEntry(packageSourcesSection, $"contoso.org", source);
+                    SimpleTestSettingsContext.AddEntry(packageSourcesSection, $"contoso.org", source, "allowInsecureConnections", "true");
                     settings.Save();
 
                     // Act
                     var result = CommandRunner.Run(
                         NuGetExePath,
                         pathContext.SolutionRoot,
-                        $"push {packageFileName} -Source contoso.org -SymbolSource {pushSymbolsUri} -ConfigFile {settings.ConfigPath} -ApiKey {testApiKey} -SymbolApiKey {testSymbolApiKey}",
-                        waitForExit: true);
+                        $"push {packageFileName} -Source contoso.org -SymbolSource {pushSymbolsUri} -ConfigFile {settings.ConfigPath} -ApiKey {testApiKey} -SymbolApiKey {testSymbolApiKey}");
 
                     serverV3.Stop();
 
@@ -2102,8 +2169,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                                 nugetexe,
                                 pathContext.SolutionRoot,
-                                string.Join(" ", args),
-                                true);
+                                string.Join(" ", args));
 
                 // Assert
                 Assert.True(1 == result.ExitCode, result.Output + " " + result.Errors);
@@ -2116,11 +2182,11 @@ namespace NuGet.CommandLine.Test
         {
             var nugetexe = Util.GetNuGetExePath();
 
-            using (var packageDirectory = TestDirectory.Create())
+            using (SimpleTestPathContext pathContext = new SimpleTestPathContext())
             {
                 // Arrange
-                var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
-                string outputFileName = Path.Combine(packageDirectory, "t1.nupkg");
+                var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", pathContext.WorkingDirectory);
+                string outputFileName = Path.Combine(pathContext.WorkingDirectory, "t1.nupkg");
 
                 using (var server = new MockServer())
                 {
@@ -2166,6 +2232,7 @@ namespace NuGet.CommandLine.Test
 
                         throw new Exception("This test needs to be updated to support PUT for: " + path);
                     });
+                    pathContext.Settings.AddSource("http-feed", $"{server.Uri}api/v2/Package", allowInsecureConnectionsValue: "true");
                     server.Start();
 
                     // Act
@@ -2179,9 +2246,8 @@ namespace NuGet.CommandLine.Test
 
                     var result = CommandRunner.Run(
                                     nugetexe,
-                                    Directory.GetCurrentDirectory(),
-                                    string.Join(" ", args),
-                                    true);
+                                    pathContext.WorkingDirectory,
+                                    string.Join(" ", args));
                     server.Stop();
 
                     // Assert
@@ -2216,8 +2282,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                                 nugetexe,
                                 Directory.GetCurrentDirectory(),
-                                string.Join(" ", args),
-                                true);
+                                string.Join(" ", args));
 
                 // Assert
                 Assert.True(
@@ -2260,8 +2325,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                                 nugetexe,
                                 Directory.GetCurrentDirectory(),
-                                string.Join(" ", args),
-                                true);
+                                string.Join(" ", args));
 
                 // Assert
                 Assert.True(
@@ -2310,8 +2374,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                                 nugetexe,
                                 Directory.GetCurrentDirectory(),
-                                string.Join(" ", args),
-                                true);
+                                string.Join(" ", args));
 
                 // Assert
                 Assert.True(
@@ -2348,8 +2411,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                                 nugetexe,
                                 pathContext.SolutionRoot,
-                                string.Join(" ", args),
-                                true);
+                                string.Join(" ", args));
 
                 // Assert
                 if (RuntimeEnvironmentHelper.IsMono)
@@ -2392,10 +2454,9 @@ namespace NuGet.CommandLine.Test
                 };
 
                 CommandRunnerResult result = CommandRunner.Run(
-                                process: nugetexe,
+                                filename: nugetexe,
                                 workingDirectory: pathContext.SolutionRoot,
-                                arguments: string.Join(" ", args),
-                                waitForExit: true);
+                                arguments: string.Join(" ", args));
 
                 // Assert
                 Assert.False(
@@ -2419,7 +2480,7 @@ namespace NuGet.CommandLine.Test
         }
 
         [Fact]
-        public void PushCommand_WhenPushingToAnHttpServer_Warns()
+        public void PushCommand_WhenPushingToAnHttpServerWithAllowInsecureConnectionsFalse_Errors()
         {
             var nugetexe = Util.GetNuGetExePath();
 
@@ -2439,21 +2500,115 @@ namespace NuGet.CommandLine.Test
 
                 return HttpStatusCode.Created;
             });
+
+            // Arrange the NuGet.Config file
+            string nugetConfigContent =
+$@"<configuration>
+    <packageSources>
+        <clear />
+        <add key='http-feed' value='{server.Uri}push' protocalVersion=""3"" allowInsecureConnections=""False"" />
+    </packageSources>
+</configuration>";
+            string configPath = Path.Combine(packageDirectory, "NuGet.Config");
+            File.WriteAllText(configPath, nugetConfigContent);
+
             server.Start();
 
             // Act
             var result = CommandRunner.Run(
                             nugetexe,
                             Directory.GetCurrentDirectory(),
-                            $"push {packageFileName} -Source {server.Uri}push",
-                            true);
+                            $"push {packageFileName} -ConfigFile {configPath} -Source {server.Uri}push");
+
             // Assert
-            result.Success.Should().BeTrue(result.AllOutput);
-            result.AllOutput.Should().Contain("WARNING: You are running the 'push' operation with an 'HTTP' source");
+            result.Success.Should().BeFalse(result.AllOutput);
+            Assert.Contains($"{server.Uri}push", result.Errors);
         }
 
         [Fact]
-        public void PushCommand_WhenPushingToAnHttpServerWithSymbols_Warns()
+        public void PushCommand_WhenPushingToAnHttpServerWithAllowInsecureConnectionsTrue_Succeeds()
+        {
+            var nugetexe = Util.GetNuGetExePath();
+
+            using var packageDirectory = TestDirectory.Create();
+            var packageFileName = Util.CreateTestPackage("test", "1.1.0", packageDirectory);
+            var outputFileName = Path.Combine(packageDirectory, "t1.nupkg");
+
+            using var server = new MockServer();
+            server.Get.Add("/push", r => "OK");
+            server.Put.Add("/push", r =>
+            {
+                byte[] buffer = MockServer.GetPushedPackage(r);
+                using (var of = new FileStream(outputFileName, FileMode.Create))
+                {
+                    of.Write(buffer, 0, buffer.Length);
+                }
+
+                return HttpStatusCode.Created;
+            });
+
+            // Arrange the NuGet.Config file
+            string nugetConfigContent =
+$@"<configuration>
+    <packageSources>
+        <clear />
+        <add key='http-feed' value='{server.Uri}push' protocalVersion=""3"" allowInsecureConnections=""True"" />
+    </packageSources>
+</configuration>";
+            string configPath = Path.Combine(packageDirectory, "NuGet.Config");
+            File.WriteAllText(configPath, nugetConfigContent);
+
+            server.Start();
+
+            // Act
+            var result = CommandRunner.Run(
+                            nugetexe,
+                            Directory.GetCurrentDirectory(),
+                            $"push {packageFileName} -ConfigFile {configPath} -Source {server.Uri}push");
+
+            // Assert
+            result.Success.Should().BeTrue(result.AllOutput);
+            Assert.DoesNotContain($"{server.Uri}push", result.Errors);
+        }
+
+        [Fact]
+        public void PushCommand_WhenPushingToAnHttpServerWithAllowInsecureConnectionsOptionTrue_Succeeds()
+        {
+            // Arrange
+            var nugetexe = Util.GetNuGetExePath();
+            using var packageDirectory = TestDirectory.Create();
+            var packageFileName = Util.CreateTestPackage("test", "1.1.0", packageDirectory);
+            var outputFileName = Path.Combine(packageDirectory, "t1.nupkg");
+
+            using var server = new MockServer();
+            server.Get.Add("/push", r => "OK");
+            server.Put.Add("/push", r =>
+            {
+                byte[] buffer = MockServer.GetPushedPackage(r);
+                using (var of = new FileStream(outputFileName, FileMode.Create))
+                {
+                    of.Write(buffer, 0, buffer.Length);
+                }
+
+                return HttpStatusCode.Created;
+            });
+
+            server.Start();
+
+            // Act
+            var result = CommandRunner.Run(
+                            nugetexe,
+                            Directory.GetCurrentDirectory(),
+                            $"push {packageFileName} -Source {server.Uri}push -AllowInsecureConnections");
+
+            // Assert
+            result.Success.Should().BeTrue(result.AllOutput);
+            Assert.DoesNotContain($"{server.Uri}push", result.Errors);
+            Assert.True(File.Exists(outputFileName), "The output file was not created as expected.");
+        }
+
+        [Fact]
+        public void PushCommand_WhenPushingToAnHttpServerWithSymbolsAndAllowInsecureConnectionsFalse_Errors()
         {
             using var packageDirectory = TestDirectory.Create();
             using var server = new MockServer();
@@ -2478,6 +2633,17 @@ namespace NuGet.CommandLine.Test
                     : HttpStatusCode.Unauthorized;
             });
 
+            // Arrange the NuGet.Config file
+            string nugetConfigContent =
+$@"<configuration>
+    <packageSources>
+        <clear />
+        <add key='http-feed' value='{server.Uri}push' protocalVersion=""3"" allowInsecureConnections=""False"" />
+    </packageSources>
+</configuration>";
+            string configPath = Path.Combine(packageDirectory, "NuGet.Config");
+            File.WriteAllText(configPath, nugetConfigContent);
+
             server.Start();
 
             var pushUri = $"{server.Uri}push";
@@ -2487,8 +2653,60 @@ namespace NuGet.CommandLine.Test
             CommandRunnerResult result = CommandRunner.Run(
                 Util.GetNuGetExePath(),
                 Directory.GetCurrentDirectory(),
-                $"push {packageFileName} -Source {pushUri} -SymbolSource {pushSymbolsUri} -ApiKey PushKey -SymbolApiKey PushSymbolsKey",
-                waitForExit: true);
+                $"push {packageFileName} -Source {pushUri} -SymbolSource {pushSymbolsUri} -ConfigFile {configPath} -ApiKey PushKey -SymbolApiKey PushSymbolsKey");
+
+            // Assert
+            Assert.False(result.Success);
+            Assert.Contains(pushUri, result.Errors);
+        }
+
+        [Fact]
+        public void PushCommand_WhenPushingToAnHttpServerWithSymbolsAndAllowInsecureConnectionsTrue_Succeeds()
+        {
+            using var packageDirectory = TestDirectory.Create();
+            using var server = new MockServer();
+            // Arrange
+            var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
+            var symbolFileName = packageFileName.Replace(".nupkg", ".symbols.nupkg");
+            File.Copy(packageFileName, symbolFileName);
+
+            server.Get.Add("/push", r => "OK");
+            server.Put.Add("/push", r =>
+            {
+                return r.Headers["X-NuGet-ApiKey"] == "PushKey"
+                    ? HttpStatusCode.Created
+                    : HttpStatusCode.Unauthorized;
+            });
+
+            server.Get.Add("/symbols", r => "OK");
+            server.Put.Add("/symbols", r =>
+            {
+                return r.Headers["X-NuGet-ApiKey"] == "PushSymbolsKey"
+                    ? HttpStatusCode.Created
+                    : HttpStatusCode.Unauthorized;
+            });
+
+            // Arrange the NuGet.Config file
+            string nugetConfigContent =
+$@"<configuration>
+    <packageSources>
+        <clear />
+        <add key='http-feed' value='{server.Uri}push' protocalVersion=""3"" allowInsecureConnections=""True"" />
+    </packageSources>
+</configuration>";
+            string configPath = Path.Combine(packageDirectory, "NuGet.Config");
+            File.WriteAllText(configPath, nugetConfigContent);
+
+            server.Start();
+
+            var pushUri = $"{server.Uri}push";
+            var pushSymbolsUri = $"{server.Uri}symbols";
+
+            // Act
+            CommandRunnerResult result = CommandRunner.Run(
+                Util.GetNuGetExePath(),
+                Directory.GetCurrentDirectory(),
+                $"push {packageFileName} -Source {pushUri} -SymbolSource {pushSymbolsUri} -ConfigFile {configPath} -ApiKey PushKey -SymbolApiKey PushSymbolsKey");
 
             // Assert
             result.Success.Should().BeTrue(because: result.AllOutput);
@@ -2497,12 +2715,10 @@ namespace NuGet.CommandLine.Test
             Assert.Contains($"Pushing testPackage1.1.1.0.symbols.nupkg to '{pushSymbolsUri}'", result.Output);
             Assert.Contains($"Created {pushSymbolsUri}", result.Output);
             Assert.Contains("Your package was pushed.", result.Output);
-            Assert.Contains($"WARNING: You are running the 'push' operation with an 'HTTP' source, '{pushUri}/'", result.AllOutput);
-            Assert.Contains($"WARNING: You are running the 'push' operation with an 'HTTP' source, '{pushSymbolsUri}/'", result.AllOutput);
         }
 
         [Fact]
-        public void PushCommand_WhenPushingToAnHttpServerV3_Warns()
+        public void PushCommand_WhenPushingToAnHttpServerV3_ThrowsAnException()
         {
             var nugetexe = Util.GetNuGetExePath();
 
@@ -2566,15 +2782,11 @@ namespace NuGet.CommandLine.Test
                         var result = CommandRunner.Run(
                                         nugetexe,
                                         pathContext.SolutionRoot,
-                                        string.Join(" ", args),
-                                        true);
+                                        string.Join(" ", args));
 
                         // Assert
-                        result.Success.Should().BeTrue(result.AllOutput);
-                        result.AllOutput.Should().Contain("Your package was pushed");
-                        result.AllOutput.Should().Contain($"WARNING: You are running the 'push' operation with an 'HTTP' source, '{serverV3.Uri}index.json'");
-                        result.AllOutput.Should().Contain($"WARNING: You are running the 'push' operation with an 'HTTP' source, '{serverV2.Uri}push/'");
-                        AssertFileEqual(packageFileName, outputFileName);
+                        result.Success.Should().BeFalse(result.AllOutput);
+                        result.Errors.Should().Contain($"{serverV3.Uri}index.json");
                     }
                 }
             }
@@ -2611,6 +2823,114 @@ namespace NuGet.CommandLine.Test
                     new string[] { "First of two server warning messages", "Second of two server warning messages"}
                 };
             }
+        }
+
+        [Fact]
+        public void PushCommand_ApiKeyFromEnvironmentVariable()
+        {
+            // Test that the symbol API keys are read environment variables
+            using var packageDirectory = TestDirectory.Create();
+            using var server = new MockServer();
+            using var pathContext = new SimpleTestPathContext();
+
+            // Arrange
+            var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
+            var symbolFileName = packageFileName.Replace(".nupkg", ".symbols.nupkg");
+            File.Copy(packageFileName, symbolFileName);
+
+            string capturedApiKey = null;
+            string capturedSymbolApiKey = null;
+
+            server.Get.Add("/push", r => "OK");
+            server.Put.Add("/push", r =>
+            {
+                capturedApiKey = r.Headers["X-NuGet-ApiKey"];
+                return HttpStatusCode.Created;
+            });
+
+            server.Get.Add("/symbols", r => "OK");
+            server.Put.Add("/symbols", r =>
+            {
+                capturedSymbolApiKey = r.Headers["X-NuGet-ApiKey"];
+                return HttpStatusCode.Created;
+            });
+            pathContext.Settings.AddSource("http-feed", $"{server.Uri}push", allowInsecureConnectionsValue: "true");
+            server.Start();
+
+            var pushUri = $"{server.Uri}push";
+            var pushSymbolsUri = $"{server.Uri}symbols";
+
+            var environmentVariables = new Dictionary<string, string>
+            {
+                { "NUGET_API_KEY", "EnvApiKey123" },
+                { "NUGET_SYMBOL_API_KEY", "EnvSymbolApiKey456" }
+            };
+
+            // Act
+            var result = CommandRunner.Run(
+                NuGetExePath,
+                pathContext.WorkingDirectory,
+                $"push {packageFileName} -Source {pushUri} -SymbolSource {pushSymbolsUri}",
+                environmentVariables: environmentVariables);
+
+            // Assert
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal("EnvApiKey123", capturedApiKey);
+            Assert.Equal("EnvSymbolApiKey456", capturedSymbolApiKey);
+        }
+
+        [Fact]
+        public void PushCommand_CommandLineApiKeyTakesPrecedenceOverEnvironmentVariable()
+        {
+            // Test that command line symbol API key takes precedence over environment variable
+            using var packageDirectory = TestDirectory.Create();
+            using var server = new MockServer();
+            using var pathContext = new SimpleTestPathContext();
+
+            // Arrange
+            var packageFileName = Util.CreateTestPackage("testPackage1", "1.1.0", packageDirectory);
+            var symbolFileName = packageFileName.Replace(".nupkg", ".symbols.nupkg");
+            File.Copy(packageFileName, symbolFileName);
+
+            string capturedApiKey = null;
+            string capturedSymbolApiKey = null;
+
+            server.Get.Add("/push", r => "OK");
+            server.Put.Add("/push", r =>
+            {
+                capturedApiKey = r.Headers["X-NuGet-ApiKey"];
+                return HttpStatusCode.Created;
+            });
+
+            server.Get.Add("/symbols", r => "OK");
+            server.Put.Add("/symbols", r =>
+            {
+                capturedSymbolApiKey = r.Headers["X-NuGet-ApiKey"];
+                return HttpStatusCode.Created;
+            });
+            pathContext.Settings.AddSource("http-feed", $"{server.Uri}push", allowInsecureConnectionsValue: "true");
+            server.Start();
+
+            var pushUri = $"{server.Uri}push";
+            var pushSymbolsUri = $"{server.Uri}symbols";
+
+            var environmentVariables = new Dictionary<string, string>
+            {
+                { "NUGET_API_KEY", "EnvApiKey123" },
+                { "NUGET_SYMBOL_API_KEY", "EnvSymbolApiKey456" }
+            };
+
+            // Act
+            var result = CommandRunner.Run(
+                NuGetExePath,
+                pathContext.WorkingDirectory,
+                $"push {packageFileName} -Source {pushUri} -SymbolSource {pushSymbolsUri} -ApiKey CommandLineKey -SymbolApiKey CommandLineSymbolKey",
+                environmentVariables: environmentVariables);
+
+            // Assert
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal("CommandLineKey", capturedApiKey);
+            Assert.Equal("CommandLineSymbolKey", capturedSymbolApiKey);
         }
     }
 }

@@ -1,12 +1,15 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using Moq;
 using NuGet.Common;
 using NuGet.VisualStudio;
 using NuGet.VisualStudio.Common;
+using NuGet.VisualStudio.Telemetry;
 using Test.Utility;
 using Xunit;
 
@@ -109,7 +112,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             }
 
             var operationId = Guid.NewGuid().ToString();
-            var packageSourceMapping = string.IsNullOrEmpty(_packageSourceMapping) ? null : PackageSourceMappingUtility.GetpackageSourceMapping(_packageSourceMapping);
+            var packageSourceMapping = string.IsNullOrEmpty(_packageSourceMapping) ? null : PackageSourceMappingUtility.GetPackageSourceMapping(_packageSourceMapping);
             bool isPackageSourceMappingEnabled = packageSourceMapping?.IsEnabled ?? false;
 
             var restoreTelemetryData = new RestoreTelemetryEvent(
@@ -184,8 +187,8 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             Assert.Equal(expected[RestoreTelemetryEvent.VsOfflinePackages], (bool)actual["VsOfflinePackages"]);
             Assert.Equal(1, (int)actual["NumHTTPFeeds"]);
             Assert.Equal(2, (int)actual["NumLocalFeeds"]);
-            Assert.Equal(true, (bool)actual["NuGetOrg"]);
-            Assert.Equal(false, (bool)actual["VsOfflinePackages"]);
+            Assert.True((bool)actual["NuGetOrg"]);
+            Assert.False((bool)actual["VsOfflinePackages"]);
             Assert.Equal(expected["ExplicitRestoreReason"], actual["ExplicitRestoreReason"]);
             AssertProjectsCount(expected);
 

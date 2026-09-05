@@ -3,16 +3,16 @@
 
 using System;
 using System.Reflection;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 
 namespace NuGet.Protocol.Plugins
 {
     internal sealed class AssemblyLogMessage : PluginLogMessage
     {
-        private readonly string _fileVersion;
-        private readonly string _fullName;
-        private readonly string _informationalVersion;
-        private readonly string _entryAssemblyFullName;
+        private readonly string? _fileVersion;
+        private readonly string? _fullName;
+        private readonly string? _informationalVersion;
+        private readonly string? _entryAssemblyFullName;
 
         internal AssemblyLogMessage(DateTimeOffset now)
             : base(now)
@@ -38,18 +38,20 @@ namespace NuGet.Protocol.Plugins
 
         public override string ToString()
         {
-            var message = new JObject(
-                new JProperty("assembly full name", _fullName),
-                new JProperty("entry assembly full name", _entryAssemblyFullName));
+            var message = new JsonObject
+            {
+                ["assembly full name"] = _fullName,
+                ["entry assembly full name"] = _entryAssemblyFullName,
+            };
 
             if (!string.IsNullOrEmpty(_fileVersion))
             {
-                message.Add("file version", _fileVersion);
+                message["file version"] = _fileVersion;
             }
 
             if (!string.IsNullOrEmpty(_informationalVersion))
             {
-                message.Add("informational version", _informationalVersion);
+                message["informational version"] = _informationalVersion;
             }
 
             return ToString("assembly", message);

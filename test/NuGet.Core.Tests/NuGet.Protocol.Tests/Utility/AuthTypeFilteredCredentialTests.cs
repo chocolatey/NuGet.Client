@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Linq;
 using System.Net;
@@ -15,7 +17,7 @@ namespace NuGet.Protocol.Tests
         [InlineData("negotiate")]
         [InlineData("basic")]
         [InlineData("somethirdthing")]
-        void GetCredential_AllowsAnyWhenFilterEmpty(string authType)
+        public void GetCredential_AllowsAnyWhenFilterEmpty(string authType)
         {
             // Arrange
             var expected = new NetworkCredential("username", "password");
@@ -31,7 +33,7 @@ namespace NuGet.Protocol.Tests
         [Theory]
         [InlineData("basic")]
         [InlineData("somethirdthing")]
-        void GetCredential_PassesThroughWhenAuthTypeInFilter(string authType)
+        public void GetCredential_PassesThroughWhenAuthTypeInFilter(string authType)
         {
             // Arrange
             var expected = new NetworkCredential("username", "password");
@@ -45,7 +47,7 @@ namespace NuGet.Protocol.Tests
         }
 
         [Fact]
-        void GetCredential_PassesThroughWhenAuthTypeIsNull()
+        public void GetCredential_PassesThroughWhenAuthTypeIsNull()
         {
             // Arrange
             var expected = new NetworkCredential("username", "password");
@@ -61,7 +63,7 @@ namespace NuGet.Protocol.Tests
         [Theory]
         [InlineData("negotiate")]
         [InlineData("anotherunknownvalue")]
-        void GetCredential_ReturnsNullWhenAuthTypeNotInFilter(string authType)
+        public void GetCredential_ReturnsNullWhenAuthTypeNotInFilter(string authType)
         {
             // Arrange
             var unexpected = new NetworkCredential("username", "password");

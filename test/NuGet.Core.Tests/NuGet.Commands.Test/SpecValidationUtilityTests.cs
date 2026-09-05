@@ -1,15 +1,20 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using FluentAssertions;
+using Moq;
+using NuGet.Common;
 using NuGet.Frameworks;
 using NuGet.LibraryModel;
 using NuGet.ProjectModel;
 using NuGet.Versioning;
 using Xunit;
-using static NuGet.Frameworks.FrameworkConstants;
 
 namespace NuGet.Commands.Test
 {
@@ -53,6 +58,10 @@ namespace NuGet.Commands.Test
             // Arrange
             var spec = new DependencyGraphSpec();
             spec.AddRestore("a");
+            var errors = new List<NuGetLogCode>();
+            var mockLogger = new Mock<ILogger>();
+            mockLogger.Setup(l => l.Log(It.IsAny<ILogMessage>()))
+                .Callback((ILogMessage message) => { errors.Add(message.Code); });
 
             var targetFramework = new TargetFrameworkInformation()
             {
@@ -67,13 +76,16 @@ namespace NuGet.Commands.Test
             project.RestoreMetadata.ProjectUniqueName = "a";
             project.RestoreMetadata.ProjectName = "a";
             project.RestoreMetadata.ProjectPath = Path.Combine(Directory.GetCurrentDirectory(), "a.csproj");
-            project.RestoreMetadata.ProjectStyle = ProjectStyle.ProjectJson;
-            project.RestoreMetadata.ProjectJsonPath = Path.Combine(Directory.GetCurrentDirectory(), "project.json");
+            project.RestoreMetadata.ProjectStyle = ProjectStyle.PackageReference;
 
             spec.AddProject(project);
 
-            // Act && Assert
-            AssertError(spec, "Invalid target framework");
+            // Act
+            Action act = () => SpecValidationUtility.ValidateDependencySpec(spec, new HashSet<string>(), mockLogger.Object);
+
+            // Assert
+            act.Should().Throw<RestoreSpecException>().Where(e => e.Message.Contains(project.FilePath));
+            errors.Should().Contain(NuGetLogCode.NU1105);
         }
 
         [Fact]
@@ -90,48 +102,12 @@ namespace NuGet.Commands.Test
             project.RestoreMetadata.ProjectUniqueName = "a";
             project.RestoreMetadata.ProjectName = "a";
             project.RestoreMetadata.ProjectPath = Path.Combine(Directory.GetCurrentDirectory(), "a.csproj");
-            project.RestoreMetadata.ProjectStyle = ProjectStyle.ProjectJson;
-            project.RestoreMetadata.ProjectJsonPath = Path.Combine(Directory.GetCurrentDirectory(), "project.json");
+            project.RestoreMetadata.ProjectStyle = ProjectStyle.PackageReference;
 
             spec.AddProject(project);
 
             // Act && Assert
             AssertError(spec, "No target frameworks specified");
-        }
-
-        [Fact]
-        public void SpecValidationUtility_VerifyFrameworks_Duplicates()
-        {
-            // Arrange
-            var spec = new DependencyGraphSpec();
-            spec.AddRestore("a");
-
-            var targetFramework1 = new TargetFrameworkInformation()
-            {
-                FrameworkName = NuGetFramework.Parse("net45")
-            };
-
-            var targetFramework2 = new TargetFrameworkInformation()
-            {
-                FrameworkName = NuGetFramework.Parse("net45")
-            };
-
-            var info = new[] { targetFramework1, targetFramework2 };
-
-            var project = new PackageSpec(info);
-            project.RestoreMetadata = new ProjectRestoreMetadata();
-            project.Name = "a";
-            project.FilePath = Path.Combine(Directory.GetCurrentDirectory(), "a.csproj");
-            project.RestoreMetadata.ProjectUniqueName = "a";
-            project.RestoreMetadata.ProjectName = "a";
-            project.RestoreMetadata.ProjectPath = Path.Combine(Directory.GetCurrentDirectory(), "a.csproj");
-            project.RestoreMetadata.ProjectStyle = ProjectStyle.ProjectJson;
-            project.RestoreMetadata.ProjectJsonPath = Path.Combine(Directory.GetCurrentDirectory(), "project.json");
-
-            spec.AddProject(project);
-
-            // Act && Assert
-            AssertError(spec, "Duplicate frameworks found");
         }
 
         [Fact]
@@ -147,11 +123,6 @@ namespace NuGet.Commands.Test
                     ProjectPath = "b.csproj",
                     ProjectUniqueName = "b"
                 });
-
-            spec.Projects.First().Dependencies.Add(new LibraryDependency()
-            {
-                LibraryRange = new LibraryRange("b", LibraryDependencyTarget.PackageProjectExternal)
-            });
 
             // Act && Assert no errors
             SpecValidationUtility.ValidateDependencySpec(spec);
@@ -171,10 +142,11 @@ namespace NuGet.Commands.Test
                     ProjectUniqueName = "b"
                 });
 
-            spec.Projects.First().TargetFrameworks.First().Dependencies.Add(new LibraryDependency()
+            var newDependencies = spec.Projects.First().TargetFrameworks.First().Dependencies.Add(new LibraryDependency()
             {
                 LibraryRange = new LibraryRange("b", LibraryDependencyTarget.PackageProjectExternal)
             });
+            spec.Projects[0].TargetFrameworks[0] = new TargetFrameworkInformation(spec.Projects[0].TargetFrameworks[0]) { Dependencies = newDependencies };
 
             // Act && Assert no errors
             SpecValidationUtility.ValidateDependencySpec(spec);
@@ -242,8 +214,14 @@ namespace NuGet.Commands.Test
             var spec = new DependencyGraphSpec();
             spec.AddRestore("a");
 
+            var libraryDependency = new LibraryDependency()
+            {
+                LibraryRange = new LibraryRange("x", VersionRange.Parse("1.0.0"), LibraryDependencyTarget.PackageProjectExternal)
+            };
+
             var targetFramework1 = new TargetFrameworkInformation()
             {
+                Dependencies = [libraryDependency],
                 FrameworkName = NuGetFramework.Parse("net45")
             };
 
@@ -261,113 +239,10 @@ namespace NuGet.Commands.Test
             project.RestoreMetadata.ProjectPath = Path.Combine(Directory.GetCurrentDirectory(), "a.csproj");
             project.RestoreMetadata.ProjectStyle = ProjectStyle.Unknown;
 
-            targetFramework1.Dependencies.Add(new LibraryDependency()
-            {
-                LibraryRange = new LibraryRange("x", VersionRange.Parse("1.0.0"), LibraryDependencyTarget.PackageProjectExternal)
-            });
-
             spec.AddProject(project);
 
             // Act && Assert
             AssertError(spec, $"Properties '{nameof(project.Name)}':'{project.Name}' and '{nameof(project.RestoreMetadata.ProjectName)}':'{project.RestoreMetadata.ProjectName}' do not match.");
-        }
-
-        [Fact]
-        public void SpecValidationUtility_UAP_MultipleTFMs()
-        {
-            // Arrange
-            var spec = new DependencyGraphSpec();
-            spec.AddRestore("a");
-
-            var targetFramework1 = new TargetFrameworkInformation()
-            {
-                FrameworkName = NuGetFramework.Parse("net45")
-            };
-
-            var targetFramework2 = new TargetFrameworkInformation()
-            {
-                FrameworkName = NuGetFramework.Parse("net46")
-            };
-
-            var info = new[] { targetFramework1, targetFramework2 };
-
-            var project = new PackageSpec(info);
-            project.RestoreMetadata = new ProjectRestoreMetadata();
-            project.Name = "a";
-            project.FilePath = Path.Combine(Directory.GetCurrentDirectory(), "project.json");
-            project.RestoreMetadata.ProjectUniqueName = "a";
-            project.RestoreMetadata.ProjectName = "a";
-            project.RestoreMetadata.ProjectPath = Path.Combine(Directory.GetCurrentDirectory(), "a.csproj");
-            project.RestoreMetadata.ProjectJsonPath = Path.Combine(Directory.GetCurrentDirectory(), "project.json");
-            project.RestoreMetadata.ProjectStyle = ProjectStyle.ProjectJson;
-
-            spec.AddProject(project);
-
-            // Act && Assert
-            AssertError(spec, "UAP projects must contain exactly one target framework");
-        }
-
-        [Fact]
-        public void SpecValidationUtility_UAP_VerifyOutputPath()
-        {
-            // Arrange
-            var spec = new DependencyGraphSpec();
-            spec.AddRestore("a");
-
-            var targetFramework1 = new TargetFrameworkInformation()
-            {
-                FrameworkName = NuGetFramework.Parse("net45"),
-            };
-
-            var info = new[] { targetFramework1 };
-
-            var project = new PackageSpec(info);
-            project.RestoreMetadata = new ProjectRestoreMetadata();
-            project.Name = "a";
-            project.FilePath = Path.Combine(Directory.GetCurrentDirectory(), "project.json");
-            project.RestoreMetadata.ProjectUniqueName = "a";
-            project.RestoreMetadata.ProjectName = "a";
-            project.RestoreMetadata.ProjectPath = Path.Combine(Directory.GetCurrentDirectory(), "a.csproj");
-            project.RestoreMetadata.ProjectJsonPath = Path.Combine(Directory.GetCurrentDirectory(), "project.json");
-            project.RestoreMetadata.OutputPath = Directory.GetCurrentDirectory();
-            project.RestoreMetadata.ProjectStyle = ProjectStyle.ProjectJson;
-            project.RestoreMetadata.OriginalTargetFrameworks.Add("net45");
-
-            spec.AddProject(project);
-            // Now the output path is read in for project json projects as well
-            SpecValidationUtility.ValidateDependencySpec(spec);
-        }
-
-        [Fact]
-        public void SpecValidationUtility_UAP_VerifyProjectJsonPath()
-        {
-            // Arrange
-            var spec = new DependencyGraphSpec();
-            spec.AddRestore("a");
-
-            var targetFramework1 = new TargetFrameworkInformation()
-            {
-                FrameworkName = NuGetFramework.Parse("net45")
-            };
-
-            var info = new[] { targetFramework1 };
-
-            var project = new PackageSpec(info);
-            project.RestoreMetadata = new ProjectRestoreMetadata();
-            project.Name = "a";
-            project.FilePath = Path.Combine(Directory.GetCurrentDirectory(), "project.json");
-            project.RestoreMetadata.ProjectUniqueName = "a";
-            project.RestoreMetadata.ProjectName = "a";
-            project.RestoreMetadata.ProjectPath = Path.Combine(Directory.GetCurrentDirectory(), "a.csproj");
-            project.RestoreMetadata.ProjectJsonPath = Path.Combine(Directory.GetCurrentDirectory(), "project.json");
-            project.RestoreMetadata.OutputPath = Directory.GetCurrentDirectory();
-            project.RestoreMetadata.ProjectStyle = ProjectStyle.ProjectJson;
-            project.RestoreMetadata.OriginalTargetFrameworks.Add("net45");
-
-            spec.AddProject(project);
-
-            SpecValidationUtility.ValidateDependencySpec(spec);
-
         }
 
         [Fact]
@@ -407,8 +282,14 @@ namespace NuGet.Commands.Test
             var spec = new DependencyGraphSpec();
             spec.AddRestore("a");
 
+            var libraryDependency = new LibraryDependency()
+            {
+                LibraryRange = new LibraryRange("x", VersionRange.Parse("1.0.0"), LibraryDependencyTarget.PackageProjectExternal)
+            };
+
             var targetFramework1 = new TargetFrameworkInformation()
             {
+                Dependencies = [libraryDependency],
                 FrameworkName = NuGetFramework.Parse("net45")
             };
 
@@ -423,15 +304,10 @@ namespace NuGet.Commands.Test
             project.RestoreMetadata.ProjectPath = Path.Combine(Directory.GetCurrentDirectory(), "a.csproj");
             project.RestoreMetadata.ProjectStyle = ProjectStyle.Unknown;
 
-            targetFramework1.Dependencies.Add(new LibraryDependency()
-            {
-                LibraryRange = new LibraryRange("x", VersionRange.Parse("1.0.0"), LibraryDependencyTarget.PackageProjectExternal)
-            });
-
             spec.AddProject(project);
 
             // Act && Assert
-            AssertError(spec, "Property 'Dependencies' is not allowed");
+            AssertError(spec, "Property 'dependencies' is not allowed");
         }
 
         [Fact]
@@ -468,7 +344,7 @@ namespace NuGet.Commands.Test
         }
 
         [Fact]
-        public void SpecValidationUtility_VerifyFrameworks_WithSameBase_DifferentAssetTargetFallback_Duplicates()
+        public void SpecValidationUtility_VerifyFrameworks_Duplicates()
         {
             // Arrange
             var spec = new DependencyGraphSpec();
@@ -476,12 +352,14 @@ namespace NuGet.Commands.Test
 
             var targetFramework1 = new TargetFrameworkInformation()
             {
-                FrameworkName = new AssetTargetFallbackFramework(CommonFrameworks.Net50, new List<NuGetFramework>() { CommonFrameworks.Net463 })
+                FrameworkName = NuGetFramework.Parse("net46"),
+                TargetAlias = "net45"
             };
 
             var targetFramework2 = new TargetFrameworkInformation()
             {
-                FrameworkName = new AssetTargetFallbackFramework(CommonFrameworks.Net50, new List<NuGetFramework>() { CommonFrameworks.Net462 })
+                FrameworkName = NuGetFramework.Parse("net45"),
+                TargetAlias = "net45"
             };
 
             var info = new[] { targetFramework1, targetFramework2 };
@@ -493,13 +371,15 @@ namespace NuGet.Commands.Test
             project.RestoreMetadata.ProjectUniqueName = "a";
             project.RestoreMetadata.ProjectName = "a";
             project.RestoreMetadata.ProjectPath = Path.Combine(Directory.GetCurrentDirectory(), "a.csproj");
-            project.RestoreMetadata.ProjectStyle = ProjectStyle.ProjectJson;
-            project.RestoreMetadata.ProjectJsonPath = Path.Combine(Directory.GetCurrentDirectory(), "project.json");
+            project.RestoreMetadata.ProjectStyle = ProjectStyle.PackageReference;
+            project.RestoreMetadata.OutputPath = Directory.GetCurrentDirectory();
+            project.RestoreMetadata.OriginalTargetFrameworks.Add("net45");
+            project.RestoreMetadata.OriginalTargetFrameworks.Add("net45");
 
             spec.AddProject(project);
 
             // Act && Assert
-            AssertError(spec, "Duplicate frameworks found");
+            AssertError(spec, "TargetFramework property must be unique");
         }
 
         private static PackageSpec GetProjectA()
@@ -548,11 +428,11 @@ namespace NuGet.Commands.Test
                 specEx = ex;
             }
 
-            Assert.NotNull(specEx);
+            specEx.Should().NotBeNull();
 
             foreach (var s in contains)
             {
-                Assert.Contains(s, specEx.Message);
+                specEx.Message.Should().Contain(s);
             }
         }
     }

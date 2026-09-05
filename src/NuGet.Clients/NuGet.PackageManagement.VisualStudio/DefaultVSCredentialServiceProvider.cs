@@ -1,18 +1,18 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Diagnostics;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using NuGet.Common;
 using NuGet.Credentials;
 using NuGet.Protocol.Plugins;
-using NuGet.VisualStudio;
 using IAsyncServiceProvider = Microsoft.VisualStudio.Shell.IAsyncServiceProvider;
 
 namespace NuGet.PackageManagement.VisualStudio
@@ -44,15 +44,15 @@ namespace NuGet.PackageManagement.VisualStudio
             var credentialProviders = new List<ICredentialProvider>();
             var webProxy = await _asyncServiceProvider.GetServiceAsync<SVsWebProxy, IVsWebProxy>();
 
-            TryAddCredentialProviders(
+            await TryAddCredentialProvidersAsync(
                 credentialProviders,
                 Strings.CredentialProviderFailed_VisualStudioAccountProvider,
-                () =>
+                async () =>
                 {
                     var importer = new VsCredentialProviderImporter(
                         (exception, failureMessage) => LogCredentialProviderError(exception, failureMessage));
 
-                    return importer.GetProviders();
+                    return await importer.GetProvidersAsync();
                 });
 
             TryAddCredentialProviders(
@@ -86,19 +86,15 @@ namespace NuGet.PackageManagement.VisualStudio
                 });
             }
 
-            // can only interact when VS is not in server mode.
-            bool nonInteractive = await VisualStudioContextHelper.IsInServerModeAsync(CancellationToken.None);
-
-            // Initialize the credential service.
             var credentialService = new CredentialService(
-                new AsyncLazy<IEnumerable<ICredentialProvider>>(() => System.Threading.Tasks.Task.FromResult((IEnumerable<ICredentialProvider>)credentialProviders)),
-                nonInteractive: nonInteractive,
+                new AsyncLazy<IEnumerable<ICredentialProvider>>(() => Task.FromResult((IEnumerable<ICredentialProvider>)credentialProviders)),
+                nonInteractive: false,
                 handlesDefaultCredentials: PreviewFeatureSettings.DefaultCredentialsAfterCredentialProviders);
 
             return credentialService;
         }
 
-        private async System.Threading.Tasks.Task TryAddCredentialProvidersAsync(
+        private async Task TryAddCredentialProvidersAsync(
             List<ICredentialProvider> credentialProviders,
             string failureMessage,
             Func<Task<IEnumerable<ICredentialProvider>>> factory)

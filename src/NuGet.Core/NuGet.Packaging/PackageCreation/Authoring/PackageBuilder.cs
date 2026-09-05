@@ -32,40 +32,57 @@ namespace NuGet.Packaging
         internal const string ManifestRelationType = "manifest";
         private readonly bool _includeEmptyDirectories;
         private readonly bool _deterministic;
+        private readonly DateTimeOffset _deterministicTimestamp = DateTimeOffset.UtcNow;
         private readonly ILogger _logger;
+        private readonly string? _versionOverride;
 
         /// <summary>
         /// Maximum Icon file size: 1 megabyte
         /// </summary>
         public const int MaxIconFileSize = 1024 * 1024;
 
-        public PackageBuilder(string path, Func<string, string> propertyProvider, bool includeEmptyDirectories)
+        public PackageBuilder(string path, Func<string, string>? propertyProvider, bool includeEmptyDirectories)
             : this(path, propertyProvider, includeEmptyDirectories, deterministic: false)
         {
         }
 
-        public PackageBuilder(string path, Func<string, string> propertyProvider, bool includeEmptyDirectories, bool deterministic)
-            : this(path, Path.GetDirectoryName(path), propertyProvider, includeEmptyDirectories, deterministic)
+        public PackageBuilder(string path, Func<string, string>? propertyProvider, bool includeEmptyDirectories, bool deterministic)
+            : this(path, Path.GetDirectoryName(path)!, propertyProvider, includeEmptyDirectories, deterministic)
         {
         }
 
-        public PackageBuilder(string path, Func<string, string> propertyProvider, bool includeEmptyDirectories, bool deterministic, ILogger logger)
-            : this(path, Path.GetDirectoryName(path), propertyProvider, includeEmptyDirectories, deterministic, logger)
+        public PackageBuilder(string path, Func<string, string>? propertyProvider, bool includeEmptyDirectories, bool deterministic, ILogger logger)
+            : this(path, Path.GetDirectoryName(path)!, propertyProvider, includeEmptyDirectories, deterministic, logger, versionOverride: "")
         {
         }
 
-        public PackageBuilder(string path, string basePath, Func<string, string> propertyProvider, bool includeEmptyDirectories)
+        public PackageBuilder(string path, Func<string, string>? propertyProvider, bool includeEmptyDirectories, bool deterministic, ILogger logger, string versionOverride)
+            : this(path, Path.GetDirectoryName(path)!, propertyProvider, includeEmptyDirectories, deterministic, logger, versionOverride)
+        {
+        }
+
+        public PackageBuilder(string path, string? basePath, Func<string, string>? propertyProvider, bool includeEmptyDirectories)
             : this(path, basePath, propertyProvider, includeEmptyDirectories, deterministic: false)
         {
         }
 
-        public PackageBuilder(string path, string basePath, Func<string, string> propertyProvider, bool includeEmptyDirectories, bool deterministic, ILogger logger)
-            : this(path, basePath, propertyProvider, includeEmptyDirectories, deterministic)
+        public PackageBuilder(string path, string? basePath, Func<string, string>? propertyProvider, bool includeEmptyDirectories, bool deterministic, ILogger logger)
+            : this(path, basePath, propertyProvider, includeEmptyDirectories, deterministic, logger, versionOverride: "")
+        {
+        }
+
+        public PackageBuilder(string path, string? basePath, Func<string, string>? propertyProvider, bool includeEmptyDirectories, bool deterministic, ILogger logger, string versionOverride)
+            : this(path, basePath, propertyProvider, includeEmptyDirectories, deterministic, versionOverride)
         {
             _logger = logger;
         }
 
-        public PackageBuilder(string path, string basePath, Func<string, string> propertyProvider, bool includeEmptyDirectories, bool deterministic)
+        public PackageBuilder(string path, string? basePath, Func<string, string>? propertyProvider, bool includeEmptyDirectories, bool deterministic)
+            : this(path, basePath, propertyProvider, includeEmptyDirectories, deterministic, versionOverride: "")
+        {
+        }
+
+        public PackageBuilder(string path, string? basePath, Func<string, string>? propertyProvider, bool includeEmptyDirectories, bool deterministic, string versionOverride)
             : this(includeEmptyDirectories, deterministic)
         {
             if (!File.Exists(path))
@@ -75,27 +92,34 @@ namespace NuGet.Packaging
                     string.Format(CultureInfo.CurrentCulture, Strings.ErrorManifestFileNotFound, path ?? "null"));
             }
 
+            _versionOverride = versionOverride;
+
             using (Stream stream = File.OpenRead(path))
             {
                 ReadManifest(stream, basePath, propertyProvider);
             }
         }
 
-        public PackageBuilder(Stream stream, string basePath)
+        public PackageBuilder(Stream stream, string? basePath)
             : this(stream, basePath, null)
         {
         }
 
-        public PackageBuilder(Stream stream, string basePath, Func<string, string> propertyProvider)
+        public PackageBuilder(Stream stream, string? basePath, Func<string, string>? propertyProvider)
+            : this(stream, basePath, propertyProvider, "")
+        {
+        }
+
+        public PackageBuilder(Stream stream, string? basePath, Func<string, string>? propertyProvider, string versionOverride)
             : this()
         {
+            _versionOverride = versionOverride;
             ReadManifest(stream, basePath, propertyProvider);
         }
 
         public PackageBuilder(bool deterministic) :
             this(includeEmptyDirectories: false, deterministic: deterministic)
         {
-
         }
 
         public PackageBuilder()
@@ -104,19 +128,19 @@ namespace NuGet.Packaging
         }
 
         public PackageBuilder(bool deterministic, ILogger logger)
-            : this(includeEmptyDirectories: false, deterministic: deterministic, logger)
+            : this(includeEmptyDirectories: false, deterministic: deterministic, logger: logger)
         {
         }
 
         private PackageBuilder(bool includeEmptyDirectories, bool deterministic)
-            : this(includeEmptyDirectories: false, deterministic: deterministic, logger: NullLogger.Instance)
+            : this(includeEmptyDirectories: includeEmptyDirectories, deterministic: deterministic, logger: NullLogger.Instance)
         {
         }
 
         private PackageBuilder(bool includeEmptyDirectories, bool deterministic, ILogger logger)
         {
             _includeEmptyDirectories = includeEmptyDirectories;
-            _deterministic = false; // fix in https://github.com/NuGet/Home/issues/8601
+            _deterministic = deterministic;
             _logger = logger;
             Files = new Collection<IPackageFile>();
             DependencyGroups = new Collection<PackageDependencyGroup>();
@@ -133,275 +157,174 @@ namespace NuGet.Packaging
             Properties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
 
-        public string Id
+        public string DeterministicTimestamp
         {
-            get;
-            set;
+            init
+            {
+                if (string.IsNullOrEmpty(value) || string.Equals(value, bool.TrueString, StringComparison.OrdinalIgnoreCase))
+                {
+                    _deterministicTimestamp = DateTimeOffset.UtcNow;
+                }
+                else if (string.Equals(value, bool.FalseString, StringComparison.OrdinalIgnoreCase))
+                {
+                    _deterministic = false;
+                    _deterministicTimestamp = DateTimeOffset.UtcNow;
+                }
+                else if (TryParseTimestamp(value, out DateTimeOffset parsedDateTimestamp))
+                {
+                    _deterministicTimestamp = parsedDateTimestamp;
+                }
+                else
+                {
+                    throw new PackagingException(
+                        NuGetLogCode.NU5502,
+                        string.Format(CultureInfo.CurrentCulture, Strings.ErrorInvalidTimestamp, value));
+                }
+            }
         }
 
-        public NuGetVersion Version
+        internal static bool TryParseTimestamp(string timestamp, out DateTimeOffset result)
         {
-            get;
-            set;
+            if (long.TryParse(timestamp, NumberStyles.None, CultureInfo.InvariantCulture, out long unixTimeSeconds))
+            {
+                result = DateTimeOffset.FromUnixTimeSeconds(unixTimeSeconds);
+                return true;
+            }
+
+            var parsedDate = ParseRfc3339(timestamp);
+            if (parsedDate is DateTimeOffset nonNullParsedTimestamp)
+            {
+                result = nonNullParsedTimestamp;
+                return true;
+            }
+
+            result = default;
+            return false;
         }
 
-        public RepositoryMetadata Repository { get; set; }
-
-        public LicenseMetadata LicenseMetadata { get; set; }
-
-        public bool HasSnapshotVersion
+        private static DateTimeOffset? ParseRfc3339(string input)
         {
-            get;
-            set;
+            // RFC3339 patterns:
+            // 1. Full date-time with 'Z' (UTC)
+            // 2. Full date-time with offset (+HH:mm or -HH:mm)
+            // 3. Full date-time with fractional seconds and 'Z'
+            // 4. Full date-time with fractional seconds and offset
+            string[] formats = {
+                "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                "yyyy-MM-dd'T'HH:mm:sszzz",
+                "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFK", // K handles Z or offset
+            };
+            if (DateTimeOffset.TryParseExact(input, formats,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out DateTimeOffset result))
+            {
+                return result;
+            }
+
+            return null;
         }
 
-        public string Title
-        {
-            get;
-            set;
-        }
 
-        public ISet<string> Authors
-        {
-            get;
-            private set;
-        }
+        // Set to empty to enforce a stricter nullability contract.
+        // This will be validated in the Save() method before writing the manifest
+        public string Id { get; set; } = string.Empty;
 
-        public ISet<string> Owners
-        {
-            get;
-            private set;
-        }
+        public NuGetVersion? Version { get; set; }
 
-        public Uri IconUrl
-        {
-            get;
-            set;
-        }
+        public RepositoryMetadata? Repository { get; set; }
 
-        public string Icon
-        {
-            get;
-            set;
-        }
+        public LicenseMetadata? LicenseMetadata { get; set; }
 
-        public Uri LicenseUrl
-        {
-            get;
-            set;
-        }
+        public bool HasSnapshotVersion { get; set; }
 
-        public Uri ProjectUrl
-        {
-            get;
-            set;
-        }
+        public string? Title { get; set; }
 
-        public bool RequireLicenseAcceptance
-        {
-            get;
-            set;
-        }
+        public ISet<string> Authors { get; private set; }
 
-        public bool EmitRequireLicenseAcceptance
-        {
-            get;
-            set;
-        } = true;
+        public ISet<string> Owners { get; private set; }
 
-        public bool Serviceable
-        {
-            get;
-            set;
-        }
+        public Uri? IconUrl { get; set; }
 
-        public bool DevelopmentDependency
-        {
-            get;
-            set;
-        }
+        public string? Icon { get; set; }
 
-        public string Description
-        {
-            get;
-            set;
-        }
+        public Uri? LicenseUrl { get; set; }
 
-        public string Summary
-        {
-            get;
-            set;
-        }
+        public Uri? ProjectUrl { get; set; }
 
-        public string ReleaseNotes
-        {
-            get;
-            set;
-        }
+        public bool RequireLicenseAcceptance { get; set; }
 
-        public string Language
-        {
-            get;
-            set;
-        }
+        public bool EmitRequireLicenseAcceptance { get; set; } = true;
 
-        public string OutputName
-        {
-            get;
-            set;
-        }
+        public bool Serviceable { get; set; }
 
-        public ISet<string> Tags
-        {
-            get;
-            private set;
-        }
+        public bool DevelopmentDependency { get; set; }
 
-        public string Readme { get; set; }
+        public string? Description { get; set; }
+
+        public string? Summary { get; set; }
+
+        public string? ReleaseNotes { get; set; }
+
+        public string? Language { get; set; }
+
+        public string? OutputName { get; set; }
+
+        public ISet<string> Tags { get; private set; }
+
+        public string? Readme { get; set; }
 
         /// <summary>
         /// Exposes the additional properties extracted by the metadata
         /// extractor or received from the command line.
         /// </summary>
-        public Dictionary<string, string> Properties
-        {
-            get;
-            private set;
-        }
+        public Dictionary<string, string> Properties { get; private set; }
 
-        public string Copyright
-        {
-            get;
-            set;
-        }
+        public string? Copyright { get; set; }
 
-        public Collection<PackageDependencyGroup> DependencyGroups
-        {
-            get;
-            private set;
-        }
+        public Collection<PackageDependencyGroup> DependencyGroups { get; private set; }
 
-        public ICollection<IPackageFile> Files
-        {
-            get;
-            private set;
-        }
+        public ICollection<IPackageFile> Files { get; private set; }
 
-        public Collection<FrameworkAssemblyReference> FrameworkReferences
-        {
-            get;
-            private set;
-        }
+        public Collection<FrameworkAssemblyReference> FrameworkReferences { get; private set; }
 
-        public Collection<FrameworkReferenceGroup> FrameworkReferenceGroups
-        {
-            get;
-            private set;
-        }
+        public Collection<FrameworkReferenceGroup> FrameworkReferenceGroups { get; private set; }
 
-        public IList<NuGetFramework> TargetFrameworks
-        {
-            get;
-            set;
-        }
+        public IList<NuGetFramework> TargetFrameworks { get; set; }
 
         /// <summary>
         /// ContentFiles section from the manifest for content v2
         /// </summary>
-        public ICollection<ManifestContentFiles> ContentFiles
-        {
-            get;
-            private set;
-        }
+        public ICollection<ManifestContentFiles> ContentFiles { get; private set; }
 
-        public ICollection<PackageReferenceSet> PackageAssemblyReferences
-        {
-            get;
-            set;
-        }
+        public ICollection<PackageReferenceSet> PackageAssemblyReferences { get; set; }
 
-        public ICollection<PackageType> PackageTypes
-        {
-            get;
-            set;
-        }
+        public ICollection<PackageType> PackageTypes { get; set; }
 
-        IEnumerable<string> IPackageMetadata.Authors
-        {
-            get
-            {
-                return Authors;
-            }
-        }
+        IEnumerable<string> IPackageMetadata.Authors => Authors;
 
-        IEnumerable<string> IPackageMetadata.Owners
-        {
-            get
-            {
-                return Owners;
-            }
-        }
+        IEnumerable<string> IPackageMetadata.Owners => Owners;
 
-        string IPackageMetadata.Tags
-        {
-            get
-            {
-                return string.Join(" ", Tags);
-            }
-        }
+        string IPackageMetadata.Tags => string.Join(" ", Tags);
 
-        IEnumerable<PackageReferenceSet> IPackageMetadata.PackageAssemblyReferences
-        {
-            get
-            {
-                return PackageAssemblyReferences;
-            }
-        }
+        IEnumerable<PackageReferenceSet> IPackageMetadata.PackageAssemblyReferences => PackageAssemblyReferences;
 
-        IEnumerable<PackageDependencyGroup> IPackageMetadata.DependencyGroups
-        {
-            get
-            {
-                return DependencyGroups;
-            }
-        }
+        IEnumerable<PackageDependencyGroup> IPackageMetadata.DependencyGroups => DependencyGroups;
 
-        IEnumerable<FrameworkAssemblyReference> IPackageMetadata.FrameworkReferences
-        {
-            get
-            {
-                return FrameworkReferences;
-            }
-        }
+        IEnumerable<FrameworkAssemblyReference> IPackageMetadata.FrameworkReferences => FrameworkReferences;
 
-        IEnumerable<ManifestContentFiles> IPackageMetadata.ContentFiles
-        {
-            get
-            {
-                return ContentFiles;
-            }
-        }
+        IEnumerable<ManifestContentFiles> IPackageMetadata.ContentFiles => ContentFiles;
 
-        IEnumerable<PackageType> IPackageMetadata.PackageTypes
-        {
-            get
-            {
-                return PackageTypes;
-            }
-        }
+        IEnumerable<PackageType> IPackageMetadata.PackageTypes => PackageTypes;
 
         IEnumerable<FrameworkReferenceGroup> IPackageMetadata.FrameworkReferenceGroups => FrameworkReferenceGroups;
 
-        public Version MinClientVersion
-        {
-            get;
-            set;
-        }
+        public Version? MinClientVersion { get; set; }
 
         public void Save(Stream stream)
         {
             // Make sure we're saving a valid package id
-            PackageIdValidator.ValidatePackageId(Id);
+            PackageIdValidator.ValidatePackageId(Id!);
 
             // Throw if the package doesn't contain any dependencies nor content
             if (!Files.Any() && !DependencyGroups.SelectMany(d => d.Packages).Any() && !FrameworkReferences.Any() && !FrameworkReferenceGroups.Any())
@@ -420,13 +343,13 @@ namespace NuGet.Packaging
 
             using (var package = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
             {
-                string psmdcpPath = $"package/services/metadata/core-properties/{CalcPsmdcpName()}.psmdcp";
+                string psmdcpPath = "package/services/metadata/core-properties/nuget.psmdcp";
 
                 // Validate and write the manifest
                 WriteManifest(package, DetermineMinimumSchemaVersion(Files, DependencyGroups), psmdcpPath);
 
                 // Write the files to the package
-                HashSet<string> filesWithoutExtensions = new HashSet<string>();
+                SortedSet<string> filesWithoutExtensions = new();
                 var extensions = WriteFiles(package, filesWithoutExtensions);
 
                 extensions.Add("nuspec");
@@ -437,42 +360,13 @@ namespace NuGet.Packaging
             }
         }
 
-        private static byte[] ReadAllBytes(Stream stream)
-        {
-            using (var ms = new MemoryStream())
-            {
-                stream.CopyTo(ms);
-                return ms.ToArray();
-            }
-        }
-
-        private string CalcPsmdcpName()
-        {
-            if (_deterministic)
-            {
-                using (var hashFunc = new Sha512HashFunction())
-                {
-                    foreach (var file in Files)
-                    {
-                        var data = ReadAllBytes(file.GetStream());
-                        hashFunc.Update(data, 0, data.Length);
-                    }
-                    return EncodeHexString(hashFunc.GetHashBytes()).Substring(0, 32);
-                }
-            }
-            else
-            {
-                return Guid.NewGuid().ToString("N", provider: null);
-            }
-        }
-
         private static readonly char[] HexValues = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
         // Reference https://github.com/dotnet/corefx/blob/2c2e4a599889652ec579a870054b0f8915ea70fd/src/System.Security.Cryptography.Xml/src/System/Security/Cryptography/Xml/Utils.cs#L736
-        internal static string EncodeHexString(byte[] sArray)
+        internal static string? EncodeHexString(byte[] sArray)
         {
             uint start = 0;
             uint end = (uint)sArray.Length;
-            string result = null;
+            string? result = null;
             if (sArray != null)
             {
                 char[] hexOrder = new char[(end - start) * 2];
@@ -492,8 +386,8 @@ namespace NuGet.Packaging
         private static string CreatorInfo()
         {
             List<string> creatorInfo = new List<string>();
-            var assembly = typeof(PackageBuilder).GetTypeInfo().Assembly;
-            creatorInfo.Add(assembly.FullName);
+            var assembly = typeof(PackageBuilder).Assembly;
+            creatorInfo.Add(assembly.FullName!);
 #if !IS_CORECLR // CORECLR_TODO: Environment.OSVersion
             creatorInfo.Add(Environment.OSVersion.ToString());
 #endif
@@ -501,7 +395,7 @@ namespace NuGet.Packaging
             var attribute = assembly.GetCustomAttributes<System.Runtime.Versioning.TargetFrameworkAttribute>().FirstOrDefault();
             if (attribute != null)
             {
-                creatorInfo.Add(attribute.FrameworkDisplayName);
+                creatorInfo.Add(attribute.FrameworkDisplayName!);
             }
 
             return string.Join(";", creatorInfo);
@@ -511,15 +405,9 @@ namespace NuGet.Packaging
             ICollection<IPackageFile> Files,
             ICollection<PackageDependencyGroup> package)
         {
-            if (HasContentFilesV2(Files) || HasIncludeExclude(package))
+            if (HasContentFilesV2(Files) || HasIncludeExclude(package) || HasXdtTransformFile(Files))
             {
-                // version 5
-                return ManifestVersionUtility.XdtTransformationVersion;
-            }
-
-            if (HasXdtTransformFile(Files))
-            {
-                // version 5
+                // version 6
                 return ManifestVersionUtility.XdtTransformationVersion;
             }
 
@@ -578,7 +466,7 @@ namespace NuGet.Packaging
                  file.Path.EndsWith(".uninstall.xdt", StringComparison.OrdinalIgnoreCase)));
         }
 
-        private static void ValidateDependencies(SemanticVersion version,
+        private static void ValidateDependencies(SemanticVersion? version,
             IEnumerable<PackageDependencyGroup> dependencies)
         {
             var frameworksMissingPlatformVersion = new HashSet<string>(dependencies
@@ -607,7 +495,7 @@ namespace NuGet.Packaging
             var frameworksMissingPlatformVersion = new HashSet<string>(packageAssemblyReferences
                 .Select(group => group.TargetFramework)
                 .Where(groupFramework => groupFramework != null && groupFramework.HasPlatform && groupFramework.PlatformVersion == FrameworkConstants.EmptyVersion)
-                .Select(framework => framework.GetShortFolderName()));
+                .Select(framework => framework!.GetShortFolderName()));
             if (frameworksMissingPlatformVersion.Any())
             {
                 throw new PackagingException(NuGetLogCode.NU1012, string.Format(CultureInfo.CurrentCulture, Strings.MissingTargetPlatformVersionsFromReferenceGroups, string.Join(", ", frameworksMissingPlatformVersion.OrderBy(str => str))));
@@ -657,8 +545,8 @@ namespace NuGet.Packaging
         /// <param name="filePath">The file path to search for</param>
         /// <param name="packageFiles">The list of files to search within</param>
         /// <param name="filePathIncorrectCase">If the file was not found, this will be a path which almost matched but had the incorrect case</param>
-        /// <returns>An <see cref="IPackageFile"/> matching the specified path or <c>null</c></returns>
-        private static IPackageFile FindFileInPackage(string filePath, IEnumerable<IPackageFile> packageFiles, out string filePathIncorrectCase)
+        /// <returns>An <see cref="IPackageFile"/> matching the specified path or <see langword="null" /></returns>
+        private static IPackageFile? FindFileInPackage(string filePath, IEnumerable<IPackageFile> packageFiles, out string? filePathIncorrectCase)
         {
             filePathIncorrectCase = null;
             var strippedFilePath = PathUtility.StripLeadingDirectorySeparators(filePath);
@@ -704,7 +592,7 @@ namespace NuGet.Packaging
 
         }
 
-        private void ValidateLicenseFile(IEnumerable<IPackageFile> files, LicenseMetadata licenseMetadata)
+        private void ValidateLicenseFile(IEnumerable<IPackageFile> files, LicenseMetadata? licenseMetadata)
         {
             if (!PackageTypes.Contains(PackageType.SymbolsPackage) && licenseMetadata?.Type == LicenseType.File)
             {
@@ -740,7 +628,7 @@ namespace NuGet.Packaging
         /// <param name="files">Files resolved from the file entries in the nuspec</param>
         /// <param name="iconPath">icon entry found in the .nuspec</param>
         /// <exception cref="PackagingException">When a validation rule is not met</exception>
-        private void ValidateIconFile(IEnumerable<IPackageFile> files, string iconPath)
+        private void ValidateIconFile(IEnumerable<IPackageFile> files, string? iconPath)
         {
             if (!PackageTypes.Contains(PackageType.SymbolsPackage) && !string.IsNullOrEmpty(iconPath))
             {
@@ -756,7 +644,7 @@ namespace NuGet.Packaging
                 }
 
                 // Validate entry
-                IPackageFile iconFile = FindFileInPackage(iconPath, files, out var iconPathWithIncorrectCase);
+                IPackageFile? iconFile = FindFileInPackage(iconPath!, files, out var iconPathWithIncorrectCase);
 
                 if (iconFile is null)
                 {
@@ -809,7 +697,7 @@ namespace NuGet.Packaging
                 set.Add(file);
             }
 
-            var managedCodeConventions = new ManagedCodeConventions(new RuntimeGraph());
+            var managedCodeConventions = new ManagedCodeConventions(RuntimeGraph.Empty);
             var collection = new ContentItemCollection();
             collection.Load(set.Select(path => path.Replace('\\', '/')).ToArray());
 
@@ -828,7 +716,6 @@ namespace NuGet.Packaging
                 patterns.EmbedAssemblies,
                 patterns.MSBuildTransitiveFiles
             };
-            var warnPaths = new HashSet<string>();
 
             var itemsWithFrameworkMissingPlatformVersion = new HashSet<string>();
             List<ContentItemGroup> targetedItemGroups = new();
@@ -838,7 +725,7 @@ namespace NuGet.Packaging
                 ContentExtractor.GetContentForPattern(collection, pattern, targetedItemGroups);
                 foreach (ContentItemGroup group in targetedItemGroups)
                 {
-                    foreach (ContentItem item in group.Items)
+                    foreach (ContentItem item in group.Items.NoAllocEnumerate())
                     {
                         var framework = (NuGetFramework)item.Properties["tfm"];
                         if (framework == null)
@@ -866,7 +753,7 @@ namespace NuGet.Packaging
         /// <param name="files">Files resolved from the file entries in the nuspec</param>
         /// <param name="readmePath">readmepath found in the .nuspec</param>
         /// <exception cref="PackagingException">When a validation rule is not met</exception>
-        private void ValidateReadmeFile(IEnumerable<IPackageFile> files, string readmePath)
+        private void ValidateReadmeFile(IEnumerable<IPackageFile> files, string? readmePath)
         {
             if (!PackageTypes.Contains(PackageType.SymbolsPackage) && !string.IsNullOrEmpty(readmePath))
             {
@@ -882,7 +769,7 @@ namespace NuGet.Packaging
                 }
 
                 // Validate entry
-                var readmePathStripped = PathUtility.StripLeadingDirectorySeparators(readmePath);
+                var readmePathStripped = PathUtility.StripLeadingDirectorySeparators(readmePath!);
 
                 var readmeFileList = files.Where(f =>
                         readmePathStripped.Equals(
@@ -923,10 +810,14 @@ namespace NuGet.Packaging
             }
         }
 
-        private void ReadManifest(Stream stream, string basePath, Func<string, string> propertyProvider)
+        private void ReadManifest(Stream stream, string? basePath, Func<string, string>? propertyProvider)
         {
             // Deserialize the document and extract the metadata
-            Manifest manifest = Manifest.ReadFrom(stream, propertyProvider, validateSchema: true);
+            Manifest manifest = Manifest.ReadFrom(
+                stream,
+                propertyProvider,
+                validateSchema: true,
+                overrideVersion: !(string.IsNullOrEmpty(_versionOverride)) ? NuGetVersion.Parse(_versionOverride!) : null);
 
             Populate(manifest.Metadata);
 
@@ -947,7 +838,7 @@ namespace NuGet.Packaging
         public void Populate(ManifestMetadata manifestMetadata)
         {
             IPackageMetadata metadata = manifestMetadata;
-            Id = metadata.Id;
+            Id = metadata.Id!;
             Version = metadata.Version;
             Title = metadata.Title;
             Authors.AddRange(metadata.Authors);
@@ -994,7 +885,7 @@ namespace NuGet.Packaging
         {
             foreach (var file in files)
             {
-                AddFiles(basePath, file.Source, file.Target, file.Exclude);
+                AddFiles(basePath, file.Source!, file.Target, file.Exclude);
             }
         }
 
@@ -1003,12 +894,12 @@ namespace NuGet.Packaging
             var entry = package.CreateEntry(entryName, compressionLevel);
             if (_deterministic)
             {
-                entry.LastWriteTime = ZipFormatMinDate;
+                entry.LastWriteTime = _deterministicTimestamp;
             }
             return entry;
         }
 
-        private ZipArchiveEntry CreatePackageFileEntry(ZipArchive package, string entryName, DateTimeOffset timeOffset, CompressionLevel compressionLevel, StringBuilder warningMessage)
+        private static ZipArchiveEntry CreatePackageFileEntry(ZipArchive package, string entryName, DateTimeOffset timeOffset, CompressionLevel compressionLevel, StringBuilder warningMessage)
         {
             var entry = package.CreateEntry(entryName, compressionLevel);
 
@@ -1045,43 +936,36 @@ namespace NuGet.Packaging
             }
         }
 
-        private HashSet<string> WriteFiles(ZipArchive package, HashSet<string> filesWithoutExtensions)
+        private SortedSet<string> WriteFiles(ZipArchive package, SortedSet<string> filesWithoutExtensions)
         {
-            var extensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var extensions = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
             var warningMessage = new StringBuilder();
 
             // Add files that might not come from expanding files on disk
-            foreach (IPackageFile file in new HashSet<IPackageFile>(Files))
+            foreach (IPackageFile file in new SortedSet<IPackageFile>(Files, new NormalizedPathComparer()))
             {
                 using (Stream stream = file.GetStream())
                 {
-                    try
-                    {
-                        CreatePart(
-                            package,
-                            file.Path,
-                            stream,
-                            lastWriteTime: _deterministic ? ZipFormatMinDate : file.LastWriteTime,
-                            warningMessage);
-                        var fileExtension = Path.GetExtension(file.Path);
+                    CreatePart(
+                        package,
+                        file.Path,
+                        stream,
+                        lastWriteTime: _deterministic ? _deterministicTimestamp : file.LastWriteTime,
+                        warningMessage);
+                    var fileExtension = Path.GetExtension(file.Path);
 
-                        // We have files without extension (e.g. the executables for Nix)
-                        if (!string.IsNullOrEmpty(fileExtension))
-                        {
-                            extensions.Add(fileExtension.Substring(1));
-                        }
-                        else
-                        {
-#if NETCOREAPP
-                            filesWithoutExtensions.Add($"/{file.Path.Replace("\\", "/", StringComparison.Ordinal)}");
-#else
-                            filesWithoutExtensions.Add($"/{file.Path.Replace("\\", "/")}");
-#endif
-                        }
-                    }
-                    catch
+                    // We have files without extension (e.g. the executables for Nix)
+                    if (!string.IsNullOrEmpty(fileExtension))
                     {
-                        throw;
+                        extensions.Add(fileExtension.Substring(1));
+                    }
+                    else
+                    {
+#if NETCOREAPP
+                        filesWithoutExtensions.Add($"/{file.Path.Replace("\\", "/", StringComparison.Ordinal)}");
+#else
+                        filesWithoutExtensions.Add($"/{file.Path.Replace("\\", "/")}");
+#endif
                     }
                 }
             }
@@ -1101,7 +985,7 @@ namespace NuGet.Packaging
             return extensions;
         }
 
-        public void AddFiles(string basePath, string source, string destination, string exclude = null)
+        public void AddFiles(string basePath, string source, string? destination, string? exclude = null)
         {
             exclude = exclude?.Replace('\\', Path.DirectorySeparatorChar);
 
@@ -1127,7 +1011,7 @@ namespace NuGet.Packaging
             Files.AddRange(searchFiles);
         }
 
-        internal static IEnumerable<PhysicalPackageFile> ResolveSearchPattern(string basePath, string searchPath, string targetPath, bool includeEmptyDirectories)
+        internal static IEnumerable<PhysicalPackageFile> ResolveSearchPattern(string basePath, string searchPath, string? targetPath, bool includeEmptyDirectories)
         {
             string normalizedBasePath;
             IEnumerable<PathResolver.SearchPathResult> searchResults = PathResolver.PerformWildcardSearch(basePath, searchPath, includeEmptyDirectories, out normalizedBasePath);
@@ -1151,7 +1035,7 @@ namespace NuGet.Packaging
         /// For recursive wildcard paths, we preserve the path portion beginning with the wildcard.
         /// For non-recursive wildcard paths, we use the file name from the actual file path on disk.
         /// </summary>
-        internal static string ResolvePackagePath(string searchDirectory, string searchPattern, string fullPath, string targetPath)
+        internal static string ResolvePackagePath(string searchDirectory, string searchPattern, string fullPath, string? targetPath)
         {
             string packagePath;
             bool isDirectorySearch = PathResolver.IsDirectoryPath(searchPattern);
@@ -1169,7 +1053,7 @@ namespace NuGet.Packaging
             {
                 // If the search does not contain wild cards, and the target path shares the same extension, copy it
                 // e.g. <file src="ie\css\style.css" target="Content\css\ie.css" /> --> Content\css\ie.css
-                return targetPath;
+                return targetPath!;
             }
             else
             {
@@ -1204,7 +1088,7 @@ namespace NuGet.Packaging
             return false;
         }
 
-        private static void ExcludeFiles(List<PhysicalPackageFile> searchFiles, string basePath, string exclude)
+        private static void ExcludeFiles(List<PhysicalPackageFile> searchFiles, string basePath, string? exclude)
         {
             if (string.IsNullOrEmpty(exclude))
             {
@@ -1212,11 +1096,11 @@ namespace NuGet.Packaging
             }
 
             // One or more exclusions may be specified in the file. Split it and prepend the base path to the wildcard provided.
-            var exclusions = exclude.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            var exclusions = exclude!.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
             foreach (var item in exclusions)
             {
                 string wildCard = PathResolver.NormalizeWildcardForExcludedFiles(basePath, item);
-                PathResolver.FilterPackageFiles(searchFiles, p => p.SourcePath, new[] { wildCard });
+                PathResolver.FilterPackageFiles(searchFiles, p => p.SourcePath!, new[] { wildCard });
             }
         }
 
@@ -1262,10 +1146,10 @@ namespace NuGet.Packaging
         /// <summary>
         /// Tags come in this format. tag1 tag2 tag3 etc..
         /// </summary>
-        private static IEnumerable<string> ParseTags(string tags)
+        private static IEnumerable<string> ParseTags(string? tags)
         {
             Debug.Assert(tags != null);
-            return from tag in tags.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+            return from tag in tags!.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
                    select tag.Trim();
         }
 
@@ -1295,7 +1179,7 @@ namespace NuGet.Packaging
             }
         }
 
-        private void WriteOpcContentTypes(ZipArchive package, HashSet<string> extensions, HashSet<string> filesWithoutExtensions)
+        private void WriteOpcContentTypes(ZipArchive package, SortedSet<string> extensions, SortedSet<string> filesWithoutExtensions)
         {
             // OPC backwards compatibility
             ZipArchiveEntry relsEntry = CreateEntry(package, "[Content_Types].xml", CompressionLevel.Optimal);
@@ -1345,9 +1229,7 @@ namespace NuGet.Packaging
             var dcText = "http://purl.org/dc/elements/1.1/";
             XNamespace dc = dcText;
             var dctermsText = "http://purl.org/dc/terms/";
-            XNamespace dcterms = dctermsText;
             var xsiText = "http://www.w3.org/2001/XMLSchema-instance";
-            XNamespace xsi = xsiText;
             XNamespace core = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
 
             XDocument document = new XDocument(
@@ -1358,7 +1240,7 @@ namespace NuGet.Packaging
                     new XElement(dc + "creator", string.Join(", ", Authors)),
                     new XElement(dc + "description", Description),
                     new XElement(dc + "identifier", Id),
-                    new XElement(core + "version", Version.ToString()),
+                    new XElement(core + "version", Version!.ToString()),
                     //new XElement(core + "language", Language),
                     new XElement(core + "keywords", ((IPackageMetadata)this).Tags),
                     //new XElement(dc + "title", Title),
@@ -1383,7 +1265,17 @@ namespace NuGet.Packaging
                 hashFunc.Update(data, 0, data.Length);
                 var hash = hashFunc.GetHashBytes();
                 var hex = EncodeHexString(hash);
-                return "R" + hex.Substring(0, 16);
+                return "R" + hex!.Substring(0, 16);
+            }
+        }
+
+        private class NormalizedPathComparer : IComparer<IPackageFile>
+        {
+            public int Compare(IPackageFile? x, IPackageFile? y)
+            {
+                string xPathNormalized = x!.Path.Replace('\\', '/');
+                string yPathNormalized = y!.Path.Replace('\\', '/');
+                return String.CompareOrdinal(xPathNormalized, yPathNormalized);
             }
         }
     }

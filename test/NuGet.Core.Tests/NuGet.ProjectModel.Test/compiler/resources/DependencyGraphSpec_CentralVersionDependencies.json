@@ -7,10 +7,12 @@
     "a": {
       "restore": {
         "projectUniqueName": "a",
-        "centralPackageVersionsManagementEnabled": true
+        "centralPackageVersionsManagementEnabled": true,
+        "UsingMicrosoftNETSdk": false
       },
       "frameworks": {
         "net40": {
+          "framework": "net40",
           "dependencies": {
             "foo": {
               "suppressParent": "All",
@@ -21,8 +23,8 @@
             }
           },
           "centralPackageVersions": {
-            "bar": "[2.0.0, )",
-            "foo": "[1.0.0, )"
+            "bar": "2.0.0",
+            "foo": "1.0.0"
           },
           "assetTargetFallback": true
         }

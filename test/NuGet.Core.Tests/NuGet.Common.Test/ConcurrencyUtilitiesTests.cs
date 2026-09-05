@@ -130,6 +130,48 @@ namespace NuGet.Core.FuncTest
         }
 
         [Fact]
+        public async Task ExecuteWithFileLockedAsync_WhenStaticStateIsResetConcurrently_DoesNotThrow()
+        {
+            // Arrange
+            using var testDirectory = TestDirectory.Create();
+            using var resetCancellationTokenSource = new CancellationTokenSource();
+
+            var path = Path.Combine(testDirectory, nameof(ExecuteWithFileLockedAsync_WhenStaticStateIsResetConcurrently_DoesNotThrow));
+
+            await ConcurrencyUtilities.ExecuteWithFileLockedAsync(
+                path,
+                _ => Task.FromResult(true),
+                CancellationToken.None);
+
+            Task resetTask = Task.Run(() =>
+            {
+                while (!resetCancellationTokenSource.IsCancellationRequested)
+                {
+                    StaticState.RaiseBuildEnded();
+                }
+            });
+
+            try
+            {
+                Func<int, Task<bool>> lockAsync = _ => ConcurrencyUtilities.ExecuteWithFileLockedAsync(
+                    path,
+                    _ => Task.FromResult(true),
+                    CancellationToken.None);
+
+                // Act
+                var results = await Task.WhenAll(Enumerable.Range(0, 200).Select(lockAsync));
+
+                // Assert that all lock tasks completed; Task.WhenAll throws if the concurrent reset causes the lock to fail.
+                Assert.Equal(200, results.Length);
+            }
+            finally
+            {
+                resetCancellationTokenSource.Cancel();
+                await resetTask;
+            }
+        }
+
+        [Fact]
         public async Task ConcurrencyUtilities_LockAllCasings()
         {
             // Arrange
@@ -144,13 +186,13 @@ namespace NuGet.Core.FuncTest
             {
                 action1HitSem.Set();
                 action1Sem.Wait();
-                return Task.FromResult(true);
+                return TaskResult.True;
             };
 
             Func<CancellationToken, Task<bool>> action2 = (ct) =>
             {
                 action2Sem.Set();
-                return Task.FromResult(true);
+                return TaskResult.True;
             };
 
             // Act
@@ -196,13 +238,13 @@ namespace NuGet.Core.FuncTest
             {
                 action1HitSem.Set();
                 action1Sem.Wait();
-                return Task.FromResult(true);
+                return TaskResult.True;
             };
 
             Func<CancellationToken, Task<bool>> action2 = (ct) =>
             {
                 action2Sem.Set();
-                return Task.FromResult(true);
+                return TaskResult.True;
             };
 
             // Act
@@ -231,6 +273,40 @@ namespace NuGet.Core.FuncTest
             // Assert
             Assert.True(task2blocked);
             Assert.True(result);
+        }
+
+        [Fact]
+        public void ExecuteWithFileLocked_WhenFileStreamIsUnauthorized_ThrowsInvalidOperationException()
+        {
+            // Arrange
+            using var testDirectory = TestDirectory.Create();
+
+            // This is the path that uniquely identifies the system-wide mutex.
+            var path = Path.Combine(testDirectory, nameof(ExecuteWithFileLocked_WhenFileStreamIsUnauthorized_ThrowsInvalidOperationException));
+
+            // This is a semaphore use to verify the lock.
+            var verificationSemaphore = new SemaphoreSlim(1);
+
+            // This is the action that is execute inside of the lock.
+            Action lockedActionSync = () =>
+            {
+                var acquired = verificationSemaphore.Wait(0);
+                Assert.True(acquired, "Unable to acquire the lock on the semaphore within the file lock");
+
+                // Hold the lock for a little bit.
+                Thread.Sleep(TimeSpan.FromMilliseconds(1));
+
+                verificationSemaphore.Release();
+            };
+
+            Assert.Throws<InvalidOperationException>(() =>
+            {
+                ConcurrencyUtilities.ExecuteWithFileLocked(
+                    path,
+                    lockedActionSync,
+                    acquireFileStream: (s) => throw new UnauthorizedAccessException(),
+                    numberOfRetries: 3);
+            });
         }
     }
 }

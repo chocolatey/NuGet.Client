@@ -1,122 +1,5 @@
 # Verify Xunit 2.1.0 can be installed into a net45 project.
 # https://github.com/NuGet/Home/issues/1711
-
-function Test-InstallPackageWithInvalidAbsoluteLocalSource {
-    # Arrange
-    $package = "Rules"
-    $project = New-ConsoleApplication
-    $source = "c:\temp\data"
-    $message = "Unable to find package '$package' at source '$source'. Source not found."
-
-    # Act & Assert
-    Assert-Throws { Install-Package $package -ProjectName $project.Name -source $source } $message
-}
-
-function Test-InstallPackageWithValidAbsoluteLocalSource {
-    # Arrange
-    $package = "Rules"
-    $project = New-ConsoleApplication
-    $source = pwd
-    $message = "Unable to find package '$package'"
-
-    # Act & Assert
-    Assert-Throws { Install-Package $package -ProjectName $project.Name -source $source } $message
-}
-
-function Test-InstallPackageWithInvalidRelativeLocalSource {
-    # Arrange
-    $package = "Rules"
-    $project = New-ConsoleApplication
-    $source = "..\invalid_folder"
-    $message = "Unable to find package '$package' at source '$source'. Source not found."
-
-    # Act & Assert
-    Assert-Throws { Install-Package $package -ProjectName $project.Name -source $source } $message
-}
-
-function Test-InstallPackageWithValidRelativeLocalSource {
-    # Arrange
-    $package = "Rules"
-    $project = New-ConsoleApplication
-    $source = "..\"
-    $message = "Unable to find package '$package'"
-
-    # Act & Assert
-    Assert-Throws { Install-Package $package -ProjectName $project.Name -source $source } $message
-}
-
-function Test-InstallPackageWithInvalidHttpSource {
-    # Arrange
-    $package = "Rules"
-    $project = New-ConsoleApplication
-    $source = "http://example.com"
-    $message = "Unable to find package '$package' at source '$source'."
-
-    # Act & Assert
-    Assert-Throws { Install-Package $package -ProjectName $project.Name -source $source } $message
-}
-
-function Test-InstallPackageWithInvalidHttpSourceVerbose {
-    # Arrange
-    $package = "Rules"
-    $project = New-ConsoleApplication
-    $source = "http://example.com"
-    $escapedSource = [regex]::Escape($source)
-    $escapedUrl = [regex]::Escape($source+"/FindPackagesById()?id='$package'&semVerLevel=2.0.0")
-    $message = "\ \ GET\ $escapedUrl\ \ \ NotFound\ $escapedUrl\ [\w]+\ An\ error\ occurred\ while\ retrieving\ package\ metadata\ for\ '$package'\ from\ source\ '$escapedSource'\."
-    # Act
-    $result = Install-Package $package -ProjectName $project.Name -source $source -Verbose *>&1
-    $resultString = [string]::Join(" ", $result)
-    $compare = $resultString -Match $message
-    $messageToPrint = "Result string is `n$resultString but expected message was `n$message"
-    # Assert
-    Assert-True $compare $messageToPrint
-}
-
-function Test-InstallPackageWithIncompleteHttpSource {
-    # Arrange
-    $package = "Rules"
-    $project = New-ConsoleApplication
-    $source = "http://"
-    $message = "Unable to find package 'Rules' at source '$source'. Source not found."
-
-    # Act & Assert
-    Assert-Throws { Install-Package $package -ProjectName $project.Name -source $source } $message
-}
-
-function Test-InstallPackageWithInvalidKnownSource {
-    # Arrange
-    $package = "Rules"
-    $project = New-ConsoleApplication
-    $source = "nuget.random"
-    $message = "Unable to find package 'Rules' at source '$source'. Source not found."
-
-    # Act & Assert
-    Assert-Throws { Install-Package $package -ProjectName $project.Name -source $source } $message
-}
-
-function Test-InstallPackageWithValidKnownSource {
-    # Arrange
-    $package = "Rules"
-    $project = New-ConsoleApplication
-    $source = "nuget.org"
-    $message = "Unable to find package '$package'"
-
-    # Act & Assert
-    Assert-Throws { Install-Package $package -ProjectName $project.Name -source $source } $message
-}
-
-function Test-InstallPackageWithFtpProtocolSource {
-    # Arrange
-    $package = "Rules"
-    $project = New-ConsoleApplication
-    $source = "ftp://Rules"
-    $message = "Unsupported type of source '$source'. Please provide an http or local source."
-
-    # Act & Assert
-    Assert-Throws { Install-Package $package -ProjectName $project.Name -source $source } $message
-}
-
 function Test-InstallXunit210WithEmptyBuildFolderSucceeds
 {
     param($context)
@@ -134,66 +17,6 @@ function Test-InstallXunit210WithEmptyBuildFolderSucceeds
     Assert-Package $p xunit.extensibility.core 2.1.0
     Assert-Package $p xunit.extensibility.execution 2.1.0
     Assert-Package $p xunit.abstractions 2.0.0
-}
-
-function Test-SinglePackageInstallIntoSingleProject {
-    # Arrange
-    $project = New-ConsoleApplication
-
-    # Act
-    Install-Package FakeItEasy -ProjectName $project.Name -version 1.8.0
-
-    # Assert
-    Assert-Reference $project Castle.Core
-    Assert-Reference $project FakeItEasy
-    Assert-Package $project FakeItEasy
-    Assert-Package $project Castle.Core
-    Assert-SolutionPackage FakeItEasy
-    Assert-SolutionPackage Castle.Core
-}
-
-# Test install-package -WhatIf to downgrade an installed package.
-function Test-PackageInstallWithFileUri {
-    # Arrange
-    $project = New-ConsoleApplication
-
-    $uri = $context.RepositoryRoot
-    $uri = $uri.replace("\", "/")
-    $uri = "file:///" + $uri
-
-    # Act
-    Install-Package TestUpdatePackage -Version 2.0.0.0 -Source $uri
-
-    # Assert
-    # that the installed package is not touched.
-    Assert-Package $project TestUpdatePackage '2.0.0.0'
-}
-
-function Test-PackageInstallWhatIf {
-    # Arrange
-    $project = New-ConsoleApplication
-
-    # Act
-    Install-Package FakeItEasy -Project $project.Name -version 1.8.0 -WhatIf
-
-    # Assert: no packages are installed
-    Assert-Null (Get-ProjectPackage $project FakeItEasy)
-}
-
-# Test install-package -WhatIf to downgrade an installed package.
-function Test-PackageInstallDowngradeWhatIf {
-    # Arrange
-    $project = New-ConsoleApplication
-
-    Install-Package TestUpdatePackage -Version 2.0.0.0 -Source $context.RepositoryRoot
-    Assert-Package $project TestUpdatePackage '2.0.0.0'
-
-    # Act
-    Install-Package TestUpdatePackage -Version 1.0.0.0 -Source $context.RepositoryRoot -WhatIf
-
-    # Assert
-    # that the installed package is not touched.
-    Assert-Package $project TestUpdatePackage '2.0.0.0'
 }
 
 function Test-WebsiteSimpleInstall {
@@ -303,7 +126,7 @@ function Test-PackageWithIncompatibleAssembliesRollsInstallBack {
         $context
     )
     # Arrange
-    $p = New-WebApplication
+    $p = New-ConsoleApplication
 
     # Act & Assert
     Assert-Throws { Install-Package BingMapAppSDK -Project $p.Name -Source $context.RepositoryPath } "Could not install package 'BingMapAppSDK 1.0.1011.1716'. You are trying to install this package into a project that targets '.NETFramework,Version=v4.7.2', but the package does not contain any assembly references or content files that are compatible with that framework. For more information, contact the package author."
@@ -395,7 +218,7 @@ function Test-InstallComplexPackageStructure {
     )
 
     # Arrange
-    $p = New-WebApplication
+    $p = New-ConsoleApplication
 
     # Act
     Install-Package MyFirstPackage -Project $p.Name -Source $context.RepositoryPath
@@ -471,20 +294,6 @@ function Test-InstallCanPipeToFSharpProjects {
     Assert-NetCorePackageInLockFile $p elmah 1.1
 }
 
-function Test-PipingMultipleProjectsToInstall {
-    # Arrange
-    $projects = @((New-WebSite), (New-ClassLibrary), (New-WebApplication))
-
-Write-Host 'proejct creation successful'
-    # Act
-    $projects | Install-Package elmah
-
-Write-Host 'Installation successful'
-    # Assert
-    $projects | %{ Assert-Package $_ elmah }
-
-Write-Host 'Assertion successful'
-}
 
 function Test-InstallPackageWithNestedContentFile {
     [SkipTest('https://github.com/NuGet/Home/issues/8486')]
@@ -533,7 +342,7 @@ function Test-InstallPackageWithNestedReferences {
     )
 
     # Arrange
-    $p = New-WebApplication
+    $p = New-ConsoleApplication
 
     # Act
     Install-Package PackageWithNestedReferenceFolders -Source $context.RepositoryRoot
@@ -1170,7 +979,7 @@ function Test-InstallingPackageDoesNotOverwriteFileIfExistsOnDiskButNotInProject
     )
 
     # Arrange
-    $p = New-WebApplication
+    $p = New-ConsoleApplication
     $projectPath = Get-ProjectDir $p
     $fooPath = Join-Path $projectPath foo
     "file content" > $fooPath
@@ -1229,7 +1038,7 @@ function Test-InstallingPackageWithDependencyThatFailsShouldRollbackSuccessfully
         $context
     )
     # Arrange
-    $p = New-WebApplication
+    $p = New-ConsoleApplication
 
     # Act
     Assert-Throws { $p | Install-Package GoodPackageWithBadDependency -Source $context.RepositoryPath } "NOT #WINNING"
@@ -1461,7 +1270,7 @@ function Test-InstallPackageTargetingNetClientAndNet {
         $context
     )
     # Arrange
-    $p = New-WebApplication
+    $p = New-ConsoleApplication
 
     # Act
     $p | Install-Package PackageTargetingNetClientAndNet -Source $context.RepositoryRoot
@@ -1479,7 +1288,7 @@ function Test-InstallWithFailingInitPs1RollsBack {
         $context
     )
     # Arrange
-    $p = New-WebApplication
+    $p = New-ConsoleApplication
 
     # Act
     Assert-Throws { $p | Install-Package PackageWithFailingInitPs1 -Source $context.RepositoryRoot } "This is an exception"
@@ -1487,30 +1296,6 @@ function Test-InstallWithFailingInitPs1RollsBack {
     # Assert
     Assert-Null (Get-ProjectPackage $p PackageWithFailingInitPs1)
     Assert-Null (Get-SolutionPackage PackageWithFailingInitPs1)
-}
-
-<#
-function Test-InstallPackageWithBadFileInMachineCache {
-    # Arrange
-    # Write a bad package file to the machine cache
-    "foo" > "$($env:LocalAppData)\NuGet\Cache\Ninject.2.2.1.0.nupkg"
-
-    # Act
-    $p = New-WebApplication
-    $p | Install-Package Ninject -Version 2.2.1.0
-
-    # Assert
-    Assert-Package $p Ninject
-    Assert-SolutionPackage Ninject
-}
-#>
-
-function Test-InstallPackageThrowsWhenSourceIsInvalid {
-    # Arrange
-    $p = New-WebApplication
-
-    # Act & Assert
-    Assert-Throws { Install-Package jQuery -source "d:package" } "Unsupported type of source 'd:package'. Please provide an HTTP or local source."
 }
 
 function Test-InstallPackageInvokeInstallScriptWhenProjectNameHasApostrophe {
@@ -1653,22 +1438,6 @@ function Test-InstallPackageWithFrameworkRefsOnlyRequiredForSL {
     # Assert
     Assert-Package $p PackageWithNet40AndSLLibButOnlySLGacRefs
     Assert-SolutionPackage PackageWithNet40AndSLLibButOnlySLGacRefs
-}
-
-function Test-InstallPackageWithValuesFromPipe {
-    [SkipTest('https://github.com/NuGet/Home/issues/8496')]
-    param(
-        $context
-    )
-
-    # Arrange
-    $p = New-ClassLibrary
-
-    # Act
-    Get-Package -ListAvailable -Filter "Microsoft-web-helpers" | Install-Package
-
-    # Assert
-    Assert-Package $p Microsoft-web-helpers
 }
 
 function Test-InstallPackageInstallsHighestReleasedPackageIfPreReleaseFlagIsNotSet {
@@ -2226,27 +1995,6 @@ function Test-InstallFailCleansUpSatellitePackageFiles
     Assert-NoSolutionPackage A.fr -Version 1.0.0
 }
 
-function FileTransformWorksOnDependentFile
-{
-    param($context)
-
-    # Arrange
-    $p = New-WebApplication
-    Install-Package TTFile -Source $context.RepositoryPath
-
-    # Act
-    Install-Package test -Source $context.RepositoryPath
-
-    # Assert
-	Assert-Package $p TTFile
-	Assert-Package $p test
-
-	$projectDir = Split-Path -parent -path $p.FullName
-    $configFilePath = Join-Path -path $projectDir -childpath "one.config"
-	$content = [xml](Get-Content $configFilePath)
-    Assert-AreEqual "bar" $content.configuration["system.web"].compilation.foo
-}
-
 # Solution level package used
 function Test-InstallMetaPackageWorksAsExpected
 {
@@ -2337,20 +2085,6 @@ function Test-InstallPackageRespectAssemblyReferenceFilterOnSecondProject
     Assert-Package $q 'B' '1.0.0'
     Assert-Reference $q 'GrayscaleEffect'
     Assert-Null (Get-AssemblyReference $q 'Ookii.Dialogs.Wpf')
-}
-
-function Test-InstallPackageThrowsIfMinClientVersionIsNotSatisfied
-{
-    param ($context)
-
-    # Arrange
-    $p = New-ConsoleApplication
-
-    $currentSemanticVersion = Get-HostSemanticVersion
-
-    # Act & Assert
-    Assert-Throws { $p | Install-Package Kitty -Source $context.RepositoryPath } "The 'kitty 1.0.0' package requires NuGet client version '100.0.0' or above, but the current NuGet version is '$currentSemanticVersion'. To upgrade NuGet, please go to https://docs.nuget.org/consume/installing-nuget"
-    Assert-NoPackage $p "Kitty"
 }
 
 function Test-InstallPackageWithXdtTransformTransformsTheFile
@@ -2464,37 +2198,13 @@ function Test-SpecifyDifferentVersionThenServerVersion
     # checks for all variations of "2.0" (2.0, 2.0.0 and 2.0.0.0)
 
     # Arrange
-    $p = New-WebApplication
+    $p = New-ConsoleApplication
 
     # Act
     Install-Package jQuery -version 2.0
 
     # Assert
     Assert-Package $p jQuery
-}
-
-function Test-InstallLatestVersionWorksCorrectly
-{
-    # Arrange
-    $p = New-WebApplication
-
-    # Act
-    Install-Package A -ProjectName $p.Name -Source $context.RepositoryPath
-
-    # Assert
-    Assert-Package $p A 0.5
-}
-
-function Test-InstallLatestVersionWorksCorrectlyWithPrerelease
-{
-    # Arrange
-    $p = New-WebApplication
-
-    # Act
-    Install-Package A -IncludePrerelease -ProjectName $p.Name -Source $context.RepositoryPath
-
-    # Assert
-    Assert-Package $p A 0.6-beta
 }
 
 function Test-InstallPackageAddPackagesConfigFileToProject
@@ -2623,135 +2333,6 @@ function Test-InstallPackageAddMoreEntriesToProjectConfigFile
     Assert-Null (Get-ProjectItem $p 'packages.config')
 }
 
-# Tests that when -DependencyVersion HighestPatch is specified, the dependency with
-# the largest patch number is installed
-function Test-InstallPackageWithDependencyVersionHighestPatch
-{
-    param($context)
-
-    # A depends on B >= 1.0.0
-    # Available versions of B are: 1.0.0, 1.0.1, 1.2.0, 1.2.1, 2.0.0, 2.0.1
-
-    # Arrange
-    $p = New-ClassLibrary
-
-    # Act
-    $p | Install-Package A -Source $context.RepositoryPath -DependencyVersion HighestPatch
-
-    # Assert
-    Assert-Package $p A 1.0
-    Assert-Package $p B 1.0.1
-}
-
-# Tests that when -DependencyVersion HighestPatch is specified, the dependency with
-# the lowest major, highest minor, highest patch is installed
-function Test-InstallPackageWithDependencyVersionHighestMinor
-{
-    param($context)
-
-    # A depends on B >= 1.0.0
-    # Available versions of B are: 1.0.0, 1.0.1, 1.2.0, 1.2.1, 2.0.0, 2.0.1
-
-    # Arrange
-    $p = New-ClassLibrary
-
-    # Act
-    $p | Install-Package A -Source $context.RepositoryPath -DependencyVersion HighestMinor
-
-    # Assert
-    Assert-Package $p A 1.0
-    Assert-Package $p B 1.2.1
-}
-
-# Tests that when -DependencyVersion Highest is specified, the dependency with
-# the highest version installed
-function Test-InstallPackageWithDependencyVersionHighest
-{
-    param($context)
-
-    # A depends on B >= 1.0.0
-    # Available versions of B are: 1.0.0, 1.0.1, 1.2.0, 1.2.1, 2.0.0, 2.0.1
-
-    # Arrange
-    $p = New-ClassLibrary
-
-    # Act
-    $p | Install-Package A -Source $context.RepositoryPath -DependencyVersion Highest
-
-    # Assert
-    Assert-Package $p A 1.0
-    Assert-Package $p B 2.0.1
-}
-
-# Tests that when -DependencyVersion is lowest, the dependency with
-# the smallest patch number is installed
-function Test-InstallPackageWithDependencyVersionLowest
-{
-    param($context)
-
-    # A depends on B >= 1.0.0
-    # Available versions of B are: 1.0.0, 1.0.1, 1.2.0, 1.2.1, 2.0.0, 2.0.1
-
-    # Arrange
-    $p = New-ClassLibrary
-
-    # Act
-    $p | Install-Package A -Source $context.RepositoryPath -DependencyVersion Lowest
-
-    # Assert
-    Assert-Package $p A 1.0
-    Assert-Package $p B 1.0.0
-}
-
-# Tests the case when DependencyVersion is specified in nuget.config
-function Test-InstallPackageWithDependencyVersionHighestInNuGetConfig
-{
-    param($context)
-
-    # Arrange
-    Check-NuGetConfig
-
-    $componentModel = Get-VSComponentModel
-    $setting = $componentModel.GetService([NuGet.Configuration.ISettings])
-
-    try {
-        # Arrange
-        $p = New-ClassLibrary
-
-        $setting.AddOrUpdate('config', [NuGet.Configuration.AddItem]::new('dependencyversion', 'HighestPatch'))
-
-        # Act
-        $p | Install-Package jquery.validation -version 1.10
-
-        # Assert
-        Assert-Package $p jquery.validation 1.10
-        Assert-Package $p jquery 1.4.4
-    }
-    finally {
-        $setting.AddOrUpdate('config', [NuGet.Configuration.AddItem]::new('dependencyversion', $null))
-    }
-}
-
-# Tests that when -DependencyVersion is not specified, the dependency with
-# the smallest patch number is installed
-function Test-InstallPackageWithoutDependencyVersion
-{
-    param($context)
-
-   # A depends on B >= 1.0.0
-    # Available versions of B are: 1.0.0, 1.0.1, 1.2.0, 1.2.1, 2.0.0, 2.0.1
-
-    # Arrange
-    $p = New-ClassLibrary
-
-    # Act
-    $p | Install-Package A -Source $context.RepositoryPath
-
-    # Assert
-    Assert-Package $p A 1.0
-    Assert-Package $p B 1.0.0
-}
-
 # Tests that passing in online path to a packages.config file to
 # Install-Package works.
 function Test-InstallPackagesConfigOnline
@@ -2768,25 +2349,6 @@ function Test-InstallPackagesConfigOnline
 
     # Assert
     Assert-Package $p Newtonsoft.Json 4.0.1
-}
-
-# Tests that passing in local path to a packages.config file to
-# Install-Package works.
-function Test-InstallPackagesConfigLocal
-{
-    param($context)
-
-    # Arrange
-    $p = New-ClassLibrary
-    $pathToPackagesConfig = Join-Path $context.RepositoryRoot "InstallPackagesConfigLocal\packages.config"
-
-    # Act
-    $p | Install-Package $pathToPackagesConfig
-
-    # Assert
-    Assert-Package $p jQuery.validation 1.13.1
-    Assert-Package $p jQuery 2.1.3
-    Assert-Package $p EntityFramework 6.1.3-beta1
 }
 
 # Tests that passing in online path to a .nupkg file to
@@ -2884,22 +2446,6 @@ function Test-InstallPackageWithScriptAddImportFile
     # Assert
     $errorlist = Get-Errors
     Assert-AreEqual 0 $errorlist.Count
-}
-
-# Temporarily disable this test
-function Disable-Test-InstallPackageInCpsApp
-{
-    param($context)
-
-    # Arrange
-    $p = New-CpsApp "CpsProject"
-
-    #Act
-    $p | Install-Package GoogleAnalyticsTracker.Core -version 3.2.0
-
-    # Assert
-    $item = Get-ProjectItem $p packages.config
-    Assert-NotNull $item
 }
 
 function Test-InstallPackageWithEscapedSymbolInPath()

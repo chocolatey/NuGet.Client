@@ -1,10 +1,14 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.VisualStudio.Sdk.TestFramework;
 using Moq;
 using NuGet.Common;
 
@@ -14,7 +18,11 @@ namespace NuGet.VisualStudio.Common.Test
     {
         public abstract class LogAndReportErrorTests : OutputConsoleLoggerTests
         {
-            protected void VerifyThatEntryToErrorListIsAdded(Action<LogMessage> action, LogLevel logLevel, int verbosityLevel)
+            public LogAndReportErrorTests(GlobalServiceProvider sp)
+                : base(sp)
+            { }
+
+            protected async Task VerifyThatEntryToErrorListIsAddedAsync(Action<LogMessage> action, LogLevel logLevel, int verbosityLevel)
             {
                 ErrorListTableEntry[] errorListTableEntries = null;
 
@@ -25,7 +33,7 @@ namespace NuGet.VisualStudio.Common.Test
                 _msBuildOutputVerbosity = verbosityLevel;
 
                 action(new LogMessage(logLevel, "message"));
-
+                await WaitForInitializationAsync();
                 _errorList.Verify(el => el.AddNuGetEntries(It.IsAny<ErrorListTableEntry[]>()));
 
                 errorListTableEntries.Length.Should().Be(1);

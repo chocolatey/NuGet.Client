@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>$(TargetFrameworksExeForSigning)</TargetFrameworks>
-    <UseParallelXunit>true</UseParallelXunit>
+    <TargetFramework>$(LatestNETCoreTargetFramework)</TargetFramework>
     <Description>Unit tests for NuGet.CommandLine.XPlat.</Description>
   </PropertyGroup>
 
@@ -11,13 +10,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="System.IO.Compression" />
+    <PackageReference Include="Microsoft.Build" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Build.Framework" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Build.Locator" />
+    <PackageReference Include="Spectre.Console.Testing" />
+    <PackageReference Include="System.CommandLine" />
   </ItemGroup>
 
   <ItemGroup>
-      <PackageReference Include="Microsoft.Build" ExcludeAssets="runtime" />
-      <PackageReference Include="Microsoft.Build.Framework" ExcludeAssets="runtime" />
-      <PackageReference Include="Microsoft.Build.Locator" />
-      <PackageReference Include="System.Memory" />
+    <EmbeddedResource Include="compiler\resources\**\*" />
   </ItemGroup>
 </Project>

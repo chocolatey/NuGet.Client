@@ -21,8 +21,6 @@ namespace NuGet.PackageManagement.VisualStudio
 
         #region INuGetProjectServices
 
-        public IProjectBuildProperties BuildProperties => _vsProjectAdapter.BuildProperties;
-
         public IProjectSystemCapabilities Capabilities => this;
 
         public IProjectSystemReferencesReader ReferencesReader { get; }

@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,7 +28,7 @@ namespace NuGet.Protocol.Tests
 
         public override LocalPackageInfo GetPackage(PackageIdentity identity, ILogger logger, CancellationToken token)
         {
-            return Packages.Where(p => p.Identity.Equals(identity)).FirstOrDefault();
+            return Packages.FirstOrDefault(p => p.Identity.Equals(identity));
         }
 
         public override LocalPackageInfo GetPackage(Uri path, ILogger logger, CancellationToken token)

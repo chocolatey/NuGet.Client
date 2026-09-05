@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Common;
@@ -25,7 +26,7 @@ namespace NuGet.Protocol.Plugins
         /// Instantiates a new instance of the <see cref="LogRequestHandler" /> class.
         /// </summary>
         /// <param name="logger">A logger.</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> is <see langword="null" />.</exception>
         public LogRequestHandler(ILogger logger)
         {
             if (logger == null)
@@ -45,12 +46,16 @@ namespace NuGet.Protocol.Plugins
         /// <param name="cancellationToken">A cancellation token.</param>
         /// <returns>A task that represents the asynchronous operation.</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="connection" />
-        /// is <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="request" /> is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="request" /> is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="responseHandler" />
-        /// is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="cancellationToken" />
         /// is cancelled.</exception>
+#if NET5_0_OR_GREATER
+        [UnconditionalSuppressMessage("AOT", "IL2026", Justification = "PayloadObject is always a typed object (not JObject) in these scenarios; the reflection code path is not reached.")]
+        [UnconditionalSuppressMessage("AOT", "IL3050", Justification = "PayloadObject is always a typed object (not JObject) in these scenarios; the reflection code path is not reached.")]
+#endif
         public async Task HandleResponseAsync(
             IConnection connection,
             Message request,
@@ -74,7 +79,8 @@ namespace NuGet.Protocol.Plugins
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            var logRequest = MessageUtilities.DeserializePayload<LogRequest>(request);
+            // Deserialized payload is non-null for well-formed handler requests.
+            var logRequest = MessageUtilities.DeserializePayload<LogRequest>(request)!;
             MessageResponseCode responseCode;
 
             if (logRequest.LogLevel >= _logLevel)
@@ -97,7 +103,8 @@ namespace NuGet.Protocol.Plugins
         /// Sets the logger.
         /// </summary>
         /// <param name="logger">A logger.</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> is <see langword="null" />.</exception>
+        [MemberNotNull(nameof(_logger))]
         public void SetLogger(ILogger logger)
         {
             if (logger == null)
@@ -119,7 +126,7 @@ namespace NuGet.Protocol.Plugins
         /// </summary>
         /// <param name="logger">A logger.</param>
         /// <returns>A log level.</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> is <see langword="null" />.</exception>
         public static LogLevel GetLogLevel(ILogger logger)
         {
             if (logger == null)

@@ -25,9 +25,9 @@ namespace NuGet.Packaging.Signing
     public sealed class PolicyQualifierInfo
     {
         public Oid PolicyQualifierId { get; }
-        public byte[] Qualifier { get; }
+        public byte[]? Qualifier { get; }
 
-        private PolicyQualifierInfo(Oid policyQualifierId, byte[] qualifier)
+        private PolicyQualifierInfo(Oid policyQualifierId, byte[]? qualifier)
         {
             PolicyQualifierId = policyQualifierId;
             Qualifier = qualifier;
@@ -44,7 +44,7 @@ namespace NuGet.Packaging.Signing
         {
             var policyQualifierReader = reader.ReadSequence();
             var policyQualifierId = policyQualifierReader.ReadOid();
-            byte[] qualifier = null;
+            byte[]? qualifier = null;
 
             if (policyQualifierReader.HasData)
             {

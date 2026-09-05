@@ -1,7 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System.Globalization;
+#nullable disable
+
 using Microsoft.Build.Framework;
 using NuGet.ProjectModel;
 
@@ -10,6 +11,7 @@ namespace NuGet.Build.Tasks
     /// <summary>
     /// Gets the project style.
     /// </summary>
+    [MSBuildMultiThreadableTask]
     public sealed class GetRestoreProjectStyleTask : Microsoft.Build.Utilities.Task
     {
         /// <summary>
@@ -33,11 +35,6 @@ namespace NuGet.Build.Tasks
         public string MSBuildProjectName { get; set; }
 
         /// <summary>
-        /// The path to a project.json file.
-        /// </summary>
-        public string ProjectJsonPath { get; set; }
-
-        /// <summary>
         /// Gets or sets the <see cref="ProjectModel.ProjectStyle"/> of the project.
         /// </summary>
         [Output]
@@ -52,21 +49,10 @@ namespace NuGet.Build.Tasks
         {
             var log = new MSBuildLogger(Log);
 
-            // Log Inputs
-            BuildTasksUtility.LogInputParam(log, nameof(HasPackageReferenceItems), HasPackageReferenceItems.ToString(CultureInfo.CurrentCulture));
-            BuildTasksUtility.LogInputParam(log, nameof(MSBuildProjectDirectory), MSBuildProjectDirectory);
-            BuildTasksUtility.LogInputParam(log, nameof(MSBuildProjectName), MSBuildProjectName);
-            BuildTasksUtility.LogInputParam(log, nameof(ProjectJsonPath), ProjectJsonPath);
-            BuildTasksUtility.LogInputParam(log, nameof(RestoreProjectStyle), RestoreProjectStyle);
+            var result = BuildTasksUtility.GetProjectRestoreStyle(RestoreProjectStyle, HasPackageReferenceItems, MSBuildProjectDirectory, MSBuildProjectName, log);
 
-            var result = BuildTasksUtility.GetProjectRestoreStyle(RestoreProjectStyle, HasPackageReferenceItems, ProjectJsonPath, MSBuildProjectDirectory, MSBuildProjectName, log);
-
-            IsPackageReferenceCompatibleProjectStyle = result.IsPackageReferenceCompatibleProjectStyle;
+            IsPackageReferenceCompatibleProjectStyle = result.ProjectStyle == ProjectStyle.PackageReference;
             ProjectStyle = result.ProjectStyle;
-
-            // Log Outputs
-            BuildTasksUtility.LogOutputParam(log, nameof(IsPackageReferenceCompatibleProjectStyle), IsPackageReferenceCompatibleProjectStyle.ToString(CultureInfo.CurrentCulture));
-            BuildTasksUtility.LogOutputParam(log, nameof(ProjectStyle), ProjectStyle.ToString());
 
             return !Log.HasLoggedErrors;
         }

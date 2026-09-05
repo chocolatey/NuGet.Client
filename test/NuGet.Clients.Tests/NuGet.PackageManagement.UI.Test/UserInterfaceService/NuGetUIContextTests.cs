@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,7 +11,6 @@ using System.Threading.Tasks;
 using Microsoft.ServiceHub.Framework;
 using Moq;
 using NuGet.Configuration;
-using NuGet.PackageManagement.UI.Utility;
 using NuGet.PackageManagement.VisualStudio;
 using NuGet.Packaging;
 using NuGet.Packaging.Core;
@@ -18,6 +19,8 @@ using NuGet.Protocol.Core.Types;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
 using NuGet.VisualStudio;
+using NuGet.VisualStudio.Internal.Contracts;
+using NuGet.VisualStudio.Telemetry;
 using Xunit;
 
 namespace NuGet.PackageManagement.UI.Test.UserInterfaceService
@@ -133,13 +136,32 @@ namespace NuGet.PackageManagement.UI.Test.UserInterfaceService
             Assert.True(wasEventRaised);
         }
 
+        [Fact]
+        public void PackageSourceMapping_OnSettingsChanged_ReferencesNewObject()
+        {
+            // Arrange
+            var settings = new Mock<ISettings>();
+            NuGetUIContext nuGetUIContext = CreateNuGetUIContext(settings.Object);
+            PackageSourceMapping targetBefore = nuGetUIContext.PackageSourceMapping;
+
+            // Act
+            settings.Raise(s => s.SettingsChanged += null, (EventArgs)null);
+
+            PackageSourceMapping targetAfter = nuGetUIContext.PackageSourceMapping;
+
+            // Assert
+            Assert.NotEqual(targetBefore, targetAfter);
+        }
+
         public void Dispose()
         {
             _testDirectory.Dispose();
         }
 
-        private NuGetUIContext CreateNuGetUIContext()
+        private NuGetUIContext CreateNuGetUIContext(ISettings settings = null, INuGetTelemetryProvider nuGetTelemetryProvider = null)
         {
+            settings = settings ?? Mock.Of<ISettings>();
+            nuGetTelemetryProvider = nuGetTelemetryProvider ?? Mock.Of<INuGetTelemetryProvider>();
             var sourceRepositoryProvider = Mock.Of<ISourceRepositoryProvider>();
             var packageManager = new NuGetPackageManager(
                 sourceRepositoryProvider,
@@ -148,18 +170,20 @@ namespace NuGet.PackageManagement.UI.Test.UserInterfaceService
 
             return new NuGetUIContext(
                 Mock.Of<IServiceBroker>(),
-                Mock.Of<IReconnectingNuGetSearchService>(),
+                Mock.Of<INuGetSearchService>(),
                 _solutionManager.Object,
                 new NuGetSolutionManagerServiceWrapper(),
                 packageManager,
                 new UIActionEngine(
                     sourceRepositoryProvider,
                     packageManager,
-                    Mock.Of<INuGetLockService>()),
+                    Mock.Of<INuGetLockService>(),
+                    Mock.Of<INuGetTelemetryProvider>()),
                 Mock.Of<IPackageRestoreManager>(),
                 Mock.Of<IOptionsPageActivator>(),
                 Mock.Of<IUserSettingsManager>(),
-                new NuGetSourcesServiceWrapper());
+                new NuGetSourcesServiceWrapper(),
+                settings);
         }
 
         private sealed class TestNuGetProject : NuGetProject

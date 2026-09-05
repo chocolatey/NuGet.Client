@@ -6,9 +6,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.ServiceHub.Framework;
+using Microsoft.VisualStudio.Sdk.TestFramework;
 using Microsoft.VisualStudio.Threading;
 using Moq;
-using NuGet.PackageManagement.UI.Utility;
+using NuGet.PackageManagement.VisualStudio;
 using NuGet.Packaging.Core;
 using NuGet.Protocol.Core.Types;
 using NuGet.Versioning;
@@ -26,8 +27,9 @@ namespace NuGet.PackageManagement.UI.Test
         {
             var solutionManager = Mock.Of<INuGetSolutionManagerService>();
             var uiContext = new Mock<INuGetUIContext>();
-            var searchService = Mock.Of<IReconnectingNuGetSearchService>();
+            var searchService = Mock.Of<INuGetSearchService>();
             var packageFileService = Mock.Of<INuGetPackageFileService>();
+            var packageVulnerabilityService = Mock.Of<IPackageVulnerabilityService>();
 
             uiContext.Setup(x => x.SolutionManagerService)
                 .Returns(solutionManager);
@@ -57,7 +59,8 @@ namespace NuGet.PackageManagement.UI.Test
                 searchService,
                 packageFileService,
                 "EntityFramework",
-                includePrerelease: false);
+                includePrerelease: false,
+                vulnerabilityService: packageVulnerabilityService);
 
             var packageSearchMetadata = new PackageSearchMetadataBuilder.ClonedPackageSearchMetadata()
             {
@@ -88,8 +91,9 @@ namespace NuGet.PackageManagement.UI.Test
         {
             var solutionManager = Mock.Of<INuGetSolutionManagerService>();
             var uiContext = new Mock<INuGetUIContext>();
-            var searchService = Mock.Of<IReconnectingNuGetSearchService>();
+            var searchService = Mock.Of<INuGetSearchService>();
             var packageFileService = Mock.Of<INuGetPackageFileService>();
+            var packageVulnerabilityService = Mock.Of<IPackageVulnerabilityService>();
 
             uiContext.Setup(x => x.SolutionManagerService)
                 .Returns(solutionManager);
@@ -125,7 +129,8 @@ namespace NuGet.PackageManagement.UI.Test
                 searchService,
                 packageFileService,
                 "EntityFramework",
-                includePrerelease: false);
+                includePrerelease: false,
+                vulnerabilityService: packageVulnerabilityService);
 
             var packageSearchMetadata = new PackageSearchMetadataBuilder.ClonedPackageSearchMetadata()
             {

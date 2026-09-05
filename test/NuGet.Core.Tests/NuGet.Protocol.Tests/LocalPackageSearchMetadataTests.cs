@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Threading.Tasks;
 using NuGet.Packaging;
@@ -65,6 +67,17 @@ namespace NuGet.Protocol.Tests
             Assert.True(_testData.TestData.IconUrl.IsFile);
             Assert.True(_testData.TestData.IconUrl.IsAbsoluteUri);
             Assert.NotNull(_testData.TestData.IconUrl.Fragment);
+        }
+
+        [Fact]
+        public void ReadmeFileUrl_ReturnsEmbeddedReadmeUri()
+        {
+            Assert.NotNull(_testData.TestData.ReadmeFileUrl);
+
+            var readmeFileUri = new Uri(_testData.TestData.ReadmeFileUrl);
+            Assert.True(readmeFileUri.IsFile);
+            Assert.True(readmeFileUri.IsAbsoluteUri);
+            Assert.NotNull(readmeFileUri.Fragment);
         }
     }
 }

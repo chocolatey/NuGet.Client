@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -47,7 +49,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
 
                 var context = new MockSdkResolverContext(testDirectory);
 
-                var globalJsonReader = new GlobalJsonReader();
+                var globalJsonReader = GlobalJsonReader.Instance;
 
                 string actualGlobalJsonPath = null;
 
@@ -94,7 +96,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
 }}
 }}");
 
-                var globalJsonReader = new GlobalJsonReader();
+                var globalJsonReader = GlobalJsonReader.Instance;
 
                 string actualGlobalJsonPath = null;
 
@@ -127,7 +129,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
 
                 var context = new MockSdkResolverContext(testDirectory);
 
-                var globalJsonReader = new GlobalJsonReader();
+                var globalJsonReader = GlobalJsonReader.Instance;
 
                 string actualGlobalJsonPath = null;
 
@@ -164,7 +166,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
 
                 var context = new MockSdkResolverContext(testDirectory);
 
-                var globalJsonReader = new GlobalJsonReader();
+                var globalJsonReader = GlobalJsonReader.Instance;
 
                 string actualGlobalJsonPath = null;
 
@@ -197,7 +199,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
 
                 var context = new MockSdkResolverContext(testDirectory);
 
-                var globalJsonReader = new GlobalJsonReader();
+                var globalJsonReader = GlobalJsonReader.Instance;
 
                 Dictionary<string, int> globalJsonReadCountByPath = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
@@ -246,7 +248,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
         }
 
         /// <summary>
-        /// Verifies that <see cref="GlobalJsonReader.GetMSBuildSdkVersions(Framework.SdkResolverContext)" /> returns <c>null</c> when a file is not found in a parent directory.
+        /// Verifies that <see cref="GlobalJsonReader.GetMSBuildSdkVersions(Framework.SdkResolverContext)" /> returns <see langword="null" /> when a file is not found in a parent directory.
         /// </summary>
         [Fact]
         public void GetMSBuildSdkVersions_ReturnsNull_WhenGlobalJsonDoesNotExist()
@@ -258,7 +260,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
             {
                 var context = new MockSdkResolverContext(testDirectory);
 
-                var globalJsonReader = new GlobalJsonReader();
+                var globalJsonReader = GlobalJsonReader.Instance;
 
                 bool wasGlobalJsonRead = false;
 
@@ -274,7 +276,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
         }
 
         /// <summary>
-        /// Verifies that <see cref="GlobalJsonReader.GetMSBuildSdkVersions(Framework.SdkResolverContext)" /> returns <c>null</c> when the specified global.json is empty or does not contain an msbuild-sdks section.
+        /// Verifies that <see cref="GlobalJsonReader.GetMSBuildSdkVersions(Framework.SdkResolverContext)" /> returns <see langword="null" /> when the specified global.json is empty or does not contain an msbuild-sdks section.
         /// </summary>
         [Theory]
         [InlineData("{ }")]
@@ -289,7 +291,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
 
                 var context = new MockSdkResolverContext(testDirectory);
 
-                var globalJsonReader = new GlobalJsonReader();
+                var globalJsonReader = GlobalJsonReader.Instance;
 
                 bool wasGlobalJsonRead = false;
 
@@ -305,7 +307,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
         }
 
         /// <summary>
-        /// Verifies that <see cref="GlobalJsonReader.GetMSBuildSdkVersions(Framework.SdkResolverContext)" /> returns <c>null</c> when the specified global.json contains valid JSON but the msbuild-sdks section isn't correctly declared.
+        /// Verifies that <see cref="GlobalJsonReader.GetMSBuildSdkVersions(Framework.SdkResolverContext)" /> returns <see langword="null" /> when the specified global.json contains valid JSON but the msbuild-sdks section isn't correctly declared.
         /// </summary>
         [Theory]
         [InlineData("1")] // A number value
@@ -325,7 +327,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
   ""msbuild-sdks"": {msbuildSdksSection}
 }}");
 
-                var globalJsonReader = new GlobalJsonReader();
+                var globalJsonReader = GlobalJsonReader.Instance;
 
                 bool wasGlobalJsonRead = false;
 
@@ -341,14 +343,14 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
         }
 
         /// <summary>
-        /// Verifies that <see cref="GlobalJsonReader.GetMSBuildSdkVersions(Framework.SdkResolverContext)" /> returns <c>null</c> when the <see cref="Framework.SdkResolverContext.SolutionFilePath" /> and <see cref="Framework.SdkResolverContext.ProjectFilePath" /> is null.
+        /// Verifies that <see cref="GlobalJsonReader.GetMSBuildSdkVersions(Framework.SdkResolverContext)" /> returns <see langword="null" /> when the <see cref="Framework.SdkResolverContext.SolutionFilePath" /> and <see cref="Framework.SdkResolverContext.ProjectFilePath" /> is null.
         /// </summary>
         [Fact]
         public void GetMSBuildSdkVersions_ReturnsNull_WhenSolutionFilePathAndProjectFilePathIsNull()
         {
             var context = new MockSdkResolverContext(projectPath: null, solutionPath: null);
 
-            var globalJsonReader = new GlobalJsonReader();
+            var globalJsonReader = GlobalJsonReader.Instance;
 
             bool wasGlobalJsonRead = false;
 
@@ -404,7 +406,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
 
                 var context = new MockSdkResolverContext(testDirectory);
 
-                var globalJsonReader = new GlobalJsonReader();
+                var globalJsonReader = GlobalJsonReader.Instance;
 
                 bool wasGlobalJsonRead = false;
 
@@ -472,7 +474,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
         }
 
         /// <summary>
-        /// Verifies that <see cref="GlobalJsonReader.TryGetPathOfFileAbove(string, DirectoryInfo, out FileInfo)" /> return <c>false</c> when a file could not be found.
+        /// Verifies that <see cref="GlobalJsonReader.TryGetPathOfFileAbove(string, DirectoryInfo, out FileInfo)" /> return <see langword="false" /> when a file could not be found.
         /// </summary>
         [Fact]
         public void TryGetPathOfFileAbove_ReturnsFalse_WhenFileIsNotFound()
@@ -493,7 +495,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
         }
 
         /// <summary>
-        /// Verifies that <see cref="GlobalJsonReader.TryGetPathOfFileAbove(string, DirectoryInfo, out FileInfo)" /> return <c>false</c> when specifying <c>null</c> for the file parameter.
+        /// Verifies that <see cref="GlobalJsonReader.TryGetPathOfFileAbove(string, DirectoryInfo, out FileInfo)" /> return <see langword="false" /> when specifying <see langword="null" /> for the file parameter.
         /// </summary>
         [Fact]
         public void TryGetPathOfFileAbove_ReturnsFalse_WhenFileIsNull()
@@ -508,7 +510,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
         }
 
         /// <summary>
-        /// Verifies that <see cref="GlobalJsonReader.TryGetPathOfFileAbove(string, DirectoryInfo, out FileInfo)" /> return <c>false</c> when specifying a starting directory that does not exist.
+        /// Verifies that <see cref="GlobalJsonReader.TryGetPathOfFileAbove(string, DirectoryInfo, out FileInfo)" /> return <see langword="false" /> when specifying a starting directory that does not exist.
         /// </summary>
         [Fact]
         public void TryGetPathOfFileAbove_ReturnsFalse_WhenStartingDirectoryDoesNotExist()
@@ -525,7 +527,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
         }
 
         /// <summary>
-        /// Verifies that <see cref="GlobalJsonReader.TryGetPathOfFileAbove(string, DirectoryInfo, out FileInfo)" /> return <c>false</c> when specifying <c>null</c> for the startingDirectory parameter.
+        /// Verifies that <see cref="GlobalJsonReader.TryGetPathOfFileAbove(string, DirectoryInfo, out FileInfo)" /> return <see langword="false" /> when specifying <see langword="null" /> for the startingDirectory parameter.
         /// </summary>
         [Fact]
         public void TryGetPathOfFileAbove_ReturnsFalse_WhenStartingDirectoryIsNull()
@@ -537,7 +539,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
         }
 
         /// <summary>
-        /// Verifies that <see cref="GlobalJsonReader.TryGetPathOfFileAbove(string, DirectoryInfo, out FileInfo)" /> return <c>true</c> and the path to the file when one is found.
+        /// Verifies that <see cref="GlobalJsonReader.TryGetPathOfFileAbove(string, DirectoryInfo, out FileInfo)" /> return <see langword="true" /> and the path to the file when one is found.
         /// </summary>
         [Fact]
         public void TryGetPathOfFileAbove_ReturnsTrue_WhenFileIsFound()

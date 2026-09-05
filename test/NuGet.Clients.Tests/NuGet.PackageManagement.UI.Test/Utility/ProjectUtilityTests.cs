@@ -8,7 +8,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.ServiceHub.Framework;
 using Moq;
-using NuGet.PackageManagement.VisualStudio;
 using NuGet.VisualStudio.Internal.Contracts;
 using Xunit;
 
@@ -124,7 +123,7 @@ namespace NuGet.PackageManagement.UI.Test
                         It.IsAny<ServiceActivationOptions>(),
                         It.IsAny<CancellationToken>()))
 #pragma warning restore ISB001 // Dispose of proxies
-                .Returns(new ValueTask<INuGetProjectManagerService>(projectManagerService.Object));
+                .Returns(new ValueTask<INuGetProjectManagerService?>(projectManagerService.Object));
 
             return projectManagerService;
         }

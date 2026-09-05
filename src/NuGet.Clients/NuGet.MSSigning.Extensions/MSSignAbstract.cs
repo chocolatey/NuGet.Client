@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -88,7 +90,29 @@ namespace NuGet.MSSigning.Extensions
 
         protected X509Certificate2 GetCertificate(X509Certificate2Collection certCollection)
         {
-            var matchingCertCollection = certCollection.Find(X509FindType.FindByThumbprint, CertificateFingerprint, validOnly: false);
+            X509Certificate2Collection matchingCertCollection = [];
+
+            if (CertificateUtility.TryDeduceHashAlgorithm(CertificateFingerprint, out Common.HashAlgorithmName hashAlgorithmName))
+            {
+                if (hashAlgorithmName == Common.HashAlgorithmName.SHA1)
+                {
+                    matchingCertCollection = certCollection.Find(X509FindType.FindByThumbprint, CertificateFingerprint, validOnly: false);
+                }
+                else if (hashAlgorithmName != Common.HashAlgorithmName.Unknown)
+                {
+                    foreach (var cert in certCollection)
+                    {
+                        string actualFingerprint = CertificateUtility.GetHashString(cert, hashAlgorithmName);
+
+                        if (string.Equals(actualFingerprint, CertificateFingerprint, StringComparison.InvariantCultureIgnoreCase))
+                        {
+                            matchingCertCollection.Add(cert);
+                            break;
+                        }
+                    }
+
+                }
+            }
 
             if (matchingCertCollection == null || matchingCertCollection.Count == 0)
             {
@@ -154,11 +178,13 @@ namespace NuGet.MSSigning.Extensions
                         nameof(KeyContainer)));
             }
 
-            if (string.IsNullOrEmpty(CertificateFingerprint))
+            if (string.IsNullOrEmpty(CertificateFingerprint) ||
+                !CertificateUtility.TryDeduceHashAlgorithm(CertificateFingerprint, out Common.HashAlgorithmName hashAlgorithmName) ||
+                hashAlgorithmName == Common.HashAlgorithmName.SHA1)
             {
                 throw new ArgumentException(string.Format(CultureInfo.CurrentCulture,
-                        NuGetMSSignCommand.MSSignCommandInvalidArgumentException,
-                        nameof(CertificateFingerprint)));
+                        NuGetMSSignCommand.MSSignCommandInvalidCertificateFingerprint,
+                        NuGetLogCode.NU3043));
             }
         }
 

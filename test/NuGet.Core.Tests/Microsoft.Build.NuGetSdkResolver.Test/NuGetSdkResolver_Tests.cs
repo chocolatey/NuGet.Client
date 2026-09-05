@@ -1,13 +1,17 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Build.Framework;
 using NuGet.Packaging;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
+using Test.Utility;
 using Xunit;
 
 namespace Microsoft.Build.NuGetSdkResolver.Test
@@ -77,7 +81,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
         /// </summary>
         /// <returns></returns>
         [Fact]
-        public void Resolve_WhenPackageExists_ReturnsSucceededSdkResult()
+        public async Task Resolve_WhenPackageExists_ReturnsSucceededSdkResult()
         {
             using (var pathContext = new SimpleTestPathContext())
             {
@@ -85,7 +89,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
                 var package = new SimpleTestPackageContext(sdkReference.Name, sdkReference.Version);
                 package.AddFile("Sdk/Sdk.props", "<Project />");
                 package.AddFile("Sdk/Sdk.targets", "<Project />");
-                SimpleTestPackageUtility.CreateFolderFeedV3Async(pathContext.PackageSource, PackageSaveMode.Defaultv3, package).Wait();
+                await SimpleTestPackageUtility.CreateFolderFeedV3Async(pathContext.PackageSource, PackageSaveMode.Defaultv3, package);
                 var sdkResolverContext = new MockSdkResolverContext(pathContext.WorkingDirectory);
                 var sdkResultFactory = new MockSdkResultFactory();
                 var sdkResolver = new NuGetSdkResolver();
@@ -149,7 +153,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
         }
 
         /// <summary>
-        /// Verifies that <see cref="NuGetSdkResolver.TryGetNuGetVersionForSdk(string, string, SdkResolverContext, out object)" /> returns <c>null</c> when an invalid version is specified in global.json.
+        /// Verifies that <see cref="NuGetSdkResolver.TryGetNuGetVersionForSdk(string, string, SdkResolverContext, out object)" /> returns <see langword="null" /> when an invalid version is specified in global.json.
         /// </summary>
         [Fact]
         public void TryGetNuGetVersionForSdk_WhenInvalidVersionInGlobalJson_ReturnsNull()
@@ -169,7 +173,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
         }
 
         /// <summary>
-        /// Verifies that <see cref="NuGetSdkResolver.TryGetNuGetVersionForSdk(string, string, SdkResolverContext, out object)" /> returns <c>null</c> when an invalid version is specified in a project.
+        /// Verifies that <see cref="NuGetSdkResolver.TryGetNuGetVersionForSdk(string, string, SdkResolverContext, out object)" /> returns <see langword="null" /> when an invalid version is specified in a project.
         /// </summary>
         [Fact]
         public void TryGetNuGetVersionForSdk_WhenInvalidVersionSpecified_ReturnsNull()
@@ -199,7 +203,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
         }
 
         /// <summary>
-        /// Verifies that <see cref="NuGetSdkResolver.TryGetNuGetVersionForSdk(string, string, SdkResolverContext, out object)" /> returns <c>null</c> when the project path is <c>null</c>.
+        /// Verifies that <see cref="NuGetSdkResolver.TryGetNuGetVersionForSdk(string, string, SdkResolverContext, out object)" /> returns <see langword="null" /> when the project path is <see langword="null" />.
         /// </summary>
         [Fact]
         public void TryGetNuGetVersionForSdk_WhenProjectPathIsNullAndVersionIsNull_ReturnsNull()
@@ -214,7 +218,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
         }
 
         /// <summary>
-        /// Verifies that <see cref="NuGetSdkResolver.TryGetNuGetVersionForSdk(string, string, SdkResolverContext, out object)" /> returns <c>null</c> when the state of a previous call has no version specified.
+        /// Verifies that <see cref="NuGetSdkResolver.TryGetNuGetVersionForSdk(string, string, SdkResolverContext, out object)" /> returns <see langword="null" /> when the state of a previous call has no version specified.
         /// </summary>
         [Fact]
         public void TryGetNuGetVersionForSdk_WhenStateContainsNoVersion_ReturnsNull()
@@ -235,7 +239,7 @@ namespace Microsoft.Build.NuGetSdkResolver.Test
         {
             var globalJsonReader = new MockGlobalJsonReader(allVersions);
 
-            var sdkResolver = new NuGetSdkResolver(globalJsonReader);
+            var sdkResolver = new NuGetSdkResolver(globalJsonReader, TestEnvironmentVariableReader.EmptyInstance);
 
             var result = sdkResolver.TryGetNuGetVersionForSdk(PackageA, version, context, out var parsedVersion);
 

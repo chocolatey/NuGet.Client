@@ -18,10 +18,10 @@ namespace NuGet.Protocol
         {
         }
 
-        public override async Task<Tuple<bool, INuGetResource>> TryCreate(SourceRepository source, CancellationToken token)
+        public override async Task<Tuple<bool, INuGetResource?>> TryCreate(SourceRepository source, CancellationToken token)
         {
-            RawSearchResourceV3 curResource = null;
-            var serviceIndex = await source.GetResourceAsync<ServiceIndexResourceV3>();
+            RawSearchResourceV3? curResource = null;
+            var serviceIndex = await source.GetResourceAsync<ServiceIndexResourceV3>(token);
 
             if (serviceIndex != null)
             {
@@ -29,14 +29,15 @@ namespace NuGet.Protocol
 
                 if (endpoints.Count > 0)
                 {
-                    var httpSourceResource = await source.GetResourceAsync<HttpSourceResource>(token);
+                    var httpSourceResource = await source.GetResourceAsync<HttpSourceResource>(token)
+                        ?? throw new InvalidOperationException($"The source '{source.PackageSource.Source}' does not provide {nameof(HttpSourceResource)}.");
 
                     // construct a new resource
                     curResource = new RawSearchResourceV3(httpSourceResource.HttpSource, endpoints);
                 }
             }
 
-            return new Tuple<bool, INuGetResource>(curResource != null, curResource);
+            return new Tuple<bool, INuGetResource?>(curResource != null, curResource);
         }
     }
 }

@@ -20,11 +20,11 @@ namespace NuGet.Packaging.Signing
 
         public WarningLevel WarningLevel { get; set; } = WarningLevel.Severe; //setting default to Severe as 0 implies show no warnings
 
-        public string ProjectPath { get; set; }
+        public string? ProjectPath { get; set; }
 
         public DateTimeOffset Time { get; set; }
 
-        public string LibraryId { get; set; }
+        public string? LibraryId { get; set; }
 
         private SignatureLog(LogLevel level, NuGetLogCode code, string message)
         {
@@ -71,7 +71,7 @@ namespace NuGet.Packaging.Signing
             return new SignatureLog(LogLevel.Error, code, message);
         }
 
-        public bool Equals(SignatureLog other)
+        public bool Equals(SignatureLog? other)
         {
             if (other == null)
             {

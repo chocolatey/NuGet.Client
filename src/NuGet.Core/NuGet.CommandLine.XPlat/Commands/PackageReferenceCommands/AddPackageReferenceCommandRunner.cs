@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -19,6 +21,7 @@ using NuGet.Packaging;
 using NuGet.Packaging.Core;
 using NuGet.ProjectModel;
 using NuGet.Protocol.Core.Types;
+using NuGet.Shared;
 using NuGet.Versioning;
 
 namespace NuGet.CommandLine.XPlat
@@ -49,7 +52,7 @@ namespace NuGet.CommandLine.XPlat
                     versionRange = VersionRange.Parse(packageReferenceArgs.PackageVersion);
                 }
 
-                var libraryDependency = new LibraryDependency
+                var libraryDependency = new LibraryDependency()
                 {
                     LibraryRange = new LibraryRange(
                         name: packageReferenceArgs.PackageId,
@@ -75,6 +78,11 @@ namespace NuGet.CommandLine.XPlat
 
             var projectFullPath = Path.GetFullPath(packageReferenceArgs.ProjectPath);
 
+            if (msBuild.VirtualProjectBuilder?.IsValidEntryPointPath(projectFullPath) == true)
+            {
+                projectFullPath = msBuild.VirtualProjectBuilder.GetVirtualProjectPath(projectFullPath);
+            }
+
             var matchingPackageSpecs = dgSpec
                 .Projects
                 .Where(p => p.RestoreMetadata.ProjectStyle == ProjectStyle.PackageReference &&
@@ -91,16 +99,20 @@ namespace NuGet.CommandLine.XPlat
                     packageReferenceArgs.ProjectPath));
             }
 
-            // Parse the user specified frameworks once to avoid re-do's
-            var userSpecifiedFrameworks = Enumerable.Empty<NuGetFramework>();
+            // Keep the user specified frameworks as aliases to match against TargetAlias
+            var userSpecifiedFrameworks = new List<string>();
             if (packageReferenceArgs.Frameworks?.Any() == true)
             {
-                userSpecifiedFrameworks = packageReferenceArgs
-                    .Frameworks
-                    .Select(f => NuGetFramework.Parse(f));
+                userSpecifiedFrameworks.AddRange(packageReferenceArgs.Frameworks);
             }
 
             var originalPackageSpec = matchingPackageSpecs.FirstOrDefault();
+
+            // Check if the project files are correct for CPM
+            if (originalPackageSpec.RestoreMetadata.CentralPackageVersionsEnabled && !msBuild.AreCentralVersionRequirementsSatisfied(packageReferenceArgs, originalPackageSpec))
+            {
+                return 1;
+            }
 
             // 2. Determine the version
 
@@ -126,22 +138,37 @@ namespace NuGet.CommandLine.XPlat
             PackageDependency packageDependency = default;
             if (packageReferenceArgs.NoVersion)
             {
-                var latestVersion = await GetLatestVersionAsync(originalPackageSpec, packageReferenceArgs.PackageId, packageReferenceArgs.Logger, packageReferenceArgs.Prerelease);
-
-                if (latestVersion == null)
+                if (originalPackageSpec.RestoreMetadata.CentralPackageVersionsEnabled)
                 {
-                    if (!packageReferenceArgs.Prerelease)
+                    var centralVersion = originalPackageSpec
+                        .TargetFrameworks
+                        .Where(tf => tf.CentralPackageVersions.ContainsKey(packageReferenceArgs.PackageId))
+                        .Select(tf => tf.CentralPackageVersions[packageReferenceArgs.PackageId])
+                        .FirstOrDefault();
+                    if (centralVersion != null)
                     {
-                        latestVersion = await GetLatestVersionAsync(originalPackageSpec, packageReferenceArgs.PackageId, packageReferenceArgs.Logger, !packageReferenceArgs.Prerelease);
-                        if (latestVersion != null)
-                        {
-                            throw new CommandException(string.Format(CultureInfo.CurrentCulture, Strings.PrereleaseVersionsAvailable, latestVersion));
-                        }
+                        packageDependency = new PackageDependency(packageReferenceArgs.PackageId, centralVersion.VersionRange);
                     }
-                    throw new CommandException(string.Format(CultureInfo.CurrentCulture, Strings.Error_NoVersionsAvailable, packageReferenceArgs.PackageId));
                 }
+                if (packageDependency == null)
+                {
+                    var latestVersion = await GetLatestVersionAsync(originalPackageSpec, packageReferenceArgs.PackageId, packageReferenceArgs.Logger, packageReferenceArgs.Prerelease);
 
-                packageDependency = new PackageDependency(packageReferenceArgs.PackageId, new VersionRange(minVersion: latestVersion, includeMinVersion: true));
+                    if (latestVersion == null)
+                    {
+                        if (!packageReferenceArgs.Prerelease)
+                        {
+                            latestVersion = await GetLatestVersionAsync(originalPackageSpec, packageReferenceArgs.PackageId, packageReferenceArgs.Logger, !packageReferenceArgs.Prerelease);
+                            if (latestVersion != null)
+                            {
+                                throw new CommandException(string.Format(CultureInfo.CurrentCulture, Strings.PrereleaseVersionsAvailable, latestVersion));
+                            }
+                        }
+                        throw new CommandException(Messages.Error_NoVersionsAvailable(packageReferenceArgs.PackageId));
+                    }
+
+                    packageDependency = new PackageDependency(packageReferenceArgs.PackageId, new VersionRange(minVersion: latestVersion, includeMinVersion: true));
+                }
             }
             else
             {
@@ -159,8 +186,7 @@ namespace NuGet.CommandLine.XPlat
             }
             else
             {
-                // If the user has not specified a framework, then just add it to all frameworks
-                PackageSpecOperations.AddOrUpdateDependency(updatedPackageSpec, packageDependency, updatedPackageSpec.TargetFrameworks.Select(e => e.FrameworkName));
+                PackageSpecOperations.AddOrUpdateDependency(updatedPackageSpec, packageDependency);
             }
 
             var updatedDgSpec = dgSpec.WithReplacedSpec(updatedPackageSpec).WithoutRestores();
@@ -175,24 +201,23 @@ namespace NuGet.CommandLine.XPlat
             packageReferenceArgs.Logger.LogDebug("Restore Review completed");
 
             // 4. Process Restore Result
-            var compatibleFrameworks = new HashSet<NuGetFramework>(
+            var compatibleFrameworks = new HashSet<string>(
                 restorePreviewResult
                 .Result
                 .CompatibilityCheckResults
                 .Where(t => t.Success)
-                .Select(t => t.Graph.Framework), new NuGetFrameworkFullComparer());
+                .Select(t => t.Graph.TargetAlias), StringComparer.OrdinalIgnoreCase);
 
             if (packageReferenceArgs.Frameworks?.Any() == true)
             {
                 // If the user has specified frameworks then we intersect that with the compatible frameworks.
-                var userSpecifiedFrameworkSet = new HashSet<NuGetFramework>(
+                var userSpecifiedFrameworkSet = new HashSet<string>(
                     userSpecifiedFrameworks,
-                    new NuGetFrameworkFullComparer());
+                    StringComparer.OrdinalIgnoreCase);
 
                 compatibleFrameworks.IntersectWith(userSpecifiedFrameworkSet);
             }
 
-            // 5. Write to Project
             if (compatibleFrameworks.Count == 0)
             {
                 // Package is compatible with none of the project TFMs
@@ -205,9 +230,17 @@ namespace NuGet.CommandLine.XPlat
 
                 return 1;
             }
+
+            // 5. Write to Project
+
+            if (!TryFindResolvedVersion(userSpecifiedFrameworks, packageDependency.Id, restorePreviewResult.Result, packageReferenceArgs.Logger, out NuGetVersion resolvedVersion))
+            {
+                return 1;
+            }
+
             // Ignore the graphs with RID
-            else if (compatibleFrameworks.Count ==
-                restorePreviewResult.Result.CompatibilityCheckResults.Where(r => string.IsNullOrEmpty(r.Graph.RuntimeIdentifier)).Count())
+            if (compatibleFrameworks.Count ==
+                     restorePreviewResult.Result.CompatibilityCheckResults.Count(r => string.IsNullOrEmpty(r.Graph.RuntimeIdentifier)))
             {
                 // Package is compatible with all the project TFMs
                 // Add an unconditional package reference to the project
@@ -216,8 +249,8 @@ namespace NuGet.CommandLine.XPlat
                     packageReferenceArgs.PackageId,
                     packageReferenceArgs.ProjectPath));
 
-                // generate a library dependency with all the metadata like Include, Exlude and SuppressParent
-                var libraryDependency = GenerateLibraryDependency(updatedPackageSpec, packageReferenceArgs, restorePreviewResult, userSpecifiedFrameworks, packageDependency);
+                // generate a library dependency with all the metadata like Include, Exclude and SuppressParent
+                var libraryDependency = GenerateLibraryDependency(updatedPackageSpec, packageReferenceArgs.PackageDirectory, packageDependency, resolvedVersion);
 
                 msBuild.AddPackageReference(packageReferenceArgs.ProjectPath, libraryDependency, packageReferenceArgs.NoVersion);
             }
@@ -230,16 +263,13 @@ namespace NuGet.CommandLine.XPlat
                     packageReferenceArgs.PackageId,
                     packageReferenceArgs.ProjectPath));
 
-                var compatibleOriginalFrameworks = compatibleFrameworks
-                    .Select(e => GetAliasForFramework(originalPackageSpec, e))
-                    .Where(originalFramework => originalFramework != null);
-
                 // generate a library dependency with all the metadata like Include, Exlude and SuppressParent
-                var libraryDependency = GenerateLibraryDependency(updatedPackageSpec, packageReferenceArgs, restorePreviewResult, userSpecifiedFrameworks, packageDependency);
+                var libraryDependency = GenerateLibraryDependency(updatedPackageSpec, packageReferenceArgs.PackageDirectory, packageDependency, resolvedVersion);
 
+                // compatibleFrameworks already contains aliases from TargetAlias
                 msBuild.AddPackageReferencePerTFM(packageReferenceArgs.ProjectPath,
                     libraryDependency,
-                    compatibleOriginalFrameworks,
+                    compatibleFrameworks,
                     packageReferenceArgs.NoVersion);
             }
 
@@ -249,28 +279,53 @@ namespace NuGet.CommandLine.XPlat
             return 0;
         }
 
-        private static string GetAliasForFramework(PackageSpec spec, NuGetFramework framework)
+        internal static bool TryFindResolvedVersion(List<string> userSpecifiedFrameworks, string packageId, RestoreResult restoreResult, ILogger logger, out NuGetVersion resolvedVersion)
         {
-            return spec.TargetFrameworks.Where(e => e.FrameworkName.Equals(framework)).FirstOrDefault()?.TargetAlias;
+            // get the package resolved version from restore preview result
+            (LibraryType libraryType, resolvedVersion) = GetPackageVersionFromRestoreResult(restoreResult, packageId, userSpecifiedFrameworks);
+
+            if (libraryType == LibraryType.Unresolved)
+            {
+                logger.LogError(string.Format(CultureInfo.CurrentCulture,
+                    Strings.Error_AddPkgUnresolved,
+                    packageId));
+                return false;
+            }
+
+            if (libraryType == LibraryType.Project ||
+               libraryType == LibraryType.ExternalProject)
+            {
+                // If the package is a project or external project, we cannot add it as a package reference.
+                logger.LogError(string.Format(CultureInfo.CurrentCulture,
+                    Strings.Error_AddPkgProjectReference,
+                    packageId));
+                return false;
+            }
+
+            return true;
+        }
+
+        internal static string GetAliasForFramework(PackageSpec spec, NuGetFramework framework)
+        {
+            return spec.TargetFrameworks.FirstOrDefault(e => e.FrameworkName.Equals(framework))?.TargetAlias;
         }
 
         public static async Task<NuGetVersion> GetLatestVersionAsync(PackageSpec originalPackageSpec, string packageId, ILogger logger, bool prerelease)
         {
             IList<PackageSource> sources = AddPackageCommandUtility.EvaluateSources(originalPackageSpec.RestoreMetadata.Sources, originalPackageSpec.RestoreMetadata.ConfigFilePaths);
 
-            return await AddPackageCommandUtility.GetLatestVersionFromSourcesAsync(sources, logger, packageId, prerelease);
+            return await AddPackageCommandUtility.GetLatestVersionFromSourcesAsync(sources, logger, packageId, prerelease, CancellationToken.None);
         }
 
-        private static LibraryDependency GenerateLibraryDependency(
+        /// <summary>
+        /// Returns the library dependency for the package reference to be added if appropriate. May return null if the package is not compatible with the project or if it is a project reference.
+        /// </summary>
+        internal static LibraryDependency GenerateLibraryDependency(
             PackageSpec project,
-            PackageReferenceArgs packageReferenceArgs,
-            RestoreResultPair restorePreviewResult,
-            IEnumerable<NuGetFramework> userSpecifiedFrameworks,
-            PackageDependency packageDependency)
+            string customPackagesPath,
+            PackageDependency packageDependency,
+            NuGetVersion resolvedVersion)
         {
-            // get the package resolved version from restore preview result
-            var resolvedVersion = GetPackageVersionFromRestoreResult(restorePreviewResult, packageReferenceArgs, userSpecifiedFrameworks);
-
             // correct package version to write in project file
             var version = packageDependency.VersionRange;
 
@@ -280,54 +335,66 @@ namespace NuGet.CommandLine.XPlat
             // get if the project is onboarded to CPM
             var isCentralPackageManagementEnabled = project.RestoreMetadata.CentralPackageVersionsEnabled;
 
-            if (!string.IsNullOrEmpty(packageReferenceArgs.PackageDirectory))
+            if (!string.IsNullOrEmpty(customPackagesPath))
             {
-                packagesPath = packageReferenceArgs.PackageDirectory;
+                packagesPath = customPackagesPath;
             }
 
             // create a path resolver to get nuspec file of the package
             var pathResolver = new FallbackPackagePathResolver(
                 packagesPath,
                 project.RestoreMetadata.FallbackFolders);
-            var info = pathResolver.GetPackageInfo(packageReferenceArgs.PackageId, resolvedVersion);
-            var packageDirectory = info?.PathResolver.GetInstallPath(packageReferenceArgs.PackageId, resolvedVersion);
-            var nuspecFile = info?.PathResolver.GetManifestFileName(packageReferenceArgs.PackageId, resolvedVersion);
+            var info = pathResolver.GetPackageInfo(packageDependency.Id, resolvedVersion);
+            var packageDirectory = info?.PathResolver.GetInstallPath(packageDependency.Id, resolvedVersion);
+            var nuspecFile = info?.PathResolver.GetManifestFileName(packageDependency.Id, resolvedVersion);
 
             var nuspecFilePath = Path.GetFullPath(Path.Combine(packageDirectory, nuspecFile));
 
             // read development dependency from nuspec file
-            var developmentDependency = new NuspecReader(nuspecFilePath).GetDevelopmentDependency();
+            NuspecReader nuspecReader = new(nuspecFilePath);
+            var developmentDependency = nuspecReader.GetDevelopmentDependency();
+            string packageId = nuspecReader.GetId();
 
             if (developmentDependency)
             {
-                foreach (var frameworkInfo in project.TargetFrameworks
-                    .OrderBy(framework => framework.FrameworkName.ToString(),
-                        StringComparer.Ordinal))
+                var orderedFrameworksWithOriginalIndex = project.TargetFrameworks
+                    .Select((frameworkInfo, originalIndex) => (frameworkInfo, originalIndex))
+                    .OrderBy(tuple => tuple.frameworkInfo.FrameworkName.ToString(), StringComparer.Ordinal);
+
+                foreach (var (frameworkInfo, originalIndex) in orderedFrameworksWithOriginalIndex)
                 {
-                    var dependency = frameworkInfo.Dependencies.First(
-                        dep => dep.Name.Equals(packageReferenceArgs.PackageId, StringComparison.OrdinalIgnoreCase));
+                    var index = frameworkInfo.Dependencies.FirstIndex(dep => dep.Name.Equals(packageDependency.Id, StringComparison.OrdinalIgnoreCase));
+                    var dependency = frameworkInfo.Dependencies[index];
+                    var includeType = dependency.IncludeType;
+                    var suppressParent = dependency.SuppressParent;
 
                     // if suppressParent and IncludeType aren't set by user, then only update those as per dev dependency
-                    if (dependency?.SuppressParent == LibraryIncludeFlagUtils.DefaultSuppressParent &&
-                        dependency?.IncludeType == LibraryIncludeFlags.All)
+                    if (suppressParent == LibraryIncludeFlagUtils.DefaultSuppressParent &&
+                        includeType == LibraryIncludeFlags.All)
                     {
-                        dependency.SuppressParent = LibraryIncludeFlags.All;
-                        dependency.IncludeType = LibraryIncludeFlags.All & ~LibraryIncludeFlags.Compile;
+                        suppressParent = LibraryIncludeFlags.All;
+                        includeType = LibraryIncludeFlags.All & ~LibraryIncludeFlags.Compile;
                     }
 
-                    if (dependency != null)
+                    dependency = new LibraryDependency(dependency)
                     {
-                        dependency.LibraryRange.VersionRange = version;
-                        dependency.VersionCentrallyManaged = isCentralPackageManagementEnabled;
-                        return dependency;
-                    }
+                        IncludeType = includeType,
+                        LibraryRange = new LibraryRange(dependency.LibraryRange) { VersionRange = version, Name = packageId },
+                        SuppressParent = suppressParent,
+                        VersionCentrallyManaged = isCentralPackageManagementEnabled,
+                    };
+
+                    var newDependencies = frameworkInfo.Dependencies.SetItem(index, dependency);
+                    project.TargetFrameworks[originalIndex] = new TargetFrameworkInformation(frameworkInfo) { Dependencies = newDependencies };
+
+                    return dependency;
                 }
             }
 
-            return new LibraryDependency
+            return new LibraryDependency()
             {
                 LibraryRange = new LibraryRange(
-                    name: packageReferenceArgs.PackageId,
+                    name: packageId,
                     versionRange: version,
                     typeConstraint: LibraryDependencyTarget.Package),
                 VersionCentrallyManaged = isCentralPackageManagementEnabled
@@ -356,7 +423,6 @@ namespace NuGet.CommandLine.XPlat
                 var restoreContext = new RestoreArgs()
                 {
                     CacheContext = cacheContext,
-                    LockFileVersion = LockFileFormat.Version,
                     Log = packageReferenceArgs.Logger,
                     MachineWideSettings = new XPlatMachineWideSetting(),
                     GlobalPackagesFolder = packageReferenceArgs.PackageDirectory,
@@ -386,24 +452,23 @@ namespace NuGet.CommandLine.XPlat
             return spec;
         }
 
-        private static NuGetVersion GetPackageVersionFromRestoreResult(RestoreResultPair restorePreviewResult,
-            PackageReferenceArgs packageReferenceArgs,
-            IEnumerable<NuGetFramework> UserSpecifiedFrameworks)
+        private static (LibraryType, NuGetVersion) GetPackageVersionFromRestoreResult(RestoreResult restoreResult,
+            string packageId,
+            List<string> userSpecifiedFrameworks)
         {
             // Get the restore graphs from the restore result
-            var restoreGraphs = restorePreviewResult
-                .Result
+            var restoreGraphs = restoreResult
                 .RestoreGraphs;
 
-            if (packageReferenceArgs.Frameworks?.Any() == true)
+            if (userSpecifiedFrameworks.Count > 1)
             {
                 // If the user specified frameworks then we get the flattened graphs  only from the compatible frameworks.
-                var userSpecifiedFrameworkSet = new HashSet<NuGetFramework>(
-                    UserSpecifiedFrameworks,
-                    new NuGetFrameworkFullComparer());
+                var userSpecifiedFrameworkSet = new HashSet<string>(
+                    userSpecifiedFrameworks,
+                    StringComparer.OrdinalIgnoreCase);
 
                 restoreGraphs = restoreGraphs
-                    .Where(r => userSpecifiedFrameworkSet.Contains(r.Framework));
+                    .Where(r => userSpecifiedFrameworkSet.Contains(r.TargetAlias));
             }
 
             foreach (var restoreGraph in restoreGraphs)
@@ -411,17 +476,27 @@ namespace NuGet.CommandLine.XPlat
                 var matchingPackageEntries = restoreGraph
                     .Flattened
                     .Select(p => p)
-                    .Where(p => p.Key.Name.Equals(packageReferenceArgs.PackageId, StringComparison.OrdinalIgnoreCase));
+                    .Where(p => p.Key.Name.Equals(packageId, StringComparison.OrdinalIgnoreCase));
 
                 if (matchingPackageEntries.Any())
                 {
-                    return matchingPackageEntries
-                        .First()
+                    var firstMatchingEntry = matchingPackageEntries
+                        .First();
+
+                    // If we have found that the project is selected, then we return null.
+                    if (firstMatchingEntry.Key.Type == LibraryType.Project ||
+                        firstMatchingEntry.Key.Type == LibraryType.ExternalProject)
+                    {
+                        return (firstMatchingEntry.Key.Type, null);
+                    }
+
+                    return (firstMatchingEntry.Key.Type, firstMatchingEntry
                         .Key
-                        .Version;
+                        .Version);
                 }
             }
-            return null;
+
+            return (LibraryType.Unresolved, null);
         }
     }
 }

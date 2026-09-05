@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#nullable enable
-
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,7 +38,9 @@ namespace NuGet.PackageManagement.VisualStudio
             PackageDeprecationMetadata? deprecationMetadata = await _packageSearchMetadata.GetDeprecationMetadataAsync();
             if (deprecationMetadata == null)
             {
+#pragma warning disable VSTHRD003 // Avoid awaiting foreign Tasks
                 IPackageSearchMetadata detailedMetadata = await _detailedPackageSearchMetadata.Value;
+#pragma warning restore VSTHRD003 // Avoid awaiting foreign Tasks
                 deprecationMetadata = await detailedMetadata.GetDeprecationMetadataAsync();
                 if (deprecationMetadata == null)
                 {
@@ -52,7 +52,9 @@ namespace NuGet.PackageManagement.VisualStudio
 
         private async ValueTask<PackageSearchMetadataContextInfo> GetDetailedPackageSearchMetadataContextInfoAsync()
         {
+#pragma warning disable VSTHRD003 // Avoid awaiting foreign Tasks
             IPackageSearchMetadata detailedMetadata = await _detailedPackageSearchMetadata.Value;
+#pragma warning restore VSTHRD003 // Avoid awaiting foreign Tasks
             return PackageSearchMetadataContextInfo.Create(detailedMetadata);
         }
     }

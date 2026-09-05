@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
@@ -19,11 +21,14 @@ using Microsoft.VisualStudio.OLE.Interop;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Threading;
-using NuGet.Options;
+using NuGet.Configuration;
 using NuGet.PackageManagement;
 using NuGet.PackageManagement.UI;
 using NuGet.PackageManagement.VisualStudio;
+using NuGet.PackageManagement.VisualStudio.Options;
 using NuGet.ProjectManagement;
+using NuGet.ProjectManagement.Projects;
+using NuGet.Tools.Commands;
 using NuGet.VisualStudio;
 using NuGet.VisualStudio.Common;
 using NuGet.VisualStudio.Common.Telemetry;
@@ -51,9 +56,7 @@ namespace NuGetVSExtension
         Style = VsDockStyle.Tabbed,
         Window = "{34E76E81-EE4A-11D0-AE2E-00A0C90FFFC3}", // this is the guid of the Output tool window, which is present in both VS and VWD
         Orientation = ToolWindowOrientation.Right)]
-    [ProvideOptionPage(typeof(PackageSourceOptionsPage), "NuGet Package Manager", "Package Sources", 113, 114, true)]
-    [ProvideOptionPage(typeof(GeneralOptionPage), "NuGet Package Manager", "General", 113, 115, true)]
-    [ProvideOptionPage(typeof(PackageSourceMappingOptionsPage), "NuGet Package Manager", "Package Source Mapping", 113, 116, true)]
+    [ProvideSettingsManifest]
     [ProvideSearchProvider(typeof(NuGetSearchProvider), "NuGet Search")]
     // UI Context rule for a project that could be upgraded to PackageReference from packages.config based project.
     // Only exception is this UI context doesn't get enabled for right-click on Reference since there is no extension point on references
@@ -84,6 +87,7 @@ namespace NuGetVSExtension
         private const string F1KeywordValuePmUI = "VS.NuGet.PackageManager.UI";
 
         private AsyncLazy<IVsMonitorSelection> _vsMonitorSelection;
+
         private IVsMonitorSelection VsMonitorSelection => ThreadHelper.JoinableTaskFactory.Run(_vsMonitorSelection.GetValueAsync);
         private readonly ReentrantSemaphore _semaphore = ReentrantSemaphore.Create(1, NuGetUIThreadHelper.JoinableTaskFactory.Context, ReentrantSemaphore.ReentrancyMode.Freeform);
 
@@ -134,15 +138,21 @@ namespace NuGetVSExtension
         [Import]
         private Lazy<INuGetUIFactory> UIFactory { get; set; }
 
-        private IDisposable ProjectRetargetingHandler { get; set; }
+        private IDisposable _projectRetargetingHandler;
 
-        private IDisposable ProjectUpgradeHandler { get; set; }
+        private IDisposable _projectUpgradeHandler;
 
         [Import]
         private Lazy<IServiceBrokerProvider> ServiceBrokerProvider { get; set; }
 
         [Import]
+        private Lazy<IResolveSupplyChainSecurityService> ResolveSupplyChainSecurityService { get; set; }
+
+        [Import]
         private Lazy<INuGetExperimentationService> NuGetExperimentationService { get; set; }
+
+        [Import]
+        private Lazy<IVsProjectJsonToPackageReferenceMigrator> ProjectJsonMigrator { get; set; }
 
         /// <summary>
         /// Initialization of the package; this method is called right after the package is sited, so this is the place
@@ -152,10 +162,9 @@ namespace NuGetVSExtension
         {
             NuGetVSTelemetryService.Initialize();
 
-            _nuGetPowerShellUsageCollector = new NuGetPowerShellUsageCollector();
+            _nuGetPowerShellUsageCollector = new NuGetPowerShellUsageCollector(NuGet.Common.TelemetryActivity.NuGetTelemetryService);
 
             await base.InitializeAsync(cancellationToken, progress);
-
             // Add our command handlers for menu (commands must exist in the .vsct file)
             await AddMenuCommandHandlersAsync();
 
@@ -191,9 +200,37 @@ namespace NuGetVSExtension
 
             VsShellUtilities.ShutdownToken.Register(InstanceCloseTelemetryEmitter.OnShutdown);
 
-            var componentModel = await this.GetFreeThreadedServiceAsync<SComponentModel, IComponentModel>();
+            var componentModel = await this.GetServiceAsync<SComponentModel, IComponentModel>();
             Assumes.Present(componentModel);
             componentModel.DefaultCompositionService.SatisfyImportsOnce(this);
+
+            if (NuGetExperimentationService.Value.IsExperimentEnabled(ExperimentationConstants.UseSystemTextJsonDeserialization))
+            {
+                AppContext.SetSwitch(NuGet.Shared.NuGetFeatureFlags.UseSystemTextJsonDeserializationSwitchName, isEnabled: true);
+            }
+
+            VSSettings vsSettings = Settings.Value as VSSettings;
+            PackageSourceProvider packageSourceProvider = new(Settings.Value);
+            PackageSourceMappingProvider packageSourceMappingProvider = new(Settings.Value);
+
+            AddService(typeof(GeneralPage),
+                (container, ct, serviceType) => Task.FromResult<object>(new GeneralPage(vsSettings)),
+                promote: true);
+            AddService(typeof(ConfigurationFilesPage),
+                (container, ct, serviceType) => Task.FromResult<object>(new ConfigurationFilesPage(vsSettings)),
+                promote: true);
+            AddService(typeof(PackageSourcesPage),
+                (container, ct, serviceType) => Task.FromResult<object>(new PackageSourcesPage(vsSettings, packageSourceProvider)),
+                promote: true);
+            AddService(typeof(PackageSourceMappingPage),
+                (container, ct, serviceType) => Task.FromResult<object>(new PackageSourceMappingPage(vsSettings, packageSourceProvider, packageSourceMappingProvider)),
+                promote: true);
+
+            ClearNuGetLocalResourcesCommand clearNuGetLocalResourcesCommand = new(oleMenuCommandService: _mcs, OutputConsoleLogger);
+            clearNuGetLocalResourcesCommand.Initialize();
+
+            PackageSourceMapperCommand packageSourceMapperCommand = new(_mcs, ResolveSupplyChainSecurityService, SolutionManager);
+            packageSourceMapperCommand.Initialize();
         }
 
         /// <summary>
@@ -208,7 +245,7 @@ namespace NuGetVSExtension
                     return;
                 }
 
-                var componentModel = await this.GetFreeThreadedServiceAsync<SComponentModel, IComponentModel>();
+                var componentModel = await this.GetServiceAsync<SComponentModel, IComponentModel>();
                 Assumes.Present(componentModel);
 
                 await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
@@ -235,7 +272,7 @@ namespace NuGetVSExtension
 
                 IVsTrackProjectRetargeting vsTrackProjectRetargeting = await this.GetServiceAsync<SVsTrackProjectRetargeting, IVsTrackProjectRetargeting>();
                 IVsMonitorSelection vsMonitorSelection = await this.GetServiceAsync<IVsMonitorSelection, IVsMonitorSelection>(throwOnFailure: false);
-                ProjectRetargetingHandler = new ProjectRetargetingHandler(
+                _projectRetargetingHandler = new ProjectRetargetingHandler(
                     _dte,
                     SolutionManager.Value,
                     this,
@@ -244,7 +281,7 @@ namespace NuGetVSExtension
                     vsMonitorSelection);
 
                 IVsSolution2 vsSolution2 = await this.GetServiceAsync<SVsSolution, IVsSolution2>();
-                ProjectUpgradeHandler = new ProjectUpgradeHandler(
+                _projectUpgradeHandler = new ProjectUpgradeHandler(
                     SolutionManager.Value,
                     vsSolution2);
 
@@ -293,6 +330,12 @@ namespace NuGetVSExtension
                 var upgradePackagesConfigCommand = new OleMenuCommand(ExecuteUpgradeNuGetProjectCommand, null,
                     BeforeQueryStatusForUpgradePackagesConfig, upgradePackagesConfigCommandID);
                 _mcs.AddCommand(upgradePackagesConfigCommand);
+
+                // menu command for upgrading project.json files to PackageReference - References context menu
+                var upgradeProjectJsonNuGetProjectCommandID = new CommandID(GuidList.guidNuGetDialogCmdSet, PkgCmdIDList.cmdidUpgradeProjectJsonNuGetProject);
+                var upgradeProjectJsonNuGetProjectCommand = new OleMenuCommand(ExecuteUpgradeProjectJsonNuGetProjectCommand, null,
+                    BeforeQueryStatusForUpgradeProjectJsonNuGetProject, upgradeProjectJsonNuGetProjectCommandID);
+                _mcs.AddCommand(upgradeProjectJsonNuGetProjectCommand);
 
                 // menu command for opening Package Manager Console
                 var toolwndCommandID = new CommandID(GuidList.guidNuGetConsoleCmdSet, PkgCmdIDList.cmdidPowerConsole);
@@ -404,40 +447,39 @@ namespace NuGetVSExtension
         {
             await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-            var uiShell = (IVsUIShell)GetService(typeof(SVsUIShell));
-            foreach (var windowFrame in VsUtility.GetDocumentWindows(uiShell))
+            IVsHierarchy projectHierarchy = await project.ToVsHierarchyAsync();
+            return await FindExistingNuGetWindowFrameAsync(
+                (IVsUIHierarchy)projectHierarchy,
+                (uint)VSConstants.VSITEMID.Root,
+                project.FullName);
+        }
+
+        private async Task<IVsWindowFrame> FindExistingNuGetWindowFrameAsync(
+            IVsUIHierarchy hierarchy,
+            uint itemId,
+            string documentName)
+        {
+            await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+            var uiShellOpenDocument = await this.GetServiceAsync<SVsUIShellOpenDocument, IVsUIShellOpenDocument>();
+            Assumes.Present(uiShellOpenDocument);
+
+            Guid editorType = GuidList.guidNuGetEditorType;
+            var hr = uiShellOpenDocument.IsSpecificDocumentViewOpen(
+                hierarchy,
+                itemId,
+                documentName,
+                ref editorType,
+                null,
+                (uint)__VSIDOFLAGS.IDO_IgnoreLogicalView,
+                out _,
+                out _,
+                out IVsWindowFrame windowFrame,
+                out int isOpen);
+
+            if (ErrorHandler.Succeeded(hr) && isOpen != 0)
             {
-                object docView;
-                var hr = windowFrame.GetProperty(
-                    (int)__VSFPROPID.VSFPROPID_DocView,
-                    out docView);
-                if (hr == VSConstants.S_OK
-                    && docView is PackageManagerWindowPane)
-                {
-                    var packageManagerWindowPane = (PackageManagerWindowPane)docView;
-                    if (packageManagerWindowPane.Model.IsSolution)
-                    {
-                        // the window is the solution package manager
-                        continue;
-                    }
-
-                    var projects = packageManagerWindowPane.Model.Context.Projects;
-                    if (projects.Count() != 1)
-                    {
-                        continue;
-                    }
-
-                    IProjectContextInfo existingProject = projects.First();
-                    IServiceBroker serviceBroker = await ServiceBrokerProvider.Value.GetAsync();
-                    IProjectMetadataContextInfo projectMetadata = await existingProject.GetMetadataAsync(
-                        serviceBroker,
-                        CancellationToken.None);
-
-                    if (string.Equals(projectMetadata.Name, project.Name, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return windowFrame;
-                    }
-                }
+                return windowFrame;
             }
 
             return null;
@@ -532,7 +574,7 @@ namespace NuGetVSExtension
                 isSolution: false,
                 editorFactoryGuid: GuidList.guidNuGetEditorType);
 
-            PackageManagerControl control = await PackageManagerControl.CreateAsync(model, OutputConsoleLogger.Value);
+            PackageManagerControl control = await PackageManagerControl.CreateAsync(model, OutputConsoleLogger.Value, VsShellUtilities.ShutdownToken);
             var windowPane = new PackageManagerWindowPane(control);
             var guidEditorType = GuidList.guidNuGetEditorType;
             var guidCommandUI = Guid.Empty;
@@ -571,6 +613,7 @@ namespace NuGetVSExtension
                 {
                     WindowFrameHelper.AddF1HelpKeyword(windowFrame, keywordValue: F1KeywordValuePmUI);
                     WindowFrameHelper.DisableWindowAutoReopen(windowFrame);
+                    await control.SetWindowFrameAsync(windowFrame);
                 }
             }
             finally
@@ -633,12 +676,68 @@ namespace NuGetVSExtension
             }
         }
 
+        private void ExecuteUpgradeProjectJsonNuGetProjectCommand(object sender, EventArgs e)
+        {
+            NuGetUIThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+            {
+                await ExecuteUpgradeProjectJsonNuGetProjectCommandAsync(sender, e);
+            })
+           .PostOnFailure(nameof(NuGetPackage), nameof(ExecuteUpgradeNuGetProjectCommand));
+        }
+
+        private async Task ExecuteUpgradeProjectJsonNuGetProjectCommandAsync(object sender, EventArgs e)
+        {
+            await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+            if (ShouldInitializeSolutionExperiences())
+            {
+                await InitializeSolutionExperiencesAsync();
+            }
+
+            Project project = VsMonitorSelection.GetActiveProject();
+            NuGetProject nuGetProject = null;
+            if (project != null)
+            {
+                string uniqueName = await project.GetCustomUniqueNameAsync();
+                nuGetProject = await SolutionManager.Value.GetNuGetProjectAsync(uniqueName);
+            }
+
+            if (project == null || nuGetProject is not ProjectJsonNuGetProject)
+            {
+                MessageHelper.ShowWarningMessage(Resources.ProjectJsonMigrateErrorMessage, Resources.ErrorDialogBoxTitle);
+                return;
+            }
+
+            // Close NuGet Package Manager if it is open for this project
+            IVsWindowFrame windowFrame = await FindExistingWindowFrameAsync(project);
+            windowFrame?.CloseFrame((uint)__FRAMECLOSE.FRAMECLOSE_SaveIfDirty);
+
+            var result = await ProjectJsonMigrator.Value.MigrateProjectJsonToPackageReferenceAsync(project.GetFullProjectPath());
+
+            if (result is IVsProjectJsonToPackageReferenceMigrateResult migrationResult)
+            {
+                if (!migrationResult.IsSuccess)
+                {
+                    MessageHelper.ShowWarningMessage(migrationResult.ErrorMessage, Resources.ErrorDialogBoxTitle);
+                }
+            }
+        }
+
         private void ShowManageLibraryPackageDialog(object sender, EventArgs e)
         {
             string parameterString = (e as OleMenuCmdEventArgs)?.InValue as string;
             NuGetUIThreadHelper.JoinableTaskFactory.RunAsync(async delegate
             {
-                await ShowManageLibraryPackageDialogAsync(GetSearchText(parameterString));
+                try
+                {
+                    await ShowManageLibraryPackageDialogAsync(GetSearchText(parameterString));
+                }
+#pragma warning disable CA1031 // Do not catch general exception types
+                catch (Exception exception)
+#pragma warning restore CA1031 // Do not catch general exception types
+                {
+                    await OnPackageManagerOpenFailureAsync(exception, nameof(ShowManageLibraryPackageDialog));
+                }
             }).PostOnFailure(nameof(NuGetPackage), nameof(ShowManageLibraryPackageDialog));
         }
 
@@ -712,25 +811,13 @@ namespace NuGetVSExtension
         {
             await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-            var uiShell = await this.GetServiceAsync<SVsUIShell, IVsUIShell>();
-            foreach (var windowFrame in VsUtility.GetDocumentWindows(uiShell))
-            {
-                object property;
-                var hr = windowFrame.GetProperty(
-                    (int)__VSFPROPID.VSFPROPID_DocData,
-                    out property);
-                var packageManagerControl = VsUtility.GetPackageManagerControl(windowFrame);
-                if (hr == VSConstants.S_OK
-                    &&
-                    property is IVsSolution
-                    &&
-                    packageManagerControl != null)
-                {
-                    return windowFrame;
-                }
-            }
+            var solution = await this.GetServiceAsync<SVsSolution, IVsSolution>();
+            Assumes.Present(solution);
 
-            return null;
+            return await FindExistingNuGetWindowFrameAsync(
+                (IVsUIHierarchy)solution,
+                (uint)VSConstants.VSITEMID.Root,
+                await SolutionManager.Value.GetSolutionFilePathAsync());
         }
 
         private static string GetSearchText(string parameterString)
@@ -761,7 +848,7 @@ namespace NuGetVSExtension
         /// A string array containing the list of selected packages in the same hierarchy.
         /// If only one package is selected, the array will contain one package name, otherwise, it will be a list of package names.
         /// If the selected packages are across multiple hierarchies or if no packages are selected, an empty array will be returned.
-        /// This method will return <c>null</c> if it fails to retrieve the selected hierarchy.
+        /// This method will return <see langword="null" /> if it fails to retrieve the selected hierarchy.
         /// </returns>
         private string[] GetSelectedPackages()
         {
@@ -889,7 +976,7 @@ namespace NuGetVSExtension
                 SolutionName = solutionName
             };
 
-            PackageManagerControl control = await PackageManagerControl.CreateAsync(model, OutputConsoleLogger.Value);
+            PackageManagerControl control = await PackageManagerControl.CreateAsync(model, OutputConsoleLogger.Value, VsShellUtilities.ShutdownToken);
             var windowPane = new PackageManagerWindowPane(control);
             var guidEditorType = GuidList.guidNuGetEditorType;
             var guidCommandUI = Guid.Empty;
@@ -924,6 +1011,7 @@ namespace NuGetVSExtension
                 {
                     WindowFrameHelper.AddF1HelpKeyword(windowFrame, keywordValue: F1KeywordValuePmUI);
                     WindowFrameHelper.DisableWindowAutoReopen(windowFrame);
+                    await control.SetWindowFrameAsync(windowFrame);
                 }
             }
             finally
@@ -945,37 +1033,62 @@ namespace NuGetVSExtension
 
         private void ShowManageLibraryPackageForSolutionDialog(object sender, EventArgs e)
         {
+            PackageManagerShowOptions options = null;
+            if (e is OleMenuCmdEventArgs eventArgs)
+            {
+                if (eventArgs?.InValue is string parameterString)
+                {
+                    options = new PackageManagerShowOptions() { SearchText = parameterString };
+                }
+                else if (eventArgs?.InValue is PackageManagerShowOptions parameterOptions)
+                {
+                    options = parameterOptions;
+                }
+                else
+                {
+                    options = new PackageManagerShowOptions();
+                }
+            }
+
             NuGetUIThreadHelper.JoinableTaskFactory.RunAsync(async delegate
             {
-                await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-
-                if (ShouldInitializeSolutionExperiences())
+                try
                 {
-                    await InitializeSolutionExperiencesAsync();
+                    await ShowManageLibraryPackageForSolutionDialogAsync(options);
                 }
-
-                var windowFrame = await FindExistingSolutionWindowFrameAsync();
-                if (windowFrame == null)
+#pragma warning disable CA1031 // Do not catch general exception types
+                catch (Exception exception)
+#pragma warning restore CA1031 // Do not catch general exception types
                 {
-                    // Create the window frame
-                    windowFrame = await CreateDocWindowForSolutionAsync();
-                }
-
-                if (windowFrame != null)
-                {
-                    // process search string
-                    string parameterString = null;
-                    var args = e as OleMenuCmdEventArgs;
-                    if (args != null)
-                    {
-                        parameterString = args.InValue as string;
-                    }
-                    var searchText = GetSearchText(parameterString);
-                    Search(windowFrame, searchText);
-
-                    windowFrame.Show();
+                    await OnPackageManagerOpenFailureAsync(exception, nameof(ShowManageLibraryPackageForSolutionDialog));
                 }
             }).PostOnFailure(nameof(NuGetPackage), nameof(ShowManageLibraryPackageForSolutionDialog));
+        }
+
+        private async Task<IVsWindowFrame> ShowManageLibraryPackageForSolutionDialogAsync(PackageManagerShowOptions options)
+        {
+            string searchText = GetSearchText(options.SearchText);
+
+            await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+            if (ShouldInitializeSolutionExperiences())
+            {
+                await InitializeSolutionExperiencesAsync();
+            }
+
+            var windowFrame = await FindExistingSolutionWindowFrameAsync();
+            // Create the window frame
+            windowFrame ??= await CreateDocWindowForSolutionAsync();
+
+            if (windowFrame != null)
+            {
+                SelectActiveItemFilter(windowFrame, options.ItemFilter);
+                SelectFilterOptions(windowFrame, options.PackageFilterOptions);
+                Search(windowFrame, searchText);
+                windowFrame.Show();
+            }
+
+            return windowFrame;
         }
 
         /// <summary>
@@ -1014,6 +1127,31 @@ namespace NuGetVSExtension
 
             var packageManagerControl = VsUtility.GetPackageManagerControl(windowFrame);
             packageManagerControl?.ShowUpdatePackages(updatePackageOptions);
+        }
+
+        private static void SelectActiveItemFilter(IVsWindowFrame windowFrame, UI.ItemFilter? itemFilter)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            if (itemFilter.HasValue)
+            {
+                var packageManagerControl = VsUtility.GetPackageManagerControl(windowFrame);
+                if (packageManagerControl != null)
+                {
+                    packageManagerControl.ActiveFilter = itemFilter.Value;
+                }
+            }
+        }
+
+        private static void SelectFilterOptions(IVsWindowFrame windowFrame, PackageFilterOptions packageFilterOptions)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            if (packageFilterOptions != null)
+            {
+                var packageManagerControl = VsUtility.GetPackageManagerControl(windowFrame);
+                packageManagerControl?.SelectPackageFilterOptions(packageFilterOptions);
+            }
         }
 
         // For PowerShell, it's okay to query from the worker thread.
@@ -1059,6 +1197,36 @@ namespace NuGetVSExtension
             });
         }
 
+        private void BeforeQueryStatusForUpgradeProjectJsonNuGetProject(object sender, EventArgs args)
+        {
+            NuGetUIThreadHelper.JoinableTaskFactory.Run(async delegate
+            {
+                if (ShouldInitializeSolutionExperiences())
+                {
+                    await InitializeSolutionExperiencesAsync();
+                }
+
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                var command = (OleMenuCommand)sender;
+
+                var isConsoleBusy = false;
+                if (ConsoleStatus != null)
+                {
+                    isConsoleBusy = ConsoleStatus.Value.IsBusy;
+                }
+
+                Project project = VsMonitorSelection.GetActiveProject();
+                NuGetProject nuGetProject = project == null
+                    ? null
+                    : await SolutionManager.Value.GetNuGetProjectAsync(project.GetUniqueName());
+
+                command.Visible = GetIsSolutionOpen() && nuGetProject != null && nuGetProject is ProjectJsonNuGetProject;
+
+                command.Enabled = !isConsoleBusy && IsSolutionExistsAndNotDebuggingAndNotBuilding() && await HasActiveLoadedSupportedProjectAsync();
+            });
+        }
+
         private void BeforeQueryStatusForUpgradePackagesConfig(object sender, EventArgs args)
         {
             // Check whether to show context menu item on packages.config
@@ -1089,6 +1257,11 @@ namespace NuGetVSExtension
             await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
             var dteProject = VsMonitorSelection.GetActiveProject();
+
+            if (dteProject == null)
+            {
+                return false;
+            }
 
             var uniqueName = dteProject.GetUniqueName();
             var nuGetProject = await SolutionManager.Value.GetNuGetProjectAsync(uniqueName);
@@ -1204,21 +1377,24 @@ namespace NuGetVSExtension
 
         private void ShowPackageSourcesOptionPage(object sender, EventArgs args)
         {
-            ShowOptionPageSafe(typeof(PackageSourceOptionsPage));
+            ShowOptionPageSafe(OptionsPage.PackageSources);
         }
 
         private void ShowGeneralSettingsOptionPage(object sender, EventArgs args)
         {
-            ShowOptionPageSafe(typeof(GeneralOptionPage));
+            ShowOptionPageSafe(OptionsPage.General);
         }
 
-        private void ShowOptionPageSafe(Type optionPageType)
+        private static void ShowOptionPageSafe(OptionsPage optionsPage)
         {
             try
             {
-                ShowOptionPage(optionPageType);
+                var optionsPageActivator = ServiceLocator.GetComponentModelService<IOptionsPageActivator>();
+                optionsPageActivator.ActivatePage(optionsPage, closeCallback: null);
             }
+#pragma warning disable CA1031 // Do not catch general exception types
             catch (Exception exception)
+#pragma warning restore CA1031 // Do not catch general exception types
             {
                 MessageHelper.ShowErrorMessage(exception, Resources.ErrorDialogBoxTitle);
                 ExceptionHelper.WriteErrorToActivityLog(exception);
@@ -1315,8 +1491,8 @@ namespace NuGetVSExtension
                     _mcs?.Dispose();
                     _nuGetPowerShellUsageCollector?.Dispose();
                     _semaphore.Dispose();
-                    ProjectRetargetingHandler?.Dispose();
-                    ProjectUpgradeHandler?.Dispose();
+                    _projectRetargetingHandler?.Dispose();
+                    _projectUpgradeHandler?.Dispose();
 
                     GC.SuppressFinalize(this);
                 }

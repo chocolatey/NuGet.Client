@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 #if NET5_0_OR_GREATER
 
 using System;
@@ -108,7 +110,7 @@ namespace NuGet.Packaging.Test
 
             Assert.True(wasCreated);
 
-            using (X509Chain chain = factory.Create())
+            using (IX509Chain chain = factory.Create())
             {
                 Assert.Equal(X509ChainTrustMode.CustomRootTrust, chain.ChainPolicy.TrustMode);
                 Assert.Empty(chain.ChainPolicy.CustomTrustStore);
@@ -128,7 +130,7 @@ namespace NuGet.Packaging.Test
 
                 Assert.True(wasCreated);
 
-                using (X509Chain chain = factory.Create())
+                using (IX509Chain chain = factory.Create())
                 {
                     Assert.Equal(X509ChainTrustMode.CustomRootTrust, chain.ChainPolicy.TrustMode);
                     Assert.Equal(1, chain.ChainPolicy.CustomTrustStore.Count);

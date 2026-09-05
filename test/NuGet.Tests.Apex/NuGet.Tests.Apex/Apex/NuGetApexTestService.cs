@@ -1,13 +1,17 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.ComponentModel.Composition;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EnvDTE;
+using EnvDTE80;
 using Microsoft.Test.Apex;
 using Microsoft.Test.Apex.VisualStudio;
 using Microsoft.Test.Apex.VisualStudio.Solution;
@@ -25,16 +29,12 @@ using NuGet.VisualStudio.Contracts;
 namespace NuGet.Tests.Apex
 {
     [Export(typeof(NuGetApexTestService))]
-    public class NuGetApexTestService : VisualStudioTestService<NuGetApexVerifier>
+    public class NuGetApexTestService : VisualStudioTestService
     {
         [Import]
         private NuGetApexUITestService NuGetApexUITestService { get; set; }
         [Import]
         private NuGetApexConsoleTestService NuGetApexConsoleTestService { get; set; }
-
-        public NuGetApexTestService()
-        {
-        }
 
         /// <summary>
         /// Gets the NuGet IVsPackageInstaller
@@ -163,7 +163,27 @@ namespace NuGet.Tests.Apex
             });
         }
 
-        public async Task<NuGetInstalledPackage> GetInstalledPackageAsync(string projectName, string packageName)
+        public bool IsPackageInstalledIncludingTransitive(string projectName, string packageName, string packageVersion)
+        {
+            return ThreadHelper.JoinableTaskFactory.Run(async () =>
+            {
+                var package = await GetInstalledPackageAsync(projectName, packageName, directDependencyOnly: false);
+                if (package == null)
+                {
+                    return false;
+                }
+
+                var expectedVersion = NuGetVersion.Parse(packageVersion);
+                var actualVersion = NuGetVersion.Parse(package.Version);
+
+                return expectedVersion == actualVersion;
+            });
+        }
+
+        public async Task<NuGetInstalledPackage> GetInstalledPackageAsync(
+            string projectName,
+            string packageName,
+            bool directDependencyOnly = true)
         {
             var solution = VisualStudioObjectProviders.GetService<SVsSolution, IVsSolution>();
             int result = solution.GetProjectOfUniqueName(projectName, out IVsHierarchy project);
@@ -190,9 +210,9 @@ namespace NuGet.Tests.Apex
                     throw new Exception("Unexpected result from GetInstalledPackagesAsync: " + packagesResult.Status);
                 }
 
-                return packagesResult.Packages
-                    .Where(p => p.DirectDependency)
-                    .FirstOrDefault(p => StringComparer.OrdinalIgnoreCase.Equals(p.Id, packageName));
+                return packagesResult.Packages.FirstOrDefault(p =>
+                    (!directDependencyOnly || p.DirectDependency)
+                    && StringComparer.OrdinalIgnoreCase.Equals(p.Id, packageName));
             }
         }
 
@@ -230,7 +250,7 @@ namespace NuGet.Tests.Apex
 
         /// <summary>
         /// Get the UI window from the project.
-        /// Note that the UI window is initialized asynchronously, so we have to poll until it loads. 
+        /// Note that the UI window is initialized asynchronously, so we have to poll until it loads.
         /// </summary>
         /// <param name="project">project for which we want to load a UI window</param>
         /// <param name="timeout">Max time to wait for the UI window to load</param>
@@ -268,6 +288,51 @@ namespace NuGet.Tests.Apex
         {
             PathContextProvider2.TryCreateNoSolutionContext(out var pathContext);
             return pathContext.UserPackageFolder;
+        }
+
+        public string GetUserPackagesFolderFromProjectContext(string projectPath)
+        {
+            PathContextProvider2.TryCreateContext(projectPath, out var pathContext);
+            return pathContext.UserPackageFolder;
+        }
+
+        public void SetStartupProject(string projectUniqueName)
+        {
+            ThreadHelper.JoinableTaskFactory.Run(async () =>
+            {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                Dte.Solution.SolutionBuild.StartupProjects = projectUniqueName;
+            });
+        }
+
+        public string CreateProjectsWithAmbiguousNames(string solutionFolderName, string projectName)
+        {
+            return ThreadHelper.JoinableTaskFactory.Run(async () =>
+            {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                var solution = (Solution2)Dte.Solution;
+                var solutionDirectory = Path.GetDirectoryName(solution.FullName);
+                var projectTemplate = solution.GetProjectTemplate("ClassLibrary.zip", "CSharp");
+                var solutionFolderProject = solution.AddSolutionFolder(solutionFolderName);
+                var solutionFolder = (SolutionFolder)solutionFolderProject.Object;
+                solutionFolder.AddFromTemplate(
+                    projectTemplate,
+                    Path.Combine(solutionDirectory, solutionFolderName, projectName),
+                    projectName);
+                var nestedProject = solutionFolderProject.ProjectItems
+                    .Cast<ProjectItem>()
+                    .Single(item => item.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
+                    .SubProject;
+
+                solution.AddFromTemplate(
+                    projectTemplate,
+                    Path.Combine(solutionDirectory, projectName),
+                    projectName,
+                    Exclusive: false);
+
+                return nestedProject.UniqueName;
+            });
         }
     }
 }

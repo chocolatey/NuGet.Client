@@ -17,25 +17,26 @@ namespace NuGet.Protocol
         {
         }
 
-        public override async Task<Tuple<bool, INuGetResource>> TryCreate(SourceRepository sourceRepository, CancellationToken token)
+        public override async Task<Tuple<bool, INuGetResource?>> TryCreate(SourceRepository sourceRepository, CancellationToken token)
         {
-            INuGetResource resource = null;
+            INuGetResource? resource = null;
 
-            var serviceIndexResource = await sourceRepository.GetResourceAsync<ServiceIndexResourceV3>();
+            var serviceIndexResource = await sourceRepository.GetResourceAsync<ServiceIndexResourceV3>(token);
 
             if (serviceIndexResource != null)
             {
                 //Repository signature information init
                 var repositorySignatureResource = await sourceRepository.GetResourceAsync<RepositorySignatureResource>(token);
                 repositorySignatureResource?.UpdateRepositorySignatureInfo();
-                var httpSourceResource = await sourceRepository.GetResourceAsync<HttpSourceResource>(token);
+                var httpSourceResource = await sourceRepository.GetResourceAsync<HttpSourceResource>(token)
+                    ?? throw new InvalidOperationException($"The source '{sourceRepository.PackageSource.Source}' does not provide {nameof(HttpSourceResource)}.");
 
                 resource = new RemoteV3FindPackageByIdResource(
                     sourceRepository,
                     httpSourceResource.HttpSource);
             }
 
-            return Tuple.Create(resource != null, resource);
+            return new Tuple<bool, INuGetResource?>(resource != null, resource);
         }
     }
 }

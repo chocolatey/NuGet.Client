@@ -19,7 +19,7 @@ namespace NuGet.CommandLine.XPlat {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "17.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class Strings {
@@ -151,15 +151,6 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Allows prerelease packages to be installed..
-        /// </summary>
-        internal static string AddPkg_PackagePrerelease {
-            get {
-                return ResourceManager.GetString("AddPkg_PackagePrerelease", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Version of the package to be added..
         /// </summary>
         internal static string AddPkg_PackageVersionDescription {
@@ -205,7 +196,16 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The API key for the server..
+        ///   Looks up a localized string similar to Allows pushing to HTTP sources (insecure)..
+        /// </summary>
+        internal static string AllowInsecureConnections_Description {
+            get {
+                return ResourceManager.GetString("AllowInsecureConnections_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The API key for the server. If not set, the NUGET_API_KEY environment variable is read..
         /// </summary>
         internal static string ApiKey_Description {
             get {
@@ -219,6 +219,132 @@ namespace NuGet.CommandLine.XPlat {
         internal static string App_FullName {
             get {
                 return ResourceManager.GetString("App_FullName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Argument cannot be null or empty..
+        /// </summary>
+        internal static string ArgumentNullOrEmpty {
+            get {
+                return ResourceManager.GetString("ArgumentNullOrEmpty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to NuGet configuration CLI.
+        /// </summary>
+        internal static string Config_Description {
+            get {
+                return ResourceManager.GetString("Config_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Key &apos;{0}&apos; not found..
+        /// </summary>
+        internal static string ConfigCommandKeyNotFound {
+            get {
+                return ResourceManager.GetString("ConfigCommandKeyNotFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to ALL: Get all merged NuGet configuration settings from multiple NuGet configuration files that will be applied, when invoking NuGet command from the working directory path.  CONFIG_KEY: Get the effective value of the specified configuration settings of the config section..
+        /// </summary>
+        internal static string ConfigGetAllOrConfigKeyDescription {
+            get {
+                return ResourceManager.GetString("ConfigGetAllOrConfigKeyDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Gets the NuGet configuration settings that will be applied..
+        /// </summary>
+        internal static string ConfigGetCommandDescription {
+            get {
+                return ResourceManager.GetString("ConfigGetCommandDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Indicate that the NuGet configuration file path will be shown beside the configuration settings..
+        /// </summary>
+        internal static string ConfigGetShowPathDescription {
+            get {
+                return ResourceManager.GetString("ConfigGetShowPathDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Lists the paths to all NuGet configuration files that will be applied when invoking NuGet command in a specific directory.
+        /// </summary>
+        internal static string ConfigPathsCommandDescription {
+            get {
+                return ResourceManager.GetString("ConfigPathsCommandDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Specifies the directory to start from when listing configuration files. If not specified, the current directory is used..
+        /// </summary>
+        internal static string ConfigPathsWorkingDirectoryDescription {
+            get {
+                return ResourceManager.GetString("ConfigPathsWorkingDirectoryDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Set the value of a specified NuGet configuration setting..
+        /// </summary>
+        internal static string ConfigSetCommandDescription {
+            get {
+                return ResourceManager.GetString("ConfigSetCommandDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The key of the settings that are to be set..
+        /// </summary>
+        internal static string ConfigSetConfigKeyDescription {
+            get {
+                return ResourceManager.GetString("ConfigSetConfigKeyDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The value of the settings that are to be set..
+        /// </summary>
+        internal static string ConfigSetConfigValueDescription {
+            get {
+                return ResourceManager.GetString("ConfigSetConfigValueDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Removes the key-value pair from a specified NuGet configuration setting..
+        /// </summary>
+        internal static string ConfigUnsetCommandDescription {
+            get {
+                return ResourceManager.GetString("ConfigUnsetCommandDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The key of the settings that are to be removed..
+        /// </summary>
+        internal static string ConfigUnsetConfigKeyDescription {
+            get {
+                return ResourceManager.GetString("ConfigUnsetConfigKeyDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The key &quot;{0}&quot; could not be found in config section, so it could not be unset..
+        /// </summary>
+        internal static string ConfigUnsetNonExistingKey {
+            get {
+                return ResourceManager.GetString("ConfigUnsetNonExistingKey", resourceCulture);
             }
         }
         
@@ -259,7 +385,7 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Please provide arguments for package id and package version..
+        ///   Looks up a localized string similar to Provide arguments for package id and package version..
         /// </summary>
         internal static string Delete_MissingArguments {
             get {
@@ -331,6 +457,33 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to VersionOverride for package &apos;{0}&apos; should not be empty..
+        /// </summary>
+        internal static string Error_AddPkg_CentralPackageVersions_EmptyVersionOverride {
+            get {
+                return ResourceManager.GetString("Error_AddPkg_CentralPackageVersions_EmptyVersionOverride", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package reference for package &apos;{0}&apos; defined in incorrect location, PackageReference should be defined in project file..
+        /// </summary>
+        internal static string Error_AddPkg_CentralPackageVersions_PackageReference_WrongLocation {
+            get {
+                return ResourceManager.GetString("Error_AddPkg_CentralPackageVersions_PackageReference_WrongLocation", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to PackageVersion for package &apos;{0}&apos; defined in incorrect location, PackageVersion should be defined in Directory.Package.props..
+        /// </summary>
+        internal static string Error_AddPkg_CentralPackageVersions_PackageVersion_WrongLocation {
+            get {
+                return ResourceManager.GetString("Error_AddPkg_CentralPackageVersions_PackageVersion_WrongLocation", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Item &apos;{0}&apos; for &apos;{1}&apos; in Imported file &apos;{2}&apos;..
         /// </summary>
         internal static string Error_AddPkgErrorStringForImportedEdit {
@@ -358,11 +511,129 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to No assets file was found for `{0}`. Please run restore before running this command..
+        ///   Looks up a localized string similar to Failed to add a PackageReference for &apos;{0}&apos;. A ProjectReference with the same name already exists and a package with the same name cannot be added to the project..
+        /// </summary>
+        internal static string Error_AddPkgProjectReference {
+            get {
+                return ResourceManager.GetString("Error_AddPkgProjectReference", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unable to find a resolved package for &apos;{0}&apos;. This is a tooling error. Please file an issue at https://github.com/NuGet/Home..
+        /// </summary>
+        internal static string Error_AddPkgUnresolved {
+            get {
+                return ResourceManager.GetString("Error_AddPkgUnresolved", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No assets file was found for `{0}`. Run restore before running this command..
         /// </summary>
         internal static string Error_AssetsFileNotFound {
             get {
                 return ResourceManager.GetString("Error_AssetsFileNotFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to obtain a search resource..
+        /// </summary>
+        internal static string Error_CannotObtainSearchSource {
+            get {
+                return ResourceManager.GetString("Error_CannotObtainSearchSource", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0}: Package {1} is implicitly added by the SDK and cannot be upgraded independently.
+        /// </summary>
+        internal static string Error_CannotUpgradeAutoReferencedPackage {
+            get {
+                return ResourceManager.GetString("Error_CannotUpgradeAutoReferencedPackage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The packages {0} are implicitly referenced. You do not typically need to reference them from your project or in your central package versions management file. For more information, see https://aka.ms/sdkimplicitrefs.
+        /// </summary>
+        internal static string Error_CentralPackageVersions_AutoreferencedReferencesNotAllowed {
+            get {
+                return ResourceManager.GetString("Error_CentralPackageVersions_AutoreferencedReferencesNotAllowed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Centrally defined floating package versions are not allowed..
+        /// </summary>
+        internal static string Error_CentralPackageVersions_FloatingVersionsAreNotAllowed {
+            get {
+                return ResourceManager.GetString("Error_CentralPackageVersions_FloatingVersionsAreNotAllowed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The PackageReference items {0} do not have corresponding PackageVersion..
+        /// </summary>
+        internal static string Error_CentralPackageVersions_MissingPackageVersion {
+            get {
+                return ResourceManager.GetString("Error_CentralPackageVersions_MissingPackageVersion", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The package reference {0} specifies a VersionOverride but the ability to override a centrally defined version is currently disabled..
+        /// </summary>
+        internal static string Error_CentralPackageVersions_VersionOverrideDisabled {
+            get {
+                return ResourceManager.GetString("Error_CentralPackageVersions_VersionOverrideDisabled", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Projects that use central package version management should not define the version on the PackageReference items but on the PackageVersion items: {0}.
+        /// </summary>
+        internal static string Error_CentralPackageVersions_VersionsNotAllowed {
+            get {
+                return ResourceManager.GetString("Error_CentralPackageVersions_VersionsNotAllowed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to &apos;{0}&apos; is not a valid config key in config section..
+        /// </summary>
+        internal static string Error_ConfigSetInvalidKey {
+            get {
+                return ResourceManager.GetString("Error_ConfigSetInvalidKey", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Central Package Management configuration error: Could not find PackageVersion for package {0}.
+        /// </summary>
+        internal static string Error_CouldNotFindPackageVersionForCpmPackage {
+            get {
+                return ResourceManager.GetString("Error_CouldNotFindPackageVersionForCpmPackage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to You are running the &apos;{0}&apos; operation with an &apos;HTTP&apos; source, &apos;{1}&apos;. NuGet requires HTTPS sources. To use HTTP sources, you must explicitly set &apos;allowInsecureConnections&apos; to true in your NuGet.Config file. Refer to https://aka.ms/nuget-https-everywhere for more information..
+        /// </summary>
+        internal static string Error_HttpServerUsage {
+            get {
+                return ResourceManager.GetString("Error_HttpServerUsage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to You are running the &apos;{0}&apos; operation with &apos;HTTP&apos; sources: {1}
+        ///NuGet requires HTTPS sources. To use HTTP sources, you must explicitly set &apos;allowInsecureConnections&apos; to true in your NuGet.Config file. Refer to https://aka.ms/nuget-https-everywhere for more information..
+        /// </summary>
+        internal static string Error_HttpServerUsage_MultipleSources {
+            get {
+                return ResourceManager.GetString("Error_HttpServerUsage_MultipleSources", resourceCulture);
             }
         }
         
@@ -376,6 +647,51 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Invalid value `{0}` for option {1}..
+        /// </summary>
+        internal static string Error_InvalidOptionValue {
+            get {
+                return ResourceManager.GetString("Error_InvalidOptionValue", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The specified source &apos;{0}&apos; is invalid. Provide a valid source..
+        /// </summary>
+        internal static string Error_InvalidSource {
+            get {
+                return ResourceManager.GetString("Error_InvalidSource", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Invalid version value &apos;{0}&apos;..
+        /// </summary>
+        internal static string Error_InvalidVersion {
+            get {
+                return ResourceManager.GetString("Error_InvalidVersion", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Invalid version range &apos;{0}&apos;.
+        /// </summary>
+        internal static string Error_InvalidVersionRange {
+            get {
+                return ResourceManager.GetString("Error_InvalidVersionRange", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Missing version from {0}.
+        /// </summary>
+        internal static string Error_MissingVersion {
+            get {
+                return ResourceManager.GetString("Error_MissingVersion", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to MsBuild was unable to open Project &apos;{0}&apos;..
         /// </summary>
         internal static string Error_MsBuildUnableToOpenProject {
@@ -385,11 +701,38 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to The directory &apos;{0}&apos; contains multiple project or solution files. Specify which project or solution file to use..
+        /// </summary>
+        internal static string Error_MultipleProjectOrSolutionFilesInDirectory {
+            get {
+                return ResourceManager.GetString("Error_MultipleProjectOrSolutionFilesInDirectory", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to None or invalid DgSpec was passed to NuGet add package command..
         /// </summary>
         internal static string Error_NoDgSpec {
             get {
                 return ResourceManager.GetString("Error_NoDgSpec", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The directory &apos;{0}&apos; does not contain any project or solution files..
+        /// </summary>
+        internal static string Error_NoProjectOrSolutionFilesInDirectory {
+            get {
+                return ResourceManager.GetString("Error_NoProjectOrSolutionFilesInDirectory", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No package sources found..
+        /// </summary>
+        internal static string Error_NoSource {
+            get {
+                return ResourceManager.GetString("Error_NoSource", resourceCulture);
             }
         }
         
@@ -408,6 +751,42 @@ namespace NuGet.CommandLine.XPlat {
         internal static string Error_NoVersionsAvailable {
             get {
                 return ResourceManager.GetString("Error_NoVersionsAvailable", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unable to find a valid package version.
+        /// </summary>
+        internal static string Error_PackageDownload_VersionNotFound {
+            get {
+                return ResourceManager.GetString("Error_PackageDownload_VersionNotFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package source mapping is enabled, but no mapping for package {0} was found. See https://aka.ms/nuget/psm for more information..
+        /// </summary>
+        internal static string Error_PackageSourceMappingNotFound {
+            get {
+                return ResourceManager.GetString("Error_PackageSourceMappingNotFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Missing or invalid path &apos;{0}&apos;. Provide a path to a project, solution file, file-based app, or project directory..
+        /// </summary>
+        internal static string Error_PathIsMissingOrInvalid {
+            get {
+                return ResourceManager.GetString("Error_PathIsMissingOrInvalid", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The specified path &apos;{0}&apos; does not exist..
+        /// </summary>
+        internal static string Error_PathNotFound {
+            get {
+                return ResourceManager.GetString("Error_PathNotFound", resourceCulture);
             }
         }
         
@@ -435,6 +814,15 @@ namespace NuGet.CommandLine.XPlat {
         internal static string Error_PrereleaseWhenVersionSpecified {
             get {
                 return ResourceManager.GetString("Error_PrereleaseWhenVersionSpecified", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Project &apos;{0}&apos; does not have MSBuild property ProjectAssetsFile defined. This may indicate that this project does not support NuGet PackageReference, or that project customization has prevented the .NET SDK setting default values..
+        /// </summary>
+        internal static string Error_ProjectAssetsFilePropertyNotFound {
+            get {
+                return ResourceManager.GetString("Error_ProjectAssetsFilePropertyNotFound", resourceCulture);
             }
         }
         
@@ -637,7 +1025,7 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Unable to read the assets file `{0}`. Please make sure the file has the write format..
+        ///   Looks up a localized string similar to Unable to read the assets file `{0}`. Make sure the file has the correct format..
         /// </summary>
         internal static string ListPkg_ErrorReadingAssetsFile {
             get {
@@ -646,7 +1034,7 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Unable to read a package reference from the project `{0}`. Please make sure that your project file and project.assets.json file are in sync by running restore..
+        ///   Looks up a localized string similar to Unable to read a package reference from the project `{0}`. Make sure that your project file and project.assets.json file are in sync by running restore..
         /// </summary>
         internal static string ListPkg_ErrorReadingReferenceFromProject {
             get {
@@ -682,7 +1070,7 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Failed to parse one of the given frameworks. Please make sure the given frameworks are valid..
+        ///   Looks up a localized string similar to The specified TargetFramework &apos;{0}&apos; is not found in the project &apos;{1}&apos;..
         /// </summary>
         internal static string ListPkg_InvalidFramework {
             get {
@@ -1043,7 +1431,7 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Both operations, --list and --clear, are not supported in the same command. Please specify only one operation.
+        ///   Looks up a localized string similar to Both operations, --list and --clear, are not supported in the same command. Specify only one operation.
         ///usage: NuGet locals &lt;all | http-cache | global-packages | temp | plugins-cache&gt; [--clear | -c | --list | -l]
         ///For more information, visit https://docs.nuget.org/docs/reference/command-line-reference.
         /// </summary>
@@ -1065,7 +1453,7 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Please specify an operation i.e. --list or --clear.
+        ///   Looks up a localized string similar to Specify an operation i.e. --list or --clear.
         ///usage: NuGet locals &lt;all | http-cache | global-packages | temp | plugins-cache&gt; [--clear | -c | --list | -l]
         ///For more information, visit https://docs.nuget.org/docs/reference/command-line-reference.
         /// </summary>
@@ -1211,6 +1599,384 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Allows downloading from HTTP (non-HTTPS) package sources..
+        /// </summary>
+        internal static string PackageDownloadCommand_AllowInsecureConnectionsDescription {
+            get {
+                return ResourceManager.GetString("PackageDownloadCommand_AllowInsecureConnectionsDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Skipping download. Package &apos;{0}&apos; version {1} already exists at &apos;{2}&apos;..
+        /// </summary>
+        internal static string PackageDownloadCommand_AlreadyInstalled {
+            get {
+                return ResourceManager.GetString("PackageDownloadCommand_AlreadyInstalled", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Downloads a NuGet package to a local folder without requiring a project file..
+        /// </summary>
+        internal static string PackageDownloadCommand_Description {
+            get {
+                return ResourceManager.GetString("PackageDownloadCommand_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package &apos;{0}&apos; ({1}) failed to download..
+        /// </summary>
+        internal static string PackageDownloadCommand_Failed {
+            get {
+                return ResourceManager.GetString("PackageDownloadCommand_Failed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to latest version.
+        /// </summary>
+        internal static string PackageDownloadCommand_LatestVersion {
+            get {
+                return ResourceManager.GetString("PackageDownloadCommand_LatestVersion", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Directory where the package will be placed. Defaults to the current working directory..
+        /// </summary>
+        internal static string PackageDownloadCommand_OutputDirectoryDescription {
+            get {
+                return ResourceManager.GetString("PackageDownloadCommand_OutputDirectoryDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package identifier (e.g. &apos;Newtonsoft.Json&apos;)..
+        /// </summary>
+        internal static string PackageDownloadCommand_PackageIdDescription {
+            get {
+                return ResourceManager.GetString("PackageDownloadCommand_PackageIdDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unable to download package &apos;{0}&apos;. PackageSourceMapping is enabled, but no mapped sources were found for this package. The following source(s) were not considered: {1}..
+        /// </summary>
+        internal static string PackageDownloadCommand_PackageSourceMapping_NoSourcesMapped {
+            get {
+                return ResourceManager.GetString("PackageDownloadCommand_PackageSourceMapping_NoSourcesMapped", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The mapped source &apos;{0}&apos; for package &apos;{1}&apos; was not found among the configured sources..
+        /// </summary>
+        internal static string PackageDownloadCommand_PackageSourceMapping_NoSuchSource {
+            get {
+                return ResourceManager.GetString("PackageDownloadCommand_PackageSourceMapping_NoSuchSource", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Specifies one or more NuGet package sources to use..
+        /// </summary>
+        internal static string PackageDownloadCommand_SourcesDescription {
+            get {
+                return ResourceManager.GetString("PackageDownloadCommand_SourcesDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Downloading package {0}, version {1}..
+        /// </summary>
+        internal static string PackageDownloadCommand_Starting {
+            get {
+                return ResourceManager.GetString("PackageDownloadCommand_Starting", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package &apos;{0}&apos; ({1}) successfully downloaded to &apos;{2}&apos;..
+        /// </summary>
+        internal static string PackageDownloadCommand_Succeeded {
+            get {
+                return ResourceManager.GetString("PackageDownloadCommand_Succeeded", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package download failed for `{0} {1}` from source `{2}`..
+        /// </summary>
+        internal static string PackageDownloadCommand_UnableToDownload {
+            get {
+                return ResourceManager.GetString("PackageDownloadCommand_UnableToDownload", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to All packages are already up to date..
+        /// </summary>
+        internal static string PackageUpdate_AllPackagesAlreadyUpToDate {
+            get {
+                return ResourceManager.GetString("PackageUpdate_AllPackagesAlreadyUpToDate", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to All versions of package {0} have security advisories. Unable to find a non-vulnerable version to update to..
+        /// </summary>
+        internal static string PackageUpdate_AllVersionsHaveAdvisories {
+            get {
+                return ResourceManager.GetString("PackageUpdate_AllVersionsHaveAdvisories", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to All packages are up to date.
+        /// </summary>
+        internal static string PackageUpdate_AlreadyUpToDate {
+            get {
+                return ResourceManager.GetString("PackageUpdate_AlreadyUpToDate", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to This command requires NuGetAudit to be enabled at this time. See https://aka.ms/nuget/audit for more information..
+        /// </summary>
+        internal static string PackageUpdate_AuditDisabled {
+            get {
+                return ResourceManager.GetString("PackageUpdate_AuditDisabled", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to NuGetAuditMode is set to direct, which means that transitive packages with known vulnerabilities will not be updated. See https://aka.ms/nuget/audit for more information..
+        /// </summary>
+        internal static string PackageUpdate_AuditModeIsDirect {
+            get {
+                return ResourceManager.GetString("PackageUpdate_AuditModeIsDirect", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Updated {0} packages in {1} scanned packages..
+        /// </summary>
+        internal static string PackageUpdate_FinalSummary {
+            get {
+                return ResourceManager.GetString("PackageUpdate_FinalSummary", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Finding versions of packages to update..
+        /// </summary>
+        internal static string PackageUpdate_FindingUpdateVersions {
+            get {
+                return ResourceManager.GetString("PackageUpdate_FindingUpdateVersions", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Loading Project(s)..
+        /// </summary>
+        internal static string PackageUpdate_LoadingDGSpec {
+            get {
+                return ResourceManager.GetString("PackageUpdate_LoadingDGSpec", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No upgradable packages have known vulnerabilities..
+        /// </summary>
+        internal static string PackageUpdate_NoVulnerablePackages {
+            get {
+                return ResourceManager.GetString("PackageUpdate_NoVulnerablePackages", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package reference in the form of a package identifier like &apos;Newtonsoft.Json&apos; or package identifier and version separated by &apos;@&apos; like &apos;Newtonsoft.Json@13.0.3&apos;..
+        /// </summary>
+        internal static string PackageUpdate_PackageArgumentDescription {
+            get {
+                return ResourceManager.GetString("PackageUpdate_PackageArgumentDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Running preview restore to check package compatibility..
+        /// </summary>
+        internal static string PackageUpdate_PreviewRestore {
+            get {
+                return ResourceManager.GetString("PackageUpdate_PreviewRestore", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Preview restore with updated packages was not successful. Force mode is not yet available..
+        /// </summary>
+        internal static string PackageUpdate_PreviewRestoreFailed {
+            get {
+                return ResourceManager.GetString("PackageUpdate_PreviewRestoreFailed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Updating {0} {1} to {2}..
+        /// </summary>
+        internal static string PackageUpdate_UpdatedMessage {
+            get {
+                return ResourceManager.GetString("PackageUpdate_UpdatedMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Updating outdated packages in {0}..
+        /// </summary>
+        internal static string PackageUpdate_UpdatingOutdatedPackages {
+            get {
+                return ResourceManager.GetString("PackageUpdate_UpdatingOutdatedPackages", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Updating packages with security advisories in {0}.
+        /// </summary>
+        internal static string PackageUpdate_UpdatingVulnerablePackages {
+            get {
+                return ResourceManager.GetString("PackageUpdate_UpdatingVulnerablePackages", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Update referenced packages in a project or solution..
+        /// </summary>
+        internal static string PackageUpdateCommand_Description {
+            get {
+                return ResourceManager.GetString("PackageUpdateCommand_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Path to a project or solution file or file-based app, or a project directory..
+        /// </summary>
+        internal static string PackageUpdateCommand_ProjectOptionDescription {
+            get {
+                return ResourceManager.GetString("PackageUpdateCommand_ProjectOptionDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Upgrade packages with known vulnerabilities..
+        /// </summary>
+        internal static string PackageUpdateCommand_VulnerableOptionDescription {
+            get {
+                return ResourceManager.GetString("PackageUpdateCommand_VulnerableOptionDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Searches one or more package sources for packages that match a search term. If no sources are specified, all sources defined in the NuGet.Config are used..
+        /// </summary>
+        internal static string pkgSearch_Description {
+            get {
+                return ResourceManager.GetString("pkgSearch_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Require that the search term exactly match the name of the package. Causes `--take` and `--skip` options to be ignored..
+        /// </summary>
+        internal static string pkgSearch_ExactMatchDescription {
+            get {
+                return ResourceManager.GetString("pkgSearch_ExactMatchDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Format the output accordingly. Either `table`, or `json`. The default value is `table`..
+        /// </summary>
+        internal static string pkgSearch_FormatDescription {
+            get {
+                return ResourceManager.GetString("pkgSearch_FormatDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Stop and wait for user input or action (for example to complete authentication)..
+        /// </summary>
+        internal static string pkgSearch_InteractiveDescription {
+            get {
+                return ResourceManager.GetString("pkgSearch_InteractiveDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Include prerelease packages..
+        /// </summary>
+        internal static string pkgSearch_PrereleaseDescription {
+            get {
+                return ResourceManager.GetString("pkgSearch_PrereleaseDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Number of results to skip, to allow pagination. Default 0..
+        /// </summary>
+        internal static string pkgSearch_SkipDescription {
+            get {
+                return ResourceManager.GetString("pkgSearch_SkipDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package source to search. You can pass multiple `--source` options to search multiple package sources. Example: `--source https://api.nuget.org/v3/index.json`..
+        /// </summary>
+        internal static string pkgSearch_SourceDescription {
+            get {
+                return ResourceManager.GetString("pkgSearch_SourceDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Number of results to return. Default 20..
+        /// </summary>
+        internal static string pkgSearch_TakeDescription {
+            get {
+                return ResourceManager.GetString("pkgSearch_TakeDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Search term to filter package names, descriptions, and tags. Used as a literal value. Example: `dotnet package search some.package`. See also `--exact-match`..
+        /// </summary>
+        internal static string pkgSearch_termDescription {
+            get {
+                return ResourceManager.GetString("pkgSearch_termDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Display this amount of details in the output: `normal`, `minimal`, `detailed`. The default is `normal`..
+        /// </summary>
+        internal static string pkgSearch_VerbosityDescription {
+            get {
+                return ResourceManager.GetString("pkgSearch_VerbosityDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Allows prerelease packages to be installed..
+        /// </summary>
+        internal static string Prerelease_Description {
+            get {
+                return ResourceManager.GetString("Prerelease_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to There are no stable versions available, {0} is the best available. Consider adding the --prerelease option.
         /// </summary>
         internal static string PrereleaseVersionsAvailable {
@@ -1238,7 +2004,7 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Please specify the path to the package..
+        ///   Looks up a localized string similar to Specify the path to the package..
         /// </summary>
         internal static string Push_MissingArguments {
             get {
@@ -1337,7 +2103,7 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to SHA-1 fingerprint of the certificate used to search a local certificate store for the certificate. The certificate store can be specified by --certificate-store-name and --certificate-store-location options..
+        ///   Looks up a localized string similar to SHA-256, SHA-384 or SHA-512 fingerprint of the certificate used to search a local certificate store for the certificate. The certificate store can be specified by --certificate-store-name and --certificate-store-location options..
         /// </summary>
         internal static string SignCommandCertificateFingerprintDescription {
             get {
@@ -1413,6 +2179,15 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to {0}: Invalid value for &apos;--certificate-fingerprint&apos; option. The value must be a SHA-256, SHA-384, or SHA-512 certificate fingerprint (in hexadecimal)..
+        /// </summary>
+        internal static string SignCommandInvalidCertificateFingerprint {
+            get {
+                return ResourceManager.GetString("SignCommandInvalidCertificateFingerprint", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Multiple options were used to specify a certificate..
         /// </summary>
         internal static string SignCommandMultipleCertificateException {
@@ -1431,7 +2206,7 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The &apos;--timestamper&apos; option was not provided. The signed package will not be timestamped. To learn more about this option, please visit https://docs.microsoft.com/dotnet/core/tools.
+        ///   Looks up a localized string similar to The &apos;--timestamper&apos; option was not provided. The signed package will not be timestamped. To learn more about this option, visit https://docs.microsoft.com/dotnet/core/tools.
         /// </summary>
         internal static string SignCommandNoTimestamperWarning {
             get {
@@ -1454,6 +2229,15 @@ namespace NuGet.CommandLine.XPlat {
         internal static string SignCommandOverwriteDescription {
             get {
                 return ResourceManager.GetString("SignCommandOverwriteDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Allow signing with certificates whose root certificate is not in a trusted root store...
+        /// </summary>
+        internal static string SignCommandAllowUntrustedRootDescription {
+            get {
+                return ResourceManager.GetString("SignCommandAllowUntrustedRootDescription", resourceCulture);
             }
         }
         
@@ -1503,6 +2287,15 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Allows HTTP connections for adding or updating packages. Note: This method is not secure. For secure options, see https://aka.ms/nuget-https-everywhere for more information..
+        /// </summary>
+        internal static string SourcesCommandAllowInsecureConnectionsDescription {
+            get {
+                return ResourceManager.GetString("SourcesCommandAllowInsecureConnectionsDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The format of the list command output: `Detailed` (the default) and `Short`..
         /// </summary>
         internal static string SourcesCommandFormatDescription {
@@ -1526,6 +2319,15 @@ namespace NuGet.CommandLine.XPlat {
         internal static string SourcesCommandPasswordDescription {
             get {
                 return ResourceManager.GetString("SourcesCommandPasswordDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The NuGet server protocol version to be used. Currently supported versions are 2 and 3. See https://learn.microsoft.com/nuget/api/overview for information about the version 3 protocol. Defaults to 2 if not specified..
+        /// </summary>
+        internal static string SourcesCommandProtocolVersionDescription {
+            get {
+                return ResourceManager.GetString("SourcesCommandProtocolVersionDescription", resourceCulture);
             }
         }
         
@@ -1566,16 +2368,16 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to .
+        ///   Looks up a localized string similar to The protocol version specified is invalid. Provide a valid protocol version..
         /// </summary>
-        internal static string String1 {
+        internal static string SourcesCommandValidProtocolVersion {
             get {
-                return ResourceManager.GetString("String1", resourceCulture);
+                return ResourceManager.GetString("SourcesCommandValidProtocolVersion", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The API key for the symbol server..
+        ///   Looks up a localized string similar to The API key for the symbol server. If not set, the NUGET_SYMBOL_API_KEY environment variable is read..
         /// </summary>
         internal static string SymbolApiKey_Description {
             get {
@@ -1755,6 +2557,33 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to The package {0} references different versions of the package for different target frameworks. This is not supported by this command. Edit the project file directly. ({1}).
+        /// </summary>
+        internal static string Unsupported_UpdatePackageWithDifferentPerTfmVersions {
+            get {
+                return ResourceManager.GetString("Unsupported_UpdatePackageWithDifferentPerTfmVersions", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unsupported: Updating more than one project is not yet supported.
+        /// </summary>
+        internal static string Unsupported_UpdatingMoreThanOneProject {
+            get {
+                return ResourceManager.GetString("Unsupported_UpdatingMoreThanOneProject", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unsupported: Upgrading all packages in a project is not yet supported.
+        /// </summary>
+        internal static string Unsupported_UpgradeAllPackages {
+            get {
+                return ResourceManager.GetString("Unsupported_UpgradeAllPackages", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Update a NuGet source..
         /// </summary>
         internal static string Update_Description {
@@ -1836,21 +2665,155 @@ namespace NuGet.CommandLine.XPlat {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to You are running the &apos;{0}&apos; operation with an &apos;HTTP&apos; source, &apos;{1}&apos;. Non-HTTPS access will be removed in a future version. Consider migrating to an &apos;HTTPS&apos; source..
+        ///   Looks up a localized string similar to The package {0} is already referencing the highest version {1} in project {2}.
         /// </summary>
-        internal static string Warning_HttpServerUsage {
+        internal static string Warning_AlreadyHighestVersion {
             get {
-                return ResourceManager.GetString("Warning_HttpServerUsage", resourceCulture);
+                return ResourceManager.GetString("Warning_AlreadyHighestVersion", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to You are running the &apos;{0}&apos; operation with &apos;HTTP&apos; sources: {1}
-        ///Non-HTTPS access will be removed in a future version. Consider migrating to &apos;HTTPS&apos; sources..
+        ///   Looks up a localized string similar to Package {0} is already referencing version {1}.
         /// </summary>
-        internal static string Warning_HttpServerUsage_MultipleSources {
+        internal static string Warning_AlreadyUsingSameVersion {
             get {
-                return ResourceManager.GetString("Warning_HttpServerUsage_MultipleSources", resourceCulture);
+                return ResourceManager.GetString("Warning_AlreadyUsingSameVersion", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Audit source &apos;{0}&apos; did not provide any vulnerability data..
+        /// </summary>
+        internal static string Warning_AuditSourceWithoutData {
+            get {
+                return ResourceManager.GetString("Warning_AuditSourceWithoutData", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Shows the dependency graph for a particular package for a given project or solution..
+        /// </summary>
+        internal static string WhyCommand_Description {
+            get {
+                return ResourceManager.GetString("WhyCommand_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unable to run &apos;dotnet nuget why&apos;. The &apos;{0}&apos; argument cannot be empty..
+        /// </summary>
+        internal static string WhyCommand_Error_ArgumentCannotBeEmpty {
+            get {
+                return ResourceManager.GetString("WhyCommand_Error_ArgumentCannotBeEmpty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unable to run &apos;dotnet nuget why&apos;. {0}.
+        /// </summary>
+        internal static string WhyCommand_Error_ArgumentExceptionThrown {
+            get {
+                return ResourceManager.GetString("WhyCommand_Error_ArgumentExceptionThrown", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Internal error: Assets file is inconsistent.
+        /// </summary>
+        internal static string WhyCommand_Error_InconsistentAssetsFile {
+            get {
+                return ResourceManager.GetString("WhyCommand_Error_InconsistentAssetsFile", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The file &apos;{0}&apos; does not appear to be a NuGet assets file. For more information, see https://aka.ms/dotnet/nuget/why#older-project-format.
+        /// </summary>
+        internal static string WhyCommand_Error_InvalidAssetsFile_WithoutProject {
+            get {
+                return ResourceManager.GetString("WhyCommand_Error_InvalidAssetsFile_WithoutProject", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The file &apos;{0}&apos; does not appear to be a NuGet assets file. Run restore for project &apos;{1}&apos; before running this command..
+        /// </summary>
+        internal static string WhyCommand_Error_InvalidAssetsFile_WithProject {
+            get {
+                return ResourceManager.GetString("WhyCommand_Error_InvalidAssetsFile_WithProject", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The target framework(s) for which dependency graphs are shown..
+        /// </summary>
+        internal static string WhyCommand_FrameworksOption_Description {
+            get {
+                return ResourceManager.GetString("WhyCommand_FrameworksOption_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Project &apos;{0}&apos; has the following dependency graph(s) for &apos;{1}&apos;:.
+        /// </summary>
+        internal static string WhyCommand_Message_DependencyGraphsFoundInProject {
+            get {
+                return ResourceManager.GetString("WhyCommand_Message_DependencyGraphsFoundInProject", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No dependency graph(s) found for this target framework..
+        /// </summary>
+        internal static string WhyCommand_Message_NoDependencyGraphsFoundForFramework {
+            get {
+                return ResourceManager.GetString("WhyCommand_Message_NoDependencyGraphsFoundForFramework", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Project &apos;{0}&apos; does not have a dependency on &apos;{1}&apos;..
+        /// </summary>
+        internal static string WhyCommand_Message_NoDependencyGraphsFoundInProject {
+            get {
+                return ResourceManager.GetString("WhyCommand_Message_NoDependencyGraphsFoundInProject", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unable to run &apos;dotnet nuget why&apos; for project &apos;{0}&apos;. See https://aka.ms/dotnet/nuget/why#older-project-format.
+        /// </summary>
+        internal static string WhyCommand_Message_NonSDKStyleProjectsAreNotSupported {
+            get {
+                return ResourceManager.GetString("WhyCommand_Message_NonSDKStyleProjectsAreNotSupported", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The package name to lookup in the dependency graph..
+        /// </summary>
+        internal static string WhyCommand_PackageArgument_Description {
+            get {
+                return ResourceManager.GetString("WhyCommand_PackageArgument_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to A path to a project, solution file, file-based app, or project directory..
+        /// </summary>
+        internal static string WhyCommand_PathArgument_Description {
+            get {
+                return ResourceManager.GetString("WhyCommand_PathArgument_Description", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The assets file &apos;{0}&apos; for project &apos;{1}&apos; does not contain a target for the specified input framework &apos;{2}&apos;..
+        /// </summary>
+        internal static string WhyCommand_Warning_AssetsFileDoesNotContainSpecifiedTarget {
+            get {
+                return ResourceManager.GetString("WhyCommand_Warning_AssetsFileDoesNotContainSpecifiedTarget", resourceCulture);
             }
         }
     }

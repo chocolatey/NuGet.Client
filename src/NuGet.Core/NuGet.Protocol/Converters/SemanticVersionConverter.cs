@@ -16,7 +16,7 @@ namespace NuGet.Protocol
         /// Gets a flag indicating whether or not a type is convertible.
         /// </summary>
         /// <param name="objectType">An object type to check.</param>
-        /// <returns><c>true</c> if <paramref name="objectType" /> is convertible; otherwise <c>false</c>.</returns>
+        /// <returns><see langword="true" /> if <paramref name="objectType" /> is convertible; otherwise <see langword="false" />.</returns>
         public override bool CanConvert(Type objectType) => objectType == typeof(SemanticVersion);
 
         /// <summary>
@@ -27,9 +27,9 @@ namespace NuGet.Protocol
         /// <param name="existingValue">The existing value of the object.</param>
         /// <param name="serializer">A serializer.</param>
         /// <returns>A <see cref="SemanticVersion" /> object.</returns>
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+        public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
         {
-            return reader.TokenType != JsonToken.Null ? SemanticVersion.Parse(serializer.Deserialize<string>(reader)) : null;
+            return reader.TokenType != JsonToken.Null ? SemanticVersion.Parse(serializer.Deserialize<string>(reader)!) : null;
         }
 
         /// <summary>
@@ -38,9 +38,9 @@ namespace NuGet.Protocol
         /// <param name="writer">A JSON writer.</param>
         /// <param name="value">A value to serialize.</param>
         /// <param name="serializer">A serializer.</param>
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
         {
-            var semanticVersion = (SemanticVersion)value;
+            var semanticVersion = (SemanticVersion)value!;
 
             serializer.Serialize(writer, semanticVersion.ToString());
         }

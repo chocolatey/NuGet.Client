@@ -41,7 +41,7 @@ namespace NuGet.Credentials
             _semaphore.Wait();
             try
             {
-                _delegateLogger?.Log(message);
+                _delegateLogger.Log(message);
             }
             finally
             {
@@ -54,7 +54,7 @@ namespace NuGet.Credentials
             await _semaphore.WaitAsync();
             try
             {
-                await _delegateLogger?.LogAsync(message);
+                await _delegateLogger.LogAsync(message);
             }
             finally
             {

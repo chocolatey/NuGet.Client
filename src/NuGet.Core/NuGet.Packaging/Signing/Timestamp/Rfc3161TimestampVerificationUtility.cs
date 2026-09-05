@@ -2,12 +2,9 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
-
-#if IS_SIGNING_SUPPORTED
 using System.Security.Cryptography.Pkcs;
-#endif
-
 using System.Security.Cryptography.X509Certificates;
 
 namespace NuGet.Packaging.Signing
@@ -17,8 +14,6 @@ namespace NuGet.Packaging.Signing
     /// </summary>
     internal static class Rfc3161TimestampVerificationUtility
     {
-#if IS_SIGNING_SUPPORTED
-
         internal static bool ValidateSignerCertificateAgainstTimestamp(
             X509Certificate2 signerCertificate,
             Timestamp timestamp)
@@ -32,10 +27,10 @@ namespace NuGet.Packaging.Signing
 
         internal static bool TryReadTSTInfoFromSignedCms(
             SignedCms timestampCms,
-            out IRfc3161TimestampTokenInfo tstInfo)
+            [NotNullWhen(returnValue: true)] out IRfc3161TimestampTokenInfo? tstInfo)
         {
             tstInfo = null;
-            if (timestampCms.ContentInfo.ContentType.Value.Equals(Oids.TSTInfoContentType, StringComparison.Ordinal))
+            if (timestampCms.ContentInfo.ContentType.Value!.Equals(Oids.TSTInfoContentType, StringComparison.Ordinal))
             {
                 tstInfo = Rfc3161TimestampTokenInfoFactory.Create(timestampCms.ContentInfo.Content);
                 return true;
@@ -72,6 +67,5 @@ namespace NuGet.Packaging.Signing
 
             return accuracyInMilliseconds;
         }
-#endif
     }
 }

@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -49,12 +51,9 @@ namespace NuGet.CommandLine.XPlat.ListPackage
         protected readonly List<ReportProblem> _problems = new();
         protected TextWriter _writer;
 
-        private ListPackageJsonRenderer()
-        { }
-
         public ListPackageJsonRenderer(TextWriter textWriter = null)
         {
-            _writer = textWriter != null ? textWriter : Console.Out;
+            _writer = textWriter ?? Console.Out;
         }
 
         public void AddProblem(ProblemType problemType, string text)
@@ -100,17 +99,12 @@ namespace NuGet.CommandLine.XPlat.ListPackage
             writer.WritePropertyName(ParametersProperty);
             writer.WriteValue(PathUtility.GetPathWithForwardSlashes(listPackageArgs.ArgumentText));
 
-            if (listPackageReportModel.Projects.Any(p => p.AutoReferenceFound))
-            {
-                _problems.Add(new ReportProblem(ProblemType.Warning, string.Empty, Strings.ListPkg_AutoReferenceDescription));
-            }
-
             if (_problems?.Count > 0)
             {
                 WriteProblems(writer, _problems);
             }
 
-            WriteSources(writer, listPackageReportModel.ListPackageArgs);
+            WriteSources(writer, listPackageReportModel);
             WriteProjects(writer, listPackageReportModel.Projects, listPackageReportModel.ListPackageArgs);
             writer.WriteEndObject();
         }
@@ -140,9 +134,9 @@ namespace NuGet.CommandLine.XPlat.ListPackage
             writer.WriteEndArray();
         }
 
-        private static void WriteSources(JsonWriter writer, ListPackageArgs listPackageArgs)
+        private static void WriteSources(JsonWriter writer, ListPackageReportModel listPackageReportModel)
         {
-            if (listPackageArgs.ReportType == ReportType.Default)
+            if (listPackageReportModel.ListPackageArgs.ReportType == ReportType.Default)
             {
                 // generic list is offline.
                 return;
@@ -151,9 +145,19 @@ namespace NuGet.CommandLine.XPlat.ListPackage
             writer.WritePropertyName(SourcesProperty);
             writer.WriteStartArray();
 
-            foreach (PackageSource packageSource in listPackageArgs.PackageSources)
+            if (listPackageReportModel.ListPackageArgs.ReportType == ReportType.Vulnerable && listPackageReportModel.AuditSourcesUsed.Count > 0)
             {
-                writer.WriteValue(PathUtility.GetPathWithForwardSlashes(packageSource.Source));
+                foreach (PackageSource packageSource in listPackageReportModel.AuditSourcesUsed)
+                {
+                    writer.WriteValue(PathUtility.GetPathWithForwardSlashes(packageSource.Source));
+                }
+            }
+            else
+            {
+                foreach (PackageSource packageSource in listPackageReportModel.ListPackageArgs.PackageSources)
+                {
+                    writer.WriteValue(PathUtility.GetPathWithForwardSlashes(packageSource.Source));
+                }
             }
 
             writer.WriteEndArray();
@@ -193,7 +197,7 @@ namespace NuGet.CommandLine.XPlat.ListPackage
             {
                 writer.WriteStartObject();
                 writer.WritePropertyName(FrameworkProperty);
-                writer.WriteValue(reportFrameworkPackage.Framework);
+                writer.WriteValue(reportFrameworkPackage.TargetAlias);
                 WriteTopLevelPackages(writer, TopLevelPackagesProperty, reportFrameworkPackage.TopLevelPackages, listPackageArgs);
                 WriteTransitivePackages(writer, TransitivePackagesProperty, reportFrameworkPackage.TransitivePackages, listPackageArgs);
                 writer.WriteEndObject();

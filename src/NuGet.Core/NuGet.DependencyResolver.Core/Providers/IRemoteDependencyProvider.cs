@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Common;
@@ -23,13 +24,20 @@ namespace NuGet.DependencyResolver
         /// <summary>
         /// Gets a flag indicating whether or not the provider source is HTTP or HTTPS.
         /// </summary>
+        [MemberNotNullWhen(true, nameof(Source))]
         bool IsHttp { get; }
 
         /// <summary>
         /// Gets the package source.
         /// </summary>
-        /// <remarks>Optional. This will be <c>null</c> for project providers.</remarks>
-        PackageSource Source { get; }
+        /// <remarks>Optional. This will be <see langword="null" /> for project providers.</remarks>
+        PackageSource? Source { get; }
+
+        /// <summary>
+        /// Gets the source repository.
+        /// </summary>
+        /// <remarks>Optional. This will be <see langword="null" /> for project providers.</remarks>
+        SourceRepository? SourceRepository { get; }
 
         /// <summary>
         /// Asynchronously discovers all versions of a package from a source and selects the best match.
@@ -44,16 +52,16 @@ namespace NuGet.DependencyResolver
         /// The task result (<see cref="Task{TResult}.Result" />) returns a <see cref="LibraryIdentity" />
         /// instance.</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="libraryRange" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="targetFramework" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="cacheContext" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="cancellationToken" />
         /// is cancelled.</exception>
-        Task<LibraryIdentity> FindLibraryAsync(
+        Task<LibraryIdentity?> FindLibraryAsync(
             LibraryRange libraryRange,
             NuGetFramework targetFramework,
             SourceCacheContext cacheContext,
@@ -72,13 +80,13 @@ namespace NuGet.DependencyResolver
         /// The task result (<see cref="Task{TResult}.Result" />) returns a <see cref="LibraryDependencyInfo" />
         /// instance.</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="libraryIdentity" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="targetFramework" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="cacheContext" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="cancellationToken" />
         /// is cancelled.</exception>
         Task<LibraryDependencyInfo> GetDependenciesAsync(
@@ -99,11 +107,11 @@ namespace NuGet.DependencyResolver
         /// The task result (<see cref="Task{TResult}.Result" />) returns a <see cref="IPackageDownloader" />
         /// instance.</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="packageIdentity" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="cacheContext" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="cancellationToken" />
         /// is cancelled.</exception>
         Task<IPackageDownloader> GetPackageDownloaderAsync(
@@ -112,7 +120,8 @@ namespace NuGet.DependencyResolver
             ILogger logger,
             CancellationToken cancellationToken);
 
-        Task<IEnumerable<NuGetVersion>> GetAllVersionsAsync(
+        /// <remarks>Returns <see langword="null" /> when the source is unreachable.</remarks>
+        Task<IEnumerable<NuGetVersion>?> GetAllVersionsAsync(
             string id,
             SourceCacheContext cacheContext,
             ILogger logger,

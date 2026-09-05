@@ -11,6 +11,7 @@ namespace NuGet.SolutionRestoreManager
     /// </summary>
     [ComImport]
     [Guid("28954114-b5b5-40c4-8ca3-c983e1429960")]
+    [Obsolete]
     public interface IVsProjectProperty
     {
         /// <summary>
@@ -21,6 +22,6 @@ namespace NuGet.SolutionRestoreManager
         /// <summary>
         /// Property value.
         /// </summary>
-        string Value { get; }
+        string? Value { get; }
     }
 }

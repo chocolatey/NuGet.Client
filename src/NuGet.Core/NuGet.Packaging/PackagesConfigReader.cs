@@ -103,9 +103,9 @@ namespace NuGet.Packaging
         /// <returns>Minimum client version or the default of 2.5.0</returns>
         public NuGetVersion GetMinClientVersion()
         {
-            NuGetVersion version = null;
+            NuGetVersion? version = null;
 
-            var node = _doc.Root.Attribute(XName.Get(PackagesConfig.MinClientAttributeName));
+            var node = _doc.Root!.Attribute(XName.Get(PackagesConfig.MinClientAttributeName));
 
             if (node == null)
             {
@@ -119,7 +119,7 @@ namespace NuGet.Packaging
                     node.Value));
             }
 
-            return version;
+            return version!;
         }
 
         /// <summary>
@@ -140,9 +140,9 @@ namespace NuGet.Packaging
         {
             var packages = new List<PackageReference>();
 
-            foreach (var package in _doc.Root.Elements(XName.Get(PackagesConfig.PackageNodeName)))
+            foreach (var package in _doc.Root!.Elements(XName.Get(PackagesConfig.PackageNodeName)))
             {
-                string id = null;
+                string? id = null;
                 if (!PackagesConfig.TryGetAttribute(package, "id", out id)
                     || String.IsNullOrEmpty(id))
                 {
@@ -151,7 +151,7 @@ namespace NuGet.Packaging
                         Strings.ErrorNullOrEmptyPackageId));
                 }
 
-                string version = null;
+                string? version = null;
                 if (!PackagesConfig.TryGetAttribute(package, PackagesConfig.VersionAttributeName, out version)
                     || String.IsNullOrEmpty(version))
                 {
@@ -162,7 +162,7 @@ namespace NuGet.Packaging
                        version));
                 }
 
-                NuGetVersion semver = null;
+                NuGetVersion? semver = null;
                 if (!NuGetVersion.TryParse(version, out semver))
                 {
                     throw new PackagesConfigReaderException(string.Format(
@@ -172,11 +172,11 @@ namespace NuGet.Packaging
                        version));
                 }
 
-                string attributeValue = null;
-                VersionRange allowedVersions = null;
+                string? attributeValue = null;
+                VersionRange? allowedVersions = null;
                 if (PackagesConfig.TryGetAttribute(package, PackagesConfig.allowedVersionsAttributeName, out attributeValue))
                 {
-                    if (!VersionRange.TryParse(attributeValue, out allowedVersions))
+                    if (!VersionRange.TryParse(attributeValue!, out allowedVersions))
                     {
                         throw new PackagesConfigReaderException(string.Format(
                             CultureInfo.CurrentCulture,
@@ -189,21 +189,21 @@ namespace NuGet.Packaging
                 var targetFramework = NuGetFramework.UnsupportedFramework;
                 if (PackagesConfig.TryGetAttribute(package, PackagesConfig.TargetFrameworkAttributeName, out attributeValue))
                 {
-                    targetFramework = NuGetFramework.Parse(attributeValue, _frameworkMappings);
+                    targetFramework = NuGetFramework.Parse(attributeValue!, _frameworkMappings);
                 }
 
                 var developmentDependency = PackagesConfig.BoolAttribute(package, PackagesConfig.developmentDependencyAttributeName);
                 var requireReinstallation = PackagesConfig.BoolAttribute(package, PackagesConfig.RequireInstallAttributeName);
                 var userInstalled = PackagesConfig.BoolAttribute(package, PackagesConfig.UserInstalledAttributeName, true);
 
-                var entry = new PackageReference(new PackageIdentity(id, semver), targetFramework, userInstalled, developmentDependency, requireReinstallation, allowedVersions);
+                var entry = new PackageReference(new PackageIdentity(id!, semver!), targetFramework, userInstalled, developmentDependency, requireReinstallation, allowedVersions);
 
                 packages.Add(entry);
             }
 
             // check if there are duplicate entries
             var duplicates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            PackageIdentity lastIdentity = null;
+            PackageIdentity? lastIdentity = null;
             var comparer = PackageIdentity.Comparer;
 
             // Sort the list of packages and check for duplicates

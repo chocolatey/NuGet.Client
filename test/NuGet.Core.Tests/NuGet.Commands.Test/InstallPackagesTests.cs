@@ -5,10 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Xml.Linq;
 using FluentAssertions;
 using NuGet.Configuration;
 using NuGet.Frameworks;
@@ -19,6 +17,7 @@ using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
+using Test.Utility;
 using Xunit;
 
 namespace NuGet.Commands.Test
@@ -34,19 +33,7 @@ namespace NuGet.Commands.Test
             using (var cacheContext = new SourceCacheContext())
             using (var pathContext = new SimpleTestPathContext())
             {
-                var tfi = new List<TargetFrameworkInformation>
-                {
-                    new TargetFrameworkInformation()
-                    {
-                        FrameworkName = NuGetFramework.Parse("net462")
-                    }
-                };
-
-                var spec = NETCoreRestoreTestUtility.GetProject(projectName: "projectA", framework: "net46");
-                spec.Dependencies.Add(new LibraryDependency()
-                {
-                    LibraryRange = new LibraryRange("a", VersionRange.Parse("1.0.0"), LibraryDependencyTarget.Package)
-                });
+                var spec = NETCoreRestoreTestUtility.GetProject(projectName: "projectA", framework: "net46", new LibraryRange("a", VersionRange.Parse("1.0.0"), LibraryDependencyTarget.Package));
 
                 var project = NETCoreRestoreTestUtility.CreateProjectsFromSpecs(pathContext, spec).Single();
 
@@ -78,7 +65,7 @@ namespace NuGet.Commands.Test
                 };
 
                 var request = (await RestoreRunner.GetRequests(restoreContext)).Single();
-                var providers = providerCache.GetOrCreate(pathContext.UserPackagesFolder, sources, new List<SourceRepository>(), cacheContext, logger, false);
+                var providers = providerCache.GetOrCreate(pathContext.UserPackagesFolder, sources, new List<SourceRepository>(), Array.Empty<SourceRepository>(), cacheContext, logger, false, TestEnvironmentVariableReader.EmptyInstance);
                 var command = new RestoreCommand(request.Request);
 
                 // Add to cache before install on all providers

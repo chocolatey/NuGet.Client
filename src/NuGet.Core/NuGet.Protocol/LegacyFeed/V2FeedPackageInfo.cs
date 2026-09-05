@@ -18,33 +18,33 @@ namespace NuGet.Protocol
     /// </summary>
     public class V2FeedPackageInfo : PackageIdentity
     {
-        private readonly string _title;
-        private readonly string _summary;
+        private readonly string? _title;
+        private readonly string? _summary;
         private readonly string[] _authors;
-        private readonly string _description;
+        private readonly string? _description;
         private readonly string[] _owners;
-        private readonly string _iconUrl;
-        private readonly string _licenseUrl;
-        private readonly string _projectUrl;
-        private readonly string _reportAbuseUrl;
-        private readonly string _galleryDetailsUrl;
-        private readonly string _tags;
-        private readonly string _downloadCount;
+        private readonly string? _iconUrl;
+        private readonly string? _licenseUrl;
+        private readonly string? _projectUrl;
+        private readonly string? _reportAbuseUrl;
+        private readonly string? _galleryDetailsUrl;
+        private readonly string? _tags;
+        private readonly string? _downloadCount;
         private readonly bool _requireLicenseAcceptance;
         private readonly DateTimeOffset? _created;
         private readonly DateTimeOffset? _lastEdited;
         private readonly DateTimeOffset? _published;
-        private readonly string _dependencies;
-        private readonly string _downloadUrl;
-        private readonly string _packageHash;
-        private readonly string _packageHashAlgorithm;
-        private readonly NuGetVersion _minClientVersion;
+        private readonly string? _dependencies;
+        private readonly string? _downloadUrl;
+        private readonly string? _packageHash;
+        private readonly string? _packageHashAlgorithm;
+        private readonly NuGetVersion? _minClientVersion;
         private const string NullString = "null";
 
-        public V2FeedPackageInfo(PackageIdentity identity, string title, string summary, string description, IEnumerable<string> authors, IEnumerable<string> owners,
-            string iconUrl, string licenseUrl, string projectUrl, string reportAbuseUrl, string galleryDetailsUrl,
-            string tags, DateTimeOffset? created, DateTimeOffset? lastEdited, DateTimeOffset? published, string dependencies, bool requireLicenseAccept, string downloadUrl, string downloadCount,
-            string packageHash, string packageHashAlgorithm, NuGetVersion minClientVersion)
+        public V2FeedPackageInfo(PackageIdentity identity, string? title, string? summary, string? description, IEnumerable<string>? authors, IEnumerable<string>? owners,
+            string? iconUrl, string? licenseUrl, string? projectUrl, string? reportAbuseUrl, string? galleryDetailsUrl,
+            string? tags, DateTimeOffset? created, DateTimeOffset? lastEdited, DateTimeOffset? published, string? dependencies, bool requireLicenseAccept, string? downloadUrl, string? downloadCount,
+            string? packageHash, string? packageHashAlgorithm, NuGetVersion? minClientVersion)
             : base(identity.Id, identity.Version)
         {
             _summary = summary;
@@ -72,7 +72,7 @@ namespace NuGet.Protocol
             _minClientVersion = minClientVersion;
         }
 
-        public string Title
+        public string? Title
         {
             get
             {
@@ -80,7 +80,7 @@ namespace NuGet.Protocol
             }
         }
 
-        public string Summary
+        public string? Summary
         {
             get
             {
@@ -88,7 +88,7 @@ namespace NuGet.Protocol
             }
         }
 
-        public string Description
+        public string? Description
         {
             get
             {
@@ -112,7 +112,7 @@ namespace NuGet.Protocol
             }
         }
 
-        public string IconUrl
+        public string? IconUrl
         {
             get
             {
@@ -120,7 +120,7 @@ namespace NuGet.Protocol
             }
         }
 
-        public string LicenseUrl
+        public string? LicenseUrl
         {
             get
             {
@@ -128,7 +128,7 @@ namespace NuGet.Protocol
             }
         }
 
-        public string ProjectUrl
+        public string? ProjectUrl
         {
             get
             {
@@ -136,7 +136,7 @@ namespace NuGet.Protocol
             }
         }
 
-        public string DownloadUrl
+        public string? DownloadUrl
         {
             get
             {
@@ -144,7 +144,7 @@ namespace NuGet.Protocol
             }
         }
 
-        public string ReportAbuseUrl
+        public string? ReportAbuseUrl
         {
             get
             {
@@ -152,7 +152,7 @@ namespace NuGet.Protocol
             }
         }
 
-        public string GalleryDetailsUrl
+        public string? GalleryDetailsUrl
         {
             get
             {
@@ -160,7 +160,7 @@ namespace NuGet.Protocol
             }
         }
 
-        public string Tags
+        public string? Tags
         {
             get
             {
@@ -168,7 +168,7 @@ namespace NuGet.Protocol
             }
         }
 
-        public string DownloadCount
+        public string? DownloadCount
         {
             get
             {
@@ -224,7 +224,7 @@ namespace NuGet.Protocol
             }
         }
 
-        public string Dependencies
+        public string? Dependencies
         {
             get
             {
@@ -247,9 +247,9 @@ namespace NuGet.Protocol
                 }
                 else
                 {
-                    var results = new Dictionary<NuGetFramework, List<PackageDependency>>(new NuGetFrameworkFullComparer());
+                    var results = new Dictionary<NuGetFramework, List<PackageDependency>>(NuGetFrameworkFullComparer.Instance);
 
-                    foreach (var set in Dependencies.Split('|'))
+                    foreach (var set in Dependencies!.Split('|'))
                     {
                         var parts = set.Trim().Split(new[] { ':' }, StringSplitOptions.None);
 
@@ -287,8 +287,7 @@ namespace NuGet.Protocol
                             }
 
                             // Group dependencies by target framework
-                            List<PackageDependency> deps = null;
-                            if (!results.TryGetValue(framework, out deps))
+                            if (!results.TryGetValue(framework, out List<PackageDependency>? deps))
                             {
                                 deps = new List<PackageDependency>();
                                 results.Add(framework, deps);
@@ -325,7 +324,7 @@ namespace NuGet.Protocol
             }
         }
 
-        public string PackageHash
+        public string? PackageHash
         {
             get
             {
@@ -333,7 +332,7 @@ namespace NuGet.Protocol
             }
         }
 
-        public string PackageHashAlgorithm
+        public string? PackageHashAlgorithm
         {
             get
             {
@@ -341,7 +340,7 @@ namespace NuGet.Protocol
             }
         }
 
-        public NuGetVersion MinClientVersion
+        public NuGetVersion? MinClientVersion
         {
             get
             {

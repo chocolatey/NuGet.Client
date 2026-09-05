@@ -6,8 +6,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using FluentAssertions;
 using NuGet.Common;
 using NuGet.Packaging;
+using NuGet.ProjectModel;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
 using Xunit;
@@ -45,6 +47,95 @@ namespace NuGet.Commands.Test
                         Assert.Equal(1, package.Entries.Count(entry => entry.Name == expectedEntryName));
                     }
                 }
+            }
+        }
+
+        [Fact]
+        public void RunPackageBuild_WithInvalidNuspec_Throws()
+        {
+            using (var test = DefaultExclusionsTest.Create(packageVersion: string.Empty))
+            {
+                var args = new PackArgs()
+                {
+                    CurrentDirectory = test.CurrentDirectory.FullName,
+                    Exclude = Enumerable.Empty<string>(),
+                    Logger = NullLogger.Instance,
+                    Path = test.NuspecFile.FullName,
+                };
+                var runner = new PackCommandRunner(args, createProjectFactory: null);
+
+                Assert.Throws<Exception>(() => runner.RunPackageBuild());
+
+                var nupkgPath = Path.Combine(test.CurrentDirectory.FullName, $"DefaultExclusions.1.0.0.nupkg");
+                File.Exists(nupkgPath).Should().BeFalse();
+            }
+        }
+
+        [Fact]
+        public void RunPackageBuild_WithVersionAsArgument_NuspecVersionOverriddenByVersionArgument()
+        {
+            using (var test = DefaultExclusionsTest.Create())
+            {
+                var args = new PackArgs()
+                {
+                    CurrentDirectory = test.CurrentDirectory.FullName,
+                    Exclude = Enumerable.Empty<string>(),
+                    Logger = NullLogger.Instance,
+                    Path = test.NuspecFile.FullName,
+                    Version = "3.1.2",
+                };
+                var runner = new PackCommandRunner(args, createProjectFactory: null);
+
+                var result = runner.RunPackageBuild();
+                Assert.True(result);
+
+                var nupkgPath = Path.Combine(test.CurrentDirectory.FullName, $"DefaultExclusions.3.1.2.nupkg");
+                File.Exists(nupkgPath).Should().BeTrue();
+            }
+        }
+
+        [Fact]
+        public void RunPackageBuild_WithVersionAndPropertiesAsArgument_NuspecVersionOverriddenByVersionArgument()
+        {
+            using (var test = DefaultExclusionsTest.Create())
+            {
+                var args = new PackArgs()
+                {
+                    CurrentDirectory = test.CurrentDirectory.FullName,
+                    Exclude = Enumerable.Empty<string>(),
+                    Logger = NullLogger.Instance,
+                    Path = test.NuspecFile.FullName,
+                    Version = "3.1.2",
+                    Properties = { { "version", "2.0.0" }, { "prerelease", "-preview" } }
+                };
+                var runner = new PackCommandRunner(args, createProjectFactory: null);
+
+                var result = runner.RunPackageBuild();
+                Assert.True(result);
+
+                var nupkgPath = Path.Combine(test.CurrentDirectory.FullName, $"DefaultExclusions.3.1.2.nupkg");
+                File.Exists(nupkgPath).Should().BeTrue();
+            }
+        }
+
+        [Fact]
+        public void RunPackageBuild_NuspecWithEmptyVersion_WithVersionAsArgument_PackSucceeds()
+        {
+            using (var test = DefaultExclusionsTest.Create(packageVersion: string.Empty))
+            {
+                var args = new PackArgs()
+                {
+                    CurrentDirectory = test.CurrentDirectory.FullName,
+                    Exclude = Enumerable.Empty<string>(),
+                    Logger = NullLogger.Instance,
+                    Path = test.NuspecFile.FullName,
+                    Version = "3.1.2"
+                };
+                var runner = new PackCommandRunner(args, createProjectFactory: null);
+                var result = runner.RunPackageBuild();
+
+                var nupkgPath = Path.Combine(test.CurrentDirectory.FullName, $"DefaultExclusions.3.1.2.nupkg");
+                File.Exists(nupkgPath).Should().BeTrue();
             }
         }
 
@@ -112,7 +203,7 @@ namespace NuGet.Commands.Test
                 UnexpectedEntryNames = unexpectedEntryNames;
             }
 
-            internal static DefaultExclusionsTest Create()
+            internal static DefaultExclusionsTest Create(string packageVersion = "1.0.0")
             {
                 TestDirectory testDirectory = TestDirectory.Create();
 
@@ -135,7 +226,6 @@ namespace NuGet.Commands.Test
                 string pattern = $"..{Path.DirectorySeparatorChar}{packRootDirectory.Name}{Path.DirectorySeparatorChar}**{Path.DirectorySeparatorChar}*.*";
 
                 const string packageId = "DefaultExclusions";
-                const string packageVersion = "1.0.0";
 
                 File.WriteAllText(nuspecFile.FullName, $@"<?xml version=""1.0""?>
 <package>
@@ -150,7 +240,7 @@ namespace NuGet.Commands.Test
     </metadata>
     <files>
         <file src=""{pattern}"" target="""" />
-    </files>   
+    </files>
 </package>");
 
                 var nupkgFile = new FileInfo(Path.Combine(currentDirectory.FullName, $"{packageId}.{packageVersion}.nupkg"));
@@ -167,6 +257,147 @@ namespace NuGet.Commands.Test
             public void Dispose()
             {
                 _testDirectory.Dispose();
+            }
+        }
+
+        [Theory]
+        [InlineData("Contöso.Utilities", "11.0.100", true, true)]       // non-ASCII ö, enabled → emits
+        [InlineData("\u0421ontoso.Utilities", "11.0.100", true, true)]   // Cyrillic С, enabled → emits
+        [InlineData("Contöso.Utilities", "10.0.100", true, false)]      // below threshold → suppressed
+        [InlineData("Contöso.Utilities", null, false, false)]            // non-SDK project (nuget.exe) → not emitted (SDK-only warning)
+        [InlineData("Contöso.Utilities", null, true, false)]            // SDK project, no level (assumes 8.0.400) → suppressed
+        public void BuildPackage_PackageIdWithInvalidCharacters_EmitsNU5052_BasedOnSdkAnalysisLevel(string packageId, string? sdkAnalysisLevel, bool usingMicrosoftNETSdk, bool expectWarning)
+        {
+            using (var testDirectory = TestDirectory.Create())
+            {
+                // Arrange
+                var nuspecPath = Path.Combine(testDirectory.Path, "test.nuspec");
+                File.WriteAllText(nuspecPath, $@"<?xml version=""1.0""?>
+<package>
+    <metadata>
+        <id>{packageId}</id>
+        <version>1.0.0</version>
+        <description>test</description>
+        <authors>test</authors>
+        <dependencies>
+            <dependency id=""TestDep"" version=""1.0.0"" />
+        </dependencies>
+    </metadata>
+</package>");
+
+                var logger = new TestLogger();
+                var args = new PackArgs()
+                {
+                    CurrentDirectory = testDirectory.Path,
+                    Exclude = Enumerable.Empty<string>(),
+                    Logger = new PackCollectorLogger(logger, new WarningProperties()),
+                    Path = nuspecPath,
+                    SdkAnalysisLevel = sdkAnalysisLevel != null ? new NuGetVersion(sdkAnalysisLevel) : null,
+                    UsingMicrosoftNETSdk = usingMicrosoftNETSdk,
+                };
+                var runner = new PackCommandRunner(args, createProjectFactory: null);
+
+                // Act
+                runner.RunPackageBuild();
+
+                // Assert
+                if (expectWarning)
+                {
+                    logger.WarningMessages.Should().Contain(m => m.Contains("NU5052"));
+                }
+                else
+                {
+                    logger.WarningMessages.Should().NotContain(m => m.Contains("NU5052"));
+                }
+            }
+        }
+
+        [Fact]
+        public void BuildPackage_PackageIdWithInvalidCharacters_NoWarnSuppressesNU5052()
+        {
+            using (var testDirectory = TestDirectory.Create())
+            {
+                // Arrange
+                string packageId = "Contöso.Utilities";
+                var nuspecPath = Path.Combine(testDirectory.Path, "test.nuspec");
+                File.WriteAllText(nuspecPath, $@"<?xml version=""1.0""?>
+<package>
+    <metadata>
+        <id>{packageId}</id>
+        <version>1.0.0</version>
+        <description>test</description>
+        <authors>test</authors>
+        <dependencies>
+            <dependency id=""TestDep"" version=""1.0.0"" />
+        </dependencies>
+    </metadata>
+</package>");
+
+                var warningProperties = new WarningProperties();
+                warningProperties.NoWarn.Add(NuGetLogCode.NU5052);
+
+                var logger = new TestLogger();
+                var args = new PackArgs()
+                {
+                    CurrentDirectory = testDirectory.Path,
+                    Exclude = Enumerable.Empty<string>(),
+                    Logger = new PackCollectorLogger(logger, warningProperties),
+                    Path = nuspecPath,
+                    SdkAnalysisLevel = new NuGetVersion("11.0.100"),
+                    UsingMicrosoftNETSdk = true,
+                };
+                var runner = new PackCommandRunner(args, createProjectFactory: null);
+
+                // Act
+                runner.RunPackageBuild();
+
+                // Assert
+                logger.WarningMessages.Should().NotContain(m => m.Contains("NU5052"));
+            }
+        }
+
+        [Fact]
+        public void BuildPackage_PackageIdWithInvalidCharacters_TreatWarningsAsErrors_RaisesNU5052AsError()
+        {
+            using (var testDirectory = TestDirectory.Create())
+            {
+                // Arrange
+                string packageId = "Contöso.Utilities";
+                var nuspecPath = Path.Combine(testDirectory.Path, "test.nuspec");
+                File.WriteAllText(nuspecPath, $@"<?xml version=""1.0""?>
+<package>
+    <metadata>
+        <id>{packageId}</id>
+        <version>1.0.0</version>
+        <description>test</description>
+        <authors>test</authors>
+        <dependencies>
+            <dependency id=""TestDep"" version=""1.0.0"" />
+        </dependencies>
+    </metadata>
+</package>");
+
+                var warningProperties = new WarningProperties();
+                warningProperties.AllWarningsAsErrors = true;
+
+                var logger = new TestLogger();
+                var args = new PackArgs()
+                {
+                    CurrentDirectory = testDirectory.Path,
+                    Exclude = Enumerable.Empty<string>(),
+                    Logger = new PackCollectorLogger(logger, warningProperties),
+                    Path = nuspecPath,
+                    SdkAnalysisLevel = new NuGetVersion("11.0.100"),
+                    UsingMicrosoftNETSdk = true,
+                };
+                var runner = new PackCommandRunner(args, createProjectFactory: null);
+
+                // Act
+                runner.RunPackageBuild();
+
+                // Assert - warning is upgraded to error
+                logger.ErrorMessages.Should().Contain(m => m.Contains("NU5052"));
+                logger.WarningMessages.Should().NotContain(m => m.Contains("NU5052"));
             }
         }
     }

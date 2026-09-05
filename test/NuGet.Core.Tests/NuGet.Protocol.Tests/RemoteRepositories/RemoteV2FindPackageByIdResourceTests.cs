@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -210,7 +212,7 @@ namespace NuGet.Protocol.Tests
 
             using (var cacheContext = new SourceCacheContext())
             {
-                var resource = await repo.GetResourceAsync<FindPackageByIdResource>();
+                var resource = await repo.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None);
 
                 // Act
                 var versions = await resource.GetAllVersionsAsync(
@@ -366,7 +368,7 @@ namespace NuGet.Protocol.Tests
 
                 using (var cacheContext = new SourceCacheContext())
                 {
-                    var resource = await repo.GetResourceAsync<FindPackageByIdResource>();
+                    var resource = await repo.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None);
 
                     // Act
                     var info = await resource.GetDependencyInfoAsync(
@@ -424,7 +426,7 @@ namespace NuGet.Protocol.Tests
 
                 using (var cacheContext = new SourceCacheContext())
                 {
-                    var resource = await repo.GetResourceAsync<FindPackageByIdResource>();
+                    var resource = await repo.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None);
 
                     // Act
                     var info = await resource.GetDependencyInfoAsync(
@@ -683,7 +685,7 @@ namespace NuGet.Protocol.Tests
         private static HttpSource CreateDummyHttpSource()
         {
             var packageSource = new PackageSource("https://unit.test");
-            Task<HttpHandlerResource> messageHandlerFactory() => Task.FromResult<HttpHandlerResource>(null);
+            Task<HttpHandlerResource> messageHandlerFactory() => TaskResult.Null<HttpHandlerResource>();
 
             return new HttpSource(packageSource, messageHandlerFactory, Mock.Of<IThrottle>());
         }

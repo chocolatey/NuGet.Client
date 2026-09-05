@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
@@ -69,7 +71,7 @@ namespace NuGet.PackageManagement.VisualStudio
             {
                 try
                 {
-                    var nuGetProject = await provider.TryCreateNuGetProjectAsync(
+                    var nuGetProject = provider.TryCreateNuGetProject(
                         vsProjectAdapter,
                         context,
                         forceProjectType: false);
@@ -119,7 +121,7 @@ namespace NuGet.PackageManagement.VisualStudio
 
             try
             {
-                var nuGetProject = await provider.TryCreateNuGetProjectAsync(
+                var nuGetProject = provider.TryCreateNuGetProject(
                     vsProjectAdapter,
                     optionalContext,
                     forceProjectType: true);

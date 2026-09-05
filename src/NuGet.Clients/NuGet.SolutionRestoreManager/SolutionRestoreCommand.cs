@@ -1,10 +1,11 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.ComponentModel.Composition;
 using System.ComponentModel.Design;
-using System.Linq;
 using System.Threading;
 using Microsoft;
 using Microsoft.VisualStudio;
@@ -13,7 +14,6 @@ using Microsoft.VisualStudio.Shell.Interop;
 using NuGet.PackageManagement;
 using NuGet.VisualStudio;
 using NuGet.VisualStudio.Common;
-using NuGet.VisualStudio.Telemetry;
 using Task = System.Threading.Tasks.Task;
 
 namespace NuGet.SolutionRestoreManager

@@ -16,7 +16,7 @@ namespace NuGet.Packaging.Core
         }
 
         // Get fingerprint from hash algorithm oid.
-        public string this[string key]
+        public string? this[string key]
         {
             get
             {

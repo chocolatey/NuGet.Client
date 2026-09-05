@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -392,12 +394,22 @@ namespace NuGet.PackageManagement.VisualStudio
             Assumes.Present(envDTEProject);
             await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             var hierarchy = await envDTEProject.ToVsHierarchyAsync();
+            return IsSupported(envDTEProject.Kind, hierarchy);
+        }
+
+        public static bool IsSupported(string projectKind, IVsHierarchy hierarchy)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            Assumes.Present(projectKind);
+            Assumes.Present(hierarchy);
+
             if (VsHierarchyUtility.IsProjectCapabilityCompliant(hierarchy))
             {
                 return true;
             }
 
-            return envDTEProject.Kind != null && ProjectType.IsSupported(envDTEProject.Kind) && !VsHierarchyUtility.HasUnsupportedProjectCapability(hierarchy);
+            return projectKind != null && ProjectType.IsSupported(projectKind) && !VsHierarchyUtility.HasUnsupportedProjectCapability(hierarchy);
         }
 
         public async static Task<NuGetProject> GetNuGetProjectAsync(EnvDTE.Project project, ISolutionManager solutionManager)

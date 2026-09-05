@@ -5,6 +5,9 @@ using System.Net;
 
 namespace NuGet.Credentials
 {
+    /// <summary>
+    /// Represents the result of a credential provider request.
+    /// </summary>
     public class CredentialResponse
     {
         /// <summary>
@@ -22,12 +25,11 @@ namespace NuGet.Credentials
         /// credential provider was able to get credentials.
         /// </summary>
         /// <param name="credentials">The credentials fetched by the credential provider.</param>
-
         public CredentialResponse(ICredentials credentials) : this(credentials, CredentialStatus.Success)
         {
         }
 
-        private CredentialResponse(ICredentials credentials, CredentialStatus status)
+        private CredentialResponse(ICredentials? credentials, CredentialStatus status)
         {
             if ((credentials != null && status != CredentialStatus.Success) ||
                 (credentials == null && status == CredentialStatus.Success))
@@ -39,7 +41,14 @@ namespace NuGet.Credentials
             Status = status;
         }
 
-        public ICredentials Credentials { get; }
+        /// <summary>
+        /// Gets the credentials returned by the provider, or <see langword="null"/> when the request did not succeed.
+        /// </summary>
+        public ICredentials? Credentials { get; }
+
+        /// <summary>
+        /// Gets the status of the credential provider request.
+        /// </summary>
         public CredentialStatus Status { get; }
     }
 }

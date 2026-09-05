@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.IO;
 using System.Xml.Linq;
@@ -25,6 +27,7 @@ namespace NuGet.Test.Utility
                 .WithPackageId(pkgId.Id)
                 .WithPackageVersion(pkgId.Version.ToNormalizedString())
                 .WithIcon("icon.png")
+                .WithReadme("readme.md")
                 .Build();
             pkg.Nuspec = XDocument.Parse(nuspec.ToString());
 

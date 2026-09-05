@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -81,7 +83,9 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
                     WaitAndLogPackageActions();
                     UnsubscribeFromProgressEvents();
 
-                    return Task.FromResult(true);
+#pragma warning disable VSTHRD003 // Avoid awaiting foreign Tasks
+                    return TaskResult.True;
+#pragma warning restore VSTHRD003 // Avoid awaiting foreign Tasks
                 }, Token);
             });
 
@@ -92,7 +96,7 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
             var actionTelemetryEvent = VSTelemetryServiceUtility.GetActionTelemetryEvent(
                 OperationId.ToString(),
                 new[] { Project },
-                NuGetOperationType.Install,
+                NuGetProjectActionType.Install,
                 OperationSource.PMC,
                 startTime,
                 _status,

@@ -18,20 +18,22 @@ namespace NuGet.Protocol
         {
         }
 
-        public override async Task<Tuple<bool, INuGetResource>> TryCreate(SourceRepository source, CancellationToken token)
+        public override async Task<Tuple<bool, INuGetResource?>> TryCreate(SourceRepository source, CancellationToken token)
         {
-            DependencyInfoResource curResource = null;
+            DependencyInfoResource? curResource = null;
 
             if (await source.GetResourceAsync<ServiceIndexResourceV3>(token) != null)
             {
-                var httpSourceResource = await source.GetResourceAsync<HttpSourceResource>(token);
-                var regResource = await source.GetResourceAsync<RegistrationResourceV3>(token);
+                var httpSourceResource = await source.GetResourceAsync<HttpSourceResource>(token)
+                    ?? throw new InvalidOperationException($"The source '{source.PackageSource.Source}' does not provide {nameof(HttpSourceResource)}.");
+                var regResource = await source.GetResourceAsync<RegistrationResourceV3>(token)
+                    ?? throw new InvalidOperationException($"The source '{source.PackageSource.Source}' does not provide {nameof(RegistrationResourceV3)}.");
 
                 // construct a new resource
                 curResource = new DependencyInfoResourceV3(httpSourceResource.HttpSource, regResource, source);
             }
 
-            return new Tuple<bool, INuGetResource>(curResource != null, curResource);
+            return new Tuple<bool, INuGetResource?>(curResource != null, curResource);
         }
     }
 }

@@ -57,5 +57,7 @@ namespace NuGet.Protocol
 
             return results.ToList();
         }
+
+        public override bool SupportsPackageTypeFiltering => false;
     }
 }

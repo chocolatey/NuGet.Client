@@ -2,28 +2,26 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.IO;
 using System.Linq;
-using System.Xml;
 using System.Xml.Linq;
 
 namespace NuGet.Configuration
 {
     internal static class XElementUtility
     {
-        internal static string GetOptionalAttributeValue(XElement element, string localName)
+        internal static string? GetOptionalAttributeValue(XElement element, string localName)
         {
             var attr = element.Attribute(localName);
             return attr?.Value;
         }
 
-        internal static string GetOptionalAttributeValue(XElement element, string localName, string namespaceName)
+        internal static string? GetOptionalAttributeValue(XElement element, string localName, string namespaceName)
         {
             var attr = element.Attribute(XName.Get(localName, namespaceName));
             return attr?.Value;
         }
 
-        internal static void AddIndented(XContainer container, XNode content)
+        internal static void AddIndented(XContainer? container, XNode? content)
         {
             if (container != null && content != null)
             {
@@ -40,7 +38,7 @@ namespace NuGet.Configuration
             }
         }
 
-        internal static void RemoveIndented(XNode element)
+        internal static void RemoveIndented(XNode? element)
         {
             if (element != null)
             {
@@ -60,7 +58,7 @@ namespace NuGet.Configuration
 
                 if (isLastChild
                     && textBeforeOrNull != null
-                    && IsWhiteSpace(textAfterOrNull))
+                    && (textAfterOrNull is null || IsWhiteSpace(textAfterOrNull)))
                 {
                     textBeforeOrNull.Value = textBeforeOrNull.Value.Substring(0, textBeforeOrNull.Value.Length - oneIndentLevel.Length);
                 }
@@ -90,7 +88,7 @@ namespace NuGet.Configuration
             return string.IsNullOrWhiteSpace(textNode.Value);
         }
 
-        private static void IndentChildrenElements(XContainer container, string containerIndent, string oneIndentLevel)
+        private static void IndentChildrenElements(XContainer? container, string containerIndent, string oneIndentLevel)
         {
             if (container != null)
             {

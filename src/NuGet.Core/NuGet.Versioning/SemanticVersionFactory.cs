@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
 namespace NuGet.Versioning
@@ -16,10 +17,9 @@ namespace NuGet.Versioning
         /// </summary>
         public static SemanticVersion Parse(string value)
         {
-            SemanticVersion ver = null;
-            if (!TryParse(value, out ver))
+            if (!TryParse(value, out SemanticVersion? ver))
             {
-                throw new ArgumentException(String.Format(CultureInfo.CurrentCulture, Resources.Invalidvalue, value), nameof(value));
+                throw new ArgumentException(string.Format(CultureInfo.CurrentCulture, Resources.Invalidvalue, value), nameof(value));
             }
 
             return ver;
@@ -29,21 +29,19 @@ namespace NuGet.Versioning
         /// Parse a version string
         /// </summary>
         /// <returns>false if the version is not a strict semver</returns>
-        public static bool TryParse(string value, out SemanticVersion version)
+        public static bool TryParse(string value, [NotNullWhen(true)] out SemanticVersion? version)
         {
             version = null;
 
             if (value != null)
             {
-                Version systemVersion = null;
-
-                ParseSections(value, out string versionString, out string[] releaseLabels, out string buildMetadata);
+                ParseSections(value, out string? versionString, out string[]? releaseLabels, out string? buildMetadata);
 
                 // null indicates the string did not meet the rules
-                if (Version.TryParse(versionString, out systemVersion))
+                if (Version.TryParse(versionString, out Version? systemVersion))
                 {
                     // validate the version string
-                    var parts = versionString.Split('.');
+                    var parts = versionString!.Split('.');
 
                     if (parts.Length != 3)
                     {
@@ -176,13 +174,13 @@ namespace NuGet.Versioning
         /// to parsing and validating a semver. Regex would be much cleaner, but
         /// due to the number of versions created in NuGet Regex is too slow.
         /// </summary>
-        internal static void ParseSections(string value, out string versionString, out string[] releaseLabels, out string buildMetadata)
+        internal static void ParseSections(string value, out string? versionString, out string[]? releaseLabels, out string? buildMetadata)
         {
             versionString = null;
             releaseLabels = null;
             buildMetadata = null;
 
-            var dashPos = -1;
+            var versionEndPos = -1;
             var plusPos = -1;
 
             var end = false;
@@ -190,7 +188,7 @@ namespace NuGet.Versioning
             {
                 end = (i == value.Length - 1);
 
-                if (dashPos < 0)
+                if (versionEndPos < 0)
                 {
                     if (end
                         || value[i] == '-'
@@ -199,7 +197,7 @@ namespace NuGet.Versioning
                         var endPos = i + (end ? 1 : 0);
                         versionString = value.Substring(0, endPos);
 
-                        dashPos = i;
+                        versionEndPos = i;
 
                         if (value[i] == '+')
                         {
@@ -211,7 +209,7 @@ namespace NuGet.Versioning
                 {
                     if (end || value[i] == '+')
                     {
-                        var start = dashPos + 1;
+                        var start = versionEndPos + 1;
                         var endPos = i + (end ? 1 : 0);
                         var releaseLabel = value.Substring(start, endPos - start);
 
@@ -246,11 +244,11 @@ namespace NuGet.Versioning
             return normalized;
         }
 
-        private static string[] ParseReleaseLabels(string releaseLabels)
+        private static string[]? ParseReleaseLabels(string? releaseLabels)
         {
             if (!string.IsNullOrEmpty(releaseLabels))
             {
-                return releaseLabels.Split('.');
+                return releaseLabels!.Split('.');
             }
 
             return null;

@@ -12,12 +12,12 @@ namespace NuGet.ProjectModel
         /// <summary>
         /// Set when customer wants to opt into packages lock file
         /// </summary>
-        public string RestorePackagesWithLockFile { get; }
+        public string? RestorePackagesWithLockFile { get; }
 
         /// <summary>
         /// Packages.lock.json file path including file name if customer wants to override defualt file name.
         /// </summary>
-        public string NuGetLockFilePath { get; }
+        public string? NuGetLockFilePath { get; }
 
         /// <summary>
         /// True, if updating lock file on restore is denied.
@@ -29,8 +29,8 @@ namespace NuGet.ProjectModel
         }
 
         public RestoreLockProperties(
-            string restorePackagesWithLockFile,
-            string nuGetLockFilePath,
+            string? restorePackagesWithLockFile,
+            string? nuGetLockFilePath,
             bool restoreLockedMode)
         {
             RestorePackagesWithLockFile = restorePackagesWithLockFile;
@@ -49,12 +49,12 @@ namespace NuGet.ProjectModel
             return hashCode.CombinedHash;
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return Equals(obj as RestoreLockProperties);
         }
 
-        public bool Equals(RestoreLockProperties other)
+        public bool Equals(RestoreLockProperties? other)
         {
             if (other == null)
             {

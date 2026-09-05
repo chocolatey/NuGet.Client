@@ -4,9 +4,11 @@
 using System;
 using System.Globalization;
 using System.IO;
-using System.Reflection;
 using System.Security.Cryptography;
-using System.Text;
+
+#if !IS_CORECLR
+using System.Reflection;
+#endif
 
 namespace NuGet.Common
 {
@@ -49,7 +51,7 @@ namespace NuGet.Common
                 throw new ArgumentNullException(nameof(data));
             }
 
-            string hash = null;
+            string hash;
 
             try
             {
@@ -108,7 +110,7 @@ namespace NuGet.Common
                 throw new ArgumentNullException(nameof(data));
             }
 
-            byte[] hash = null;
+            byte[] hash;
 
             try
             {
@@ -326,20 +328,6 @@ namespace NuGet.Common
                         string.Format(CultureInfo.CurrentCulture, Strings.UnsupportedSignatureAlgorithmName, signatureAlgorithmName),
                         nameof(signatureAlgorithmName));
             }
-        }
-
-        public static string GenerateUniqueToken(string caseInsensitiveKey)
-        {
-            if (string.IsNullOrEmpty(caseInsensitiveKey))
-            {
-                throw new ArgumentNullException(nameof(caseInsensitiveKey));
-            }
-
-            // SHA256 is case sensitive; given that our key is case insensitive, we upper case it
-            var pathBytes = Encoding.UTF8.GetBytes(caseInsensitiveKey.ToUpperInvariant());
-            var hashProvider = new CryptoHashProvider("SHA256");
-
-            return Convert.ToBase64String(hashProvider.CalculateHash(pathBytes)).ToUpperInvariant();
         }
     }
 }

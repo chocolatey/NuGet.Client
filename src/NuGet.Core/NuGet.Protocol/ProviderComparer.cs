@@ -12,25 +12,37 @@ namespace NuGet.Protocol.Core.Types
     /// </summary>
     internal class ProviderComparer : IComparer<INuGetResourceProvider>
     {
-        public ProviderComparer()
+        public static ProviderComparer Instance { get; } = new();
+
+        private ProviderComparer()
         {
         }
 
         // higher goes last
-        public int Compare(INuGetResourceProvider providerA, INuGetResourceProvider providerB)
+        public int Compare(INuGetResourceProvider? providerA, INuGetResourceProvider? providerB)
         {
+            if (providerA == null)
+            {
+                throw new ArgumentNullException(nameof(providerA));
+            }
+
+            if (providerB == null)
+            {
+                throw new ArgumentNullException(nameof(providerB));
+            }
+
             if (StringComparer.Ordinal.Equals(providerA.Name, providerB.Name))
             {
                 return 0;
             }
 
             // empty names go last
-            if (String.IsNullOrEmpty(providerA.Name))
+            if (string.IsNullOrEmpty(providerA.Name))
             {
                 return 1;
             }
 
-            if (String.IsNullOrEmpty(providerB.Name))
+            if (string.IsNullOrEmpty(providerB.Name))
             {
                 return -1;
             }

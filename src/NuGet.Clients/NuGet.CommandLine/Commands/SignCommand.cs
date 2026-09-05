@@ -1,10 +1,11 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using NuGet.Commands;
@@ -59,6 +60,9 @@ namespace NuGet.CommandLine
         [Option(typeof(NuGetCommand), "SignCommandOverwriteDescription")]
         public bool Overwrite { get; set; }
 
+        [Option(typeof(NuGetCommand), "SignCommandAllowUntrustedRootDescription")]
+        public bool AllowUntrustedRoot { get; set; }
+
         public override async Task ExecuteCommandAsync()
         {
             var signArgs = GetSignArgs();
@@ -101,6 +105,7 @@ namespace NuGet.CommandLine
                 SignatureHashAlgorithm = hashAlgorithm,
                 Logger = Console,
                 Overwrite = Overwrite,
+                AllowUntrustedRoot = AllowUntrustedRoot,
                 NonInteractive = NonInteractive,
                 Timestamper = Timestamper,
                 TimestampHashAlgorithm = timestampHashAlgorithm,
@@ -180,13 +185,23 @@ namespace NuGet.CommandLine
                  !string.IsNullOrEmpty(CertificateStoreLocation) ||
                  !string.IsNullOrEmpty(CertificateStoreName)))
             {
-                // Thow if the user provided a path and any one of the other options
+                // Throw if the user provided a path and any one of the other options
                 throw new ArgumentException(NuGetCommand.SignCommandMultipleCertificateException);
             }
             else if (!string.IsNullOrEmpty(CertificateFingerprint) && !string.IsNullOrEmpty(CertificateSubjectName))
             {
-                // Thow if the user provided a fingerprint and a subject
+                // Throw if the user provided a fingerprint and a subject
                 throw new ArgumentException(NuGetCommand.SignCommandMultipleCertificateException);
+            }
+            else if (CertificateFingerprint != null)
+            {
+                if (!CertificateUtility.TryDeduceHashAlgorithm(CertificateFingerprint, out HashAlgorithmName hashAlgorithmName) ||
+                    hashAlgorithmName == HashAlgorithmName.SHA1)
+                {
+                    throw new ArgumentException(string.Format(CultureInfo.CurrentCulture,
+                        NuGetCommand.SignCommandInvalidCertificateFingerprint,
+                        NuGetLogCode.NU3043));
+                }
             }
         }
     }

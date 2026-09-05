@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Linq;
 using System.Threading;
@@ -206,6 +208,47 @@ namespace NuGet.PackageManagement.VisualStudio.Test
                     cancellationToken: CancellationToken.None);
 
                 // Assert
+                Mock.Get(_metadataResource).Verify(
+                    x => x.GetMetadataAsync(TestPackageIdentity.Id, true, false, It.IsAny<SourceCacheContext>(), It.IsAny<Common.ILogger>(), It.IsAny<CancellationToken>()),
+                    Times.Once);
+
+                Assert.Equal(expectedVersionStrings, (await metadata.GetVersionsAsync()).Select(v => v.Version.ToString()).OrderBy(v => v));
+                Assert.Same(deprecationMetadata, await metadata.GetDeprecationMetadataAsync());
+            }
+
+            [Fact]
+            public async Task GetPackageMetadataAsync_WhenLocalSourceHasPackage_GetsRemoteMetadata()
+            {
+                // Arrange
+                Mock.Get(_localMetadataResource)
+                    .Setup(x => x.GetMetadataAsync(TestPackageIdentity.Id, true, true, It.IsAny<SourceCacheContext>(), It.IsAny<Common.ILogger>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new[] { PackageSearchMetadataBuilder.FromIdentity(TestPackageIdentity).Build() });
+
+                var deprecationMetadata = new PackageDeprecationMetadata();
+                Mock.Get(_metadataResource)
+                    .Setup(x => x.GetMetadataAsync(TestPackageIdentity.Id, true, false, It.IsAny<SourceCacheContext>(), It.IsAny<Common.ILogger>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(
+                        new[]
+                        {
+                            PackageSearchMetadataBuilder
+                                .FromIdentity(TestPackageIdentity)
+                                .WithDeprecation(new AsyncLazy<PackageDeprecationMetadata>(() => Task.FromResult(deprecationMetadata)))
+                                .Build(),
+
+                            PackageSearchMetadataBuilder
+                                .FromIdentity(new PackageIdentity(TestPackageIdentity.Id, new NuGetVersion("2.0.0")))
+                                .Build()
+                        });
+
+                // Act
+                var metadata = await _target.GetPackageMetadataAsync(
+                    TestPackageIdentity,
+                    includePrerelease: true,
+                    cancellationToken: CancellationToken.None);
+
+                // Assert
+                var expectedVersionStrings = new[] { "1.0.0", "2.0.0" };
+
                 Mock.Get(_metadataResource).Verify(
                     x => x.GetMetadataAsync(TestPackageIdentity.Id, true, false, It.IsAny<SourceCacheContext>(), It.IsAny<Common.ILogger>(), It.IsAny<CancellationToken>()),
                     Times.Once);

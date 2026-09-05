@@ -5,7 +5,7 @@
   xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
   xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
   xmlns:imaging="clr-namespace:Microsoft.VisualStudio.Imaging;assembly=Microsoft.VisualStudio.Imaging"  
-  xmlns:catalog="clr-namespace:Microsoft.VisualStudio.Imaging;assembly=Microsoft.VisualStudio.ImageCatalog"  
+  xmlns:catalog="clr-namespace:Microsoft.VisualStudio.Imaging;assembly=Microsoft.VisualStudio.ImageCatalog"
   x:Name="_self"
   mc:Ignorable="d"
   xmlns:nuget="clr-namespace:NuGet.PackageManagement.UI"
@@ -23,9 +23,31 @@
         x:Key="SummaryToStringConverter" />
       <nuget:StringFormatConverter
         x:Key="StringFormatConverter" />
-      <nuget:NullToBooleanConverter
-        x:Key="NullToBooleanConverter" />
 
+      <!--Style for warning tooltip text-->
+      <Style TargetType="TextBlock" x:Key="VulnerabilitiesCountText">
+        <Setter Property="Text">
+          <Setter.Value>
+            <MultiBinding Converter="{StaticResource StringFormatConverter}">
+              <Binding Source="{x:Static nuget:Resources.Label_MultiplePackageVulnerableVersionToolTip}" />
+              <Binding Path="VulnerableVersionsString" />
+            </MultiBinding>
+          </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+          <DataTrigger Binding="{Binding VulnerableVersions.Count}" Value="1">
+            <Setter Property="Text">
+              <Setter.Value>
+                <MultiBinding Converter="{StaticResource StringFormatConverter}">
+                  <Binding Source="{x:Static nuget:Resources.Label_PackageVulnerableToolTip}" />
+                  <Binding Path="VulnerabilityMaxSeverity" Converter="{StaticResource IntToVulnerabilitySeverityConverter}" />
+                </MultiBinding>
+              </Setter.Value>
+            </Setter>
+          </DataTrigger>
+        </Style.Triggers>
+      </Style>
+      
       <!-- style for install, uninstall and update buttons -->
       <Style x:Key="buttonStyle" TargetType="{x:Type Button}">
         <Setter Property="Template">
@@ -84,9 +106,10 @@
       <!-- check box -->
       <CheckBox
                     Grid.Column="0"
+                    Style="{StaticResource CheckBoxSelectorAware}"
                     Margin="4,12,4,0"
                     VerticalAlignment="top"
-                    Visibility="{Binding CheckBoxesEnabled, RelativeSource={RelativeSource AncestorType={x:Type nuget:InfiniteScrollList}}, Converter={StaticResource BooleanToHiddenVisibilityConverter}}"
+                    Visibility="{Binding ViewModel.IsUpdateMode, RelativeSource={RelativeSource AncestorType={x:Type nuget:InfiniteScrollList}}, Converter={StaticResource BooleanToHiddenVisibilityConverter}}"
                     Focusable="False"
                     AutomationProperties.Name="{x:Static nuget:Resources.CheckBox_Selected}"
                     IsChecked="{Binding IsSelected}"
@@ -152,7 +175,7 @@
                       Orientation="Horizontal">
           <TextBlock
                         FontWeight="Bold"
-                        FontSize="{Binding ElementName=_self,Path=FontSize,Converter={StaticResource Font122PercentSizeConverter}}"
+                        FontSize="{DynamicResource {x:Static nuget:Brushes.Environment122PercentFontSizeKey}}"
                         TextWrapping="NoWrap"
                         VerticalAlignment="Top"
                         ToolTip="{x:Static nuget:Resources.ToolTip_PackageRecommended}"
@@ -161,7 +184,7 @@
                         Text="&#x2605; " />
           <TextBlock
                         FontWeight="Bold"
-                        FontSize="{Binding ElementName=_self,Path=FontSize,Converter={StaticResource Font122PercentSizeConverter}}"
+                        FontSize="{DynamicResource {x:Static nuget:Brushes.Environment122PercentFontSizeKey}}"
                         TextTrimming="CharacterEllipsis"
                         TextWrapping="NoWrap"
                         AutomationProperties.AutomationId="id"
@@ -182,6 +205,7 @@
           <!-- author and download count -->
           <nuget:AuthorAndDownloadCount
                         Margin="5,4,0,0"
+                        KnownOwnerViewModels="{Binding KnownOwnerViewModels, Mode=OneTime}"
                         Author="{Binding ByAuthor, Mode=OneTime}"
                         DownloadCount="{Binding DownloadCount}" />
         </StackPanel>
@@ -206,40 +230,6 @@
                         FormatStringAlternative="{x:Static nuget:Resources.Deprecation_PackageItemMessageAlternative}"
                         DataContext="{Binding DeprecationMetadata}" />
         </Grid>
-
-        <Grid.ToolTip>
-          <TextBlock
-                        Style="{StaticResource TooltipStyle}">
-                        <Run
-                          Text="{Binding Id}"
-                          FontWeight="Bold" /> <Run Text="{Binding ByAuthor, Mode=OneTime}"/>
-                        <LineBreak />
-                        <Run FontWeight="Bold">
-                          <Run.Style>
-                            <Style TargetType="Run">
-                              <Setter Property="Text" Value="{x:Static nuget:Resources.ToolTip_TransitiveDependency}"/>
-                              <Style.Triggers>
-                                <DataTrigger Binding="{Binding Path=PackageLevel}" Value="TopLevel">
-                                    <Setter Property="Text" Value=""/>
-                                </DataTrigger>
-                              </Style.Triggers>
-                            </Style>
-                          </Run.Style>
-                        </Run>
-                        <Run>
-                          <Run.Style>
-                            <Style TargetType="Run">
-                              <Setter Property="Text" Value="{Binding TransitiveToolTipMessage}"/>
-                              <Style.Triggers>
-                                <DataTrigger Binding="{Binding Path=PackageLevel}" Value="TopLevel">
-                                  <Setter Property="Text" Value="{Binding Summary}"/>
-                                </DataTrigger>
-                              </Style.Triggers>
-                            </Style>
-                          </Run.Style>
-                        </Run>
-          </TextBlock>
-        </Grid.ToolTip>
       </Grid>
 
       <Grid
@@ -258,36 +248,42 @@
 
         <!-- row 0: -->
 
-        <!-- warnings indicator -->
-        <imaging:CrispImage
-                      x:Name="_warningIndicator"
+        <!-- warnings indicators -->
+        <StackPanel
                       Grid.Row="0"
                       Grid.Column="0"
+                      Orientation="Horizontal">
+          <imaging:CrispImage
+            VerticalAlignment="Center"
+            Moniker="{x:Static catalog:KnownMonikers.CloudError}"
+            Visibility="{Binding IsPackageWithNetworkErrors,Converter={StaticResource BooleanToVisibilityConverter}}">
+            <imaging:CrispImage.ToolTip>
+              <TextBlock Text="{x:Static nuget:Resources.Label_NetworkError}" />
+            </imaging:CrispImage.ToolTip>
+          </imaging:CrispImage>
+          <imaging:CrispImage
+                      x:Name="_warningIndicator"
                       Visibility="{Binding IsPackageWithWarnings,Converter={StaticResource BooleanToVisibilityConverter}}"
                       VerticalAlignment="Center"
                       AutomationProperties.Name="{x:Static nuget:Resources.Label_Deprecated}"
                       Moniker="{x:Static catalog:KnownMonikers.StatusWarning}">
-          <imaging:CrispImage.ToolTip>
-            <StackPanel>
-              <TextBlock
-                Margin="0, 0, 0, 8"
-                Visibility="{Binding IsPackageVulnerable,Converter={StaticResource BooleanToVisibilityConverter}}">
-                <TextBlock.Text>
-                  <MultiBinding Converter="{StaticResource StringFormatConverter}">
-                    <Binding Source="{x:Static nuget:Resources.Label_PackageVulnerableToolTip}" />
-                    <Binding Path="VulnerabilityMaxSeverity" Converter="{StaticResource IntToVulnerabilitySeverityConverter}" />
-                  </MultiBinding>
-                </TextBlock.Text>
-              </TextBlock>
-              <TextBlock
+            <imaging:CrispImage.ToolTip>
+              <StackPanel>
+                <TextBlock
+                  Margin="0, 0, 0, 8"
+                  Style="{StaticResource VulnerabilitiesCountText}"
+                  Visibility="{Binding IsPackageVulnerable,Converter={StaticResource BooleanToVisibilityConverter}}">
+                </TextBlock>
+                <TextBlock
                 Text="{x:Static nuget:Resources.Label_PackageDeprecatedToolTip}"
                 Margin="0, 0, 0, 8"
                 Visibility="{Binding IsPackageDeprecated,Converter={StaticResource BooleanToVisibilityConverter}}" />
-              <TextBlock
+                <TextBlock
                 Text="{x:Static nuget:Resources.Label_PackageSelectForInfoToolTip}" />
-            </StackPanel>
-          </imaging:CrispImage.ToolTip>
-        </imaging:CrispImage>
+              </StackPanel>
+            </imaging:CrispImage.ToolTip>
+          </imaging:CrispImage>
+        </StackPanel>
 
         <!-- installed version -->
         <TextBlock
@@ -359,7 +355,7 @@
                     <Setter Property="Visibility" Value="Hidden" />
                   </DataTrigger.Setters>
                 </DataTrigger>
-                <DataTrigger Binding="{Binding IsSolution, RelativeSource={RelativeSource AncestorType={x:Type nuget:InfiniteScrollList}}}"
+                <DataTrigger Binding="{Binding ViewModel.IsSolution, RelativeSource={RelativeSource AncestorType={x:Type nuget:InfiniteScrollList}}}"
                       Value="true">
                   <DataTrigger.Setters>
                     <Setter Property="Visibility" Value="Hidden" />
@@ -407,7 +403,7 @@
                     <Setter Property="Visibility" Value="Hidden" />
                   </DataTrigger.Setters>
                 </DataTrigger>
-                <DataTrigger Binding="{Binding IsSolution, RelativeSource={RelativeSource AncestorType={x:Type nuget:InfiniteScrollList}}}" Value="true">
+                <DataTrigger Binding="{Binding ViewModel.IsSolution, RelativeSource={RelativeSource AncestorType={x:Type nuget:InfiniteScrollList}}}" Value="true">
                   <DataTrigger.Setters>
                     <Setter Property="Visibility" Value="Hidden" />
                   </DataTrigger.Setters>
@@ -479,7 +475,7 @@
                     <Setter Property="Visibility" Value="Hidden" />
                   </DataTrigger.Setters>
                 </DataTrigger>
-                <DataTrigger Binding="{Binding IsSolution, RelativeSource={RelativeSource AncestorType={x:Type nuget:InfiniteScrollList}}}" Value="true">
+                <DataTrigger Binding="{Binding ViewModel.IsSolution, RelativeSource={RelativeSource AncestorType={x:Type nuget:InfiniteScrollList}}}" Value="true">
                   <DataTrigger.Setters>
                     <Setter Property="Visibility" Value="Hidden" />
                   </DataTrigger.Setters>

@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,9 +25,10 @@ namespace NuGet.CommandLine.XPlat.Utility
         /// <param name="logger">Logger</param>
         /// <param name="packageId">Package to look for</param>
         /// <param name="prerelease">Whether to include prerelease versions</param>
+        /// <param name="cancellationToken"></param>
         /// <returns>Return the latest version available from multiple sources and if no version is found returns null.</returns>
 
-        public static async Task<NuGetVersion> GetLatestVersionFromSourcesAsync(IList<PackageSource> sources, ILogger logger, string packageId, bool prerelease)
+        public static async Task<NuGetVersion> GetLatestVersionFromSourcesAsync(IList<PackageSource> sources, ILogger logger, string packageId, bool prerelease, CancellationToken cancellationToken)
         {
             var maxTasks = Environment.ProcessorCount;
             var tasks = new List<Task<NuGetVersion>>();
@@ -33,7 +36,7 @@ namespace NuGet.CommandLine.XPlat.Utility
 
             foreach (var source in sources)
             {
-                tasks.Add(Task.Run(() => GetLatestVersionFromSourceAsync(source, logger, packageId, prerelease)));
+                tasks.Add(Task.Run(() => GetLatestVersionFromSourceAsync(source, logger, packageId, prerelease, cancellationToken)));
                 if (maxTasks <= tasks.Count)
                 {
                     var finishedTask = await Task.WhenAny(tasks);
@@ -63,11 +66,12 @@ namespace NuGet.CommandLine.XPlat.Utility
         /// <param name="logger">Logger</param>
         /// <param name="packageId">Package to look for</param>
         /// <param name="prerelease">Whether to include prerelease versions</param>
+        /// <param name="cancellationToken"></param>
         /// <returns>Returns the latest version available from a source or a null if non is found.</returns>
-        public static async Task<NuGetVersion> GetLatestVersionFromSourceAsync(PackageSource source, ILogger logger, string packageId, bool prerelease)
+        public static async Task<NuGetVersion> GetLatestVersionFromSourceAsync(PackageSource source, ILogger logger, string packageId, bool prerelease, CancellationToken cancellationToken)
         {
             SourceRepository repository = Repository.Factory.GetCoreV3(source);
-            PackageMetadataResource resource = await repository.GetResourceAsync<PackageMetadataResource>();
+            PackageMetadataResource resource = await repository.GetResourceAsync<PackageMetadataResource>(cancellationToken);
 
             using (var cache = new SourceCacheContext())
             {

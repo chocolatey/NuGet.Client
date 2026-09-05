@@ -1,13 +1,18 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.ComponentModel;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.ServiceHub.Framework;
 using NuGet.PackageManagement.VisualStudio;
+using NuGet.Protocol;
 using NuGet.Versioning;
+using NuGet.VisualStudio;
 using NuGet.VisualStudio.Internal.Contracts;
 
 namespace NuGet.PackageManagement.UI
@@ -49,6 +54,26 @@ namespace NuGet.PackageManagement.UI
         private NuGetVersion _versionInstalled;
         private string _versionRequested;
 
+        private int _installedVersionMaxVulnerability = -1;
+        public int InstalledVersionMaxVulnerability
+        {
+            get => _installedVersionMaxVulnerability;
+            set
+            {
+                if (_installedVersionMaxVulnerability != value)
+                {
+                    _installedVersionMaxVulnerability = value;
+                    OnPropertyChanged(nameof(InstalledVersionMaxVulnerability));
+                    OnPropertyChanged(nameof(IsInstalledVersionVulnerable));
+                }
+            }
+        }
+
+        public bool IsInstalledVersionVulnerable
+        {
+            get => InstalledVersionMaxVulnerability > -1;
+        }
+
         public NuGetVersion InstalledVersion
         {
             get { return _versionInstalled; }
@@ -56,6 +81,17 @@ namespace NuGet.PackageManagement.UI
             {
                 _versionInstalled = value;
                 OnPropertyChanged(nameof(InstalledVersion));
+            }
+        }
+
+        public PackageLevel? _packageLevel;
+        public PackageLevel? PackageLevel
+        {
+            get => _packageLevel;
+            set
+            {
+                _packageLevel = value;
+                OnPropertyChanged(nameof(PackageLevel));
             }
         }
 
@@ -124,7 +160,15 @@ namespace NuGet.PackageManagement.UI
 
         public override string ToString()
         {
-            return $"{ProjectName} {InstalledVersion?.Version.ToString() ?? Resources.Text_NotInstalled}";
+            var vulnerabilityString = string.Empty;
+            if (InstalledVersionMaxVulnerability != -1)
+            {
+                var converter = new IntToVulnerabilitySeverityConverter();
+                var severityString = converter.Convert(InstalledVersionMaxVulnerability, typeof(PackageVulnerabilitySeverity), null, CultureInfo.CurrentCulture) as string;
+                vulnerabilityString = string.Format(CultureInfo.CurrentCulture, Resources.Label_PackageVulnerableToolTip, severityString);
+            }
+
+            return $"{ProjectName} {InstalledVersion?.Version.ToString() ?? Resources.Text_NotInstalled} {vulnerabilityString} {PackageLevel}";
         }
 
         public event PropertyChangedEventHandler PropertyChanged;

@@ -35,7 +35,7 @@ namespace NuGet.Configuration.Test
         public void SearchTree_WithOneSource_Match(string packagePatterns, string term)
         {
             // Arrange
-            var configuration = PackageSourceMappingUtility.GetpackageSourceMapping(packagePatterns);
+            var configuration = PackageSourceMappingUtility.GetPackageSourceMapping(packagePatterns);
             SearchTree searchTree = new SearchTree(configuration);
 
             // Act & Assert
@@ -58,7 +58,7 @@ namespace NuGet.Configuration.Test
 
             // Act & Assert
             IReadOnlyList<string> configuredSources = searchTree.GetConfiguredPackageSources(term);
-            Assert.Null(configuredSources);
+            Assert.Empty(configuredSources);
         }
 
         [Theory]
@@ -68,13 +68,13 @@ namespace NuGet.Configuration.Test
         public void SearchTree_WithMultipleSources_Match(string packagePatterns, string term)
         {
             // Arrange
-            var configuration = PackageSourceMappingUtility.GetpackageSourceMapping(packagePatterns);
+            var configuration = PackageSourceMappingUtility.GetPackageSourceMapping(packagePatterns);
             SearchTree searchTree = new SearchTree(configuration);
 
             // Act & Assert
             IReadOnlyList<string> configuredSources = searchTree.GetConfiguredPackageSources(term);
             Assert.Equal(1, configuredSources.Count);
-            Assert.True(configuredSources[0].StartsWith(term.Trim().Substring(0, 5)));
+            Assert.StartsWith(term.Trim().Substring(0, 5), configuredSources[0]);
         }
 
         [Theory]
@@ -84,13 +84,13 @@ namespace NuGet.Configuration.Test
         public void SearchTree_InternationalSources_MatchesWithOne(string packagePatterns, string term)
         {
             // Arrange
-            var configuration = PackageSourceMappingUtility.GetpackageSourceMapping(packagePatterns);
+            var configuration = PackageSourceMappingUtility.GetPackageSourceMapping(packagePatterns);
             SearchTree searchTree = new SearchTree(configuration);
 
             // Act & Assert
             IReadOnlyList<string> configuredSources = searchTree.GetConfiguredPackageSources(term);
             Assert.Equal(1, configuredSources.Count);
-            Assert.True(term.Trim().StartsWith(configuredSources[0], StringComparison.OrdinalIgnoreCase));
+            Assert.StartsWith(configuredSources[0], term.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
         [Theory]
@@ -105,7 +105,7 @@ namespace NuGet.Configuration.Test
 
             // Act & Assert
             IReadOnlyList<string> configuredSources = searchTree.GetConfiguredPackageSources(term);
-            Assert.Null(configuredSources);
+            Assert.Empty(configuredSources);
         }
 
         [Theory]
@@ -119,7 +119,7 @@ namespace NuGet.Configuration.Test
 
             // Act & Assert
             IReadOnlyList<string> configuredSources = searchTree.GetConfiguredPackageSources(term);
-            Assert.Null(configuredSources);
+            Assert.Empty(configuredSources);
         }
 
         [Theory]
@@ -139,7 +139,7 @@ namespace NuGet.Configuration.Test
 
             // Act & Assert
             IReadOnlyList<string> configuredSources = searchTree.GetConfiguredPackageSources(term);
-            Assert.Null(configuredSources);
+            Assert.Empty(configuredSources);
         }
 
         [Fact]
@@ -194,10 +194,11 @@ namespace NuGet.Configuration.Test
 
             // Act & Assert
             var packageSourcesMatch = searchTree.GetConfiguredPackageSources(term);
-            Assert.Null(packageSourcesMatch);
+            Assert.Empty(packageSourcesMatch);
         }
 
         [Theory]
+        [UseCulture("")] // Fix tests failing on systems with non-English locales
         [InlineData("nuget.org,nuget", null)]
         [InlineData("nuget.org,nuget", "")]
         [InlineData("nuget.org,nuget", " ")]
@@ -205,7 +206,7 @@ namespace NuGet.Configuration.Test
         public void SearchTree_InvalidSearchInput_Throws(string packagePatterns, string term)
         {
             // Arrange
-            var configuration = PackageSourceMappingUtility.GetpackageSourceMapping(packagePatterns);
+            var configuration = PackageSourceMappingUtility.GetPackageSourceMapping(packagePatterns);
 
             // Act & Assert
             configuration.IsEnabled.Should().BeTrue();
@@ -222,9 +223,52 @@ namespace NuGet.Configuration.Test
             Assert.Equal(expectedLine, exception.Message);
         }
 
+        /// <summary>
+        /// SearchPatternByTerm
+        /// </summary>
+        /// <param name="packagePatterns"></param>
+        /// <returns></returns>
+        [Theory]
+        [InlineData("public,Nuget", "Nuget", "nuget")]
+        [InlineData("public,nuget", "Nuget", "nuget")]
+        [InlineData("public,Nuget", "nuget", "nuget")]
+        [InlineData("public,nuget", "nuget", "nuget")]
+        [InlineData("public,nuget", " nuget", "nuget")]
+        [InlineData("public,nuget", "nuget ", "nuget")]
+        [InlineData("public,nuget", " nuget ", "nuget")]
+        [InlineData("public, nuget", "nuget", "nuget")]
+        [InlineData("public,nuget ", "nuget", "nuget")]
+        [InlineData("public, nuget ", "nuget", "nuget")]
+        [InlineData("public, nuget ", " nuget ", "nuget")]
+        [InlineData(" public , nuget ", " nuget ", "nuget")]
+        [InlineData("   public    ,    nuget    ", "   nuget   ", "nuget")]
+        [InlineData("public,*", "Microsoft.Build", "*")]
+        [InlineData("public,Contoso.Opensource.*,*", "Microsoft.Build", "*")]
+        [InlineData("public,Contoso.Opensource.*", "Contoso.Opensource.", "contoso.opensource.*")]
+        [InlineData("public,Contoso.Opensource.*", "Contoso.Opensource.MVC", "contoso.opensource.*")]
+        [InlineData("public,Contoso.Opensource.*", "Contoso.Opensource.MVC.ASP", "contoso.opensource.*")]
+        [InlineData("public,Contoso.Opensource.* ", "Contoso.Opensource.MVC.ASP", "contoso.opensource.*")]
+        [InlineData(" public,Contoso.Opensource.*", "Contoso.Opensource.MVC.ASP", "contoso.opensource.*")]
+        [InlineData(" public,Contoso.Opensource.* ", " Contoso.Opensource.MVC.ASP ", "contoso.opensource.*")]
+        [InlineData("public,Contoso.Opensource.MVC.ASP ", "Contoso.Opensource.Abstractions", null)]
+        [InlineData("public,Contoso.Opensource.MVC.*", "Contoso.Opensource.Abstractions", null)]
+        public void SearchPatternByTerm_ExistingTerm_PatternFound(string packagePatterns, string term, string expectedPatternMatch)
+        {
+            // Arrange
+            var configuration = PackageSourceMappingUtility.GetPackageSourceMapping(packagePatterns);
+            SearchTree searchTree = new SearchTree(configuration);
+
+            // Act
+            string? foundPattern = searchTree.SearchForPattern(term);
+
+            // Assert
+            configuration.IsEnabled.Should().BeTrue();
+            Assert.Equal(expectedPatternMatch, foundPattern);
+        }
+
         private SearchTree GetSearchTree(string packagePatterns)
         {
-            return new SearchTree(PackageSourceMappingUtility.GetpackageSourceMapping(packagePatterns));
+            return new SearchTree(PackageSourceMappingUtility.GetPackageSourceMapping(packagePatterns));
         }
     }
 }

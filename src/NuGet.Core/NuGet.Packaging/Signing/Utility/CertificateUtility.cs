@@ -54,6 +54,16 @@ namespace NuGet.Packaging.Signing
             issues.Add(SignatureLog.InformationLog($"{indentation}{string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityCertificateIssuer, cert.IssuerName.Name)}"));
             issues.Add(SignatureLog.MinimalLog($"{indentation}{string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityCertificateValidity, cert.NotBefore, cert.NotAfter)}"));
 
+            foreach (string url in GetCrlDistributionPointUrls(cert))
+            {
+                issues.Add(SignatureLog.InformationLog($"{indentation}{string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityCertificateCrlUrl, url)}"));
+            }
+
+            foreach (string url in GetOcspUrls(cert))
+            {
+                issues.Add(SignatureLog.InformationLog($"{indentation}{string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityCertificateOcspUrl, url)}"));
+            }
+
             return issues;
         }
 
@@ -61,11 +71,21 @@ namespace NuGet.Packaging.Signing
         {
             var certificateFingerprint = GetHashString(cert, fingerprintAlgorithm);
 
-            certStringBuilder.AppendLine($"{indentation}{string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityCertificateSubjectName, cert.Subject)}");
-            certStringBuilder.AppendLine($"{indentation}{string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityCertificateHashSha1, cert.Thumbprint)}");
-            certStringBuilder.AppendLine($"{indentation}{string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityCertificateHash, fingerprintAlgorithm.ToString(), certificateFingerprint)}");
-            certStringBuilder.AppendLine($"{indentation}{string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityCertificateIssuer, cert.IssuerName.Name)}");
-            certStringBuilder.AppendLine($"{indentation}{string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityCertificateValidity, cert.NotBefore, cert.NotAfter)}");
+            certStringBuilder.AppendLine(indentation + string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityCertificateSubjectName, cert.Subject));
+            certStringBuilder.AppendLine(indentation + string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityCertificateHashSha1, cert.Thumbprint));
+            certStringBuilder.AppendLine(indentation + string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityCertificateHash, fingerprintAlgorithm.ToString(), certificateFingerprint));
+            certStringBuilder.AppendLine(indentation + string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityCertificateIssuer, cert.IssuerName.Name));
+            certStringBuilder.AppendLine(indentation + string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityCertificateValidity, cert.NotBefore, cert.NotAfter));
+
+            foreach (string url in GetCrlDistributionPointUrls(cert))
+            {
+                certStringBuilder.AppendLine(indentation + string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityCertificateCrlUrl, url));
+            }
+
+            foreach (string url in GetOcspUrls(cert))
+            {
+                certStringBuilder.AppendLine(indentation + string.Format(CultureInfo.CurrentCulture, Strings.CertUtilityCertificateOcspUrl, url));
+            }
         }
 
         /// <summary>
@@ -155,11 +175,12 @@ namespace NuGet.Packaging.Signing
         public static bool IsCertificatePublicKeyValid(X509Certificate2 certificate)
         {
             // Check if the public key is RSA with a valid keysize
-            System.Security.Cryptography.RSA RSAPublicKey = RSACertificateExtensions.GetRSAPublicKey(certificate);
-
-            if (RSAPublicKey != null)
+            using (System.Security.Cryptography.RSA? publicKey = RSACertificateExtensions.GetRSAPublicKey(certificate))
             {
-                return RSAPublicKey.KeySize >= SigningSpecifications.V1.RSAPublicKeyMinLength;
+                if (publicKey != null)
+                {
+                    return publicKey.KeySize >= SigningSpecifications.V1.RSAPublicKeyMinLength;
+                }
             }
 
             return false;
@@ -185,7 +206,7 @@ namespace NuGet.Packaging.Signing
         {
             foreach (var extension in certificate.Extensions)
             {
-                if (string.Equals(extension.Oid.Value, Oids.EnhancedKeyUsage, StringComparison.Ordinal))
+                if (string.Equals(extension.Oid!.Value, Oids.EnhancedKeyUsage, StringComparison.Ordinal))
                 {
                     var ekuExtension = (X509EnhancedKeyUsageExtension)extension;
 
@@ -218,7 +239,7 @@ namespace NuGet.Packaging.Signing
         {
             foreach (var extension in certificate.Extensions)
             {
-                if (string.Equals(extension.Oid.Value, Oids.EnhancedKeyUsage, StringComparison.Ordinal))
+                if (string.Equals(extension.Oid!.Value, Oids.EnhancedKeyUsage, StringComparison.Ordinal))
                 {
                     var ekuExtension = (X509EnhancedKeyUsageExtension)extension;
 
@@ -302,8 +323,8 @@ namespace NuGet.Packaging.Signing
         /// additional information (e.g.:  the issuer's certificate).  This method is not a guaranteed offline
         /// check.</remarks>
         /// <param name="certificate">The certificate to check.</param>
-        /// <returns><c>true</c> if the certificate is self-issued; otherwise, <c>false</c>.</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="certificate" /> is <c>null</c>.</exception>
+        /// <returns><see langword="true" /> if the certificate is self-issued; otherwise, <see langword="false" />.</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="certificate" /> is <see langword="null" />.</exception>
         public static bool IsSelfIssued(X509Certificate2 certificate)
         {
             if (certificate == null)
@@ -313,7 +334,7 @@ namespace NuGet.Packaging.Signing
 
             using (X509ChainHolder chainHolder = X509ChainHolder.CreateForCodeSigning())
             {
-                X509Chain chain = chainHolder.Chain;
+                IX509Chain chain = chainHolder.Chain2;
 
                 chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
                 chain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority |
@@ -321,7 +342,12 @@ namespace NuGet.Packaging.Signing
                     X509VerificationFlags.IgnoreCertificateAuthorityRevocationUnknown |
                     X509VerificationFlags.IgnoreEndRevocationUnknown;
 
-                CertificateChainUtility.BuildWithPolicy(chain, certificate);
+                bool buildSuccess = CertificateChainUtility.BuildWithPolicy(chain, certificate);
+
+                if (!buildSuccess && chain.ChainStatus.Length == 0)
+                {
+                    throw new SignatureException(Strings.CertificateChainValidationFailed);
+                }
 
                 if (chain.ChainElements.Count != 1)
                 {
@@ -376,6 +402,182 @@ namespace NuGet.Packaging.Signing
             }
 
             return certificatesRawData.AsReadOnly();
+        }
+
+        /// <summary>
+        /// Tries to deduce the hash algorithm from the given certificate fingerprint.
+        /// </summary>
+        /// <param name="certificateFingerprint">The certificate fingerprint.</param>
+        /// <param name="hashAlgorithmName">The deduced hash algorithm name.</param>
+        /// <returns><c>true</c> if the hash algorithm was successfully deduced; otherwise, <c>false</c>.</returns>
+        public static bool TryDeduceHashAlgorithm(string certificateFingerprint, out HashAlgorithmName hashAlgorithmName)
+        {
+            hashAlgorithmName = HashAlgorithmName.Unknown;
+
+            if (!IsHex(certificateFingerprint))
+                return false;
+
+            // One hexadecimal character is 4 bits.
+            switch (certificateFingerprint.Length)
+            {
+                case 40: // 64 characters * 4 bits/character = 160 bits
+                    hashAlgorithmName = HashAlgorithmName.SHA1;
+                    return true;
+
+                case 64: // 64 characters * 4 bits/character = 256 bits
+                    hashAlgorithmName = HashAlgorithmName.SHA256;
+                    return true;
+
+                case 96: // 96 characters * 4 bits/character = 384 bits
+                    hashAlgorithmName = HashAlgorithmName.SHA384;
+                    return true;
+
+                case 128: // 128 characters * 4 bits/character = 512 bits
+                    hashAlgorithmName = HashAlgorithmName.SHA512;
+                    return true;
+
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// Determines if the given string represents a valid hexadecimal value.
+        /// </summary>
+        /// <param name="certificateFingerprint">The string to check.</param>
+        /// <returns><c>true</c> if the string is a valid hexadecimal value; otherwise, <c>false</c>.</returns>
+        private static bool IsHex(string certificateFingerprint)
+        {
+            if (string.IsNullOrEmpty(certificateFingerprint))
+            {
+                return false;
+            }
+
+            for (var i = 0; i < certificateFingerprint.Length; ++i)
+            {
+                char c = certificateFingerprint[i];
+
+                if (!char.IsDigit(c) && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F'))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Extracts CRL Distribution Point URLs from the certificate's CRL Distribution Points extension (OID 2.5.29.31).
+        /// </summary>
+        internal static IReadOnlyList<string> GetCrlDistributionPointUrls(X509Certificate2 cert)
+        {
+            const string CrlDistributionPointsOid = "2.5.29.31";
+            // context-specific primitive tag [6] for uniformResourceIdentifier in GeneralName
+            const byte GeneralNameUriTag = 0x86;
+
+            var urls = new List<string>();
+            var extension = cert.Extensions[CrlDistributionPointsOid];
+
+            if (extension == null)
+            {
+                return urls;
+            }
+
+            try
+            {
+                // CRLDistributionPoints ::= SEQUENCE OF DistributionPoint
+                var reader = new DerEncoding.DerSequenceReader(extension.RawData);
+
+                while (reader.HasData)
+                {
+                    // DistributionPoint ::= SEQUENCE { distributionPoint [0] ... }
+                    var dpReader = reader.ReadSequence();
+
+                    if (dpReader.HasData && dpReader.HasTag(DerEncoding.DerSequenceReader.ContextSpecificConstructedTag0))
+                    {
+                        // distributionPoint [0] CONSTRUCTED
+                        byte[] dpNameData = dpReader.ReadValue((DerEncoding.DerSequenceReader.DerTag)DerEncoding.DerSequenceReader.ContextSpecificConstructedTag0);
+                        var dpNameReader = DerEncoding.DerSequenceReader.CreateForPayload(dpNameData);
+
+                        if (dpNameReader.HasData && dpNameReader.HasTag(DerEncoding.DerSequenceReader.ContextSpecificConstructedTag0))
+                        {
+                            // fullName [0] CONSTRUCTED = GeneralNames
+                            byte[] fullNameData = dpNameReader.ReadValue((DerEncoding.DerSequenceReader.DerTag)DerEncoding.DerSequenceReader.ContextSpecificConstructedTag0);
+                            var gnReader = DerEncoding.DerSequenceReader.CreateForPayload(fullNameData);
+
+                            while (gnReader.HasData)
+                            {
+                                byte tag = gnReader.PeekTag();
+
+                                if (tag == GeneralNameUriTag)
+                                {
+                                    byte[] uriBytes = gnReader.ReadValue((DerEncoding.DerSequenceReader.DerTag)GeneralNameUriTag);
+                                    urls.Add(Encoding.ASCII.GetString(uriBytes));
+                                }
+                                else
+                                {
+                                    gnReader.SkipValue();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (System.Security.Cryptography.CryptographicException exception)
+            {
+                return [exception.Message];
+            }
+
+            return urls;
+        }
+
+        /// <summary>
+        /// Extracts OCSP responder URLs from the certificate's Authority Information Access extension (OID 1.3.6.1.5.5.7.1.1).
+        /// </summary>
+        internal static IReadOnlyList<string> GetOcspUrls(X509Certificate2 cert)
+        {
+            const string AuthorityInfoAccessOid = "1.3.6.1.5.5.7.1.1";
+            const string OcspAccessMethodOid = "1.3.6.1.5.5.7.48.1";
+            // context-specific primitive tag [6] for uniformResourceIdentifier in GeneralName
+            const byte GeneralNameUriTag = 0x86;
+
+            var urls = new List<string>();
+            var extension = cert.Extensions[AuthorityInfoAccessOid];
+
+            if (extension == null)
+            {
+                return urls;
+            }
+
+            try
+            {
+                // AuthorityInfoAccessSyntax ::= SEQUENCE OF AccessDescription
+                var reader = new DerEncoding.DerSequenceReader(extension.RawData);
+
+                while (reader.HasData)
+                {
+                    // AccessDescription ::= SEQUENCE { accessMethod OID, accessLocation GeneralName }
+                    var adReader = reader.ReadSequence();
+                    string oid = adReader.ReadOidAsString();
+
+                    if (string.Equals(oid, OcspAccessMethodOid, StringComparison.Ordinal) && adReader.HasData)
+                    {
+                        byte tag = adReader.PeekTag();
+
+                        if (tag == GeneralNameUriTag)
+                        {
+                            byte[] uriBytes = adReader.ReadValue((DerEncoding.DerSequenceReader.DerTag)GeneralNameUriTag);
+                            urls.Add(Encoding.ASCII.GetString(uriBytes));
+                        }
+                    }
+                }
+            }
+            catch (System.Security.Cryptography.CryptographicException exception)
+            {
+                return [exception.Message];
+            }
+
+            return urls;
         }
     }
 }

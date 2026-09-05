@@ -13,6 +13,7 @@ using NuGet.PackageManagement;
 using NuGet.PackageManagement.VisualStudio;
 using NuGet.Protocol.Core.Types;
 using NuGet.VisualStudio;
+using NuGet.VisualStudio.Telemetry;
 using Test.Utility;
 using Xunit;
 using Task = System.Threading.Tasks.Task;
@@ -40,10 +41,13 @@ namespace NuGet.SolutionRestoreManager.Test
             ISourceRepositoryProvider sourceRepositoryProvider = TestSourceRepositoryUtility.CreateV3OnlySourceRepositoryProvider();
             _globalProvider.AddService(typeof(ISourceRepositoryProvider), sourceRepositoryProvider);
 
+            var infoBar = new Lazy<IVulnerabilitiesNotificationService>(() => Mock.Of<IVulnerabilitiesNotificationService>());
             var restoreChecker = Mock.Of<ISolutionRestoreChecker>();
             var eventsPublisher = Mock.Of<IRestoreEventsPublisher>();
             var settings = Mock.Of<ISettings>();
             var nuGetProgressReporter = Mock.Of<IVsNuGetProgressReporter>();
+            var auditCheckResultCachingService = Mock.Of<IAuditCheckResultCachingService>();
+            var telemetryServiceProvider = Mock.Of<INuGetTelemetryProvider>();
 
             Mock.Get(settings)
                 .Setup(x => x.GetSection("packageRestore"))
@@ -61,7 +65,9 @@ namespace NuGet.SolutionRestoreManager.Test
                 restoreEventsPublisher: eventsPublisher,
                 settings: settings,
                 solutionRestoreChecker: restoreChecker,
-                nuGetProgressReporter: nuGetProgressReporter);
+                nuGetProgressReporter: nuGetProgressReporter,
+                auditCheckResultCachingService,
+                telemetryServiceProvider);
 
             var restoreRequest = new SolutionRestoreRequest(
                 forceRestore: true,
@@ -73,6 +79,7 @@ namespace NuGet.SolutionRestoreManager.Test
                 jobContext: restoreJobContext,
                 logger: logger,
                 trackingData: new Dictionary<string, object>(),
+                vulnerabilitiesFoundService: infoBar,
                 token: CancellationToken.None);
 
             Assert.Equal(NuGetOperationStatus.NoOp, job.Status);
@@ -88,10 +95,13 @@ namespace NuGet.SolutionRestoreManager.Test
             ISourceRepositoryProvider sourceRepositoryProvider = TestSourceRepositoryUtility.CreateV3OnlySourceRepositoryProvider();
             _globalProvider.AddService(typeof(ISourceRepositoryProvider), sourceRepositoryProvider);
 
+            var infoBar = Mock.Of<Lazy<IVulnerabilitiesNotificationService>>();
             var restoreChecker = Mock.Of<ISolutionRestoreChecker>();
             var eventsPublisher = Mock.Of<IRestoreEventsPublisher>();
             var settings = Mock.Of<ISettings>();
             var nuGetProgressReporter = Mock.Of<IVsNuGetProgressReporter>();
+            var auditCheckResultCachingService = Mock.Of<IAuditCheckResultCachingService>();
+            var telemetryServiceProvider = Mock.Of<INuGetTelemetryProvider>();
 
             Mock.Get(settings)
                 .Setup(x => x.GetSection("packageRestore"))
@@ -109,7 +119,9 @@ namespace NuGet.SolutionRestoreManager.Test
                 restoreEventsPublisher: eventsPublisher,
                 settings: settings,
                 solutionRestoreChecker: restoreChecker,
-                nuGetProgressReporter: nuGetProgressReporter);
+                nuGetProgressReporter: nuGetProgressReporter,
+                auditCheckResultCachingService,
+                telemetryServiceProvider);
 
             var restoreRequest = new SolutionRestoreRequest(
                 forceRestore: true,
@@ -124,6 +136,7 @@ namespace NuGet.SolutionRestoreManager.Test
                 jobContext: restoreJobContext,
                 logger: logger,
                 trackingData: new Dictionary<string, object>(),
+                vulnerabilitiesFoundService: infoBar,
                 token: cts.Token);
 
             Assert.Equal(NuGetOperationStatus.Cancelled, job.Status);

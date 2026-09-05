@@ -16,7 +16,7 @@ namespace NuGet.Protocol.Plugins
         /// Instantiates a new <see cref="PluginException" /> class.
         /// </summary>
         /// <param name="message">The exception message.</param>
-        public PluginException(string message)
+        public PluginException(string? message)
             : base(message)
         {
         }
@@ -26,11 +26,14 @@ namespace NuGet.Protocol.Plugins
         /// </summary>
         /// <param name="message">The exception message.</param>
         /// <param name="innerException">The inner exception.</param>
-        public PluginException(string message, Exception innerException)
+        public PluginException(string? message, Exception? innerException)
             : base(message, innerException)
         {
         }
 
+#if NET8_0_OR_GREATER
+        [Obsolete(DiagnosticId = "SYSLIB0051")] // https://github.com/dotnet/docs/issues/34893
+#endif
         private PluginException(SerializationInfo info, StreamingContext context) : base(info, context)
         {
         }

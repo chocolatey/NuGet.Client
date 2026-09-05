@@ -39,12 +39,12 @@ namespace NuGet.RuntimeModel
             return hashCode.CombinedHash;
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return Equals(obj as CompatibilityProfile);
         }
 
-        public bool Equals(CompatibilityProfile other)
+        public bool Equals(CompatibilityProfile? other)
         {
             return other != null &&
                 string.Equals(Name, other.Name, StringComparison.Ordinal) &&
@@ -53,7 +53,7 @@ namespace NuGet.RuntimeModel
 
         public CompatibilityProfile Clone()
         {
-            return new CompatibilityProfile(Name, RestoreContexts.Select(e => e.Clone()));
+            return new CompatibilityProfile(Name, RestoreContexts.ToList());
         }
     }
 }

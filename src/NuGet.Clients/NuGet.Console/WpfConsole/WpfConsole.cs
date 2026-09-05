@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -69,12 +71,12 @@ namespace NuGetConsole.Implementation.Console
             UtilityMethods.ThrowIfArgumentNull(sp);
 
             _consoleStatus = consoleStatus;
-            ServiceProvider = sp;
+            _serviceProvider = sp;
             ContentTypeName = contentTypeName;
             HostName = hostName;
         }
 
-        private IServiceProvider ServiceProvider { get; set; }
+        private IServiceProvider _serviceProvider;
         public string ContentTypeName { get; private set; }
         public string HostName { get; private set; }
 
@@ -92,7 +94,7 @@ namespace NuGetConsole.Implementation.Console
 
         public IVsUIShell VsUIShell
         {
-            get { return ServiceProvider.GetService<IVsUIShell>(typeof(SVsUIShell)); }
+            get { return _serviceProvider.GetService<IVsUIShell>(typeof(SVsUIShell)); }
         }
 
         private IVsStatusbar VsStatusBar
@@ -114,7 +116,7 @@ namespace NuGetConsole.Implementation.Console
 
         private IOleServiceProvider OleServiceProvider
         {
-            get { return ServiceProvider.GetService<IOleServiceProvider>(typeof(IOleServiceProvider)); }
+            get { return _serviceProvider.GetService<IOleServiceProvider>(typeof(IOleServiceProvider)); }
         }
 
         private IContentType ContentType
@@ -521,9 +523,19 @@ namespace NuGetConsole.Implementation.Console
 
             // Delete last character from input buffer.
             ITextBuffer textBuffer = WpfTextView.TextBuffer;
-            if (textBuffer.CurrentSnapshot.Length > 0)
+            ITextSnapshot snapshot = textBuffer.CurrentSnapshot;
+            int length = snapshot.Length;
+            if (length > 0)
             {
-                textBuffer.Delete(new Span(textBuffer.CurrentSnapshot.Length - 1, 1));
+                int deleteCount = 1;
+                if (length >= 2
+                    && char.IsLowSurrogate(snapshot[length - 1])
+                    && char.IsHighSurrogate(snapshot[length - 2]))
+                {
+                    deleteCount = 2;
+                }
+
+                textBuffer.Delete(new Span(length - deleteCount, deleteCount));
             }
 
             // Ensure caret visible (scroll)
@@ -637,7 +649,7 @@ namespace NuGetConsole.Implementation.Console
                     1 /* in progress */,
                     operation,
                     (uint)percentComplete,
-                    (uint)100);
+                    100);
             }
         }
 
@@ -648,8 +660,8 @@ namespace NuGetConsole.Implementation.Console
                 ref _pdwCookieForStatusBar,
                 0 /* completed */,
                 string.Empty,
-                (uint)100,
-                (uint)100);
+                100,
+                100);
         }
 
         private async Task HideProgressAsync()
@@ -660,8 +672,8 @@ namespace NuGetConsole.Implementation.Console
                 ref _pdwCookieForStatusBar,
                 0 /* completed */,
                 string.Empty,
-                (uint)100,
-                (uint)100);
+                100,
+                100);
         }
 
         public void SetExecutionMode(bool isExecuting)
@@ -745,6 +757,12 @@ namespace NuGetConsole.Implementation.Console
                 if (disposable != null)
                 {
                     disposable.Dispose();
+                }
+
+                if (_view is not null)
+                {
+                    _view.CloseView();
+                    _view = null;
                 }
             }
         }

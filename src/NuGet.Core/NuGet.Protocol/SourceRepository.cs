@@ -16,8 +16,9 @@ namespace NuGet.Protocol.Core.Types
     /// </summary>
     public class SourceRepository
     {
-        private readonly Dictionary<Type, INuGetResourceProvider[]> _providerCache;
-        private readonly PackageSource _source;
+        internal const int ProviderCacheTypes = 25;
+        private readonly Dictionary<Type, IReadOnlyList<INuGetResourceProvider>> _providerCache = new(ProviderCacheTypes);
+        private readonly PackageSource _source = null!; // Protected constructor is for subclasses that provide their own package source.
 
         /// <summary>
         /// Pre-determined feed type.
@@ -98,7 +99,8 @@ namespace NuGet.Protocol.Core.Types
         {
             if (FeedTypeOverride == FeedType.Undefined)
             {
-                var resource = await GetResourceAsync<FeedTypeResource>(token);
+                FeedTypeResource resource = await GetResourceAsync<FeedTypeResource>(token)
+                    ?? throw new InvalidOperationException($"The source '{PackageSource.Source}' does not provide {nameof(FeedTypeResource)}.");
                 return resource.FeedType;
             }
             else
@@ -112,7 +114,7 @@ namespace NuGet.Protocol.Core.Types
         /// </summary>
         /// <typeparam name="T">Expected resource type</typeparam>
         /// <returns>Null if the resource does not exist</returns>
-        public virtual T GetResource<T>() where T : class, INuGetResource
+        public virtual T? GetResource<T>() where T : class, INuGetResource
         {
             return GetResource<T>(CancellationToken.None);
         }
@@ -122,9 +124,9 @@ namespace NuGet.Protocol.Core.Types
         /// </summary>
         /// <typeparam name="T">Expected resource type</typeparam>
         /// <returns>Null if the resource does not exist</returns>
-        public virtual T GetResource<T>(CancellationToken token) where T : class, INuGetResource
+        public virtual T? GetResource<T>(CancellationToken token) where T : class, INuGetResource
         {
-            var task = GetResourceAsync<T>(token);
+            Task<T?> task = GetResourceAsync<T>(token);
             task.Wait(token);
 
             return task.Result;
@@ -135,7 +137,7 @@ namespace NuGet.Protocol.Core.Types
         /// </summary>
         /// <typeparam name="T">Expected resource type</typeparam>
         /// <returns>Null if the resource does not exist</returns>
-        public virtual async Task<T> GetResourceAsync<T>() where T : class, INuGetResource
+        public virtual async Task<T?> GetResourceAsync<T>() where T : class, INuGetResource
         {
             return await GetResourceAsync<T>(CancellationToken.None);
         }
@@ -145,19 +147,19 @@ namespace NuGet.Protocol.Core.Types
         /// </summary>
         /// <typeparam name="T">Expected resource type</typeparam>
         /// <returns>Null if the resource does not exist</returns>
-        public virtual async Task<T> GetResourceAsync<T>(CancellationToken token) where T : class, INuGetResource
+        public virtual async Task<T?> GetResourceAsync<T>(CancellationToken token) where T : class, INuGetResource
         {
             var resourceType = typeof(T);
-            INuGetResourceProvider[] possible = null;
-
-            if (_providerCache.TryGetValue(resourceType, out possible))
+            if (_providerCache.TryGetValue(resourceType, out IReadOnlyList<INuGetResourceProvider>? possible)
+                && possible != null)
             {
-                foreach (var provider in possible)
+                for (int i = 0; i < possible.Count; i++)
                 {
+                    var provider = possible[i];
                     var result = await provider.TryCreate(this, token);
                     if (result.Item1)
                     {
-                        return (T)result.Item2;
+                        return (T?)result.Item2;
                     }
                 }
             }
@@ -170,47 +172,59 @@ namespace NuGet.Protocol.Core.Types
         /// </summary>
         /// <param name="providers"></param>
         /// <returns></returns>
-        private static Dictionary<Type, INuGetResourceProvider[]> Init(IEnumerable<Lazy<INuGetResourceProvider>> providers)
+        private static Dictionary<Type, IReadOnlyList<INuGetResourceProvider>> Init(IEnumerable<Lazy<INuGetResourceProvider>> providers)
         {
-            var cache = new Dictionary<Type, INuGetResourceProvider[]>();
+            var cache = new Dictionary<Type, IReadOnlyList<INuGetResourceProvider>>(ProviderCacheTypes);
 
             foreach (var group in providers.GroupBy(p => p.Value.ResourceType))
             {
-                cache.Add(group.Key, Sort(group).ToArray());
+                cache.Add(group.Key, Sort(group));
             }
 
             return cache;
         }
 
-        private static INuGetResourceProvider[]
+        private static IReadOnlyList<INuGetResourceProvider>
             Sort(IEnumerable<Lazy<INuGetResourceProvider>> group)
         {
+            var items = new List<INuGetResourceProvider>(group.Count());
+            foreach (var lazy in group)
+            {
+                items.Add(lazy.Value);
+            }
+
             // initial ordering to help make this deterministic
-            var items = new List<INuGetResourceProvider>(
-                group.Select(e => e.Value).OrderBy(e => e.Name).ThenBy(e => e.After.Count()).ThenBy(e => e.Before.Count()));
+            items.Sort((a, b) =>
+            {
+                int cmp = StringComparer.Ordinal.Compare(a.Name, b.Name);
+                if (cmp != 0) return cmp;
+                cmp = a.After.Count().CompareTo(b.After.Count());
+                if (cmp != 0) return cmp;
+                return a.Before.Count().CompareTo(b.Before.Count());
+            });
 
-            var comparer = new ProviderComparer();
-
-            var ordered = new Queue<INuGetResourceProvider>();
+            var comparer = ProviderComparer.Instance;
 
             // List.Sort does not work when lists have unsolvable gaps, which can occur here
-            while (items.Count > 0)
+            for (int start = 0; start < items.Count - 1; start++)
             {
-                var best = items[0];
+                int bestIndex = start;
 
-                for (var i = 1; i < items.Count; i++)
+                for (int i = start + 1; i < items.Count; i++)
                 {
-                    if (comparer.Compare(items[i], best) < 0)
+                    if (comparer.Compare(items[i], items[bestIndex]) < 0)
                     {
-                        best = items[i];
+                        bestIndex = i;
                     }
                 }
 
-                items.Remove(best);
-                ordered.Enqueue(best);
+                if (bestIndex != start)
+                {
+                    (items[start], items[bestIndex]) = (items[bestIndex], items[start]);
+                }
             }
 
-            return ordered.ToArray();
+            return items;
         }
 
         /// <summary>

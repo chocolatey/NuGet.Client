@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,13 +31,13 @@ namespace NuGet.Protocol.Tests
             Assert.NotNull(first);
             Assert.NotNull(second);
 
-            // Get all properties that can be cached and are not Version (because the version of the two packages is different).
+            // Get all string properties (the only cacheable type).
             var properties =
                 typeof(T).GetTypeInfo()
                     .DeclaredProperties.Where(
                         p =>
                             p.Name != nameof(PackageIdentity.Version) &&
-                            MetadataReferenceCache.CachableTypes.Contains(p.PropertyType) && p.GetMethod != null);
+                            p.PropertyType == typeof(string) && p.GetMethod != null);
 
             // Check that all cached references between the two packages are identical.
             foreach (var property in properties)
@@ -45,7 +47,7 @@ namespace NuGet.Protocol.Tests
                 Assert.Same(firstValue, secondValue);
             }
 
-            // Get all properties that are IEnumerables of a type that can be cached.
+            // Get all properties that are IEnumerables of strings.
             var enumerableProperties =
                 typeof(T).GetTypeInfo()
                     .DeclaredProperties.Where(
@@ -53,7 +55,7 @@ namespace NuGet.Protocol.Tests
                             p.PropertyType.IsConstructedGenericType &&
                             p.PropertyType.GetGenericTypeDefinition() == typeof(IEnumerable<>) &&
                             p.PropertyType.GenericTypeArguments.Length == 1 &&
-                            MetadataReferenceCache.CachableTypes.Contains(p.PropertyType.GenericTypeArguments[0]) &&
+                            p.PropertyType.GenericTypeArguments[0] == typeof(string) &&
                             p.GetMethod != null);
 
             // Check that all cached references stored in IEnumerables between the two packages are identical.

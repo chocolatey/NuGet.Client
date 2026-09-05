@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -29,7 +31,7 @@ namespace Microsoft.Build.NuGetSdkResolver
         /// </summary>
         /// <param name="x">The first <see cref="FileSystemInfo" /> to compare.</param>
         /// <param name="y">The second <see cref="FileSystemInfo" /> to compare.</param>
-        /// <returns><c>true</c> if the specified <see cref="FileSystemInfo" /> objects' <see cref="FileSystemInfo.FullName" /> property are equal, otherwise <c>false</c>.</returns>
+        /// <returns><see langword="true" /> if the specified <see cref="FileSystemInfo" /> objects' <see cref="FileSystemInfo.FullName" /> property are equal, otherwise <see langword="false" />.</returns>
         public bool Equals(FileSystemInfo x, FileSystemInfo y)
         {
             return string.Equals(x.FullName, y.FullName, StringComparison.Ordinal);

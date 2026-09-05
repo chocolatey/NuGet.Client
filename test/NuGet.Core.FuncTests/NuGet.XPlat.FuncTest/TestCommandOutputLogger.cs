@@ -6,6 +6,7 @@ using System.Collections.Concurrent;
 using NuGet.CommandLine.XPlat;
 using NuGet.Common;
 using NuGet.Test.Utility;
+using Xunit.Abstractions;
 
 namespace NuGet.XPlat.FuncTest
 {
@@ -13,12 +14,14 @@ namespace NuGet.XPlat.FuncTest
     {
         private readonly bool _observeLogLevel;
 
-        public TestLogger Logger { get; set; } = new TestLogger();
+        public TestLogger Logger { get; set; }
 
-        public TestCommandOutputLogger(bool observeLogLevel = false)
+        public TestCommandOutputLogger(ITestOutputHelper testOutputHelper, bool observeLogLevel = false)
             : base(LogLevel.Debug)
         {
             _observeLogLevel = observeLogLevel;
+
+            Logger = new TestLogger(testOutputHelper);
         }
 
         protected override void LogInternal(LogLevel logLevel, string message)
@@ -52,6 +55,11 @@ namespace NuGet.XPlat.FuncTest
                     Logger.LogDebug(message);
                     break;
             }
+        }
+
+        public override void LogMinimal(string data, ConsoleColor color)
+        {
+            LogInternal(LogLevel.Minimal, data);
         }
 
         public ConcurrentQueue<string> Messages
@@ -102,11 +110,6 @@ namespace NuGet.XPlat.FuncTest
         public string ShowErrors()
         {
             return string.Join(Environment.NewLine, ErrorMessages);
-        }
-
-        public string ShowVerboseMessages()
-        {
-            return string.Join(Environment.NewLine, VerboseMessages);
         }
     }
 }

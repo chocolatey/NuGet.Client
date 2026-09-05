@@ -10,7 +10,7 @@ namespace NuGet.VisualStudio.Internal.Contracts.Test
     {
         private static readonly NuGetVersion MinVersion = NuGetVersion.Parse("1.0.0");
         private static readonly NuGetVersion MaxVersion = NuGetVersion.Parse("2.0.0");
-        private static readonly FloatRange FloatRange = new FloatRange(NuGetVersionFloatBehavior.PrereleaseRevision, MinVersion);
+        private static readonly FloatRange FloatRange = new FloatRange(NuGetVersionFloatBehavior.PrereleaseRevision, MinVersion, "*");
 
         [Theory]
         [MemberData(nameof(VersionRanges))]
@@ -22,7 +22,7 @@ namespace NuGet.VisualStudio.Internal.Contracts.Test
             Assert.Equal(expectedResult, actualResult);
         }
 
-        public static TheoryData VersionRanges => new TheoryData<VersionRange>
+        public static TheoryData<VersionRange> VersionRanges => new()
             {
                 { new VersionRange(MinVersion) },
                 { new VersionRange(MinVersion, FloatRange) },

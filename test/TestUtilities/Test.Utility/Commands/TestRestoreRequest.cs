@@ -1,6 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NuGet.Common;
@@ -10,6 +11,7 @@ using NuGet.ProjectModel;
 using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 using NuGet.Protocol.Test;
+using Test.Utility;
 
 namespace NuGet.Commands.Test
 {
@@ -37,12 +39,13 @@ namespace NuGet.Commands.Test
             ILogger log)
             : this(
                   project,
-                  sources.Select(source => Repository.Factory.GetCoreV3(source.Source)),
+                  sources.Select(Repository.Factory.GetCoreV3).ToList(),
                   packagesDirectory,
                   new List<string>(),
                   new TestSourceCacheContext(),
                   clientPolicyContext,
-                  log)
+                  log,
+                  new LockFileBuilderCache())
         {
         }
 
@@ -54,34 +57,13 @@ namespace NuGet.Commands.Test
             ILogger log)
             : this(
                   project,
-                  sources,
+                  sources.Select(Repository.Factory.GetCoreV3).ToList(),
                   packagesDirectory,
-                  new List<string>(),
+                  [],
                   cacheContext,
-                  log)
-        {
-        }
-
-        public TestRestoreRequest(
-            PackageSpec project,
-            IEnumerable<PackageSource> sources,
-            string packagesDirectory,
-            SourceCacheContext cacheContext,
-            ClientPolicyContext clientPolicyContext,
-            ILogger log) : base(
-                project,
-                RestoreCommandProviders.Create(
-                    packagesDirectory,
-                    fallbackPackageFolderPaths: new List<string>(),
-                    sources: sources.Select(source => Repository.Factory.GetCoreV3(source.Source)),
-                    cacheContext: cacheContext,
-                    packageFileCache: new LocalPackageFileCache(),
-                    log: log),
-                cacheContext,
-                clientPolicyContext,
-                packageSourceMapping: PackageSourceMapping.GetPackageSourceMapping(NullSettings.Instance),
-                log,
-                new LockFileBuilderCache())
+                  ClientPolicyContext.GetClientPolicy(NullSettings.Instance, log),
+                  log,
+                  new LockFileBuilderCache())
         {
         }
 
@@ -93,35 +75,19 @@ namespace NuGet.Commands.Test
             ILogger log)
             : this(
                   project,
-                  sources,
+                  sources.Select(Repository.Factory.GetCoreV3).ToList(),
                   packagesDirectory,
                   fallbackPackageFolders,
                   new TestSourceCacheContext(),
-                  log)
-        {
-        }
-
-        public TestRestoreRequest(
-            PackageSpec project,
-            IEnumerable<PackageSource> sources,
-            string packagesDirectory,
-            IEnumerable<string> fallbackPackageFolders,
-            SourceCacheContext cacheContext,
-            ILogger log)
-            : this(
-                  project,
-                  sources.Select(source => Repository.Factory.GetCoreV3(source.Source)),
-                  packagesDirectory,
-                  fallbackPackageFolders,
-                  cacheContext,
                   ClientPolicyContext.GetClientPolicy(NullSettings.Instance, log),
-                  log)
+                  log,
+                  new LockFileBuilderCache())
         {
         }
 
         public TestRestoreRequest(
             PackageSpec project,
-            IEnumerable<SourceRepository> sources,
+            IReadOnlyList<SourceRepository> sources,
             string packagesDirectory,
             IEnumerable<string> fallbackPackageFolders,
             ILogger log) : this(
@@ -131,26 +97,8 @@ namespace NuGet.Commands.Test
                 fallbackPackageFolders,
                 new TestSourceCacheContext(),
                 ClientPolicyContext.GetClientPolicy(NullSettings.Instance, log),
-                log)
-        {
-        }
-
-        public TestRestoreRequest(
-            PackageSpec project,
-            IEnumerable<SourceRepository> sources,
-            string packagesDirectory,
-            IEnumerable<string> fallbackPackageFolders,
-            SourceCacheContext cacheContext,
-            ClientPolicyContext clientPolicyContext,
-            ILogger log) : this(
-            project,
-            sources,
-            packagesDirectory,
-            fallbackPackageFolders,
-            cacheContext,
-            clientPolicyContext,
-            log,
-            new LockFileBuilderCache())
+                log,
+                new LockFileBuilderCache())
         {
         }
 
@@ -160,26 +108,30 @@ namespace NuGet.Commands.Test
             string packagesDirectory,
             SourceCacheContext cacheContext,
             PackageSourceMapping packageSourceMappingConfiguration,
-            ILogger log) : base(
+            ILogger log,
+            IReadOnlyList<SourceRepository>? auditSources = null) : base(
                 project,
-                RestoreCommandProviders.Create(
+                new RestoreCommandProvidersCache().GetOrCreate(
                     packagesDirectory,
-                    Enumerable.Empty<string>(),
-                    sources: sources.Select(source => Repository.Factory.GetCoreV3(source.Source)),
+                    Array.Empty<string>(),
+                    packageSources: sources.Select(Repository.Factory.GetCoreV3).ToList(),
+                    auditSources: auditSources ?? Array.Empty<SourceRepository>(),
                     cacheContext: cacheContext,
-                    packageFileCache: new LocalPackageFileCache(),
-                    log: log),
+                    log: log,
+                    updateLastAccess: false,
+                    environmentVariableReader: TestEnvironmentVariableReader.EmptyInstance),
                 cacheContext,
                 ClientPolicyContext.GetClientPolicy(NullSettings.Instance, log),
                 packageSourceMappingConfiguration,
                 log,
                 new LockFileBuilderCache())
         {
+            EnvironmentVariableReader = TestEnvironmentVariableReader.EmptyInstance;
         }
 
         public TestRestoreRequest(
             PackageSpec project,
-            IEnumerable<SourceRepository> sources,
+            IReadOnlyList<SourceRepository> sources,
             string packagesDirectory,
             IEnumerable<string> fallbackPackageFolders,
             SourceCacheContext cacheContext,
@@ -187,13 +139,15 @@ namespace NuGet.Commands.Test
             ILogger log,
             LockFileBuilderCache lockFileBuilderCache) : base(
             project,
-            RestoreCommandProviders.Create(
+            new RestoreCommandProvidersCache().GetOrCreate(
                 packagesDirectory,
-                fallbackPackageFolderPaths: fallbackPackageFolders,
-                sources: sources,
+                fallbackPackagesPaths: fallbackPackageFolders.ToList(),
+                packageSources: sources,
+                auditSources: Array.Empty<SourceRepository>(),
                 cacheContext: cacheContext,
-                packageFileCache: new LocalPackageFileCache(),
-                log: log),
+                log: log,
+                updateLastAccess: false,
+                environmentVariableReader: TestEnvironmentVariableReader.EmptyInstance),
             cacheContext,
             clientPolicyContext,
             packageSourceMapping: PackageSourceMapping.GetPackageSourceMapping(NullSettings.Instance),
@@ -205,6 +159,7 @@ namespace NuGet.Commands.Test
             DependencyGraphSpec.AddProject(project);
             DependencyGraphSpec.AddRestore(project.RestoreMetadata.ProjectUniqueName);
             AllowNoOp = true;
+            EnvironmentVariableReader = TestEnvironmentVariableReader.EmptyInstance;
         }
     }
 }

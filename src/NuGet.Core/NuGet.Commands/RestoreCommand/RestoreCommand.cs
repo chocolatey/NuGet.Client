@@ -1,7 +1,10 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -10,7 +13,9 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using NuGet.Commands.Restore.Utility;
 using NuGet.Common;
+using NuGet.Configuration;
 using NuGet.DependencyResolver;
 using NuGet.Frameworks;
 using NuGet.LibraryModel;
@@ -19,6 +24,7 @@ using NuGet.ProjectModel;
 using NuGet.Protocol.Core.Types;
 using NuGet.Repositories;
 using NuGet.RuntimeModel;
+using NuGet.Shared;
 using NuGet.Versioning;
 
 namespace NuGet.Commands
@@ -26,18 +32,18 @@ namespace NuGet.Commands
     public class RestoreCommand
     {
         private readonly RestoreCollectorLogger _logger;
+        private static readonly ConcurrentDictionary<NuGetFramework, string> _frameworkShortNameCache = new(NuGetFrameworkFullComparer.Instance);
 
         private readonly RestoreRequest _request;
 
         private readonly LockFileBuilderCache _lockFileBuilderCache;
-
-        private bool _success;
 
         private Guid _operationId;
 
         private readonly Dictionary<RestoreTargetGraph, Dictionary<string, LibraryIncludeFlags>> _includeFlagGraphs
             = new Dictionary<RestoreTargetGraph, Dictionary<string, LibraryIncludeFlags>>();
 
+        internal IEnvironmentVariableReader EnvironmentVariableReader { get; init; }
         public Guid ParentId { get; }
 
         private const string ProjectRestoreInformation = nameof(ProjectRestoreInformation);
@@ -45,15 +51,29 @@ namespace NuGet.Commands
         // status names for ProjectRestoreInformation
         private const string ErrorCodes = nameof(ErrorCodes);
         private const string WarningCodes = nameof(WarningCodes);
+        private const string SuppressedWarningCodes = nameof(SuppressedWarningCodes);
         private const string RestoreSuccess = nameof(RestoreSuccess);
         private const string ProjectFilePath = nameof(ProjectFilePath);
         private const string IsCentralVersionManagementEnabled = nameof(IsCentralVersionManagementEnabled);
         private const string TotalUniquePackagesCount = nameof(TotalUniquePackagesCount);
         private const string NewPackagesInstalledCount = nameof(NewPackagesInstalledCount);
+        private const string AnyPackageIdContainsNonAlphanumericDotDashOrUnderscoreCharacters = nameof(AnyPackageIdContainsNonAlphanumericDotDashOrUnderscoreCharacters);
         private const string SourcesCount = nameof(SourcesCount);
         private const string HttpSourcesCount = nameof(HttpSourcesCount);
         private const string LocalSourcesCount = nameof(LocalSourcesCount);
         private const string FallbackFoldersCount = nameof(FallbackFoldersCount);
+        private const string TargetFrameworks = nameof(TargetFrameworks);
+        private const string TargetFrameworksCount = nameof(TargetFrameworksCount);
+        private const string RuntimeIdentifiersCount = nameof(RuntimeIdentifiersCount);
+        private const string TreatWarningsAsErrors = nameof(TreatWarningsAsErrors);
+        private const string SDKAnalysisLevel = nameof(SDKAnalysisLevel);
+        private const string UsingMicrosoftNETSdk = nameof(UsingMicrosoftNETSdk);
+        private const string NETSdkVersion = nameof(NETSdkVersion);
+        private const string UpdatedAssetsFile = nameof(UpdatedAssetsFile);
+        private const string UpdatedMSBuildFiles = nameof(UpdatedMSBuildFiles);
+        private const string IsPackageInstallationTrigger = nameof(IsPackageInstallationTrigger);
+        private const string UsesLegacyPackagesDirectory = nameof(UsesLegacyPackagesDirectory);
+        private const string UsesLegacyAssetTargetFallback = nameof(UsesLegacyAssetTargetFallback);
 
         // no-op data names
         private const string NoOpDuration = nameof(NoOpDuration);
@@ -63,6 +83,8 @@ namespace NuGet.Commands
         private const string NoOpRestoreOutputEvaluationDuration = nameof(NoOpRestoreOutputEvaluationDuration);
         private const string NoOpRestoreOutputEvaluationResult = nameof(NoOpRestoreOutputEvaluationResult);
         private const string NoOpReplayLogsDuration = nameof(NoOpReplayLogsDuration);
+        private const string NoOpCacheFileAgeDays = nameof(NoOpCacheFileAgeDays);
+        private const string ForceRestore = nameof(ForceRestore);
 
         // lock file data names
         private const string EvaluateLockFileDuration = nameof(EvaluateLockFileDuration);
@@ -81,22 +103,78 @@ namespace NuGet.Commands
         private const string ValidateRestoreGraphsDuration = nameof(ValidateRestoreGraphsDuration);
         private const string CreateRestoreResultDuration = nameof(CreateRestoreResultDuration);
         private const string IsCentralPackageTransitivePinningEnabled = nameof(IsCentralPackageTransitivePinningEnabled);
+        private const string UseLegacyDependencyResolver = nameof(UseLegacyDependencyResolver);
+        private const string UsedLegacyDependencyResolver = nameof(UsedLegacyDependencyResolver);
+        private const string PackagesWithFloatingVersionCount = nameof(PackagesWithFloatingVersionCount);
 
         // PackageSourceMapping names
         private const string PackageSourceMappingIsMappingEnabled = "PackageSourceMapping.IsMappingEnabled";
+
+        // NuGetAudit names
+        private const string AuditEnabled = "Audit.Enabled";
+        private const string AuditLevel = "Audit.Level";
+        private const string AuditMode = "Audit.Mode";
+        private const string AuditSuppressedAdvisoriesDefinedCount = "Audit.SuppressedAdvisories.Defined.Count";
+        private const string AuditSuppressedAdvisoriesTotalWarningsSuppressedCount = "Audit.SuppressedAdvisories.TotalWarningsSuppressed.Count";
+        private const string AuditSuppressedAdvisoriesDistinctAdvisoriesSuppressedCount = "Audit.SuppressedAdvisories.DistinctAdvisoriesSuppressed.Count";
+        private const string AuditDataSources = "Audit.DataSources";
+        private const string AuditDirectVulnerabilitiesPackages = "Audit.Vulnerability.Direct.Packages";
+        private const string AuditDirectVulnerabilitiesCount = "Audit.Vulnerability.Direct.Count";
+        private const string AuditDirectVulnerabilitySev0 = "Audit.Vulnerability.Direct.Severity0";
+        private const string AuditDirectVulnerabilitySev1 = "Audit.Vulnerability.Direct.Severity1";
+        private const string AuditDirectVulnerabilitySev2 = "Audit.Vulnerability.Direct.Severity2";
+        private const string AuditDirectVulnerabilitySev3 = "Audit.Vulnerability.Direct.Severity3";
+        private const string AuditDirectVulnerabilitySevInvalid = "Audit.Vulnerability.Direct.SeverityInvalid";
+        private const string AuditTransitiveVulnerabilitiesPackages = "Audit.Vulnerability.Transitive.Packages";
+        private const string AuditTransitiveVulnerabilitiesCount = "Audit.Vulnerability.Transitive.Count";
+        private const string AuditTransitiveVulnerabilitySev0 = "Audit.Vulnerability.Transitive.Severity0";
+        private const string AuditTransitiveVulnerabilitySev1 = "Audit.Vulnerability.Transitive.Severity1";
+        private const string AuditTransitiveVulnerabilitySev2 = "Audit.Vulnerability.Transitive.Severity2";
+        private const string AuditTransitiveVulnerabilitySev3 = "Audit.Vulnerability.Transitive.Severity3";
+        private const string AuditTransitiveVulnerabilitySevInvalid = "Audit.Vulnerability.Transitive.SeverityInvalid";
+        private const string AuditDurationDownload = "Audit.Duration.Download";
+        private const string AuditDurationCheck = "Audit.Duration.Check";
+        private const string AuditDurationOutput = "Audit.Duration.Output";
+        private const string AuditDurationTotal = "Audit.Duration.Total";
+        private const string AuditPackageDownloadVulnerabilitiesPackages = "Audit.Vulnerability.PackageDownload.Packages";
+        private const string AuditPackageDownloadVulnerabilitiesSev0 = "Audit.Vulnerability.PackageDownload.Severity0";
+        private const string AuditPackageDownloadVulnerabilitiesSev1 = "Audit.Vulnerability.PackageDownload.Severity1";
+        private const string AuditPackageDownloadVulnerabilitiesSev2 = "Audit.Vulnerability.PackageDownload.Severity2";
+        private const string AuditPackageDownloadVulnerabilitiesSev3 = "Audit.Vulnerability.PackageDownload.Severity3";
+        private const string AuditPackageDownloadVulnerabilitiesSevInvalid = "Audit.Vulnerability.PackageDownload.SeverityInvalid";
+        private const string AuditSuppressedAdvisoriesTotalPackageDownloadWarningsSuppressedCount = "Audit.Vulnerability.PackageDownloads.TotalWarningsSuppressed.Count";
+        private const string AuditSuppressedAdvisoriesDistinctPackageDownloadAdvisoriesSuppressedCount = "Audit.Vulnerability.PackageDownload.DistinctAdvisoriesSuppressed.Count";
+
+        // PackagePruning names
+        private const string PackagePruningDefaultEnabled = "Pruning.DefaultEnabled";
+        private const string PackagePruningFrameworksEnabledCount = "Pruning.FrameworksEnabled.Count";
+        private const string PackagePruningFrameworksDisabledCount = "Pruning.FrameworksDisabled.Count";
+        private const string PackagePruningFrameworksUnsupportedCount = "Pruning.FrameworksUnsupported.Count";
+        private const string PackagePruningRemovablePackagesCount = "Pruning.RemovablePackages.Count";
+        private const string PackagePruningDirectCount = "Pruning.Pruned.Direct.Count";
+
+        // Analyzer assets names
+        private const string AnalyzerAssetsEnabled = "AnalyzerAssets.Enabled";
+        private const string AnalyzerAssetsExcluded = "AnalyzerAssets.Excluded";
+        private const string AnalyzerAssetsPackagesWithAnalyzersCount = "AnalyzerAssets.PackagesWithAnalyzers.Count";
+        private const string AnalyzerAssetsPackagesWithExcludedAnalyzersCount = "AnalyzerAssets.PackagesWithExcludedAnalyzers.Count";
+        private const string AnalyzerAssetsExcludedByPrivateAssetsCount = "AnalyzerAssets.ExcludedByPrivateAssets.Count";
+        private const string AnalyzerAssetsExcludedByExcludeAssetsCount = "AnalyzerAssets.ExcludedByExcludeAssets.Count";
+
+        internal readonly bool _enableNewDependencyResolver;
+        private readonly bool _isLockFileEnabled;
 
         public RestoreCommand(RestoreRequest request)
         {
             _request = request ?? throw new ArgumentNullException(nameof(request));
             _lockFileBuilderCache = request.LockFileBuilderCache;
 
-            // Validate the lock file version requested
-            if (_request.LockFileVersion < 1 || _request.LockFileVersion > LockFileFormat.Version)
+            // Validate the assets file version requested
+            if (_request.LockFileVersion < LockFileFormat.LegacyVersion || _request.LockFileVersion > LockFileFormat.Version)
             {
-                Debug.Fail($"Lock file version {_request.LockFileVersion} is not supported.");
                 throw new ArgumentOutOfRangeException(
                     paramName: nameof(request),
-                    message: nameof(request.LockFileVersion));
+                    message: $"Assets file version {_request.LockFileVersion} is not supported.");
             }
 
             var collectorLoggerHideWarningsAndErrors = request.Project.RestoreSettings.HideWarningsAndErrors
@@ -109,7 +187,19 @@ namespace NuGet.Commands
             _logger = collectorLogger;
             ParentId = request.ParentId;
 
-            _success = !request.AdditionalMessages?.Any(m => m.Level == LogLevel.Error) ?? true;
+            _isLockFileEnabled = PackagesLockFileUtilities.IsNuGetLockFileEnabled(_request.Project);
+            _enableNewDependencyResolver = _request.Project.RuntimeGraph.Supports.Count == 0 && ShouldUseNewResolverWithLockFile(_isLockFileEnabled, _request.Project) && !_request.Project.RestoreMetadata.UseLegacyDependencyResolver;
+            EnvironmentVariableReader = _request.EnvironmentVariableReader;
+        }
+
+        // Use the new resolver if lock files are not enabled, or if lock files are enabled and legacy projects or .NET 10 SDK is used.
+        private static bool ShouldUseNewResolverWithLockFile(bool isLockFileEnabled, PackageSpec project)
+        {
+            return !isLockFileEnabled ||
+                SdkAnalysisLevelMinimums.IsEnabled(
+                    project.RestoreMetadata.SdkAnalysisLevel,
+                    project.RestoreMetadata.UsingMicrosoftNETSdk,
+                    SdkAnalysisLevelMinimums.V10_0_100);
         }
 
         public Task<RestoreResult> ExecuteAsync()
@@ -121,26 +211,13 @@ namespace NuGet.Commands
         {
             using (var telemetry = TelemetryActivity.Create(parentId: ParentId, eventName: ProjectRestoreInformation))
             {
-                telemetry.TelemetryEvent.AddPiiData(ProjectFilePath, _request.Project.FilePath);
-
-                bool isPackageSourceMappingEnabled = _request?.PackageSourceMapping.IsEnabled ?? false;
-                telemetry.TelemetryEvent[PackageSourceMappingIsMappingEnabled] = isPackageSourceMappingEnabled;
-                telemetry.TelemetryEvent[SourcesCount] = _request.DependencyProviders.RemoteProviders.Count;
-                int httpSourcesCount = _request.DependencyProviders.RemoteProviders.Where(e => e.IsHttp).Count();
-                telemetry.TelemetryEvent[HttpSourcesCount] = httpSourcesCount;
-                telemetry.TelemetryEvent[LocalSourcesCount] = _request.DependencyProviders.RemoteProviders.Count - httpSourcesCount;
-                telemetry.TelemetryEvent[FallbackFoldersCount] = _request.DependencyProviders.FallbackPackageFolders.Count;
-
-                _operationId = telemetry.OperationId;
-
-                var isCpvmEnabled = _request.Project.RestoreMetadata?.CentralPackageVersionsEnabled ?? false;
-                telemetry.TelemetryEvent[IsCentralVersionManagementEnabled] = isCpvmEnabled;
-
-                if (isCpvmEnabled)
-                {
-                    var isCentralPackageTransitivePinningEnabled = _request.Project.RestoreMetadata?.CentralPackageTransitivePinningEnabled ?? false;
-                    telemetry.TelemetryEvent[IsCentralPackageTransitivePinningEnabled] = isCentralPackageTransitivePinningEnabled;
-                }
+                int httpSourcesCount = _request.DependencyProviders.RemoteProviders.Count(e => e.IsHttp);
+                bool auditEnabled = AuditUtility.ParseEnableValue(
+                    _request.Project.RestoreMetadata?.RestoreAuditProperties,
+                    _request.Project.FilePath,
+                    _logger);
+                InitializeTelemetry(telemetry, httpSourcesCount, auditEnabled);
+                telemetry.TelemetryEvent[PackagesWithFloatingVersionCount] = CountPackagesWithFloatingVersion(_request.Project);
 
                 var restoreTime = Stopwatch.StartNew();
 
@@ -155,144 +232,73 @@ namespace NuGet.Commands
                 var contextForProject = CreateRemoteWalkContext(_request, _logger);
 
                 CacheFile cacheFile = null;
+                bool noOpCacheFileEvaluation = false;
 
                 using (telemetry.StartIndependentInterval(NoOpDuration))
                 {
                     if (NoOpRestoreUtilities.IsNoOpSupported(_request))
                     {
-                        telemetry.StartIntervalMeasure();
-                        bool noOp;
-                        (cacheFile, noOp) = EvaluateCacheFile();
-                        telemetry.TelemetryEvent[NoOpCacheFileEvaluationResult] = noOp;
-                        telemetry.EndIntervalMeasure(NoOpCacheFileEvaluateDuration);
-                        if (noOp)
+                        (RestoreResult noOpResult, noOpCacheFileEvaluation, cacheFile) = await EvaluateNoOpAsync(telemetry, cacheFile, restoreTime);
+
+                        if (noOpResult != null)
                         {
-                            telemetry.StartIntervalMeasure();
-
-                            var noOpSuccess = NoOpRestoreUtilities.VerifyRestoreOutput(_request, cacheFile);
-
-                            telemetry.EndIntervalMeasure(NoOpRestoreOutputEvaluationDuration);
-                            telemetry.TelemetryEvent[NoOpRestoreOutputEvaluationResult] = noOpSuccess;
-
-                            if (noOpSuccess)
-                            {
-                                telemetry.StartIntervalMeasure();
-
-                                // Replay Warnings and Errors from an existing lock file in case of a no-op.
-                                await MSBuildRestoreUtility.ReplayWarningsAndErrorsAsync(cacheFile.LogMessages, _logger);
-
-                                telemetry.EndIntervalMeasure(NoOpReplayLogsDuration);
-
-                                restoreTime.Stop();
-                                telemetry.TelemetryEvent[NoOpResult] = true;
-                                telemetry.TelemetryEvent[RestoreSuccess] = _success;
-                                telemetry.TelemetryEvent[TotalUniquePackagesCount] = cacheFile.ExpectedPackageFilePaths?.Count ?? -1;
-                                telemetry.TelemetryEvent[NewPackagesInstalledCount] = 0;
-
-                                return new NoOpRestoreResult(
-                                    _success,
-                                    _request.LockFilePath,
-                                    new Lazy<LockFile>(() => LockFileUtilities.GetLockFile(_request.LockFilePath, _logger)),
-                                    cacheFile,
-                                    _request.Project.RestoreMetadata.CacheFilePath,
-                                    _request.ProjectStyle,
-                                    restoreTime.Elapsed);
-                            }
+                            return noOpResult;
                         }
                     }
                 }
+
                 telemetry.TelemetryEvent[NoOpResult] = false; // Getting here means we did not no-op.
 
-                if (!await AreCentralVersionRequirementsSatisfiedAsync(_request, httpSourcesCount))
-                {
-                    // the errors will be added to the assets file
-                    _success = false;
-                }
+                bool success = !_request.AdditionalMessages?.Any(m => m.Level == LogLevel.Error) ?? true;
+                success &= BeforeGraphResolutionValidations(httpSourcesCount, auditEnabled);
 
-                if (_request.Project?.RestoreMetadata != null)
-                {
-                    foreach (var source in _request.Project.RestoreMetadata.Sources)
-                    {
-                        if (source.IsHttp && !source.IsHttps)
-                        {
-                            await _logger.LogAsync(RestoreLogMessage.CreateWarning(NuGetLogCode.NU1803,
-                                string.Format(CultureInfo.CurrentCulture, Strings.Warning_HttpServerUsage, "restore", source.Source)));
-                        }
-                    }
-                }
-
-                _success &= HasValidPlatformVersions();
-
-                // evaluate packages.lock.json file
                 var packagesLockFilePath = PackagesLockFileUtilities.GetNuGetLockFilePath(_request.Project);
-                var isLockFileValid = false;
                 PackagesLockFile packagesLockFile = null;
-                var regenerateLockFile = true;
+                (bool successfulResult, bool isLockFileValid, bool regenerateLockFile, packagesLockFilePath, packagesLockFile) = await EvaluateLockFile(
+                    telemetry,
+                    contextForProject,
+                    packagesLockFilePath,
+                    packagesLockFile,
+                    success,
+                    token);
+                success &= successfulResult;
 
-                using (telemetry.StartIndependentInterval(EvaluateLockFileDuration))
+                AnalyzePruningResults(_request.Project, telemetry.TelemetryEvent, _logger);
+
+                // if success == false, it generates an empty restore graph suitable to create an assets file with errors.
+                // Since the graph is empty, any code that analyzes the graph (like audit) will have nothing to do.
+                (successfulResult, List<RestoreTargetGraph> graphs) = await GenerateRestoreGraphsAsync(telemetry, contextForProject, success, token);
+                success &= successfulResult;
+
+                bool auditRan = false;
+
+                if (auditEnabled)
                 {
-                    telemetry.TelemetryEvent[IsLockFileEnabled] = PackagesLockFileUtilities.IsNuGetLockFileEnabled(_request.Project);
-
-                    bool result;
-                    (result, isLockFileValid, packagesLockFile) = await EvaluatePackagesLockFileAsync(packagesLockFilePath, contextForProject, telemetry);
-
-                    telemetry.TelemetryEvent[IsLockFileValidForRestore] = isLockFileValid;
-                    telemetry.TelemetryEvent[LockFileEvaluationResult] = result;
-
-                    regenerateLockFile = result; // Ensure that the lock file *does not* get rewritten, when the lock file is out of date and the status is false.
-                    _success &= result;
-                }
-
-                IEnumerable<RestoreTargetGraph> graphs = null;
-                if (_success)
-                {
-                    using (telemetry.StartIndependentInterval(GenerateRestoreGraphDuration))
-                    {
-                        // Restore
-                        graphs = await ExecuteRestoreAsync(
-                        _request.DependencyProviders.GlobalPackages,
-                        _request.DependencyProviders.FallbackPackageFolders,
-                        contextForProject,
-                        token,
-                        telemetry);
-                    }
-                }
-                else
-                {
-                    // Being in an unsuccessful state before ExecuteRestoreAsync means there was a problem with the
-                    // project or we're in locked mode and out of date.
-                    // For example, project TFM or package versions couldn't be parsed. Although the minimal
-                    // fake package spec generated has no packages requested, it also doesn't have any project TFMs
-                    // and will generate validation errors if we tried to call ExecuteRestoreAsync. So, to avoid
-                    // incorrect validation messages, don't try to restore. It is however, the responsibility for the
-                    // caller of RestoreCommand to have provided at least one AdditionalMessage in RestoreArgs.
-                    // The other scenario is when the lock file is not up to date and we're running locked mode.
-                    // In that case we want to write a `target` for each target framework to avoid missing target errors from the SDK build tasks.
-                    var frameworkRuntimePair = CreateFrameworkRuntimePairs(_request.Project, RequestRuntimeUtility.GetRestoreRuntimes(_request));
-                    graphs = frameworkRuntimePair.Select(e =>
-                    {
-                        return RestoreTargetGraph.Create(_request.Project.RuntimeGraph, Enumerable.Empty<GraphNode<RemoteResolveResult>>(), contextForProject, _logger, e.Framework, e.RuntimeIdentifier);
-                    });
+                    auditRan = await PerformAuditAsync(graphs, telemetry, token);
                 }
 
                 telemetry.StartIntervalMeasure();
+
                 // Create assets file
+                if (CommandsEventSource.Instance.IsEnabled()) CommandsEventSource.Instance.RestoreCommand_BuildAssetsFileStart(_request.Project.FilePath);
+
                 LockFile assetsFile = BuildAssetsFile(
-                _request.ExistingLockFile,
-                _request.Project,
-                graphs,
-                localRepositories,
-                contextForProject);
+                    _request.ExistingLockFile,
+                    _request.Project,
+                    graphs,
+                    localRepositories,
+                    contextForProject);
+
+                if (CommandsEventSource.Instance.IsEnabled()) CommandsEventSource.Instance.RestoreCommand_BuildAssetsFileStop(_request.Project.FilePath);
+
                 telemetry.EndIntervalMeasure(GenerateAssetsFileDuration);
 
-                IList<CompatibilityCheckResult> checkResults = null;
-
                 telemetry.StartIntervalMeasure();
 
-                _success &= await ValidateRestoreGraphsAsync(graphs, _logger);
+                success &= await ValidateRestoreGraphsAsync(graphs, _logger);
 
                 // Check package compatibility
-                checkResults = await VerifyCompatibilityAsync(
+                IList<CompatibilityCheckResult> checkResults = await VerifyCompatibilityAsync(
                     _request.Project,
                     _includeFlagGraphs,
                     localRepositories,
@@ -303,124 +309,40 @@ namespace NuGet.Commands
 
                 if (checkResults.Any(r => !r.Success))
                 {
-                    _success = false;
+                    success = false;
                 }
+
                 telemetry.EndIntervalMeasure(ValidateRestoreGraphsDuration);
 
-
                 // Generate Targets/Props files
-                var msbuildOutputFiles = Enumerable.Empty<MSBuildOutputFile>();
-                string assetsFilePath = null;
-                string cacheFilePath = null;
-
-                using (telemetry.StartIndependentInterval(CreateRestoreResultDuration))
-                {
-                    // Determine the lock file output path
-                    assetsFilePath = GetAssetsFilePath(assetsFile);
-
-                    // Determine the cache file output path
-                    cacheFilePath = NoOpRestoreUtilities.GetCacheFilePath(_request, assetsFile);
-
-                    // Tool restores are unique since the output path is not known until after restore
-                    if (_request.LockFilePath == null
-                        && _request.ProjectStyle == ProjectStyle.DotnetCliTool)
-                    {
-                        _request.LockFilePath = assetsFilePath;
-                    }
-
-                    if (contextForProject.IsMsBuildBased)
-                    {
-                        msbuildOutputFiles = BuildAssetsUtils.GetMSBuildOutputFiles(
-                            _request.Project,
-                            assetsFile,
-                            graphs,
-                            localRepositories,
-                            _request,
-                            assetsFilePath,
-                            _success,
-                            _logger);
-                    }
-
-                    // If the request is for a lower lock file version, downgrade it appropriately
-                    DowngradeLockFileIfNeeded(assetsFile);
-
-                    // Revert to the original case if needed
-                    await FixCaseForLegacyReaders(graphs, assetsFile, token);
-
-                    // if lock file was still valid then validate package's sha512 hash or else write
-                    // the file if enabled.
-                    if (isLockFileValid)
-                    {
-                        telemetry.StartIntervalMeasure();
-                        // validate package's SHA512
-                        _success &= ValidatePackagesSha512(packagesLockFile, assetsFile);
-                        telemetry.EndIntervalMeasure(ValidatePackagesShaDuration);
-
-                        // clear out the existing lock file so that we don't over-write the same file
-                        packagesLockFile = null;
-                    }
-                    else if (PackagesLockFileUtilities.IsNuGetLockFileEnabled(_request.Project))
-                    {
-                        if (regenerateLockFile)
-                        {
-                            // generate packages.lock.json file if enabled
-                            packagesLockFile = new PackagesLockFileBuilder()
-                                .CreateNuGetLockFile(assetsFile);
-                        }
-                        else
-                        {
-                            packagesLockFile = null;
-                            _logger.LogVerbose(string.Format(CultureInfo.CurrentCulture, Strings.Log_SkippingPackagesLockFileGeneration, packagesLockFilePath));
-                        }
-                    }
-
-                    // Write the logs into the assets file
-                    var logsEnumerable = _logger.Errors
-                        .Select(l => AssetsLogMessage.Create(l));
-                    if (_request.AdditionalMessages != null)
-                    {
-                        logsEnumerable = logsEnumerable.Concat(_request.AdditionalMessages);
-                    }
-                    var logs = logsEnumerable
-                        .ToList();
-
-                    _success &= !logs.Any(l => l.Level == LogLevel.Error);
-
-                    assetsFile.LogMessages = logs;
-
-                    if (cacheFile != null)
-                    {
-                        cacheFile.Success = _success;
-                        cacheFile.ProjectFilePath = _request.Project.FilePath;
-                        cacheFile.LogMessages = assetsFile.LogMessages;
-                        cacheFile.ExpectedPackageFilePaths = NoOpRestoreUtilities.GetRestoreOutput(_request, assetsFile);
-                        telemetry.TelemetryEvent[TotalUniquePackagesCount] = cacheFile?.ExpectedPackageFilePaths.Count;
-                    }
-
-                    var errorCodes = ConcatAsString(new HashSet<NuGetLogCode>(logs.Where(l => l.Level == LogLevel.Error).Select(l => l.Code)));
-                    var warningCodes = ConcatAsString(new HashSet<NuGetLogCode>(logs.Where(l => l.Level == LogLevel.Warning).Select(l => l.Code)));
-
-                    if (!string.IsNullOrEmpty(errorCodes))
-                    {
-                        telemetry.TelemetryEvent[ErrorCodes] = errorCodes;
-                    }
-
-                    if (!string.IsNullOrEmpty(warningCodes))
-                    {
-                        telemetry.TelemetryEvent[WarningCodes] = warningCodes;
-                    }
-
-
-                    telemetry.TelemetryEvent[NewPackagesInstalledCount] = graphs.Where(g => !g.InConflict).SelectMany(g => g.Install).Distinct().Count();
-
-                    telemetry.TelemetryEvent[RestoreSuccess] = _success;
-                }
+                (successfulResult,
+                    IEnumerable<MSBuildOutputFile> msbuildOutputFiles,
+                    string assetsFilePath,
+                    string cacheFilePath,
+                    assetsFile,
+                    graphs,
+                    packagesLockFile,
+                    packagesLockFilePath,
+                    cacheFile) = await ProcessRestoreResultAsync(
+                        telemetry,
+                        localRepositories,
+                        contextForProject,
+                        isLockFileValid,
+                        regenerateLockFile,
+                        assetsFile,
+                        graphs,
+                        packagesLockFile,
+                        packagesLockFilePath,
+                        cacheFile,
+                        success,
+                        token);
+                success &= successfulResult;
 
                 restoreTime.Stop();
 
                 // Create result
-                return new RestoreResult(
-                    _success,
+                var restoreResult = new RestoreResult(
+                    success,
                     graphs,
                     checkResults,
                     msbuildOutputFiles,
@@ -434,7 +356,660 @@ namespace NuGet.Commands
                     dependencyGraphSpecFilePath: NoOpRestoreUtilities.GetPersistedDGSpecFilePath(_request),
                     dependencyGraphSpec: _request.DependencyGraphSpec,
                     _request.ProjectStyle,
-                    restoreTime.Elapsed);
+                    restoreTime.Elapsed)
+                {
+                    AuditRan = auditRan,
+                    DidDGHashChange = !noOpCacheFileEvaluation,
+                    DoNotWriteDependencyGraphSpec = _request.Project.RestoreMetadata.RestoreDoNotWriteDependencyGraphSpec
+                };
+
+                telemetry.TelemetryEvent[UpdatedAssetsFile] = restoreResult._isAssetsFileDirty.Value;
+                telemetry.TelemetryEvent[UpdatedMSBuildFiles] = restoreResult._dirtyMSBuildFiles.Value.Count > 0;
+                PopulateAnalyzerAssetsTelemetry(telemetry.TelemetryEvent, assetsFile, graphs, _request.Project);
+
+                return restoreResult;
+            }
+        }
+
+        private bool BeforeGraphResolutionValidations(int httpSourcesCount, bool auditEnabled)
+        {
+            var success = true;
+
+            success &= EnsureNotDeprecatedProjectJsonProjectType();
+            success &= AreCentralVersionRequirementsSatisfied(_request, httpSourcesCount);
+            success &= EvaluateHttpSourceUsage(auditEnabled);
+            success &= HasValidPlatformVersions();
+            success &= PackageReferencesHaveVersions();
+            success &= EnsureNoAliasesWithDisallowedCharacters();
+
+            return success;
+        }
+
+        private void InitializeTelemetry(TelemetryActivity telemetry, int httpSourcesCount, bool auditEnabled)
+        {
+            telemetry.TelemetryEvent.AddPiiData(ProjectFilePath, _request.Project.FilePath);
+            bool isPackageSourceMappingEnabled = _request.PackageSourceMapping?.IsEnabled ?? false;
+            telemetry.TelemetryEvent[PackageSourceMappingIsMappingEnabled] = isPackageSourceMappingEnabled;
+            telemetry.TelemetryEvent[SourcesCount] = _request.DependencyProviders.RemoteProviders.Count;
+            telemetry.TelemetryEvent[HttpSourcesCount] = httpSourcesCount;
+            telemetry.TelemetryEvent[LocalSourcesCount] = _request.DependencyProviders.RemoteProviders.Count - httpSourcesCount;
+            telemetry.TelemetryEvent[FallbackFoldersCount] = _request.DependencyProviders.FallbackPackageFolders.Count;
+            telemetry.TelemetryEvent[IsLockFileEnabled] = _isLockFileEnabled;
+            telemetry.TelemetryEvent[UseLegacyDependencyResolver] = _request.Project.RestoreMetadata.UseLegacyDependencyResolver;
+            telemetry.TelemetryEvent[UsedLegacyDependencyResolver] = !_enableNewDependencyResolver;
+            telemetry.TelemetryEvent[TargetFrameworks] = GetTargetFrameworksAsString(_request.Project.TargetFrameworks);
+            telemetry.TelemetryEvent[TargetFrameworksCount] = _request.Project.TargetFrameworks.Count;
+            telemetry.TelemetryEvent[RuntimeIdentifiersCount] = _request.Project.RuntimeGraph.Runtimes.Count;
+            telemetry.TelemetryEvent[TreatWarningsAsErrors] = _request.Project.RestoreMetadata.ProjectWideWarningProperties.AllWarningsAsErrors;
+            telemetry.TelemetryEvent[SDKAnalysisLevel] = _request.Project.RestoreMetadata.SdkAnalysisLevel;
+            telemetry.TelemetryEvent[UsingMicrosoftNETSdk] = _request.Project.RestoreMetadata.UsingMicrosoftNETSdk;
+            telemetry.TelemetryEvent[NETSdkVersion] = _request.Project.RestoreSettings.SdkVersion;
+            telemetry.TelemetryEvent[IsPackageInstallationTrigger] = !_request.IsRestoreOriginalAction;
+            telemetry.TelemetryEvent[UsesLegacyPackagesDirectory] = !_request.IsLowercasePackagesDirectory;
+            telemetry.TelemetryEvent[UsesLegacyAssetTargetFallback] = MSBuildStringUtility.IsTrue(EnvironmentVariableReader.GetEnvironmentVariable("NUGET_USE_LEGACY_ASSET_TARGET_FALLBACK_DEPENDENCY_RESOLUTION"));
+
+            _operationId = telemetry.OperationId;
+
+            var isCpvmEnabled = _request.Project.RestoreMetadata?.CentralPackageVersionsEnabled ?? false;
+            telemetry.TelemetryEvent[IsCentralVersionManagementEnabled] = isCpvmEnabled;
+
+            if (isCpvmEnabled)
+            {
+                var isCentralPackageTransitivePinningEnabled = _request.Project.RestoreMetadata?.CentralPackageTransitivePinningEnabled ?? false;
+                telemetry.TelemetryEvent[IsCentralPackageTransitivePinningEnabled] = isCentralPackageTransitivePinningEnabled;
+            }
+
+            telemetry.TelemetryEvent[AuditEnabled] = auditEnabled ? "enabled" : "disabled";
+            telemetry.TelemetryEvent[AnalyzerAssetsEnabled] = _request.Project.RestoreMetadata?.RestoreEnableAnalyzerAssets ?? false;
+
+            PopulatePruningEnabledTelemetry(_request.Project, telemetry.TelemetryEvent);
+        }
+
+        internal static void PopulatePruningEnabledTelemetry(PackageSpec project, TelemetryEvent telemetryEvent)
+        {
+            int pruningEnabledCount = 0;
+            int pruningDisabledCount = 0;
+            int pruningNotApplicableCount = 0;
+            bool pruningDefault = false;
+
+            foreach (var framework in project.TargetFrameworks.NoAllocEnumerate())
+            {
+                bool isPruningEnabled = framework.PackagesToPrune.Count > 0;
+                bool isNetCoreAppFramework = StringComparer.OrdinalIgnoreCase.Equals(framework.FrameworkName.Framework, FrameworkConstants.FrameworkIdentifiers.NetCoreApp);
+                // .NETCoreApp >= 2.0, .NET Standard >= 2.0 are compatible with package pruning.
+                bool isPruningCompatibleFramework = (isNetCoreAppFramework && framework.FrameworkName.Version.Major >= 2) ||
+                    (StringComparer.OrdinalIgnoreCase.Equals(framework.FrameworkName.Framework, FrameworkConstants.FrameworkIdentifiers.NetStandard) &&
+                        framework.FrameworkName.Version.Major >= 2);
+
+                pruningDefault |= isNetCoreAppFramework && framework.FrameworkName.Version.Major >= 10;
+
+                if (isPruningEnabled)
+                {
+                    pruningEnabledCount++;
+                }
+                else
+                {
+                    if (isPruningCompatibleFramework)
+                    {
+                        pruningDisabledCount++;
+                    }
+                    else
+                    {
+                        pruningNotApplicableCount++;
+                    }
+                }
+            }
+
+            telemetryEvent[PackagePruningDefaultEnabled] = pruningDefault;
+            telemetryEvent[PackagePruningFrameworksEnabledCount] = pruningEnabledCount;
+            telemetryEvent[PackagePruningFrameworksDisabledCount] = pruningDisabledCount;
+            telemetryEvent[PackagePruningFrameworksUnsupportedCount] = pruningNotApplicableCount;
+        }
+
+        /// <summary>
+        /// Reports analyzer-asset usage so the impact of enabling <c>RestoreEnableAnalyzerAssets</c> by
+        /// default can be measured ahead of the rollout. The data is derived from the resolved dependency
+        /// graphs and the package file lists, so it is reported on every restore regardless of whether the
+        /// feature is currently enabled. This lets us see, before flipping the default, how many packages
+        /// would stop having their analyzers applied because <c>PrivateAssets</c>/<c>ExcludeAssets</c> would
+        /// finally be honored. Detection is per package (not per analyzer assembly): the rollout decision is
+        /// driven by whether a package's analyzers are affected, not by how many assemblies it ships.
+        /// </summary>
+        /// <remarks>
+        /// Analyzers are not runtime-identifier specific, so only the target-framework graphs (those with a
+        /// null runtime identifier) are inspected to avoid counting the same package once per RID. This runs on
+        /// the full-restore path only (after the no-op short-circuit), where the dependency graphs are available.
+        /// </remarks>
+        private void PopulateAnalyzerAssetsTelemetry(TelemetryEvent telemetryEvent, LockFile assetsFile, List<RestoreTargetGraph> graphs, PackageSpec project)
+        {
+            // Identify which packages contribute at least one analyzer assembly, from the always-present
+            // libraries section. Detection is per package (not per assembly) since the rollout decision is
+            // driven by whether a package's analyzers are affected, not by how many assemblies it ships.
+            var packagesWithAnalyzerAssemblies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (LockFileLibrary library in assetsFile.Libraries.NoAllocEnumerate())
+            {
+                foreach (string file in library.Files.NoAllocEnumerate())
+                {
+                    if (IsAnalyzerAssemblyPath(file))
+                    {
+                        packagesWithAnalyzerAssemblies.Add(GetAnalyzerPackageKey(library.Name, library.Version));
+                        break;
+                    }
+                }
+            }
+
+            int packagesWithAnalyzers = 0;
+            int packagesWithExcludedAnalyzers = 0;
+            int excludedByPrivateAssets = 0;
+            int excludedByExcludeAssets = 0;
+
+            foreach (RestoreTargetGraph graph in graphs.NoAllocEnumerate())
+            {
+                // Analyzers are not runtime specific; only inspect the target framework graphs.
+                if (graph.RuntimeIdentifier != null)
+                {
+                    continue;
+                }
+
+                Dictionary<string, LibraryIncludeFlags> flattenedFlags = IncludeFlagUtils.FlattenDependencyTypes(_includeFlagGraphs, project, graph);
+                TargetFrameworkInformation targetFrameworkInformation = project.GetNearestTargetFramework(graph.Framework, graph.TargetAlias);
+
+                foreach (GraphItem<RemoteResolveResult> graphItem in graph.Flattened)
+                {
+                    LibraryIdentity library = graphItem.Key;
+                    if (library.Type != LibraryType.Package)
+                    {
+                        continue;
+                    }
+
+                    if (!packagesWithAnalyzerAssemblies.Contains(GetAnalyzerPackageKey(library.Name, library.Version)))
+                    {
+                        continue;
+                    }
+
+                    packagesWithAnalyzers++;
+
+                    if (!flattenedFlags.TryGetValue(library.Name, out LibraryIncludeFlags includeFlags))
+                    {
+                        includeFlags = ~LibraryIncludeFlags.ContentFiles;
+                    }
+
+                    if ((includeFlags & LibraryIncludeFlags.Analyzers) != LibraryIncludeFlags.None)
+                    {
+                        continue;
+                    }
+
+                    // The package contributes analyzers, but they would be filtered out for this project.
+                    packagesWithExcludedAnalyzers++;
+
+                    // Attribute the exclusion: a direct reference whose own IncludeAssets/ExcludeAssets drops
+                    // analyzers is counted separately from analyzers suppressed transitively via PrivateAssets
+                    // (the default for analyzers), since the transitive case is the surprising one for customers.
+                    LibraryDependency directDependency = targetFrameworkInformation?.Dependencies.FirstOrDefault(
+                        dependency => dependency.Name.Equals(library.Name, StringComparison.OrdinalIgnoreCase));
+
+                    bool excludedByOwnAssetsFilter = directDependency != null
+                        && (directDependency.IncludeType & LibraryIncludeFlags.Analyzers) == LibraryIncludeFlags.None;
+
+                    if (excludedByOwnAssetsFilter)
+                    {
+                        excludedByExcludeAssets++;
+                    }
+                    else
+                    {
+                        excludedByPrivateAssets++;
+                    }
+                }
+            }
+
+            telemetryEvent[AnalyzerAssetsExcluded] = packagesWithExcludedAnalyzers > 0;
+            telemetryEvent[AnalyzerAssetsPackagesWithAnalyzersCount] = packagesWithAnalyzers;
+            telemetryEvent[AnalyzerAssetsPackagesWithExcludedAnalyzersCount] = packagesWithExcludedAnalyzers;
+            telemetryEvent[AnalyzerAssetsExcludedByPrivateAssetsCount] = excludedByPrivateAssets;
+            telemetryEvent[AnalyzerAssetsExcludedByExcludeAssetsCount] = excludedByExcludeAssets;
+        }
+
+        private static string GetAnalyzerPackageKey(string id, NuGetVersion version)
+        {
+            return id + "/" + version?.ToNormalizedString();
+        }
+
+        /// <summary>
+        /// Determines whether a package file path is an analyzer assembly. This intentionally mirrors the
+        /// detection used by ManagedCodeConventions.ManagedCodePatterns.AnalyzerAssemblies (any '.dll' under
+        /// 'analyzers/' at any depth, excluding satellite '.resources.dll' assemblies), but as a cheap string
+        /// check so analyzer packages can be counted from the package file list for telemetry even when analyzer
+        /// assets are not selected (the feature is off), without allocating a content-item collection per package.
+        /// </summary>
+        private static bool IsAnalyzerAssemblyPath(string path)
+        {
+            return path.StartsWith("analyzers/", StringComparison.Ordinal)
+                && path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
+                && !path.EndsWith(".resources.dll", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task<(RestoreResult, bool, CacheFile)> EvaluateNoOpAsync(TelemetryActivity telemetry, CacheFile cacheFile, Stopwatch restoreTime)
+        {
+            telemetry.StartIntervalMeasure();
+            bool noOpCacheFileEvaluation;
+            TimeSpan? cacheFileAge;
+
+            if (CommandsEventSource.Instance.IsEnabled()) CommandsEventSource.Instance.RestoreCommand_CalcNoOpRestoreStart(_request.Project.FilePath);
+            (cacheFile, noOpCacheFileEvaluation, cacheFileAge) = EvaluateCacheFile();
+            if (CommandsEventSource.Instance.IsEnabled()) CommandsEventSource.Instance.RestoreCommand_CalcNoOpRestoreStop(_request.Project.FilePath);
+
+            telemetry.TelemetryEvent[NoOpCacheFileEvaluationResult] = noOpCacheFileEvaluation;
+            telemetry.TelemetryEvent[ForceRestore] = !_request.AllowNoOp;
+
+            telemetry.EndIntervalMeasure(NoOpCacheFileEvaluateDuration);
+            if (noOpCacheFileEvaluation && _request.AllowNoOp && !_request.RestoreForceEvaluate)
+            {
+                telemetry.StartIntervalMeasure();
+
+                var noOpSuccess = NoOpRestoreUtilities.VerifyRestoreOutput(_request, cacheFile);
+
+                telemetry.EndIntervalMeasure(NoOpRestoreOutputEvaluationDuration);
+                telemetry.TelemetryEvent[NoOpRestoreOutputEvaluationResult] = noOpSuccess;
+
+                if (noOpSuccess)
+                {
+                    telemetry.StartIntervalMeasure();
+                    _logger.LogVerbose(string.Format(CultureInfo.CurrentCulture, Strings.Log_RestoreNoOpFinish, _request.Project.Name));
+                    bool success = true;
+                    // Replay Warnings and Errors from an existing lock file in case of a no-op.
+                    await MSBuildRestoreUtility.ReplayWarningsAndErrorsAsync(cacheFile.LogMessages, _logger);
+
+                    telemetry.EndIntervalMeasure(NoOpReplayLogsDuration);
+
+                    restoreTime.Stop();
+                    telemetry.TelemetryEvent[NoOpResult] = true;
+                    telemetry.TelemetryEvent[RestoreSuccess] = success;
+                    telemetry.TelemetryEvent[TotalUniquePackagesCount] = cacheFile.ExpectedPackageFilePaths?.Count ?? -1;
+                    telemetry.TelemetryEvent[NewPackagesInstalledCount] = 0;
+                    telemetry.TelemetryEvent[UpdatedAssetsFile] = false;
+                    telemetry.TelemetryEvent[UpdatedMSBuildFiles] = false;
+
+                    if (cacheFileAge.HasValue) { telemetry.TelemetryEvent[NoOpCacheFileAgeDays] = cacheFileAge.Value.TotalDays; }
+
+                    return (new NoOpRestoreResult(
+                            success,
+                            _request.LockFilePath,
+                            new Lazy<LockFile>(() => LockFileUtilities.GetLockFile(_request.LockFilePath, _logger)),
+                            cacheFile,
+                            _request.Project.RestoreMetadata.CacheFilePath,
+                            _request.ProjectStyle,
+                            restoreTime.Elapsed),
+                        noOpCacheFileEvaluation,
+                        cacheFile);
+                }
+            }
+
+            _logger.LogVerbose(string.Format(CultureInfo.CurrentCulture, Strings.Log_RestoreNoOpDGChanged, _request.Project.Name));
+
+            return (null, noOpCacheFileEvaluation, cacheFile);
+        }
+
+        private bool EvaluateHttpSourceUsage(bool auditEnabled)
+        {
+            bool error = false;
+
+            // Track source URLs that have already been warned/errored about so the same URL,
+            // even when configured as both a package source and an audit source, is only reported once.
+            var reportedSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (_request.DependencyProviders.RemoteProviders != null)
+            {
+                foreach (var remoteProvider in _request.DependencyProviders.RemoteProviders)
+                {
+                    error |= CheckDisallowedInsecureHttpSource(remoteProvider.Source, SdkAnalysisLevelMinimums.V9_0_100, reportedSources);
+                }
+            }
+
+            // Audit sources are only contacted when auditing is enabled, so only error about insecure audit sources in that case.
+            // Unlike package sources, audit sources error when the SDK analysis level is high enough and are silent otherwise (no warning).
+            if (auditEnabled && _request.DependencyProviders.VulnerabilityInfoProviders != null)
+            {
+                foreach (var vulnerabilityInfoProvider in _request.DependencyProviders.VulnerabilityInfoProviders)
+                {
+                    if (vulnerabilityInfoProvider.IsAuditSource)
+                    {
+                        error |= CheckDisallowedInsecureHttpSource(vulnerabilityInfoProvider.PackageSource, SdkAnalysisLevelMinimums.V10_0_400, reportedSources, warnWhenNotError: false);
+                    }
+                }
+            }
+
+            return !error;
+        }
+
+        private bool CheckDisallowedInsecureHttpSource(PackageSource source, NuGetVersion errorMinSdkAnalysisLevel, HashSet<string> reportedSources, bool warnWhenNotError = true)
+        {
+            if (!source.IsHttp || source.IsHttps || source.AllowInsecureConnections)
+            {
+                return false;
+            }
+
+            // Only warn/error once per unique source URL.
+            if (!reportedSources.Add(source.Source))
+            {
+                return false;
+            }
+
+            var isErrorEnabled = SdkAnalysisLevelMinimums.IsEnabled(
+                _request.Project.RestoreMetadata.SdkAnalysisLevel,
+                _request.Project.RestoreMetadata.UsingMicrosoftNETSdk,
+                errorMinSdkAnalysisLevel);
+
+            if (isErrorEnabled)
+            {
+                _logger.Log(
+                    RestoreLogMessage.CreateError(
+                        NuGetLogCode.NU1302,
+                        string.Format(CultureInfo.CurrentCulture, Strings.Error_HttpSource_Single, "restore", source.Source)));
+
+                return true;
+            }
+            else if (warnWhenNotError)
+            {
+                var message = RestoreLogMessage.CreateWarning(
+                    NuGetLogCode.NU1803,
+                    string.Format(CultureInfo.CurrentCulture, Strings.Warning_HttpServerUsage, "restore", source.Source));
+                _logger.Log(message);
+
+                // If the project treats this warning as an error, we should not restore
+                return message.Level == LogLevel.Error;
+            }
+
+            return false;
+        }
+
+        private record struct EvaluateLockFileResult(bool Success, bool IsLockFileValid, bool RegenerateLockFile, string PackagesLockFilePath, PackagesLockFile PackagesLockFile);
+
+        private async Task<EvaluateLockFileResult>
+            EvaluateLockFile(TelemetryActivity telemetry, RemoteWalkContext contextForProject, string packagesLockFilePath, PackagesLockFile packagesLockFile, bool success, CancellationToken token)
+        {
+            // evaluate packages.lock.json file
+            var isLockFileValid = false;
+            var regenerateLockFile = true;
+
+            using (telemetry.StartIndependentInterval(EvaluateLockFileDuration))
+            {
+                bool result;
+                (result, isLockFileValid, packagesLockFile) = await EvaluatePackagesLockFileAsync(packagesLockFilePath, contextForProject, telemetry);
+
+                telemetry.TelemetryEvent[IsLockFileValidForRestore] = isLockFileValid;
+                telemetry.TelemetryEvent[LockFileEvaluationResult] = result;
+
+                regenerateLockFile = result; // Ensure that the lock file *does not* get rewritten, when the lock file is out of date and the status is false.
+                success &= result;
+            }
+
+            return new EvaluateLockFileResult(success, isLockFileValid, regenerateLockFile, packagesLockFilePath, packagesLockFile);
+        }
+
+        private async Task<(bool, List<RestoreTargetGraph>)> GenerateRestoreGraphsAsync(TelemetryActivity telemetry, RemoteWalkContext contextForProject, bool success, CancellationToken token)
+        {
+            List<RestoreTargetGraph> graphs = null;
+            if (success)
+            {
+                using (telemetry.StartIndependentInterval(GenerateRestoreGraphDuration))
+                {
+                    if (CommandsEventSource.Instance.IsEnabled()) CommandsEventSource.Instance.RestoreCommand_BuildRestoreGraphStart(_request.Project.FilePath);
+
+                    bool resultSuccessful;
+                    if (_enableNewDependencyResolver)
+                    {
+                        (resultSuccessful, graphs) = await ExecuteRestoreAsync(_request.DependencyProviders.GlobalPackages, _request.DependencyProviders.FallbackPackageFolders, contextForProject, telemetry, success, token);
+                    }
+                    else
+                    {
+                        // Restore using the legacy code path if the optimized dependency resolution is disabled.
+                        (resultSuccessful, graphs) = await ExecuteLegacyRestoreAsync(_request.DependencyProviders.GlobalPackages, _request.DependencyProviders.FallbackPackageFolders, contextForProject, token, telemetry);
+                    }
+                    success &= resultSuccessful;
+
+                    if (CommandsEventSource.Instance.IsEnabled()) CommandsEventSource.Instance.RestoreCommand_BuildRestoreGraphStop(_request.Project.FilePath);
+                }
+            }
+            else
+            {
+                // Being in an unsuccessful state before ExecuteRestoreAsync means there was a problem with the
+                // project or we're in locked mode and out of date.
+                // For example, project TFM or package versions couldn't be parsed. Although the minimal
+                // fake package spec generated has no packages requested, it also doesn't have any project TFMs
+                // and will generate validation errors if we tried to call ExecuteRestoreAsync. So, to avoid
+                // incorrect validation messages, don't try to restore. It is however, the responsibility for the
+                // caller of RestoreCommand to have provided at least one AdditionalMessage in RestoreArgs.
+                // The other scenario is when the lock file is not up to date and we're running locked mode.
+                // In that case we want to write a `target` for each target framework to avoid missing target errors from the SDK build tasks.
+                var frameworkRuntimePairs = CreateFrameworkRuntimeDefinitions(_request.Project, RequestRuntimeUtility.GetRestoreRuntimes(_request));
+                graphs = new(frameworkRuntimePairs.Count);
+                for (var i = 0; i < frameworkRuntimePairs.Count; i++)
+                {
+                    var restoreTargetGraph = RestoreTargetGraph.Create(_request.Project.RuntimeGraph, Enumerable.Empty<GraphNode<RemoteResolveResult>>(), contextForProject, frameworkRuntimePairs[i].TargetAlias, frameworkRuntimePairs[i].Framework, frameworkRuntimePairs[i].RuntimeIdentifier);
+                    graphs.Add(restoreTargetGraph);
+                }
+            }
+
+            return (success, graphs);
+        }
+
+        private async Task<(bool, IEnumerable<MSBuildOutputFile>, string, string, LockFile, List<RestoreTargetGraph>, PackagesLockFile, string, CacheFile)> ProcessRestoreResultAsync(TelemetryActivity telemetry,
+            List<NuGetv3LocalRepository> localRepositories,
+            RemoteWalkContext contextForProject,
+            bool isLockFileValid,
+            bool regenerateLockFile,
+            LockFile assetsFile,
+            List<RestoreTargetGraph> graphs,
+            PackagesLockFile packagesLockFile,
+            string packagesLockFilePath,
+            CacheFile cacheFile,
+            bool success,
+            CancellationToken token)
+        {
+            string assetFilePath = null;
+            string cacheFilePath = null;
+            var msbuildOutputFiles = Enumerable.Empty<MSBuildOutputFile>();
+
+            using (telemetry.StartIndependentInterval(CreateRestoreResultDuration))
+            {
+                // Determine the lock file output path
+                assetFilePath = GetAssetsFilePath(assetsFile);
+
+                // Determine the cache file output path
+                cacheFilePath = NoOpRestoreUtilities.GetCacheFilePath(_request, assetsFile);
+
+                // Tool restores are unique since the output path is not known until after restore
+                if (_request.LockFilePath == null
+                    && _request.ProjectStyle == ProjectStyle.DotnetCliTool)
+                {
+                    _request.LockFilePath = assetFilePath;
+                }
+
+                if (contextForProject.IsMsBuildBased)
+                {
+                    msbuildOutputFiles = BuildAssetsUtils.GetMSBuildOutputFiles(
+                        _request.Project,
+                        assetsFile,
+                        graphs,
+                        localRepositories,
+                        _request,
+                        assetFilePath,
+                        success,
+                        _logger);
+                }
+
+                // Revert to the original case if needed
+                await FixCaseForLegacyReaders(graphs, assetsFile, token);
+
+                // if lock file was still valid then validate package's sha512 hash or else write
+                // the file if enabled.
+                if (isLockFileValid)
+                {
+                    telemetry.StartIntervalMeasure();
+                    // validate package's SHA512
+                    success &= ValidatePackagesSha512(packagesLockFile, assetsFile);
+                    telemetry.EndIntervalMeasure(ValidatePackagesShaDuration);
+
+                    // clear out the existing lock file so that we don't over-write the same file
+                    packagesLockFile = null;
+                }
+                else if (_isLockFileEnabled)
+                {
+                    if (regenerateLockFile)
+                    {
+                        // generate packages.lock.json file if enabled
+                        packagesLockFile = new PackagesLockFileBuilder()
+                            .CreateNuGetLockFile(assetsFile);
+                    }
+                    else
+                    {
+                        packagesLockFile = null;
+                        _logger.LogVerbose(string.Format(CultureInfo.CurrentCulture, Strings.Log_SkippingPackagesLockFileGeneration, packagesLockFilePath));
+                    }
+                }
+
+                // Write the logs into the assets file
+                var logsEnumerable = _logger.Errors
+                    .Select(l => AssetsLogMessage.Create(l));
+
+                if (_request.AdditionalMessages != null)
+                {
+                    logsEnumerable = logsEnumerable.Concat(_request.AdditionalMessages);
+                }
+
+                var logs = logsEnumerable
+                    .ToList();
+                success &= !logs.Any(l => l.Level == LogLevel.Error);
+                assetsFile.LogMessages = logs;
+
+                if (cacheFile != null)
+                {
+                    cacheFile.Success = success;
+                    cacheFile.ProjectFilePath = _request.Project.FilePath;
+                    cacheFile.LogMessages = assetsFile.LogMessages;
+                    cacheFile.ExpectedPackageFilePaths = NoOpRestoreUtilities.GetRestoreOutput(_request, assetsFile);
+                    telemetry.TelemetryEvent[TotalUniquePackagesCount] = cacheFile?.ExpectedPackageFilePaths.Count;
+                }
+
+                var errorCodes = ConcatAsString(new HashSet<NuGetLogCode>(logs.Where(l => l.Level == LogLevel.Error).Select(l => l.Code)));
+                var warningCodes = ConcatAsString(new HashSet<NuGetLogCode>(logs.Where(l => l.Level == LogLevel.Warning).Select(l => l.Code)));
+                var suppressedWarningCodes = ConcatAsString(new HashSet<NuGetLogCode>(_logger.SuppressedWarnings.Select(l => l.Code)));
+
+                if (!string.IsNullOrEmpty(errorCodes))
+                {
+                    telemetry.TelemetryEvent[ErrorCodes] = errorCodes;
+                }
+
+                if (!string.IsNullOrEmpty(warningCodes))
+                {
+                    telemetry.TelemetryEvent[WarningCodes] = warningCodes;
+                }
+
+                if (!string.IsNullOrEmpty(suppressedWarningCodes))
+                {
+                    telemetry.TelemetryEvent[SuppressedWarningCodes] = suppressedWarningCodes;
+                }
+
+                telemetry.TelemetryEvent[NewPackagesInstalledCount] = graphs.Where(g => !g.InConflict).SelectMany(g => g.Install).Distinct().Count();
+                telemetry.TelemetryEvent[AnyPackageIdContainsNonAlphanumericDotDashOrUnderscoreCharacters] = graphs.Where(g => !g.InConflict).SelectMany(g => g.Flattened).Any(i => i.Key.Type == LibraryType.Package && HasNonAlphanumericDotDashOrUnderscoreCharacters(i.Key.Name));
+                telemetry.TelemetryEvent[RestoreSuccess] = success;
+            }
+
+            return (success,
+                msbuildOutputFiles,
+                assetFilePath,
+                cacheFilePath,
+                assetsFile,
+                graphs,
+                packagesLockFile,
+                packagesLockFilePath,
+                cacheFile);
+
+            bool HasNonAlphanumericDotDashOrUnderscoreCharacters(string packageId)
+            {
+                foreach (char c in packageId.AsSpan())
+                {
+                    if (!IsCharacterAlphanumericDotDashOrUnderscore(c))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+
+                bool IsCharacterAlphanumericDotDashOrUnderscore(char c)
+                {
+                    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_';
+                }
+            }
+        }
+
+        /// <summary>Run NuGetAudit on the project's resolved restore graphs, and log messages and telemetry with the results.</summary>
+        /// <param name="graphs">The resolved package graphs, one for each project target framework.</param>
+        /// <param name="telemetry">The <see cref="TelemetryActivity"/> to log NuGetAudit telemetry to.</param>
+        /// <param name="token">A <see cref="CancellationToken"/> to cancel obtaining a vulnerability database. Once the database is downloaded, audit is quick to complete.</param>
+        /// <returns>False if no vulnerability database could be found (so packages were not scanned for vulnerabilities), true otherwise.</returns>
+        private async Task<bool> PerformAuditAsync(List<RestoreTargetGraph> graphs, TelemetryActivity telemetry, CancellationToken token)
+        {
+            var audit = new AuditUtility(
+                _request.Project.RestoreMetadata.RestoreAuditProperties,
+                _request.Project.FilePath,
+                graphs,
+                _request.DependencyProviders.VulnerabilityInfoProviders,
+                _request.Project.TargetFrameworks,
+                _logger);
+            bool auditRan = await audit.CheckPackageVulnerabilitiesAsync(token);
+
+            telemetry.TelemetryEvent[AuditLevel] = (int)audit.MinSeverity;
+            telemetry.TelemetryEvent[AuditMode] = AuditUtility.GetString(audit.AuditMode);
+            telemetry.TelemetryEvent[AuditSuppressedAdvisoriesDefinedCount] = audit.SuppressedAdvisories?.Count ?? 0;
+            telemetry.TelemetryEvent[AuditSuppressedAdvisoriesDistinctAdvisoriesSuppressedCount] = audit.DistinctAdvisoriesSuppressedCount;
+            telemetry.TelemetryEvent[AuditSuppressedAdvisoriesTotalWarningsSuppressedCount] = audit.TotalWarningsSuppressedCount;
+
+            if (audit.DirectPackagesWithAdvisory is not null) { AddPackagesList(telemetry, AuditDirectVulnerabilitiesPackages, audit.DirectPackagesWithAdvisory); }
+            telemetry.TelemetryEvent[AuditDirectVulnerabilitiesCount] = audit.DirectPackagesWithAdvisory?.Count ?? 0;
+            telemetry.TelemetryEvent[AuditDirectVulnerabilitySev0] = audit.Sev0DirectMatches;
+            telemetry.TelemetryEvent[AuditDirectVulnerabilitySev1] = audit.Sev1DirectMatches;
+            telemetry.TelemetryEvent[AuditDirectVulnerabilitySev2] = audit.Sev2DirectMatches;
+            telemetry.TelemetryEvent[AuditDirectVulnerabilitySev3] = audit.Sev3DirectMatches;
+            telemetry.TelemetryEvent[AuditDirectVulnerabilitySevInvalid] = audit.InvalidSevDirectMatches;
+
+            if (audit.TransitivePackagesWithAdvisory is not null) { AddPackagesList(telemetry, AuditTransitiveVulnerabilitiesPackages, audit.TransitivePackagesWithAdvisory); }
+            telemetry.TelemetryEvent[AuditTransitiveVulnerabilitiesCount] = audit.TransitivePackagesWithAdvisory?.Count ?? 0;
+            telemetry.TelemetryEvent[AuditTransitiveVulnerabilitySev0] = audit.Sev0TransitiveMatches;
+            telemetry.TelemetryEvent[AuditTransitiveVulnerabilitySev1] = audit.Sev1TransitiveMatches;
+            telemetry.TelemetryEvent[AuditTransitiveVulnerabilitySev2] = audit.Sev2TransitiveMatches;
+            telemetry.TelemetryEvent[AuditTransitiveVulnerabilitySev3] = audit.Sev3TransitiveMatches;
+            telemetry.TelemetryEvent[AuditTransitiveVulnerabilitySevInvalid] = audit.InvalidSevTransitiveMatches;
+
+            if (audit.PackageDownloadPackagesWithAdvisory is not null) { AddPackagesList(telemetry, AuditPackageDownloadVulnerabilitiesPackages, audit.PackageDownloadPackagesWithAdvisory); }
+            telemetry.TelemetryEvent[AuditPackageDownloadVulnerabilitiesSev0] = audit.Sev0PackageDownloadMatches;
+            telemetry.TelemetryEvent[AuditPackageDownloadVulnerabilitiesSev1] = audit.Sev1PackageDownloadMatches;
+            telemetry.TelemetryEvent[AuditPackageDownloadVulnerabilitiesSev2] = audit.Sev2PackageDownloadMatches;
+            telemetry.TelemetryEvent[AuditPackageDownloadVulnerabilitiesSev3] = audit.Sev3PackageDownloadMatches;
+            telemetry.TelemetryEvent[AuditPackageDownloadVulnerabilitiesSevInvalid] = audit.InvalidSevPackageDownloadMatches;
+            telemetry.TelemetryEvent[AuditSuppressedAdvisoriesTotalPackageDownloadWarningsSuppressedCount] = audit.TotalPackageDownloadWarningsSuppressedCount;
+            telemetry.TelemetryEvent[AuditSuppressedAdvisoriesDistinctPackageDownloadAdvisoriesSuppressedCount] = audit.DistinctPackageDownloadAdvisoriesSuppressedCount;
+
+            telemetry.TelemetryEvent[AuditDataSources] = audit.SourcesWithVulnerabilityData;
+            if (audit.DownloadDurationSeconds.HasValue) { telemetry.TelemetryEvent[AuditDurationDownload] = audit.DownloadDurationSeconds.Value; }
+            if (audit.CheckPackagesDurationSeconds.HasValue) { telemetry.TelemetryEvent[AuditDurationCheck] = audit.CheckPackagesDurationSeconds.Value; }
+            if (audit.GenerateOutputDurationSeconds.HasValue) { telemetry.TelemetryEvent[AuditDurationOutput] = audit.GenerateOutputDurationSeconds.Value; }
+            telemetry.EndIntervalMeasure(AuditDurationTotal);
+
+            return auditRan;
+
+            void AddPackagesList(TelemetryActivity telemetry, string eventName, List<string> packages)
+            {
+                List<TelemetryEvent> result = new List<TelemetryEvent>(packages.Count);
+                foreach (var package in packages)
+                {
+                    TelemetryEvent packageData = new TelemetryEvent(eventName: string.Empty);
+                    packageData.AddPiiData("id", package);
+                    result.Add(packageData);
+                }
+
+                telemetry.TelemetryEvent.ComplexData[eventName] = result;
             }
         }
 
@@ -458,78 +1033,485 @@ namespace NuGet.Commands
             }
         }
 
-        private async Task<bool> AreCentralVersionRequirementsSatisfiedAsync(RestoreRequest restoreRequest, int httpSourcesCount)
+        private bool EnsureNoAliasesWithDisallowedCharacters()
+        {
+            return EnsureNoAliasesWithDisallowedCharacters(_request.Project, _logger);
+        }
+
+        internal static bool EnsureNoAliasesWithDisallowedCharacters(PackageSpec project, ILogger logger)
+        {
+            if (!SdkAnalysisLevelMinimums.IsEnabled(project.RestoreMetadata.SdkAnalysisLevel, project.RestoreMetadata.UsingMicrosoftNETSdk, SdkAnalysisLevelMinimums.V10_0_300))
+            {
+                return true;
+            }
+
+            bool nonAsciiIsError = SdkAnalysisLevelMinimums.IsEnabled(project.RestoreMetadata.SdkAnalysisLevel, project.RestoreMetadata.UsingMicrosoftNETSdk, SdkAnalysisLevelMinimums.V11_0_100);
+            var success = true;
+
+            foreach (TargetFrameworkInformation framework in project.TargetFrameworks)
+            {
+                string alias = framework.TargetAlias;
+                if (string.IsNullOrEmpty(alias))
+                {
+                    continue;
+                }
+
+                if (alias.Contains('/') || alias.Contains('\\'))
+                {
+                    logger.Log(RestoreLogMessage.CreateError(
+                        NuGetLogCode.NU1019,
+                        string.Format(CultureInfo.CurrentCulture, Strings.Log_AliasContainsDisallowedCharacters, project.Name, alias)));
+                    success = false;
+                }
+                else if (!IsAscii(alias))
+                {
+                    if (nonAsciiIsError)
+                    {
+                        logger.Log(RestoreLogMessage.CreateError(
+                            NuGetLogCode.NU1019,
+                            string.Format(CultureInfo.CurrentCulture, Strings.Log_AliasContainsDisallowedCharacters, project.Name, alias)));
+                        success = false;
+                    }
+                    else
+                    {
+                        logger.Log(RestoreLogMessage.CreateWarning(
+                            NuGetLogCode.NU1019,
+                            string.Format(CultureInfo.CurrentCulture, Strings.Log_AliasContainsDisallowedCharacters, project.Name, alias)));
+                    }
+                }
+            }
+
+            return success;
+        }
+
+        internal static bool IsAscii(string value)
+        {
+            foreach (char c in value.AsSpan())
+            {
+                if (c > 127)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        internal static int CountPackagesWithFloatingVersion(PackageSpec project)
+        {
+            // With a single target framework there can be no duplicate package names, so avoid the HashSet allocation.
+            if (project.TargetFrameworks.Count == 1)
+            {
+                int count = 0;
+                foreach (LibraryDependency dependency in project.TargetFrameworks[0].Dependencies)
+                {
+                    if (dependency.LibraryRange.TypeConstraintAllows(LibraryDependencyTarget.Package)
+                        && dependency.LibraryRange.VersionRange?.IsFloating == true)
+                    {
+                        count++;
+                    }
+                }
+
+                return count;
+            }
+
+            HashSet<string> packagesWithFloatingVersion = null;
+
+            foreach (TargetFrameworkInformation framework in project.TargetFrameworks)
+            {
+                foreach (LibraryDependency dependency in framework.Dependencies)
+                {
+                    if (dependency.LibraryRange.TypeConstraintAllows(LibraryDependencyTarget.Package)
+                        && dependency.LibraryRange.VersionRange?.IsFloating == true)
+                    {
+                        packagesWithFloatingVersion ??= new(StringComparer.OrdinalIgnoreCase);
+                        packagesWithFloatingVersion.Add(dependency.Name);
+                    }
+                }
+            }
+
+            return packagesWithFloatingVersion?.Count ?? 0;
+        }
+
+        internal static void AnalyzePruningResults(PackageSpec project, TelemetryEvent telemetryEvent, ILogger logger)
+        {
+            bool enablePruningWarnings = HasFrameworkNewerThanNET10(project);
+
+            Dictionary<string, List<string>> prunedDirectPackages = GetPrunableDirectPackages(project);
+
+            telemetryEvent[PackagePruningDirectCount] = prunedDirectPackages?.Count ?? 0;
+
+            RaiseNU1510WarningsIfNeeded(project, logger, enablePruningWarnings, prunedDirectPackages, telemetryEvent);
+
+            static Dictionary<string, List<string>> GetPrunableDirectPackages(PackageSpec project)
+            {
+                Dictionary<string, List<string>> prunedDirectPackages = null;
+
+                // Calculate direct packages that are in the pruning range.
+                foreach (TargetFrameworkInformation framework in project.TargetFrameworks)
+                {
+                    if (framework.PackagesToPrune != null && framework.PackagesToPrune.Count > 0)
+                    {
+                        foreach (var dependency in framework.Dependencies)
+                        {
+                            if (framework.PackagesToPrune.TryGetValue(dependency.Name, out PrunePackageReference packageToPrune)
+                                && dependency.LibraryRange.VersionRange != null
+                                && dependency.LibraryRange.VersionRange.Satisfies(packageToPrune.VersionRange.MaxVersion!))
+                            {
+                                prunedDirectPackages ??= new(StringComparer.OrdinalIgnoreCase);
+                                if (!prunedDirectPackages.ContainsKey(dependency.Name))
+                                {
+                                    prunedDirectPackages.Add(dependency.Name, [framework.TargetAlias]);
+                                }
+                                else
+                                {
+                                    prunedDirectPackages[dependency.Name].Add(framework.TargetAlias);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return prunedDirectPackages;
+            }
+
+            static void RaiseNU1510WarningsIfNeeded(PackageSpec project, ILogger logger, bool enablePruningWarnings, Dictionary<string, List<string>> prunedDirectPackages, TelemetryEvent telemetry)
+            {
+                Dictionary<string, string> aliasToTargetGraphName = null;
+                int removablePackagesCount = 0;
+                if (prunedDirectPackages != null)
+                {
+                    foreach (var prunedPackage in prunedDirectPackages)
+                    {
+                        // Do not warn if the package exists in any framework.
+                        if (prunedPackage.Value.Count != project.TargetFrameworks.Count)
+                        {
+                            bool doesPackageRemain = false;
+                            foreach (var framework in project.TargetFrameworks)
+                            {
+                                if (!prunedPackage.Value.Contains(framework.TargetAlias))
+                                {
+                                    if (ContainsPackage(prunedPackage, framework))
+                                    {
+                                        doesPackageRemain = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (doesPackageRemain)
+                            {
+                                continue;
+                            }
+                        }
+
+                        removablePackagesCount++;
+                        if (enablePruningWarnings)
+                        {
+                            aliasToTargetGraphName ??= InitializeAliasToTargetGraphName(project);
+                            logger.Log(RestoreLogMessage.CreateWarning(
+                                NuGetLogCode.NU1510,
+                                string.Format(CultureInfo.CurrentCulture, Strings.Error_RestorePruningDirectPackageReference, prunedPackage.Key),
+                                prunedPackage.Key,
+                                prunedPackage.Value.Select(e => aliasToTargetGraphName[e]).ToArray()));
+                        }
+                    }
+                }
+                telemetry[PackagePruningRemovablePackagesCount] = removablePackagesCount;
+            }
+
+            static bool HasFrameworkNewerThanNET10(PackageSpec project)
+            {
+                foreach (var framework in project.TargetFrameworks.NoAllocEnumerate())
+                {
+                    if (StringComparer.OrdinalIgnoreCase.Equals(framework.FrameworkName.Framework, FrameworkConstants.FrameworkIdentifiers.NetCoreApp) &&
+                        framework.FrameworkName.Version.Major >= 10)
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            static Dictionary<string, string> InitializeAliasToTargetGraphName(PackageSpec project)
+            {
+                var aliasToTargetGraphName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var framework in project.TargetFrameworks)
+                {
+                    aliasToTargetGraphName.Add(framework.TargetAlias, FrameworkRuntimePair.GetTargetGraphName(framework.FrameworkName, runtimeIdentifier: null));
+                }
+
+                return aliasToTargetGraphName;
+            }
+
+            static bool ContainsPackage(KeyValuePair<string, List<string>> prunedPackage, TargetFrameworkInformation framework)
+            {
+                foreach (var dependency in framework.Dependencies.NoAllocEnumerate())
+                {
+                    if (dependency.Name.Equals(prunedPackage.Key, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+
+        private bool PackageReferencesHaveVersions()
+        {
+            var project = _request.Project;
+            if (project.RestoreMetadata == null || project.RestoreMetadata.CentralPackageVersionsEnabled)
+            {
+                // When CPM is used, by design, the version must not be defined.
+                return true;
+            }
+
+            if (!SdkAnalysisLevelMinimums.IsEnabled(
+                project.RestoreMetadata.SdkAnalysisLevel,
+                project.RestoreMetadata.UsingMicrosoftNETSdk,
+                SdkAnalysisLevelMinimums.V10_0_100))
+            {
+                return true;
+            }
+
+            HashSet<string> packagesWithoutVersions = null;
+
+            foreach (var frameworkInfo in _request.Project.TargetFrameworks)
+            {
+                foreach (var dependency in frameworkInfo.Dependencies)
+                {
+                    if (dependency?.LibraryRange.VersionRange == VersionRange.All)
+                    {
+                        packagesWithoutVersions ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        packagesWithoutVersions.Add(dependency.Name);
+                    }
+                }
+            }
+
+            // ilmerge crashes on NuGet.MSSigning.Extensions.csproj if this logging is not in a separate method.
+            // But it only crashes when ilmerging Release mode, in case you want to try to reproduce it.
+            return EnsureNoPackageReferencesWithoutVersions(packagesWithoutVersions);
+
+            bool EnsureNoPackageReferencesWithoutVersions(HashSet<string> packagesWithoutVersions)
+            {
+                if (packagesWithoutVersions is null)
+                {
+                    return true;
+                }
+
+                var packagesList = new List<string>(packagesWithoutVersions.Count);
+                packagesList.AddRange(packagesWithoutVersions);
+                packagesList.Sort();
+
+                var diagnostic = RestoreLogMessage.CreateError(NuGetLogCode.NU1015, string.Format(CultureInfo.InvariantCulture, Strings.Error_PackageReference_NoVersion, string.Join(", ", packagesList)));
+                _logger.Log(diagnostic);
+
+                return false;
+            }
+        }
+
+        private bool AreCentralVersionRequirementsSatisfied(RestoreRequest restoreRequest, int httpSourcesCount)
         {
             if (restoreRequest?.Project?.RestoreMetadata == null || !restoreRequest.Project.RestoreMetadata.CentralPackageVersionsEnabled)
             {
                 return true;
             }
 
-            IEnumerable<LibraryDependency> dependenciesWithVersionOverride = restoreRequest.Project.TargetFrameworks.SelectMany(tfm => tfm.Dependencies.Where(d => !d.AutoReferenced && d.VersionOverride != null));
-
-            if (restoreRequest.Project.RestoreMetadata.CentralPackageVersionOverrideDisabled)
-            {
-                // Emit a error if VersionOverride was specified for a package reference but that functionality is disabled
-                foreach (var item in dependenciesWithVersionOverride)
-                {
-                    await _logger.LogAsync(RestoreLogMessage.CreateError(NuGetLogCode.NU1013, string.Format(CultureInfo.CurrentCulture, Strings.Error_CentralPackageVersions_VersionOverrideDisabled, item.Name)));
-                }
-
-                return false;
-            }
+            bool result = true;
 
             if (!restoreRequest.PackageSourceMapping.IsEnabled && httpSourcesCount > 1)
             {
-                // Log a warning if there are more than one configured source and package source mapping is not enabled
-                await _logger.LogAsync(RestoreLogMessage.CreateWarning(NuGetLogCode.NU1507, string.Format(CultureInfo.CurrentCulture, Strings.Warning_CentralPackageVersions_MultipleSourcesWithoutPackageSourceMapping, httpSourcesCount, string.Join(", ", restoreRequest.DependencyProviders.RemoteProviders.Where(i => i.IsHttp).Select(i => i.Source.Name)))));
+                // Log a warning if there are more than one configured HTTP source and package source mapping is not enabled
+                _logger.Log(
+                    RestoreLogMessage.CreateWarning(
+                        NuGetLogCode.NU1507,
+                        string.Format(
+                            CultureInfo.CurrentCulture,
+                            Strings.Warning_CentralPackageManagement_MultipleSourcesWithoutPackageSourceMapping,
+                            httpSourcesCount,
+                            string.Join(", ", restoreRequest.DependencyProviders.RemoteProviders.Where(i => i.IsHttp).Select(i => i.Source.Name)))));
             }
 
-            // The dependencies should not have versions explicitly defined if cpvm is enabled.
-            IEnumerable<LibraryDependency> dependenciesWithDefinedVersion = _request.Project.TargetFrameworks.SelectMany(tfm => tfm.Dependencies.Where(d => !d.VersionCentrallyManaged && !d.AutoReferenced && d.VersionOverride == null));
-            if (dependenciesWithDefinedVersion.Any())
-            {
-                await _logger.LogAsync(RestoreLogMessage.CreateError(NuGetLogCode.NU1008, string.Format(CultureInfo.CurrentCulture, Strings.Error_CentralPackageVersions_VersionsNotAllowed, string.Join(";", dependenciesWithDefinedVersion.Select(d => d.Name)))));
-                return false;
-            }
-            IEnumerable<LibraryDependency> autoReferencedAndDefinedInCentralFile = _request.Project.TargetFrameworks.SelectMany(tfm => tfm.Dependencies.Where(d => d.AutoReferenced && tfm.CentralPackageVersions.ContainsKey(d.Name)));
-            if (autoReferencedAndDefinedInCentralFile.Any())
-            {
-                await _logger.LogAsync(RestoreLogMessage.CreateError(NuGetLogCode.NU1009, string.Format(CultureInfo.CurrentCulture, Strings.Error_CentralPackageVersions_AutoreferencedReferencesNotAllowed, string.Join(";", autoReferencedAndDefinedInCentralFile.Select(d => d.Name)))));
+            List<CentralPackageVersion> packageVersionItemsWithFloatingVersion = null;
+            List<LibraryDependency> implicitPackageReferenceItemsWithPackageVersion = null;
+            List<LibraryDependency> packageReferenceItemsWithNoPackageVersion = null;
+            List<LibraryDependency> packageReferenceItemsWithVersion = null;
+            List<LibraryDependency> packageReferenceItemsWithVersionOverride = null;
 
-                return false;
-            }
-            IEnumerable<LibraryDependency> packageReferencedDependenciesWithoutCentralVersionDefined = _request.Project.TargetFrameworks.SelectMany(tfm => tfm.Dependencies.Where(d => d.LibraryRange.VersionRange == null));
-            if (packageReferencedDependenciesWithoutCentralVersionDefined.Any())
+            foreach (TargetFrameworkInformation targetFrameworkInformation in _request.Project.TargetFrameworks)
             {
-                await _logger.LogAsync(RestoreLogMessage.CreateError(NuGetLogCode.NU1010, string.Format(CultureInfo.CurrentCulture, Strings.Error_CentralPackageVersions_MissingPackageVersion, string.Join(";", packageReferencedDependenciesWithoutCentralVersionDefined.Select(d => d.Name)))));
-                return false;
-            }
-            var floatingVersionDependencies = _request.Project.TargetFrameworks.SelectMany(tfm => tfm.CentralPackageVersions.Values).Where(cpv => cpv.VersionRange.IsFloating);
-            if (floatingVersionDependencies.Any())
-            {
-                await _logger.LogAsync(RestoreLogMessage.CreateError(NuGetLogCode.NU1011, Strings.Error_CentralPackageVersions_FloatingVersionsAreNotAllowed));
-                return false;
-            }
-            return true;
-        }
-
-        private string ConcatAsString<T>(IEnumerable<T> enumerable)
-        {
-            string result = null;
-
-            if (enumerable != null && enumerable.Any())
-            {
-                var builder = new StringBuilder();
-                foreach (var entry in enumerable)
+                foreach (LibraryDependency libraryDependency in targetFrameworkInformation.Dependencies)
                 {
-                    builder.Append(entry.ToString());
-                    builder.Append(";");
+                    if (libraryDependency.AutoReferenced)
+                    {
+                        // Implicitly defined packages that the user specified a version for
+                        if (targetFrameworkInformation.CentralPackageVersions.ContainsKey(libraryDependency.Name))
+                        {
+                            implicitPackageReferenceItemsWithPackageVersion ??= new();
+
+                            implicitPackageReferenceItemsWithPackageVersion.Add(libraryDependency);
+                        }
+                    }
+                    else
+                    {
+                        // VersionOverride is specified but that functionality is disabled
+                        if (restoreRequest.Project.RestoreMetadata.CentralPackageVersionOverrideDisabled && libraryDependency.VersionOverride != null)
+                        {
+                            packageReferenceItemsWithVersionOverride ??= new();
+
+                            packageReferenceItemsWithVersionOverride.Add(libraryDependency);
+                        }
+
+                        // Dependencies that have a version specified
+                        if (!libraryDependency.VersionCentrallyManaged && libraryDependency.LibraryRange.VersionRange != null && libraryDependency.VersionOverride == null)
+                        {
+                            packageReferenceItemsWithVersion ??= new();
+
+                            packageReferenceItemsWithVersion.Add(libraryDependency);
+                        }
+
+                        // Dependencies that have no version specified
+                        if (libraryDependency.LibraryRange?.VersionRange == null)
+                        {
+                            packageReferenceItemsWithNoPackageVersion ??= new();
+
+                            packageReferenceItemsWithNoPackageVersion.Add(libraryDependency);
+                        }
+                    }
                 }
 
-                result = builder.ToString(0, builder.Length - 1);
+                if (!restoreRequest.Project.RestoreMetadata.CentralPackageFloatingVersionsEnabled)
+                {
+                    foreach (KeyValuePair<string, CentralPackageVersion> centralPackageVersion in targetFrameworkInformation.CentralPackageVersions.NoAllocEnumerate())
+                    {
+                        // Floating version dependencies
+                        if (centralPackageVersion.Value.VersionRange.IsFloating)
+                        {
+                            packageVersionItemsWithFloatingVersion ??= new();
+
+                            packageVersionItemsWithFloatingVersion.Add(centralPackageVersion.Value);
+                        }
+                    }
+                }
+            }
+
+            if (packageReferenceItemsWithVersion != null && packageReferenceItemsWithVersion.Count > 0)
+            {
+                result = false;
+
+                _logger.Log(
+                    RestoreLogMessage.CreateError(
+                        NuGetLogCode.NU1008,
+                        string.Format(
+                            CultureInfo.CurrentCulture,
+                            Strings.Error_CentralPackageManagement_PackageReferenceWithVersionNotAllowed,
+                            string.Join(", ", packageReferenceItemsWithVersion.Select(d => d.Name)))));
+            }
+
+            if (implicitPackageReferenceItemsWithPackageVersion != null && implicitPackageReferenceItemsWithPackageVersion.Count > 0)
+            {
+                result = false;
+
+                _logger.Log(
+                    RestoreLogMessage.CreateError(
+                        NuGetLogCode.NU1009,
+                        string.Format(
+                            CultureInfo.CurrentCulture,
+                            Strings.Error_CentralPackageManagement_ImplicitPackageReferenceWithVersionNotAllowed,
+                            string.Join(", ", implicitPackageReferenceItemsWithPackageVersion.Select(d => d.Name)))));
+            }
+
+            if (packageReferenceItemsWithNoPackageVersion != null && packageReferenceItemsWithNoPackageVersion.Count > 0)
+            {
+                result = false;
+
+                _logger.Log(
+                    RestoreLogMessage.CreateError(
+                        NuGetLogCode.NU1010,
+                        string.Format(
+                            CultureInfo.CurrentCulture,
+                            Strings.Error_CentralPackageManagement_MissingPackageVersion,
+                            string.Join(", ", packageReferenceItemsWithNoPackageVersion.Select(d => d.Name)))));
+            }
+
+            if (packageVersionItemsWithFloatingVersion != null && packageVersionItemsWithFloatingVersion.Count > 0)
+            {
+                result = false;
+
+                _logger.Log(
+                    RestoreLogMessage.CreateError(
+                        NuGetLogCode.NU1011,
+                        string.Format(
+                            CultureInfo.CurrentCulture,
+                            Strings.Error_CentralPackageManagement_FloatingVersionsNotAllowed,
+                            string.Join(", ", packageVersionItemsWithFloatingVersion.Select(i => i.Name)))));
+            }
+
+            if (packageReferenceItemsWithVersionOverride != null && packageReferenceItemsWithVersionOverride.Count > 0)
+            {
+                result = false;
+
+                foreach (var item in packageReferenceItemsWithVersionOverride)
+                {
+                    _logger.Log(
+                        RestoreLogMessage.CreateError(
+                            NuGetLogCode.NU1013,
+                            string.Format(
+                                CultureInfo.CurrentCulture,
+                                Strings.Error_CentralPackageManagement_VersionOverrideNotAllowed,
+                                item.Name)));
+                }
             }
 
             return result;
+        }
+
+        private bool EnsureNotDeprecatedProjectJsonProjectType()
+        {
+            if (_request.Project.RestoreMetadata.ProjectStyle == ProjectStyle.ProjectJson)
+            {
+                _logger.Log(
+                    RestoreLogMessage.CreateError(
+                        NuGetLogCode.NU1016,
+                        Strings.Error_ProjectJson_Deprecated));
+
+                return false;
+            }
+
+            return true;
+        }
+
+        private static string ConcatAsString<T>(HashSet<T> set)
+        {
+            if (set == null || set.Count == 0)
+            {
+                return null;
+            }
+
+            var builder = new StringBuilder();
+            foreach (T entry in set)
+            {
+                builder.Append(entry);
+                builder.Append(';');
+            }
+
+            return builder.ToString(0, builder.Length - 1);
+        }
+
+        internal static string GetTargetFrameworksAsString(IList<TargetFrameworkInformation> targetFrameworks)
+        {
+            var builder = new StringBuilder();
+
+            foreach (TargetFrameworkInformation targetFramework in targetFrameworks)
+            {
+                if (builder.Length > 0)
+                {
+                    builder.Append(';');
+                }
+
+                builder.Append(_frameworkShortNameCache.GetOrAdd(targetFramework.FrameworkName, static framework => framework.GetShortFolderName()));
+            }
+
+            return builder.ToString();
         }
 
         /// <summary>
@@ -613,6 +1595,21 @@ namespace NuGet.Commands
                 return (success, isLockFileValid, packagesLockFile);
             }
 
+            // RestoreLockedMode and RestoreForceEvaluate are contradictory: locked mode requires the lock file to remain
+            // unchanged, while force-evaluate re-evaluates the dependencies and regenerates it. When both are set,
+            // force-evaluate takes precedence; warn so the requested locked mode being ignored is not silent.
+            if (_isLockFileEnabled
+                && _request.IsRestoreOriginalAction
+                && _request.RestoreForceEvaluate
+                && _request.Project.RestoreMetadata.RestoreLockProperties.RestoreLockedMode
+                && SdkAnalysisLevelMinimums.IsEnabled(
+                    _request.Project.RestoreMetadata.SdkAnalysisLevel,
+                    _request.Project.RestoreMetadata.UsingMicrosoftNETSdk,
+                    SdkAnalysisLevelMinimums.V11_0_100))
+            {
+                await _request.Log.LogAsync(RestoreLogMessage.CreateWarning(NuGetLogCode.NU1512, Strings.Warning_RestoreLockedModeAndForceEvaluate));
+            }
+
             // read packages.lock.json file if exists and RestoreForceEvaluate flag is not set to true
             if (!_request.RestoreForceEvaluate && File.Exists(packagesLockFilePath))
             {
@@ -641,7 +1638,13 @@ namespace NuGet.Commands
                                 .ToList();
 
                             // add lock file libraries into RemoteWalkContext so that it can be used during restore graph generation
-                            contextForProject.LockFileLibraries.Add(new LockFileCacheKey(target.TargetFramework, target.RuntimeIdentifier), libraries);
+                            contextForProject.LockFileLibraries.Add(new LockFileCacheKey(
+                                target.TargetFramework,
+                                target.RuntimeIdentifier,
+                                string.IsNullOrEmpty(target.TargetAlias) ?
+                                    _request.Project.GetTargetFramework(target.TargetFramework)?.TargetAlias :
+                                    target.TargetAlias
+                                ), libraries);
                         }
                     }
                     else if (_request.IsRestoreOriginalAction && _request.Project.RestoreMetadata.RestoreLockProperties.RestoreLockedMode)
@@ -664,10 +1667,11 @@ namespace NuGet.Commands
             return (success, isLockFileValid, packagesLockFile);
         }
 
-        private (CacheFile cacheFile, bool noOp) EvaluateCacheFile()
+        private (CacheFile cacheFile, bool noOpCacheFileEvaluation, TimeSpan? cacheFileAge) EvaluateCacheFile()
         {
             CacheFile cacheFile;
-            var noOp = false;
+            var noOpCacheFileEvaluation = false;
+            TimeSpan? cacheFileAge = null;
 
             var noOpDgSpec = NoOpRestoreUtilities.GetNoOpDgSpec(_request);
 
@@ -679,25 +1683,18 @@ namespace NuGet.Commands
 
             var newDgSpecHash = noOpDgSpec.GetHash();
 
-            // if --force-evaluate flag is passed then restore noop check will also be skipped.
-            // this will also help us to get rid of -force flag in near future.
             // DgSpec doesn't contain log messages, so skip no-op if there are any, as it's not taken into account in the hash
-            if (_request.AllowNoOp &&
-                !_request.RestoreForceEvaluate &&
-                File.Exists(_request.Project.RestoreMetadata.CacheFilePath))
+            if (CacheFileExists(_request.Project.RestoreMetadata.CacheFilePath, out cacheFileAge))
             {
                 cacheFile = FileUtility.SafeRead(_request.Project.RestoreMetadata.CacheFilePath, (stream, path) => CacheFileFormat.Read(stream, _logger, path));
 
                 if (cacheFile.IsValid && StringComparer.Ordinal.Equals(cacheFile.DgSpecHash, newDgSpecHash) && VerifyCacheFileMatchesProject(cacheFile))
                 {
-                    _logger.LogVerbose(string.Format(CultureInfo.CurrentCulture, Strings.Log_RestoreNoOpFinish, _request.Project.Name));
-                    _success = true;
-                    noOp = true;
+                    noOpCacheFileEvaluation = true;
                 }
                 else
                 {
                     cacheFile = new CacheFile(newDgSpecHash);
-                    _logger.LogVerbose(string.Format(CultureInfo.CurrentCulture, Strings.Log_RestoreNoOpDGChanged, _request.Project.Name));
                 }
             }
             else
@@ -708,14 +1705,33 @@ namespace NuGet.Commands
             // DotnetCliTool restores are special because the the assets file location is not known until after the restore itself. So we just clean up.
             if (_request.ProjectStyle == ProjectStyle.DotnetCliTool)
             {
-                if (!noOp)
+                if (!noOpCacheFileEvaluation)
                 {
                     // Clean up to preserve the pre no-op behavior. This should not be used, but we want to be cautious.
                     _request.LockFilePath = null;
                     _request.Project.RestoreMetadata.CacheFilePath = null;
                 }
             }
-            return (cacheFile, noOp);
+            return (cacheFile, noOpCacheFileEvaluation, cacheFileAge);
+
+            static bool CacheFileExists(string path, out TimeSpan? cacheFileAge)
+            {
+                cacheFileAge = null;
+
+                if (path is null)
+                {
+                    return false;
+                }
+
+                FileInfo fileInfo = new FileInfo(path);
+                if (fileInfo.Exists)
+                {
+                    cacheFileAge = DateTime.UtcNow - fileInfo.LastWriteTimeUtc;
+                    return fileInfo.Exists;
+                }
+
+                return false;
+            }
         }
 
         private string GetAssetsFilePath(LockFile lockFile)
@@ -724,13 +1740,7 @@ namespace NuGet.Commands
 
             if (string.IsNullOrEmpty(projectLockFilePath))
             {
-                if (_request.ProjectStyle == ProjectStyle.PackageReference
-                    || _request.ProjectStyle == ProjectStyle.DotnetToolReference
-                    || _request.ProjectStyle == ProjectStyle.Standalone)
-                {
-                    projectLockFilePath = Path.Combine(_request.RestoreOutputPath, LockFileFormat.AssetsFileName);
-                }
-                else if (_request.ProjectStyle == ProjectStyle.DotnetCliTool)
+                if (_request.ProjectStyle == ProjectStyle.DotnetCliTool)
                 {
                     var toolName = ToolRestoreUtility.GetToolIdOrNullFromSpec(_request.Project);
                     var lockFileLibrary = ToolRestoreUtility.GetToolTargetLibrary(lockFile, toolName);
@@ -748,19 +1758,11 @@ namespace NuGet.Commands
                 }
                 else
                 {
-                    projectLockFilePath = Path.Combine(_request.Project.BaseDirectory, LockFileFormat.LockFileName);
+                    projectLockFilePath = Path.Combine(_request.RestoreOutputPath, LockFileFormat.AssetsFileName);
                 }
             }
 
             return Path.GetFullPath(projectLockFilePath);
-        }
-
-        private void DowngradeLockFileIfNeeded(LockFile lockFile)
-        {
-            if (_request.LockFileVersion <= 1)
-            {
-                DowngradeLockFileToV1(lockFile);
-            }
         }
 
         private async Task FixCaseForLegacyReaders(
@@ -786,12 +1788,14 @@ namespace NuGet.Commands
         private LockFile BuildAssetsFile(
             LockFile existingLockFile,
             PackageSpec project,
-            IEnumerable<RestoreTargetGraph> graphs,
+            List<RestoreTargetGraph> graphs,
             IReadOnlyList<NuGetv3LocalRepository> localRepositories,
             RemoteWalkContext contextForProject)
         {
+            int lockFileVersion = DetermineLockFileVersion();
+
             // Build the lock file
-            var lockFile = new LockFileBuilder(_request.LockFileVersion, _logger, _includeFlagGraphs)
+            var lockFile = new LockFileBuilder(lockFileVersion, _logger, _includeFlagGraphs)
                     .CreateLockFile(
                         existingLockFile,
                         project,
@@ -801,6 +1805,17 @@ namespace NuGet.Commands
                         _lockFileBuilderCache);
 
             return lockFile;
+
+            int DetermineLockFileVersion()
+            {
+                // We use the request provided version, unless we are using the Microsoft.NET.Sdk version that does not support reading of aliased assets files.
+                if (DoesProjectToolsetSupportsDuplicateFrameworks(_request.Project))
+                {
+                    return _request.LockFileVersion;
+                }
+
+                return LockFileFormat.LegacyVersion;
+            }
         }
 
         /// <summary>
@@ -856,13 +1871,32 @@ namespace NuGet.Commands
             {
                 foreach (var versionConflict in graph.AnalyzeResult.VersionConflicts)
                 {
-                    var message = string.Format(
-                           CultureInfo.CurrentCulture,
-                           Strings.Log_VersionConflict,
-                           versionConflict.Selected.Key.Name,
-                           versionConflict.Selected.GetIdAndVersionOrRange(),
-                           _request.Project.Name)
-                       + $" {Environment.NewLine} {versionConflict.Selected.GetPathWithLastRange()} {Environment.NewLine} {versionConflict.Conflicting.GetPathWithLastRange()}.";
+                    string message;
+
+                    bool isPinningEnabled = _request.Project.RestoreMetadata?.CentralPackageVersionsEnabled == true && _request.Project.RestoreMetadata?.CentralPackageTransitivePinningEnabled == true; // If pinning is enabled for this project, the error message can provide details about adding a PackageVersion.
+                    // If pinning is enabled, then this package is not centrally managed yet.
+                    // If the conflicting package was centrally managed, it'd be pinned and a pinned package cannot cause downgrades or version conflicts.
+                    // A pinned package would basically raise NU1109 if downgraded or no error otherwise.
+
+                    if (isPinningEnabled)
+                    {
+                        message = string.Format(
+                                CultureInfo.CurrentCulture,
+                                Strings.Log_VersionConflictForCentralTransitive,
+                                versionConflict.Selected.Key.Name,
+                                versionConflict.Selected.GetIdAndVersionOrRange())
+                           + $" {Environment.NewLine} {versionConflict.Selected.GetPathWithLastRange()} {Environment.NewLine} {versionConflict.Conflicting.GetPathWithLastRange()}.";
+                    }
+                    else
+                    {
+                        message = string.Format(
+                                CultureInfo.CurrentCulture,
+                                Strings.Log_VersionConflict,
+                                versionConflict.Selected.Key.Name,
+                                versionConflict.Selected.GetIdAndVersionOrRange(),
+                                _request.Project.Name)
+                           + $" {Environment.NewLine} {versionConflict.Selected.GetPathWithLastRange()} {Environment.NewLine} {versionConflict.Conflicting.GetPathWithLastRange()}.";
+                    }
 
                     await logger.LogAsync(RestoreLogMessage.CreateError(NuGetLogCode.NU1107, message, versionConflict.Selected.Key.Name, graph.TargetGraphName));
                     return false;
@@ -948,41 +1982,31 @@ namespace NuGet.Commands
                 var checker = new CompatibilityChecker(localRepositories, lockFile, validateRuntimeAssets, logger);
                 foreach (var graph in graphs)
                 {
-                    // Don't do compat checks for the ridless graph of DotnetTooReference restore. Everything relevant will be caught in the graph with the rid
-                    if (!(ProjectStyle.DotnetToolReference == project.RestoreMetadata?.ProjectStyle && string.IsNullOrEmpty(graph.RuntimeIdentifier)))
+                    var includeFlags = IncludeFlagUtils.FlattenDependencyTypes(includeFlagGraphs, project, graph);
+
+                    var res = await checker.CheckAsync(graph, includeFlags, project);
+
+                    checkResults.Add(res);
+                    if (res.Success)
                     {
-                        await logger.LogAsync(LogLevel.Verbose, string.Format(CultureInfo.CurrentCulture, Strings.Log_CheckingCompatibility, graph.Name));
-
-                        var includeFlags = IncludeFlagUtils.FlattenDependencyTypes(includeFlagGraphs, project, graph);
-
-                        var res = await checker.CheckAsync(graph, includeFlags, project);
-
-                        checkResults.Add(res);
-                        if (res.Success)
-                        {
-                            await logger.LogAsync(LogLevel.Verbose, string.Format(CultureInfo.CurrentCulture, Strings.Log_PackagesAndProjectsAreCompatible, graph.Name));
-                        }
-                        else
-                        {
-                            // Get error counts on a project vs package basis
-                            var projectCount = res.Issues.Count(issue => issue.Type == CompatibilityIssueType.ProjectIncompatible);
-                            var packageCount = res.Issues.Count(issue => issue.Type != CompatibilityIssueType.ProjectIncompatible);
-
-                            // Log a summary with compatibility error counts
-                            if (projectCount > 0)
-                            {
-                                await logger.LogAsync(LogLevel.Debug, $"Incompatible projects: {projectCount}");
-                            }
-
-                            if (packageCount > 0)
-                            {
-                                await logger.LogAsync(LogLevel.Debug, $"Incompatible packages: {packageCount}");
-                            }
-                        }
+                        await logger.LogAsync(LogLevel.Verbose, string.Format(CultureInfo.CurrentCulture, Strings.Log_PackagesAndProjectsAreCompatible, graph.TargetGraphName));
                     }
                     else
                     {
-                        await logger.LogAsync(LogLevel.Verbose, string.Format(CultureInfo.CurrentCulture, Strings.Log_SkippingCompatibiilityCheckOnRidlessGraphForDotnetToolReferenceProject, graph.Name));
+                        // Get error counts on a project vs package basis
+                        var projectCount = res.Issues.Count(issue => issue.Type == CompatibilityIssueType.ProjectIncompatible);
+                        var packageCount = res.Issues.Count(issue => issue.Type != CompatibilityIssueType.ProjectIncompatible);
+
+                        // Log a summary with compatibility error counts
+                        if (projectCount > 0)
+                        {
+                            await logger.LogAsync(LogLevel.Debug, $"Incompatible projects: {projectCount}");
+                        }
+
+                        if (packageCount > 0)
+                        {
+                            await logger.LogAsync(LogLevel.Debug, $"Incompatible packages: {packageCount}");
+                        }
                     }
                 }
             }
@@ -990,32 +2014,41 @@ namespace NuGet.Commands
             return checkResults;
         }
 
-        private async Task<IEnumerable<RestoreTargetGraph>> ExecuteRestoreAsync(
+        private async Task<(bool, List<RestoreTargetGraph>)> ExecuteLegacyRestoreAsync(
             NuGetv3LocalRepository userPackageFolder,
             IReadOnlyList<NuGetv3LocalRepository> fallbackPackageFolders,
             RemoteWalkContext context,
             CancellationToken token,
             TelemetryActivity telemetryActivity)
         {
+            bool success = true;
+
+            // Check for duplicate frameworks. The new dependency resolver supports aliasing, but the legacy one does not.
+            if (await ErrorForDuplicateFrameworks(_request, _logger))
+            {
+                success = false;
+                return (success, []);
+            }
+
             if (_request.Project.TargetFrameworks.Count == 0)
             {
                 var message = string.Format(CultureInfo.CurrentCulture, Strings.Log_ProjectDoesNotSpecifyTargetFrameworks, _request.Project.Name, _request.Project.FilePath);
                 await _logger.LogAsync(RestoreLogMessage.CreateError(NuGetLogCode.NU1001, message));
 
-                _success = false;
-                return Enumerable.Empty<RestoreTargetGraph>();
+                success = false;
+                return (success, []);
             }
             _logger.LogInformation(string.Format(CultureInfo.CurrentCulture, Strings.Log_RestoringPackages, _request.Project.FilePath));
 
             // Get external project references
             // If the top level project already exists, update the package spec provided
             // with the RestoreRequest spec.
-            var updatedExternalProjects = GetProjectReferences();
+            var updatedExternalProjects = GetProjectReferences(_request);
 
             // Load repositories
             // the external project provider is specific to the current restore project
             context.ProjectLibraryProviders.Add(
-                    new PackageSpecReferenceDependencyProvider(updatedExternalProjects, _logger));
+                    new PackageSpecReferenceDependencyProvider(updatedExternalProjects, _logger, useLegacyDependencyGraphResolution: true));
 
             var remoteWalker = new RemoteDependencyWalker(context);
 
@@ -1029,14 +2062,10 @@ namespace NuGet.Commands
             // Resolve dependency graphs
             var allGraphs = new List<RestoreTargetGraph>();
             var runtimeIds = RequestRuntimeUtility.GetRestoreRuntimes(_request);
-            var projectFrameworkRuntimePairs = CreateFrameworkRuntimePairs(_request.Project, runtimeIds);
+            var projectFrameworkRuntimePairs = CreateFrameworkRuntimeDefinitions(_request.Project, runtimeIds);
             var hasSupports = _request.Project.RuntimeGraph.Supports.Count > 0;
 
-            var projectRestoreRequest = new ProjectRestoreRequest(
-                _request,
-                _request.Project,
-                _request.ExistingLockFile,
-                _logger)
+            var projectRestoreRequest = new ProjectRestoreRequest(_request, _request.Project, _request.ExistingLockFile, _logger)
             {
                 ParentId = _operationId
             };
@@ -1045,13 +2074,26 @@ namespace NuGet.Commands
 
             Tuple<bool, List<RestoreTargetGraph>, RuntimeGraph> result = null;
             bool failed = false;
+
+            Dictionary<NuGetFramework, string> targetFrameworkToAlias = new(NuGetFramework.Comparer);
+            List<FrameworkRuntimePair> frameworkRuntimePairs = new();
+            foreach (var frameworkRuntimeDefinition in projectFrameworkRuntimePairs)
+            {
+                if (string.IsNullOrEmpty(frameworkRuntimeDefinition.RuntimeIdentifier))
+                {
+                    targetFrameworkToAlias.Add(frameworkRuntimeDefinition.Framework, frameworkRuntimeDefinition.TargetAlias);
+                }
+                frameworkRuntimePairs.Add(new FrameworkRuntimePair(frameworkRuntimeDefinition.Framework, frameworkRuntimeDefinition.RuntimeIdentifier));
+            }
+
             using (telemetryActivity.StartIndependentInterval(CreateRestoreTargetGraphDuration))
             {
                 try
                 {
                     result = await projectRestoreCommand.TryRestoreAsync(
                         projectRange,
-                        projectFrameworkRuntimePairs,
+                        frameworkRuntimePairs,
+                        targetFrameworkToAlias,
                         userPackageFolder,
                         fallbackPackageFolders,
                         remoteWalker,
@@ -1069,18 +2111,17 @@ namespace NuGet.Commands
 
             if (!failed)
             {
-                var success = result.Item1;
                 allGraphs.AddRange(result.Item2);
-                _success = success;
+                success = result.Item1;
             }
             else
             {
-                _success = false;
+                success = false;
                 // When we fail to create the graphs, we want to write a `target` for each target framework
                 // in order to avoid missing target errors from the SDK build tasks and ensure that NuGet errors don't get cleared.
-                foreach (FrameworkRuntimePair frameworkRuntimePair in CreateFrameworkRuntimePairs(_request.Project, RequestRuntimeUtility.GetRestoreRuntimes(_request)))
+                foreach (FrameworkRuntimeDefinition frameworkRuntimePair in CreateFrameworkRuntimeDefinitions(_request.Project, RequestRuntimeUtility.GetRestoreRuntimes(_request)))
                 {
-                    allGraphs.Add(RestoreTargetGraph.Create(_request.Project.RuntimeGraph, Enumerable.Empty<GraphNode<RemoteResolveResult>>(), context, _logger, frameworkRuntimePair.Framework, frameworkRuntimePair.RuntimeIdentifier));
+                    allGraphs.Add(RestoreTargetGraph.Create(_request.Project.RuntimeGraph, Enumerable.Empty<GraphNode<RemoteResolveResult>>(), context, frameworkRuntimePair.TargetAlias, frameworkRuntimePair.Framework, frameworkRuntimePair.RuntimeIdentifier));
                 }
             }
 
@@ -1112,7 +2153,7 @@ namespace NuGet.Commands
             }
 
             // Walk additional runtime graphs for supports checks
-            if (_success && _request.CompatibilityProfiles.Any())
+            if (success && _request.CompatibilityProfiles.Any())
             {
                 Tuple<bool, List<RestoreTargetGraph>, RuntimeGraph> compatibilityResult = null;
                 using (telemetryActivity.StartIndependentInterval(CreateAdditionalRestoreTargetGraphDuration))
@@ -1120,6 +2161,7 @@ namespace NuGet.Commands
                     compatibilityResult = await projectRestoreCommand.TryRestoreAsync(
                     projectRange,
                     _request.CompatibilityProfiles,
+                    targetFrameworkToAlias,
                     userPackageFolder,
                     fallbackPackageFolders,
                     remoteWalker,
@@ -1130,7 +2172,7 @@ namespace NuGet.Commands
                     telemetryPrefix: "Additional-");
                 }
 
-                _success = compatibilityResult.Item1;
+                success = compatibilityResult.Item1;
 
                 // TryRestore may contain graphs that are already in allGraphs if the
                 // supports section contains the same TxM as the project framework.
@@ -1154,33 +2196,240 @@ namespace NuGet.Commands
             }
 
 
-            return allGraphs;
+            return (success, allGraphs);
         }
 
-        private List<ExternalProjectReference> GetProjectReferences()
+        private async Task<(bool, List<RestoreTargetGraph>)> ExecuteRestoreAsync(
+            NuGetv3LocalRepository userPackageFolder,
+            IReadOnlyList<NuGetv3LocalRepository> fallbackPackageFolders,
+            RemoteWalkContext context,
+            TelemetryActivity telemetryActivity,
+            bool success,
+            CancellationToken token)
+        {
+            if (_request.Project.TargetFrameworks.Count == 0)
+            {
+                var message = string.Format(CultureInfo.CurrentCulture, Strings.Log_ProjectDoesNotSpecifyTargetFrameworks, _request.Project.Name, _request.Project.FilePath);
+                await _logger.LogAsync(RestoreLogMessage.CreateError(NuGetLogCode.NU1001, message));
+
+                success = false;
+
+                return (success, []);
+            }
+            var shouldDoDuplicatesCheck = !DoesProjectToolsetSupportsDuplicateFrameworks(_request.Project);
+
+            if (shouldDoDuplicatesCheck)
+            {
+                if (await ErrorForDuplicateFrameworks(_request, _logger))
+                {
+                    success = false;
+                    return (success, []);
+                }
+            }
+
+            var projectRestoreRequest = new ProjectRestoreRequest(_request, _request.Project, _request.ExistingLockFile, _logger)
+            {
+                ParentId = _operationId
+            };
+
+            var projectRestoreCommand = new ProjectRestoreCommand(projectRestoreRequest);
+
+            var localRepositories = new List<NuGetv3LocalRepository>();
+            localRepositories.Add(userPackageFolder);
+            localRepositories.AddRange(fallbackPackageFolders);
+
+            _logger.LogInformation(string.Format(CultureInfo.CurrentCulture, Strings.Log_RestoringPackages, _request.Project.FilePath));
+
+            // Get external project references
+            // If the top level project already exists, update the package spec provided
+            // with the RestoreRequest spec.
+            var updatedExternalProjects = GetProjectReferences(_request);
+
+            // Load repositories
+            // the external project provider is specific to the current restore project
+            context.ProjectLibraryProviders.Add(
+                    new PackageSpecReferenceDependencyProvider(updatedExternalProjects, _logger));
+
+            DependencyGraphResolver dependencyGraphResolver = new(_logger, _request, telemetryActivity);
+
+            List<RestoreTargetGraph> graphs = null;
+            RuntimeGraph runtimes = null;
+
+            bool failed = false;
+            using (telemetryActivity.StartIndependentInterval(CreateRestoreTargetGraphDuration))
+            {
+                try
+                {
+                    (bool Success, List<RestoreTargetGraph> Graphs, RuntimeGraph Runtimes) result = await dependencyGraphResolver.ResolveAsync(userPackageFolder, fallbackPackageFolders, context, projectRestoreCommand, localRepositories, token);
+
+                    success &= result.Success;
+
+                    graphs = result.Graphs;
+
+                    runtimes = result.Runtimes;
+                }
+                catch (FatalProtocolException)
+                {
+                    failed = true;
+                }
+                catch (Packaging.InvalidPackageIdException ex)
+                {
+                    _logger.Log(RestoreLogMessage.CreateError(NuGetLogCode.NU1017, ex.Message));
+                    failed = true;
+                }
+            }
+
+            if (failed)
+            {
+                graphs = new List<RestoreTargetGraph>();
+
+                // When we fail to create the graphs, we want to write a `target` for each target framework
+                // in order to avoid missing target errors from the SDK build tasks and ensure that NuGet errors don't get cleared.
+                foreach (FrameworkRuntimeDefinition frameworkRuntimePair in CreateFrameworkRuntimeDefinitions(_request.Project, RequestRuntimeUtility.GetRestoreRuntimes(_request)))
+                {
+                    graphs.Add(RestoreTargetGraph.Create(_request.Project.RuntimeGraph, Enumerable.Empty<GraphNode<RemoteResolveResult>>(), context, frameworkRuntimePair.TargetAlias, frameworkRuntimePair.Framework, frameworkRuntimePair.RuntimeIdentifier));
+                }
+            }
+
+            // Calculate compatibility profiles to check by merging those defined in the project with any from the command line
+            foreach (var profile in _request.Project.RuntimeGraph.Supports)
+            {
+                CompatibilityProfile compatProfile;
+                if (profile.Value.RestoreContexts.Any())
+                {
+                    // Just use the contexts from the project definition
+                    compatProfile = profile.Value;
+                }
+                else if (!runtimes.Supports.TryGetValue(profile.Value.Name, out compatProfile))
+                {
+                    // No definition of this profile found, so just continue to the next one
+                    var message = string.Format(CultureInfo.CurrentCulture, Strings.Log_UnknownCompatibilityProfile, profile.Key);
+
+                    await _logger.LogAsync(RestoreLogMessage.CreateWarning(NuGetLogCode.NU1502, message));
+                    continue;
+                }
+
+                foreach (var pair in compatProfile.RestoreContexts)
+                {
+                    _logger.LogDebug($" {profile.Value.Name} -> +{pair}");
+                    _request.CompatibilityProfiles.Add(pair);
+                }
+            }
+
+            return (success, graphs);
+        }
+
+        private static NuGetVersion Version_11_WithAliasSupport = NuGetVersion.Parse("11.0.100-preview.2.26104");
+        private static NuGetVersion Version_10_WithAliasSupport = NuGetVersion.Parse("10.0.300-preview.0.26159");
+
+        private static bool DoesProjectToolsetSupportsDuplicateFrameworks(PackageSpec project)
+        {
+            if (project.RestoreMetadata.UsingMicrosoftNETSdk &&
+                    !SdkAnalysisLevelMinimums.IsEnabled(
+                    project.RestoreMetadata.SdkAnalysisLevel,
+                    project.RestoreMetadata.UsingMicrosoftNETSdk,
+                    SdkAnalysisLevelMinimums.V10_0_300))
+            {
+                return false;
+            }
+            else
+            {
+                if (project.RestoreMetadata.UsingMicrosoftNETSdk)
+                {
+                    foreach (TargetFrameworkInformation tfi in project.TargetFrameworks)
+                    {
+                        if (string.IsNullOrEmpty(tfi.TargetAlias))
+                        {
+                            return false;
+                        }
+                    }
+                }
+
+                // If the SDK version is a prerelease, we need to ensure it's a prerelease version that can handle the aliased assets file.
+                if (project.RestoreSettings.SdkVersion?.IsPrerelease == true)
+                {
+                    if (project.RestoreSettings.SdkVersion.Major == 10
+                        && project.RestoreSettings.SdkVersion.Minor == 0
+                        && project.RestoreSettings.SdkVersion.Patch == 300)
+                    {
+                        if (project.RestoreSettings.SdkVersion < Version_10_WithAliasSupport)
+                        {
+                            return false;
+                        }
+                    }
+                    if (project.RestoreSettings.SdkVersion.Major == 11
+                        && project.RestoreSettings.SdkVersion.Minor == 0
+                        && project.RestoreSettings.SdkVersion.Patch == 100)
+                    {
+                        if (project.RestoreSettings.SdkVersion < Version_11_WithAliasSupport)
+                        {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            }
+
+            return true;
+        }
+
+        // Check for duplicate frameworks and log an error if found.
+        // Returns true if duplicates exist, false otherwise.
+        private static async ValueTask<bool> ErrorForDuplicateFrameworks(RestoreRequest request, ILogger logger)
+        {
+            if (HasDuplicateFrameworks(request.Project))
+            {
+                // Duplicate found - log error and return immediately
+                var message = string.Format(CultureInfo.CurrentCulture, Strings.Log_AliasingSupportedInNewDependencyResolver, request.Project.Name, SdkAnalysisLevelMinimums.V10_0_300);
+                await logger.LogAsync(RestoreLogMessage.CreateError(NuGetLogCode.NU1018, message));
+                return true;
+            }
+
+            return false;
+        }
+
+        internal static bool HasDuplicateFrameworks(PackageSpec packageSpec)
+        {
+            if (packageSpec.TargetFrameworks.Count <= 1)
+            {
+                return false;
+            }
+
+            var seenFrameworks = new HashSet<NuGetFramework>(packageSpec.TargetFrameworks.Count);
+            for (int i = 0; i < packageSpec.TargetFrameworks.Count; i++)
+            {
+                if (!seenFrameworks.Add(packageSpec.TargetFrameworks[i].FrameworkName))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        internal static List<ExternalProjectReference> GetProjectReferences(RestoreRequest request)
         {
             // External references
             var updatedExternalProjects = new List<ExternalProjectReference>();
 
-            if (_request.ExternalProjects.Count == 0)
+            if (request.ExternalProjects.Count == 0)
             {
                 // If no projects exist add the current project.json file to the project
                 // list so that it can be resolved.
-                updatedExternalProjects.Add(ToExternalProjectReference(_request.Project));
+                updatedExternalProjects.Add(ToExternalProjectReference(request.Project));
             }
-            else if (_request.ExternalProjects.Count > 0)
+            else if (request.ExternalProjects.Count > 0)
             {
                 // There should be at most one match in the external projects.
-                var rootProjectMatches = _request.ExternalProjects.Where(proj =>
+                var rootProjectMatches = request.ExternalProjects.Where(proj =>
                         string.Equals(
-                            _request.Project.Name,
+                            request.Project.Name,
                             proj.PackageSpecProjectName,
                             StringComparison.OrdinalIgnoreCase))
                         .ToList();
 
                 if (rootProjectMatches.Count > 1)
                 {
-                    throw new InvalidOperationException($"Ambiguous project name '{_request.Project.Name}'.");
+                    throw new InvalidOperationException($"Ambiguous project name '{request.Project.Name}'.");
                 }
 
                 var rootProject = rootProjectMatches.SingleOrDefault();
@@ -1190,13 +2439,13 @@ namespace NuGet.Commands
                     // Replace the project spec with the passed in package spec,
                     // for installs which are done in memory first this will be
                     // different from the one on disk
-                    updatedExternalProjects.AddRange(_request.ExternalProjects
+                    updatedExternalProjects.AddRange(request.ExternalProjects
                         .Where(project =>
                             !project.UniqueName.Equals(rootProject.UniqueName, StringComparison.Ordinal)));
 
                     var updatedReference = new ExternalProjectReference(
                         rootProject.UniqueName,
-                        _request.Project,
+                        request.Project,
                         rootProject.MSBuildProjectPath,
                         rootProject.ExternalProjectReferences);
 
@@ -1209,25 +2458,34 @@ namespace NuGet.Commands
                 // This is always due to an internal issue and typically caused by errors
                 // building the project closure.
                 Debug.Fail("RestoreRequest.ExternalProjects contains references, but does not contain the top level references. Add the project we are restoring for.");
-                throw new InvalidOperationException($"Missing external reference metadata for {_request.Project.Name}");
+                throw new InvalidOperationException($"Missing external reference metadata for {request.Project.Name}");
             }
 
             return updatedExternalProjects;
         }
 
-        private static IEnumerable<FrameworkRuntimePair> CreateFrameworkRuntimePairs(
-            PackageSpec packageSpec,
-            ISet<string> runtimeIds)
+        /// <summary>
+        /// Gets the list of framework runtime definition to restore for the project.  The list is sorted by frameworks first, then frameworks with runtimes.
+        /// </summary>
+        /// <param name="packageSpec">The <see cref="PackageSpec" /> with information about the project.</param>
+        /// <param name="runtimeIds">An <see cref="ISet{T}" /> containing the list of runtime identifiers.</param>
+        /// <returns>A <see cref="List{T}" /> containing <see cref="FrameworkRuntimeDefinition" /> objects with the frameworks with empty runtime identifiers followed by frameworks with the specified runtime identifiers.</returns>
+        internal static List<FrameworkRuntimeDefinition> CreateFrameworkRuntimeDefinitions(PackageSpec packageSpec, ISet<string> runtimeIds)
         {
-            var projectFrameworkRuntimePairs = new List<FrameworkRuntimePair>();
-            foreach (var framework in packageSpec.TargetFrameworks)
+            // Create a list with capacity for each framework with no runtime and each framework/runtime
+            List<FrameworkRuntimeDefinition> projectFrameworkRuntimePairs = new(capacity: packageSpec.TargetFrameworks.Count * (runtimeIds.Count + 1));
+
+            foreach (TargetFrameworkInformation framework in packageSpec.TargetFrameworks.NoAllocEnumerate())
             {
                 // We care about TFM only and null RID for compilation purposes
-                projectFrameworkRuntimePairs.Add(new FrameworkRuntimePair(framework.FrameworkName, null));
+                projectFrameworkRuntimePairs.Add(new FrameworkRuntimeDefinition(framework.TargetAlias, framework.FrameworkName, null));
+            }
 
-                foreach (var runtimeId in runtimeIds)
+            foreach (TargetFrameworkInformation framework in packageSpec.TargetFrameworks.NoAllocEnumerate())
+            {
+                foreach (string runtimeId in runtimeIds.NoAllocEnumerate())
                 {
-                    projectFrameworkRuntimePairs.Add(new FrameworkRuntimePair(framework.FrameworkName, runtimeId));
+                    projectFrameworkRuntimePairs.Add(new FrameworkRuntimeDefinition(framework.TargetAlias, framework.FrameworkName, runtimeId));
                 }
             }
 
@@ -1255,37 +2513,6 @@ namespace NuGet.Commands
             context.IsMsBuildBased = request.ProjectStyle != ProjectStyle.DotnetCliTool;
 
             return context;
-        }
-
-        private static void DowngradeLockFileToV1(LockFile lockFile)
-        {
-            // Remove projects from the library section
-            var libraryProjects = lockFile.Libraries.Where(lib => lib.Type == LibraryType.Project).ToArray();
-
-            foreach (var library in libraryProjects)
-            {
-                lockFile.Libraries.Remove(library);
-            }
-
-            // Remove projects from the targets section
-            foreach (var target in lockFile.Targets)
-            {
-                var targetProjects = target.Libraries.Where(lib => lib.Type == LibraryType.Project).ToArray();
-
-                foreach (var library in targetProjects)
-                {
-                    target.Libraries.Remove(library);
-                }
-            }
-
-            foreach (var library in lockFile.Targets.SelectMany(target => target.Libraries))
-            {
-                // Null out all target types, these did not exist in v1
-                library.Type = null;
-            }
-
-            // Remove the package spec
-            lockFile.PackageSpec = null;
         }
 
         private static ExternalProjectReference ToExternalProjectReference(PackageSpec project)

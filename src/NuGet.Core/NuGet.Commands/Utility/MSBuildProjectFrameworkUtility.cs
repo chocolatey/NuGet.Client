@@ -1,8 +1,11 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using NuGet.Common;
 using NuGet.Frameworks;
@@ -59,6 +62,7 @@ namespace NuGet.Commands
                 targetPlatformVersion: null,
                 targetPlatformMinVersion,
                 clrSupport: null,
+                windowsTargetPlatformMinVersion: null,
                 isXnaWindowsPhoneProject: false,
                 isManagementPackProject: false);
         }
@@ -68,7 +72,8 @@ namespace NuGet.Commands
             string targetFrameworkMoniker,
             string targetPlatformMoniker,
             string targetPlatformMinVersion,
-            string clrSupport)
+            string clrSupport,
+            string windowsTargetPlatformMinVersion)
         {
             return GetProjectFramework(
                 projectFilePath,
@@ -78,6 +83,7 @@ namespace NuGet.Commands
                 targetPlatformVersion: null,
                 targetPlatformMinVersion,
                 clrSupport,
+                windowsTargetPlatformMinVersion,
                 isXnaWindowsPhoneProject: false,
                 isManagementPackProject: false);
         }
@@ -110,6 +116,7 @@ namespace NuGet.Commands
                 targetPlatformVersion,
                 targetPlatformMinVersion,
                 clrSupport: null,
+                windowsTargetPlatformMinVersion: null,
                 isXnaWindowsPhoneProject,
                 isManagementPackProject);
         }
@@ -124,6 +131,7 @@ namespace NuGet.Commands
             string targetPlatformVersion,
             string targetPlatformMinVersion,
             string clrSupport,
+            string windowsTargetPlatformMinVersion,
             bool isXnaWindowsPhoneProject,
             bool isManagementPackProject)
         {
@@ -155,6 +163,7 @@ namespace NuGet.Commands
                 targetPlatformVersion,
                 targetPlatformMinVersion,
                 clrSupport,
+                windowsTargetPlatformMinVersion,
                 isXnaWindowsPhoneProject,
                 isManagementPackProject).DotNetFrameworkName };
         }
@@ -167,6 +176,7 @@ namespace NuGet.Commands
             string targetPlatformVersion,
             string targetPlatformMinVersion,
             string clrSupport,
+            string windowsTargetPlatformMinVersion,
             bool isXnaWindowsPhoneProject,
             bool isManagementPackProject)
         {
@@ -255,14 +265,23 @@ namespace NuGet.Commands
                     currentFrameworkString = "Silverlight,Version=v4.0,Profile=WindowsPhone71";
                     return NuGetFramework.Parse(currentFrameworkString);
                 }
-                if (isCppCli) // Don't use the platform moniker to CPP/CLI.
-                {
-                    platformMoniker = null;
-                }
+
                 NuGetFramework framework = NuGetFramework.ParseComponents(currentFrameworkString, platformMoniker);
 
                 if (isCppCli)
                 {
+                    if (!string.IsNullOrEmpty(windowsTargetPlatformMinVersion))
+                    {
+                        if (!Version.TryParse(windowsTargetPlatformMinVersion, out Version cppCliVersion))
+                        {
+                            throw new ArgumentException(string.Format(
+                                CultureInfo.CurrentCulture,
+                                Strings.Error_InvalidWindowsTargetPlatformMinVersion,
+                                windowsTargetPlatformMinVersion));
+                        }
+                        framework = new NuGetFramework(framework.Framework, framework.Version, framework.Platform, cppCliVersion);
+                    }
+
                     return new DualCompatibilityFramework(framework, FrameworkConstants.CommonFrameworks.Native);
                 }
 

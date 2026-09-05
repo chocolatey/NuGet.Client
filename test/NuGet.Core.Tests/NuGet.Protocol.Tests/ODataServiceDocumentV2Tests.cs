@@ -1,9 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Protocol.Core.Types;
 using Test.Utility;
@@ -24,7 +23,8 @@ namespace NuGet.Protocol.Tests
 
             var repo = StaticHttpHandler.CreateSource(serviceAddress, Repository.Provider.GetCoreV3(), responses);
 
-            var oDataServiceDocumentResource = await repo.GetResourceAsync<ODataServiceDocumentResourceV2>();
+            var oDataServiceDocumentResource = await repo.GetResourceAsync<ODataServiceDocumentResourceV2>(CancellationToken.None)
+                ?? throw new Xunit.Sdk.XunitException("Expected ODataServiceDocumentResourceV2.");
 
             // Act
             var baseAddress = oDataServiceDocumentResource.BaseAddress;
@@ -44,7 +44,8 @@ namespace NuGet.Protocol.Tests
 
             var repo = StaticHttpHandler.CreateSource(serviceAddress, Repository.Provider.GetCoreV3(), responses);
 
-            var oDataServiceDocumentResource = await repo.GetResourceAsync<ODataServiceDocumentResourceV2>();
+            var oDataServiceDocumentResource = await repo.GetResourceAsync<ODataServiceDocumentResourceV2>(CancellationToken.None)
+                ?? throw new Xunit.Sdk.XunitException("Expected ODataServiceDocumentResourceV2.");
 
             // Act
             var baseAddress = oDataServiceDocumentResource.BaseAddress;
@@ -66,7 +67,8 @@ namespace NuGet.Protocol.Tests
             var repo = StaticHttpHandler.CreateSource(serviceAddress, Repository.Provider.GetCoreV3(), responses);
 
             // Act
-            var resource = await repo.GetResourceAsync<ODataServiceDocumentResourceV2>();
+            var resource = await repo.GetResourceAsync<ODataServiceDocumentResourceV2>(CancellationToken.None)
+                ?? throw new Xunit.Sdk.XunitException("Expected ODataServiceDocumentResourceV2.");
 
             // Assert
             Assert.Equal(serviceAddress.Trim('/'), resource.BaseAddress);
@@ -83,7 +85,8 @@ namespace NuGet.Protocol.Tests
 
             var repo = StaticHttpHandler.CreateSource(serviceAddress, Repository.Provider.GetCoreV3(), responses);
 
-            var oDataServiceDocumentResource = await repo.GetResourceAsync<ODataServiceDocumentResourceV2>();
+            var oDataServiceDocumentResource = await repo.GetResourceAsync<ODataServiceDocumentResourceV2>(CancellationToken.None)
+                ?? throw new Xunit.Sdk.XunitException("Expected ODataServiceDocumentResourceV2.");
 
             // Act
             var baseAddress = oDataServiceDocumentResource.BaseAddress;
@@ -103,7 +106,8 @@ namespace NuGet.Protocol.Tests
 
             var repo = StaticHttpHandler.CreateSource(serviceAddress, Repository.Provider.GetCoreV3(), responses);
 
-            var oDataServiceDocumentResource = await repo.GetResourceAsync<ODataServiceDocumentResourceV2>();
+            var oDataServiceDocumentResource = await repo.GetResourceAsync<ODataServiceDocumentResourceV2>(CancellationToken.None)
+                ?? throw new Xunit.Sdk.XunitException("Expected ODataServiceDocumentResourceV2.");
 
             // Act
             var baseAddress = oDataServiceDocumentResource.BaseAddress;
@@ -123,7 +127,8 @@ namespace NuGet.Protocol.Tests
 
             var repo = StaticHttpHandler.CreateSource(serviceAddress, Repository.Provider.GetCoreV3(), responses);
 
-            var oDataServiceDocumentResource = await repo.GetResourceAsync<ODataServiceDocumentResourceV2>();
+            var oDataServiceDocumentResource = await repo.GetResourceAsync<ODataServiceDocumentResourceV2>(CancellationToken.None)
+                ?? throw new Xunit.Sdk.XunitException("Expected ODataServiceDocumentResourceV2.");
 
             // Act
             var baseAddress = oDataServiceDocumentResource.BaseAddress;

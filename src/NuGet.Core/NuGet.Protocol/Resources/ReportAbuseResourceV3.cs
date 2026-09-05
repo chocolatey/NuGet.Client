@@ -11,7 +11,7 @@ namespace NuGet.Protocol
     {
         private readonly string _uriTemplate;
 
-        public ReportAbuseResourceV3(string uriTemplate)
+        public ReportAbuseResourceV3(string? uriTemplate)
         {
             if (string.IsNullOrEmpty(uriTemplate) || !IsValidUriTemplate(uriTemplate))
             {
@@ -20,7 +20,7 @@ namespace NuGet.Protocol
             }
             else
             {
-                _uriTemplate = uriTemplate;
+                _uriTemplate = uriTemplate!;
             }
         }
 
@@ -32,6 +32,8 @@ namespace NuGet.Protocol
         /// <returns>The first URL from the resource, with the URI template applied.</returns>
         public Uri GetReportAbuseUrl(string id, NuGetVersion version)
         {
+            PackageIdValidator.Validate(id);
+
             var uriString = _uriTemplate
 #if NETCOREAPP
                .Replace("{id}", id, StringComparison.OrdinalIgnoreCase)
@@ -44,10 +46,9 @@ namespace NuGet.Protocol
             return new Uri(uriString);
         }
 
-        private static bool IsValidUriTemplate(string uriTemplate)
+        private static bool IsValidUriTemplate(string? uriTemplate)
         {
-            Uri uri;
-            var isValidUri = Uri.TryCreate(uriTemplate, UriKind.Absolute, out uri);
+            var isValidUri = Uri.TryCreate(uriTemplate, UriKind.Absolute, out _);
             return isValidUri;
         }
     }

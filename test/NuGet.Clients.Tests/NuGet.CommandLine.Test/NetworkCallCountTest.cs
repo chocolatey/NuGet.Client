@@ -9,10 +9,13 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using Newtonsoft.Json.Linq;
 using NuGet.Common;
+using NuGet.Frameworks;
 using NuGet.Packaging;
 using NuGet.Packaging.Core;
+using NuGet.ProjectModel;
 using NuGet.Protocol;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
@@ -100,7 +103,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -116,7 +119,6 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     pathContext.SolutionRoot,
                     string.Join(" ", args),
-                    waitForExit: true,
                     timeOutInMilliseconds: (int)TimeSpan.FromMinutes(3).TotalMilliseconds);
 
                 var allPackages = LocalFolderUtility.GetPackagesV2(packagesFolderPath, NullLogger.Instance);
@@ -237,7 +239,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -253,7 +255,6 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     pathContext.SolutionRoot,
                     string.Join(" ", args),
-                    waitForExit: true,
                     timeOutInMilliseconds: (int)TimeSpan.FromMinutes(3).TotalMilliseconds);
 
                 var allPackages = LocalFolderUtility.GetPackagesV2(packagesFolderPath, NullLogger.Instance);
@@ -267,8 +268,8 @@ namespace NuGet.CommandLine.Test
 
                 foreach (var package in expectedPackages)
                 {
-                    Assert.True(allPackages.Any(p => p.Identity.Id == package.Id
-                        && p.Identity.Version.ToNormalizedString() == package.Version.ToNormalizedString()));
+                    Assert.Contains(allPackages, p => p.Identity.Id == package.Id
+                        && p.Identity.Version.ToNormalizedString() == package.Version.ToNormalizedString());
                 }
             }
         }
@@ -370,7 +371,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -386,7 +387,6 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     pathContext.SolutionRoot,
                     string.Join(" ", args),
-                    waitForExit: true,
                     timeOutInMilliseconds: (int)TimeSpan.FromMinutes(3).TotalMilliseconds);
 
                 var allPackages = LocalFolderUtility.GetPackagesV2(packagesFolderPath, NullLogger.Instance);
@@ -398,8 +398,8 @@ namespace NuGet.CommandLine.Test
 
                 foreach (var package in expectedPackages)
                 {
-                    Assert.True(allPackages.Any(p => p.Identity.Id == package.Id
-                        && p.Identity.Version.ToNormalizedString() == package.Version.ToNormalizedString()));
+                    Assert.Contains(allPackages, p => p.Identity.Id == package.Id
+                        && p.Identity.Version.ToNormalizedString() == package.Version.ToNormalizedString());
                 }
             }
         }
@@ -500,7 +500,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -516,7 +516,6 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     pathContext.SolutionRoot,
                     string.Join(" ", args),
-                    waitForExit: true,
                     timeOutInMilliseconds: (int)TimeSpan.FromMinutes(3).TotalMilliseconds);
 
                 var allPackages = LocalFolderUtility.GetPackagesV2(packagesFolderPath, NullLogger.Instance);
@@ -528,14 +527,14 @@ namespace NuGet.CommandLine.Test
 
                 foreach (var package in expectedPackages)
                 {
-                    Assert.True(allPackages.Any(p => p.Identity.Id == package.Id
-                        && p.Identity.Version.ToNormalizedString() == package.Version.ToNormalizedString()));
+                    Assert.Contains(allPackages, p => p.Identity.Id == package.Id
+                        && p.Identity.Version.ToNormalizedString() == package.Version.ToNormalizedString());
                 }
             }
         }
 
         [SkipMono(Skip = "https://github.com/NuGet/Home/issues/8594")]
-        public void NetworkCallCount_CancelPackageDownloadForV3()
+        public async Task NetworkCallCount_CancelPackageDownloadForV3()
         {
             // Arrange
             using (var server2 = new MockServer())
@@ -543,10 +542,10 @@ namespace NuGet.CommandLine.Test
             using (var pathContext = new SimpleTestPathContext())
             {
                 var workingPath = pathContext.WorkingDirectory;
-                CreateMixedConfigAndJson(pathContext.SolutionRoot);
+                await CreateMixedConfigAndPackageReference(pathContext.SolutionRoot);
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
-                var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
+                var slnPath = Path.Combine(pathContext.SolutionRoot, "solution.sln");
 
                 var packagesFolder = pathContext.PackagesV2;
                 Directory.CreateDirectory(packagesFolder);
@@ -588,7 +587,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -603,7 +602,7 @@ namespace NuGet.CommandLine.Test
                 var task = Task.Run(() =>
                 {
                     // Wait until all packages exist before allowing v2 to return
-                    while (Directory.GetDirectories(packagesFolder, "*", SearchOption.TopDirectoryOnly).Count() < 3)
+                    while (Directory.GetDirectories(packagesFolder, "*", SearchOption.TopDirectoryOnly).Length < 3)
                     {
                         Thread.Sleep(100);
                     }
@@ -615,18 +614,15 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 task.Wait();
 
                 var globalFolderCount = Directory.GetDirectories(
-                    globalFolder, "*", SearchOption.TopDirectoryOnly)
-                    .Count();
+                    globalFolder, "*", SearchOption.TopDirectoryOnly).Length;
 
                 var packagesFolderCount = Directory.GetDirectories(
-                    packagesFolder, "*", SearchOption.TopDirectoryOnly)
-                    .Count();
+                    packagesFolder, "*", SearchOption.TopDirectoryOnly).Length;
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -637,7 +633,7 @@ namespace NuGet.CommandLine.Test
         }
 
         [SkipMono(Skip = "https://github.com/NuGet/Home/issues/8594")]
-        public void NetworkCallCount_CancelPackageDownloadForV2()
+        public async Task NetworkCallCount_CancelPackageDownloadForV2()
         {
             // Arrange
             using (var server2 = new MockServer())
@@ -645,10 +641,10 @@ namespace NuGet.CommandLine.Test
             using (var pathContext = new SimpleTestPathContext())
             {
                 var workingPath = pathContext.WorkingDirectory;
-                CreateMixedConfigAndJson(pathContext.SolutionRoot);
+                await CreateMixedConfigAndPackageReference(pathContext.SolutionRoot);
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
-                var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
+                var slnPath = Path.Combine(pathContext.SolutionRoot, "solution.sln");
 
                 var packagesFolder = pathContext.PackagesV2;
                 Directory.CreateDirectory(packagesFolder);
@@ -685,7 +681,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -700,7 +696,7 @@ namespace NuGet.CommandLine.Test
                 var task = Task.Run(() =>
                 {
                     // Wait until all packages exist before allowing v2 to return
-                    while (Directory.GetDirectories(packagesFolder, "*", SearchOption.TopDirectoryOnly).Count() < 3)
+                    while (Directory.GetDirectories(packagesFolder, "*", SearchOption.TopDirectoryOnly).Length < 3)
                     {
                         Thread.Sleep(100);
                     }
@@ -713,18 +709,15 @@ namespace NuGet.CommandLine.Test
                     nugetexe,
                     pathContext.SolutionRoot,
                     string.Join(" ", args),
-                    waitForExit: true,
                     timeOutInMilliseconds: int.MaxValue);
 
                 task.Wait();
 
                 var globalFolderCount = Directory.GetDirectories(
-                    globalFolder, "*", SearchOption.TopDirectoryOnly)
-                    .Count();
+                    globalFolder, "*", SearchOption.TopDirectoryOnly).Length;
 
                 var packagesFolderCount = Directory.GetDirectories(
-                    packagesFolder, "*", SearchOption.TopDirectoryOnly)
-                    .Count();
+                    packagesFolder, "*", SearchOption.TopDirectoryOnly).Length;
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -735,7 +728,7 @@ namespace NuGet.CommandLine.Test
         }
 
         [SkipMono(Skip = "https://github.com/NuGet/Home/issues/8594")]
-        public void NetworkCallCount_RestoreSolutionMultipleSourcesV2V3AndLocal()
+        public async Task NetworkCallCount_RestoreSolutionMultipleSourcesV2V3AndLocal()
         {
             // Arrange
             using (var server2 = new MockServer())
@@ -743,10 +736,10 @@ namespace NuGet.CommandLine.Test
             using (var pathContext = new SimpleTestPathContext())
             {
                 var workingPath = pathContext.WorkingDirectory;
-                CreateMixedConfigAndJson(pathContext.SolutionRoot);
+                await CreateMixedConfigAndPackageReference(pathContext.SolutionRoot);
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
-                var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
+                var slnPath = Path.Combine(pathContext.SolutionRoot, "solution.sln");
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -781,7 +774,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -798,37 +791,36 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
                 // Network calls can happen multiple times here with cancelation
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(2 >= hitsByUrl[url], url + " " + hitsByUrl[url]);
+                    Assert.True(2 >= hits, url + " " + hits);
                 }
 
-                foreach (var url in hitsByUrl2.Keys)
+                foreach ((var url, var hits) in hitsByUrl2)
                 {
-                    Assert.True(2 >= hitsByUrl2[url], url + " " + hitsByUrl2[url]);
+                    Assert.True(2 >= hits, url + " " + hits);
                 }
             }
         }
 
         [Fact]
-        public void NetworkCallCount_InstallVersionFromV2()
+        public async Task NetworkCallCount_InstallVersionFromV2()
         {
             // Arrange
             using (var server = new MockServer())
             using (var pathContext = new SimpleTestPathContext())
             {
                 var workingPath = pathContext.WorkingDirectory;
-                CreateMixedConfigAndJson(pathContext.SolutionRoot);
+                await CreateMixedConfigAndPackageReference(pathContext.SolutionRoot);
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
-                var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
+                var slnPath = Path.Combine(pathContext.SolutionRoot, "solution.sln");
 
                 var outputPath = Path.Combine(workingPath, "output");
                 Directory.CreateDirectory(outputPath);
@@ -856,7 +848,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -877,31 +869,30 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
 
         [Fact]
-        public void NetworkCallCount_InstallVersionFromV3()
+        public async Task NetworkCallCount_InstallVersionFromV3()
         {
             // Arrange
             using (var server = new MockServer())
             using (var pathContext = new SimpleTestPathContext())
             {
                 var workingPath = pathContext.WorkingDirectory;
-                CreateMixedConfigAndJson(pathContext.SolutionRoot);
+                await CreateMixedConfigAndPackageReference(pathContext.SolutionRoot);
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
-                var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
+                var slnPath = Path.Combine(pathContext.SolutionRoot, "solution.sln");
 
                 var outputPath = Path.Combine(workingPath, "output");
                 Directory.CreateDirectory(outputPath);
@@ -929,7 +920,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -950,33 +941,32 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
                 Assert.Equal(1, hitsByUrl["/index.json"]);
                 Assert.Equal(1, hitsByUrl["/reg/packagea/index.json"]);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
 
         [Fact]
-        public void NetworkCallCount_InstallLatestFromV2()
+        public async Task NetworkCallCount_InstallLatestFromV2()
         {
             // Arrange
             using (var server = new MockServer())
             using (var pathContext = new SimpleTestPathContext())
             {
                 var workingPath = pathContext.WorkingDirectory;
-                CreateMixedConfigAndJson(pathContext.SolutionRoot);
+                await CreateMixedConfigAndPackageReference(pathContext.SolutionRoot);
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
-                var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
+                var slnPath = Path.Combine(pathContext.SolutionRoot, "solution.sln");
 
                 var outputPath = Path.Combine(workingPath, "output");
                 Directory.CreateDirectory(outputPath);
@@ -1004,7 +994,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -1023,31 +1013,30 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
 
         [Fact]
-        public void NetworkCallCount_InstallLatestFromV3()
+        public async Task NetworkCallCount_InstallLatestFromV3()
         {
             // Arrange
             using (var server = new MockServer())
             using (var pathContext = new SimpleTestPathContext())
             {
                 var workingPath = pathContext.WorkingDirectory;
-                CreateMixedConfigAndJson(pathContext.SolutionRoot);
+                await CreateMixedConfigAndPackageReference(pathContext.SolutionRoot);
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
-                var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
+                var slnPath = Path.Combine(pathContext.SolutionRoot, "solution.sln");
 
                 var outputPath = Path.Combine(workingPath, "output");
                 Directory.CreateDirectory(outputPath);
@@ -1075,7 +1064,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -1094,23 +1083,22 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
                 Assert.Equal(1, hitsByUrl["/index.json"]);
                 Assert.Equal(1, hitsByUrl["/reg/packagea/index.json"]);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
 
         [SkipMono(Skip = "https://github.com/NuGet/Home/issues/8594")]
-        public void NetworkCallCount_RestoreSolutionMultipleSourcesV2V3()
+        public async Task NetworkCallCount_RestoreSolutionMultipleSourcesV2V3()
         {
             // Arrange
             using (var server2 = new MockServer())
@@ -1118,9 +1106,9 @@ namespace NuGet.CommandLine.Test
             using (var pathContext = new SimpleTestPathContext())
             {
                 var workingPath = pathContext.WorkingDirectory;
-                CreateMixedConfigAndJson(pathContext.SolutionRoot);
+                await CreateMixedConfigAndPackageReference(pathContext.SolutionRoot);
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
-                var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
+                var slnPath = Path.Combine(pathContext.SolutionRoot, "solution.sln");
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -1150,7 +1138,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -1167,8 +1155,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -1178,7 +1165,7 @@ namespace NuGet.CommandLine.Test
         }
 
         [SkipMono(Skip = "https://github.com/NuGet/Home/issues/8594")]
-        public void NetworkCallCount_RestoreSolutionMultipleSourcesTwoV2()
+        public async Task NetworkCallCount_RestoreSolutionMultipleSourcesTwoV2()
         {
             // Arrange
             using (var server2 = new MockServer())
@@ -1186,10 +1173,10 @@ namespace NuGet.CommandLine.Test
             using (var pathContext = new SimpleTestPathContext())
             {
                 var workingPath = pathContext.WorkingDirectory;
-                CreateMixedConfigAndJson(pathContext.SolutionRoot);
+                await CreateMixedConfigAndPackageReference(pathContext.SolutionRoot);
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
-                var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
+                var slnPath = Path.Combine(pathContext.SolutionRoot, "solution.sln");
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -1219,7 +1206,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -1236,26 +1223,25 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url + " hits: " + hitsByUrl[url]);
+                    Assert.True(1 == hits, url + " hits: " + hits);
                 }
 
-                foreach (var url in hitsByUrl2.Keys)
+                foreach ((var url, var hits) in hitsByUrl2)
                 {
-                    Assert.True(1 == hitsByUrl2[url], url + " hits: " + hitsByUrl2[url]);
+                    Assert.True(1 == hits, url + " hits: " + hits);
                 }
             }
         }
 
         [SkipMono(Skip = "https://github.com/NuGet/Home/issues/8594")]
-        public void NetworkCallCount_RestoreSolutionMultipleSourcesTwoV3()
+        public async Task NetworkCallCount_RestoreSolutionMultipleSourcesTwoV3()
         {
             // Arrange
             using (var server2 = new MockServer())
@@ -1263,10 +1249,10 @@ namespace NuGet.CommandLine.Test
             using (var pathContext = new SimpleTestPathContext())
             {
                 var workingPath = pathContext.WorkingDirectory;
-                CreateMixedConfigAndJson(pathContext.SolutionRoot);
+                await CreateMixedConfigAndPackageReference(pathContext.SolutionRoot);
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
-                var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
+                var slnPath = Path.Combine(pathContext.SolutionRoot, "solution.sln");
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -1301,7 +1287,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -1318,36 +1304,35 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
 
-                foreach (var url in hitsByUrl2.Keys)
+                foreach ((var url, var hits) in hitsByUrl2)
                 {
-                    Assert.True(1 == hitsByUrl2[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
 
         [Fact]
-        public void NetworkCallCount_RestoreSolutionV3WithoutFlatContainer()
+        public async Task NetworkCallCount_RestoreSolutionV3WithoutFlatContainer()
         {
             // Arrange
             using (var server = new MockServer())
             using (var pathContext = new SimpleTestPathContext())
             {
                 var workingPath = pathContext.WorkingDirectory;
-                CreateMixedConfigAndJson(pathContext.SolutionRoot);
+                await CreateMixedConfigAndPackageReference(pathContext.SolutionRoot);
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
-                var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
+                var slnPath = Path.Combine(pathContext.SolutionRoot, "solution.sln");
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -1369,7 +1354,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -1386,8 +1371,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
@@ -1395,26 +1379,25 @@ namespace NuGet.CommandLine.Test
 
                 // PackageE is hit twice, once from packages.config and the other from project.json.
                 // The rest should only be hit once.
-                foreach (var url in hitsByUrl.Keys.Where(s => s != "/reg/packagee/index.json"))
+                foreach ((var url, var hits) in hitsByUrl.Where(s => s.Key != "/reg/packagee/index.json"))
                 {
-                    var hits = hitsByUrl[url];
-                    Assert.True(1 == hits, url + $" was hit {hitsByUrl[url]} times instead of 1");
+                    Assert.True(1 == hits, url + $" was hit {hits} times instead of 1");
                 }
             }
         }
 
         [Fact]
-        public void NetworkCallCount_RestoreSolutionWithPackagesConfigAndProjectJsonV3()
+        public async Task NetworkCallCount_RestoreSolutionWithPackagesConfigAndPackageReferenceV3()
         {
             // Arrange
             using (var server = new MockServer())
             using (var pathContext = new SimpleTestPathContext())
             {
                 var workingPath = pathContext.WorkingDirectory;
-                CreateMixedConfigAndJson(pathContext.SolutionRoot);
+                await CreateMixedConfigAndPackageReference(pathContext.SolutionRoot);
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
-                var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
+                var slnPath = Path.Combine(pathContext.SolutionRoot, "solution.sln");
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -1437,7 +1420,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -1454,32 +1437,31 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
                 Assert.Equal(1, hitsByUrl["/index.json"]);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
 
         [Fact]
-        public void NetworkCallCount_RestoreSolutionWithPackagesConfigAndProjectJsonV2()
+        public async Task NetworkCallCount_RestoreSolutionWithPackagesConfigAndPackageReferenceV2()
         {
             // Arrange
             using (var server = new MockServer())
             using (var pathContext = new SimpleTestPathContext())
             {
                 var workingPath = pathContext.WorkingDirectory;
-                CreateMixedConfigAndJson(pathContext.SolutionRoot);
+                await CreateMixedConfigAndPackageReference(pathContext.SolutionRoot);
                 var repositoryPath = Path.Combine(pathContext.SolutionRoot, "repo");
 
-                var slnPath = Path.Combine(pathContext.SolutionRoot, "test.sln");
+                var slnPath = Path.Combine(pathContext.SolutionRoot, "solution.sln");
 
                 // Server setup
                 var indexJson = Util.CreateIndexJson();
@@ -1503,7 +1485,7 @@ namespace NuGet.CommandLine.Test
                 var section = SimpleTestSettingsContext.GetOrAddSection(settings.XML, "packageSources");
                 for (int i = 0; i < sources.Count; i++)
                 {
-                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i]);
+                    SimpleTestSettingsContext.AddEntry(section, $"source{i}", sources[i], "allowInsecureConnections", "true");
                 }
                 settings.Save();
 
@@ -1520,20 +1502,19 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(0 == r.ExitCode, r.Output + " " + r.Errors);
 
-                foreach (var url in hitsByUrl.Keys)
+                foreach ((var url, var hits) in hitsByUrl)
                 {
-                    Assert.True(1 == hitsByUrl[url], url);
+                    Assert.True(1 == hits, url);
                 }
             }
         }
 
-        private void CreateMixedConfigAndJson(string workingPath)
+        private async Task CreateMixedConfigAndPackageReference(string workingPath)
         {
             var repositoryPath = Path.Combine(workingPath, "repo");
 
@@ -1545,13 +1526,16 @@ namespace NuGet.CommandLine.Test
             Directory.CreateDirectory(repositoryPath);
             Directory.CreateDirectory(Path.Combine(workingPath, ".nuget"));
 
-            Util.CreatePackage(repositoryPath, "packageA", "1.0.0");
-            Util.CreatePackage(repositoryPath, "packageB", "1.0.0");
-            Util.CreatePackage(repositoryPath, "packageC", "1.0.0");
 
-            Util.CreatePackage(repositoryPath, "packageD", "1.0.0");
-            Util.CreatePackage(repositoryPath, "packageE", "1.0.0");
-            Util.CreatePackage(repositoryPath, "packageF", "1.0.0");
+            var packageA = new SimpleTestPackageContext("packageA", "1.0.0");
+            var packageB = new SimpleTestPackageContext("packageB", "1.0.0");
+            var packageC = new SimpleTestPackageContext("packageC", "1.0.0");
+
+            var packageD = new SimpleTestPackageContext("packageD", "1.0.0");
+            var packageE = new SimpleTestPackageContext("packageE", "1.0.0");
+            var packageF = new SimpleTestPackageContext("packageF", "1.0.0");
+
+            await SimpleTestPackageUtility.CreatePackagesAsync(repositoryPath, packageA, packageB, packageC, packageD, packageE, packageF);
 
             Util.CreateFile(
                proj1Dir,
@@ -1569,69 +1553,17 @@ namespace NuGet.CommandLine.Test
                      <package id=""packageB"" version=""1.0.0"" />
                   </packages>");
 
-            Util.CreateFile(proj3Dir, "project.json",
-                                            @"{
-                                            'dependencies': {
-                                                'packageD': '1.0.0',
-                                                'packageE': '1.0.*'
-                                            },
-                                            'frameworks': {
-                                                        'uap10.0': { }
-                                                    }
-                                            }");
+            var project1 = new SimpleTestProjectContext("proj1", ProjectStyle.PackagesConfig, workingPath);
+            var project2 = new SimpleTestProjectContext("proj2", ProjectStyle.PackagesConfig, workingPath);
+            var project3 = SimpleTestProjectContext.CreateLegacyPackageReference("proj3", workingPath, FrameworkConstants.CommonFrameworks.Net472);
+            project3.AddPackageToAllFrameworks(packageD);
+            project3.AddPackageToAllFrameworks(new SimpleTestPackageContext("packageE", "1.0.*"));
+            var project4 = SimpleTestProjectContext.CreateLegacyPackageReference("proj4", workingPath, FrameworkConstants.CommonFrameworks.Net472);
+            project4.AddPackageToAllFrameworks(packageE);
+            project3.AddPackageToAllFrameworks(new SimpleTestPackageContext("packageF", "*"));
 
-            Util.CreateFile(proj4Dir, "project.json",
-                                            @"{
-                                            'dependencies': {
-                                                'packageE': '1.0.0',
-                                                'packageF': '*'
-                                            },
-                                            'frameworks': {
-                                                        'uap10.0': { }
-                                                    }
-                                            }");
-
-            Util.CreateFile(proj1Dir, "proj1.csproj", Util.GetCSProjXML("proj1"));
-            Util.CreateFile(proj2Dir, "proj2.csproj", Util.GetCSProjXML("proj2"));
-            Util.CreateFile(proj3Dir, "proj3.csproj", Util.GetCSProjXML("proj3"));
-            Util.CreateFile(proj4Dir, "proj4.csproj", Util.GetCSProjXML("proj4"));
-
-            var slnPath = Path.Combine(workingPath, "test.sln");
-
-            Util.CreateFile(workingPath, "test.sln",
-                       @"
-                        Microsoft Visual Studio Solution File, Format Version 12.00
-                        # Visual Studio 14
-                        VisualStudioVersion = 14.0.23107.0
-                        MinimumVisualStudioVersion = 10.0.40219.1
-                        Project(""{AAE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""proj1"", ""proj1\proj1.csproj"", ""{AA6279C1-B5EE-4C6B-9FA3-A794CE195136}""
-                        EndProject
-                        Project(""{BBE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""proj2"", ""proj2\proj2.csproj"", ""{BB6279C1-B5EE-4C6B-9FA3-A794CE195136}""
-                        EndProject
-                        Project(""{CCE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""proj3"", ""proj3\proj3.csproj"", ""{CC6279C1-B5EE-4C6B-9FA3-A794CE195136}""
-                        EndProject
-                        Project(""{DDE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""proj4"", ""proj4\proj4.csproj"", ""{DD6279C1-B5EE-4C6B-9FA3-A794CE195136}""
-                        EndProject
-                        Global
-                            GlobalSection(SolutionConfigurationPlatforms) = preSolution
-                                Debug|Any CPU = Debug|Any CPU
-                                Release|Any CPU = Release|Any CPU
-                            EndGlobalSection
-                            GlobalSection(ProjectConfigurationPlatforms) = postSolution
-                                {AA6279C1-B5EE-4C6B-9FA3-A794CE195136}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-                                {AA6279C1-B5EE-4C6B-9FA3-A794CE195136}.Debug|Any CPU.Build.0 = Debug|Any CPU
-                                {BB6279C1-B5EE-4C6B-9FA3-A794CE195136}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-                                {BB6279C1-B5EE-4C6B-9FA3-A794CE195136}.Debug|Any CPU.Build.0 = Debug|Any CPU
-                                {CC6279C1-B5EE-4C6B-9FA3-A794CE195136}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-                                {CC6279C1-B5EE-4C6B-9FA3-A794CE195136}.Debug|Any CPU.Build.0 = Debug|Any CPU
-                                {DD6279C1-B5EE-4C6B-9FA3-A794CE195136}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-                                {DD6279C1-B5EE-4C6B-9FA3-A794CE195136}.Debug|Any CPU.Build.0 = Debug|Any CPU
-                            EndGlobalSection
-                            GlobalSection(SolutionProperties) = preSolution
-                                HideSolutionNode = FALSE
-                            EndGlobalSection
-                        EndGlobal
-                        ");
+            var simpleTestSolutionContext = new SimpleTestSolutionContext(workingPath, project1, project2, project3, project4);
+            simpleTestSolutionContext.Create();
         }
 
         private Action<HttpListenerResponse> ServerHandler(
@@ -1732,7 +1664,7 @@ namespace NuGet.CommandLine.Test
                 {
                     v2DownloadWait.Wait();
 
-                    var id = parts.Reverse().Skip(1).First();
+                    var id = parts.AsEnumerable().Reverse().Skip(1).First();
                     var version = parts.Last();
 
                     var file = new FileInfo(Path.Combine(repositoryPath, $"{id}.{version}.nupkg"));
@@ -1759,7 +1691,7 @@ namespace NuGet.CommandLine.Test
                 }
                 else if (path.StartsWith("/reg/") && path.EndsWith("/index.json"))
                 {
-                    var id = parts.Reverse().Skip(1).First();
+                    var id = parts.AsEnumerable().Reverse().Skip(1).First();
                     var version = "1.0.0";
 
                     return new Action<HttpListenerResponse>(response =>

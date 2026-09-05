@@ -16,7 +16,7 @@ namespace NuGet.Packaging.Rules
 {
     internal class UpholdBuildConventionRule : IPackageRule
     {
-        private static ManagedCodeConventions ManagedCodeConventions = new ManagedCodeConventions(new RuntimeGraph());
+        private static ManagedCodeConventions ManagedCodeConventions = new ManagedCodeConventions(RuntimeGraph.Empty);
         private static readonly IReadOnlyList<string> BuildFolders = new string[]
         {
             PackagingConstants.Folders.Build,
@@ -39,7 +39,7 @@ namespace NuGet.Packaging.Rules
                 : new[] { warning };
         }
 
-        internal PackagingLogMessage GenerateWarning(ICollection<ExpectedFile> expectedFiles)
+        internal PackagingLogMessage? GenerateWarning(ICollection<ExpectedFile> expectedFiles)
         {
             if (expectedFiles.Count == 0)
             {
@@ -77,7 +77,7 @@ namespace NuGet.Packaging.Rules
                         if (!extension.Any(file => string.Equals(expectedFileName, file, StringComparison.OrdinalIgnoreCase)))
                         {
                             string packageFolder = tfm.Key == string.Empty ? buildFolder.Key : buildFolder.Key + tfm.Key + '/';
-                            expectedFiles.Add(new ExpectedFile(packageFolder, extension.Key, expectedFileName));
+                            expectedFiles.Add(new ExpectedFile(packageFolder, extension.Key!, expectedFileName));
                         }
                     }
                 }
@@ -120,7 +120,7 @@ namespace NuGet.Packaging.Rules
 
         private bool EndsWithMsbuildFileExtension(string file)
         {
-            foreach (var extension in ManagedCodeConventions.Properties["msbuild"].FileExtensions)
+            foreach (var extension in ManagedCodeConventions.Properties["msbuild"].FileExtensions!)
             {
                 if (file.EndsWith(extension, StringComparison.Ordinal))
                 {
@@ -174,21 +174,21 @@ namespace NuGet.Packaging.Rules
         {
             internal static ExpectedFileComparer Instance { get; } = new ExpectedFileComparer();
 
-            public int Compare(ExpectedFile x, ExpectedFile y)
+            public int Compare(ExpectedFile? x, ExpectedFile? y)
             {
-                var result = string.Compare(x.Path, y.Path, StringComparison.Ordinal);
+                var result = string.Compare(x?.Path, y?.Path, StringComparison.Ordinal);
                 if (result != 0)
                 {
                     return result;
                 }
 
-                result = string.Compare(x.Extension, y.Extension, StringComparison.Ordinal);
+                result = string.Compare(x?.Extension, y?.Extension, StringComparison.Ordinal);
                 if (result != 0)
                 {
                     return result;
                 }
 
-                return string.Compare(x.ExpectedPath, y.ExpectedPath, StringComparison.Ordinal);
+                return string.Compare(x?.ExpectedPath, y?.ExpectedPath, StringComparison.Ordinal);
             }
         }
     }

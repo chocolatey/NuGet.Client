@@ -107,7 +107,7 @@ namespace NuGet.Packaging
         public override IEnumerable<string> GetFiles()
         {
             // Read all files starting at the root.
-            return GetFiles(folder: null);
+            return GetFiles(folder: string.Empty);
         }
 
         public override IEnumerable<string> GetFiles(string folder)
@@ -208,7 +208,7 @@ namespace NuGet.Packaging
                 var sourceFile = GetFile(packageFile);
 
                 var targetPath = Path.Combine(destination, packageFile);
-                Directory.CreateDirectory(Path.GetDirectoryName(targetPath));
+                Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
 
                 using (var fileStream = sourceFile.OpenRead())
                 {
@@ -229,14 +229,14 @@ namespace NuGet.Packaging
             // do nothing here
         }
 
-        public override Task<PrimarySignature> GetPrimarySignatureAsync(CancellationToken token)
+        public override Task<PrimarySignature?> GetPrimarySignatureAsync(CancellationToken token)
         {
-            return Task.FromResult<PrimarySignature>(null);
+            return TaskResult.Null<PrimarySignature>();
         }
 
         public override Task<bool> IsSignedAsync(CancellationToken token)
         {
-            return Task.FromResult(false);
+            return TaskResult.False;
         }
 
         public override Task ValidateIntegrityAsync(SignatureContent signatureContent, CancellationToken token)
@@ -254,7 +254,7 @@ namespace NuGet.Packaging
             return false;
         }
 
-        public override string GetContentHash(CancellationToken token, Func<string> GetUnsignedPackageHash = null)
+        public override string GetContentHash(CancellationToken token, Func<string>? GetUnsignedPackageHash = null)
         {
             throw new NotImplementedException();
         }

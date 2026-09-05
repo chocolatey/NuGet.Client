@@ -13,7 +13,7 @@ namespace NuGet.Packaging
 {
     public class PackageFileExtractor
     {
-        private readonly HashSet<string> _intellisenseXmlFiles;
+        private readonly HashSet<string>? _intellisenseXmlFiles;
         private readonly XmlDocFileSaveMode _xmlDocFileSaveMode;
 
         public PackageFileExtractor(IEnumerable<string> packageFiles, XmlDocFileSaveMode xmlDocFileSaveMode)
@@ -69,7 +69,7 @@ namespace NuGet.Packaging
             return intellisenseXmlFiles;
         }
 
-        private static string GetBinaryForLanguageSpecificXml(string file)
+        private static string? GetBinaryForLanguageSpecificXml(string file)
         {
             // For xml files located in language specific directories, look for a corresponding binary
             // in the parent directory.
@@ -91,17 +91,17 @@ namespace NuGet.Packaging
             return null;
         }
 
-        public string ExtractPackageFile(string source, string target, Stream stream)
+        public string? ExtractPackageFile(string source, string target, Stream stream)
         {
-            if ((_xmlDocFileSaveMode == XmlDocFileSaveMode.Skip) && _intellisenseXmlFiles.Contains(source))
+            if ((_xmlDocFileSaveMode == XmlDocFileSaveMode.Skip) && _intellisenseXmlFiles!.Contains(source))
             {
                 return null;
             }
 
-            var extractDirectory = Path.GetDirectoryName(target);
+            var extractDirectory = Path.GetDirectoryName(target)!;
             Directory.CreateDirectory(extractDirectory);
 
-            if ((_xmlDocFileSaveMode == XmlDocFileSaveMode.Compress) && _intellisenseXmlFiles.Contains(source))
+            if ((_xmlDocFileSaveMode == XmlDocFileSaveMode.Compress) && _intellisenseXmlFiles!.Contains(source))
             {
                 // If the package contains a file named {BinaryName}.xml.zip already exists, the result would be
                 // ambigious.

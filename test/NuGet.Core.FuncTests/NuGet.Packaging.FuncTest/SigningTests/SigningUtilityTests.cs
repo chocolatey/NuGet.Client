@@ -1,10 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if IS_SIGNING_SUPPORTED
-
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -27,17 +24,21 @@ namespace NuGet.Packaging.FuncTest
             _testFixture = fixture ?? throw new ArgumentNullException(nameof(fixture));
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public void Verify_WithValidInput_DoesNotThrow()
         {
+#if NET9_0_OR_GREATER
+            using (X509Certificate2 certificate = X509CertificateLoader.LoadCertificate(_testFixture.TrustedTestCertificate.Source.PublicCert.RawData))
+#else
             using (var certificate = new X509Certificate2(_testFixture.TrustedTestCertificate.Source.PublicCert.RawData))
+#endif
             using (var request = new AuthorSignPackageRequest(certificate, HashAlgorithmName.SHA256, HashAlgorithmName.SHA256))
             {
                 SigningUtility.Verify(request, NullLogger.Instance);
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task SignAsync_AddsPackageAuthorSignatureAsync()
         {
             using (var test = await Test.CreateAsync(_testFixture.TrustedTestCertificate.Source.Cert))
@@ -53,7 +54,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task SignAsync_AddsPackageRepositorySignatureAsync()
         {
             using (var test = await Test.CreateAsync(_testFixture.TrustedTestCertificate.Source.Cert))
@@ -69,7 +70,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task SignAsync_WhenRepositoryCountersigningPrimarySignature_SucceedsAsync()
         {
             using (var test = await Test.CreateAsync(_testFixture.TrustedTestCertificate.Source.Cert))
@@ -98,7 +99,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task SignAsync_WithExpiredCertificate_ThrowsAsync()
         {
             using (var test = await Test.CreateAsync(_testFixture.TrustedTestCertificateExpired.Source.Cert))
@@ -116,7 +117,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task SignAsync_WithNotYetValidCertificate_ThrowsAsync()
         {
             using (var test = await Test.CreateAsync(_testFixture.TrustedTestCertificateNotYetValid.Source.Cert))
@@ -134,7 +135,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task SignAsync_WhenRepositoryCountersigningRepositorySignedPackage_ThrowsAsync()
         {
             using (var test = await Test.CreateAsync(_testFixture.TrustedTestCertificate.Source.Cert))
@@ -164,7 +165,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task SignAsync_WhenRepositoryCountersigningRepositoryCountersignedPackage_ThrowsAsync()
         {
             using (var test = await Test.CreateAsync(_testFixture.TrustedTestCertificate.Source.Cert))
@@ -276,4 +277,3 @@ namespace NuGet.Packaging.FuncTest
         }
     }
 }
-#endif

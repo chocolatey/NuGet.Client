@@ -40,12 +40,12 @@ namespace NuGet.CommandLine.XPlat.Tests
                         FrameworkName = NuGetFramework.Parse("net462")
                     }
                 };
-
-                var spec = NETCoreRestoreTestUtility.GetProject(projectName: "projectA", framework: "net46");
-                spec.Dependencies.Add(new LibraryDependency()
+                LibraryDependency dependency = new LibraryDependency()
                 {
                     LibraryRange = new LibraryRange("a", VersionRange.Parse("1.0.0"), LibraryDependencyTarget.Package)
-                });
+                };
+
+                var spec = NETCoreRestoreTestUtility.GetProject(projectName: "projectA", framework: "net46", dependency);
 
                 var project = NETCoreRestoreTestUtility.CreateProjectsFromSpecs(pathContext, spec).Single();
 
@@ -77,7 +77,7 @@ namespace NuGet.CommandLine.XPlat.Tests
                 };
 
                 var request = (await RestoreRunner.GetRequests(restoreContext)).Single();
-                var providers = providerCache.GetOrCreate(pathContext.UserPackagesFolder, sources, new List<SourceRepository>(), cacheContext, logger, false);
+                var providers = providerCache.GetOrCreate(pathContext.UserPackagesFolder, sources, new List<SourceRepository>(), System.Array.Empty<SourceRepository>(), cacheContext, logger, false, TestEnvironmentVariableReader.EmptyInstance);
                 var command = new NuGet.Commands.RestoreCommand(request.Request);
 
                 // Add to cache before install on all providers

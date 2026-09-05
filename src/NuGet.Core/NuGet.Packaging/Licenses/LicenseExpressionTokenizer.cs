@@ -10,6 +10,7 @@ namespace NuGet.Packaging.Licenses
 {
     internal class LicenseExpressionTokenizer
     {
+        private static readonly Regex ValidCharactersRegex = new Regex("^[a-zA-Z0-9\\.\\-\\s\\+\\(\\)]+$", RegexOptions.CultureInvariant);
         private readonly string _value;
 
         /// <summary>
@@ -34,8 +35,7 @@ namespace NuGet.Packaging.Licenses
         /// <returns>Whether the value has valid characters.</returns>
         internal bool HasValidCharacters()
         {
-            var regex = new Regex("^[a-zA-Z0-9\\.\\-\\s\\+\\(\\)]+$", RegexOptions.CultureInvariant);
-            return regex.IsMatch(_value);
+            return ValidCharactersRegex.IsMatch(_value);
         }
 
         /// <summary>
@@ -49,7 +49,7 @@ namespace NuGet.Packaging.Licenses
             {
                 var processingToken = token;
 
-                IList<LicenseExpressionToken> tokensAfterValue = null;
+                IList<LicenseExpressionToken>? tokensAfterValue = null;
 
                 while (processingToken.Length > 0 && (processingToken[0] == '(' || processingToken[0] == ')'))
                 {
@@ -95,7 +95,7 @@ namespace NuGet.Packaging.Licenses
             {
                 return new LicenseExpressionToken(bracket.ToString(CultureInfo.CurrentCulture), LicenseTokenType.CLOSING_BRACKET);
             }
-            return null;
+            throw new ArgumentException("Invalid bracket character: " + bracket);
         }
 
         /// <summary>

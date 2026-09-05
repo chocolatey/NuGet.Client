@@ -1,7 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
+#nullable disable
+
 using NuGet.Commands;
 using NuGet.Common;
 
@@ -70,6 +71,9 @@ namespace NuGet.Build.Tasks.Pack
         public string PackageLicenseExpression { get; set; }
         public string PackageLicenseExpressionVersion { get; set; }
         public bool Deterministic { get; set; }
+        public string DeterministicTimestamp { get; set; }
         public string PackageIcon { get; set; }
+        public string SdkAnalysisLevel { get; set; }
+        public string UsingMicrosoftNETSdk { get; set; }
     }
 }

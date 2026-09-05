@@ -45,7 +45,7 @@ namespace NuGet.Packaging
                 return Uri.UnescapeDataString(path);
             }
 
-            return path;
+            return path!;
         }
 
         public static Stream OpenFile(this ZipArchive zipArchive, string path)
@@ -83,7 +83,7 @@ namespace NuGet.Packaging
             internal Testable(IEnvironmentVariableReader environmentVariableReader)
             {
                 _updateFileTimeFromEntryMaxRetries = 9;
-                string value = environmentVariableReader.GetEnvironmentVariable("NUGET_UPDATEFILETIME_MAXRETRIES");
+                string? value = environmentVariableReader.GetEnvironmentVariable("NUGET_UPDATEFILETIME_MAXRETRIES");
                 if (int.TryParse(value, out int maxRetries) && maxRetries > 0)
                 {
                     _updateFileTimeFromEntryMaxRetries = maxRetries;

@@ -4,9 +4,9 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using NuGet.Common;
+using System.Linq;
 
 namespace NuGet.Packaging.Signing
 {
@@ -95,7 +95,6 @@ namespace NuGet.Packaging.Signing
             return validationFlags;
         }
 
-#if IS_SIGNING_SUPPORTED
         internal static SignatureVerificationStatusFlags ValidateTimestamp(Timestamp timestamp, Signature signature, bool treatIssuesAsErrors, List<SignatureLog> issues, SigningSpecifications spec)
         {
             if (timestamp == null)
@@ -117,7 +116,7 @@ namespace NuGet.Packaging.Signing
             var validationFlags = SignatureVerificationStatusFlags.NoErrors;
             var signerInfo = timestamp.SignerInfo;
 
-            if (timestamp.SignerInfo.Certificate != null)
+            if (signerInfo.Certificate != null)
             {
                 try
                 {
@@ -150,11 +149,11 @@ namespace NuGet.Packaging.Signing
 
                 try
                 {
-                    var hashAlgorithm = CryptoHashUtility.OidToHashAlgorithmName(timestamp.TstInfo.HashAlgorithmId.Value);
+                    var hashAlgorithm = CryptoHashUtility.OidToHashAlgorithmName(timestamp.TstInfo!.HashAlgorithmId.Value!);
                     var signatureValue = signature.GetSignatureValue();
-                    var messageHash = hashAlgorithm.ComputeHash(signatureValue);
+                    var messageHash = hashAlgorithm.ComputeHash(signatureValue!);
 
-                    if (!timestamp.TstInfo.HasMessageHash(messageHash))
+                    if (!timestamp.TstInfo!.HasMessageHash(messageHash))
                     {
                         issues.Add(SignatureLog.Issue(treatIssuesAsErrors, NuGetLogCode.NU3019, string.Format(CultureInfo.CurrentCulture, Strings.VerifyError_TimestampIntegrityCheckFailed, signature.FriendlyName)));
                         validationFlags |= SignatureVerificationStatusFlags.IntegrityCheckFailed;
@@ -187,6 +186,5 @@ namespace NuGet.Packaging.Signing
 
             return validationFlags;
         }
-#endif
     }
 }

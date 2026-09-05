@@ -17,7 +17,7 @@ namespace NuGet.Protocol.Plugins.Tests
         public void Constructor_ThrowsForNullLogger()
         {
             var exception = Assert.Throws<ArgumentNullException>(
-                () => new LogRequestHandler(logger: null));
+                () => new LogRequestHandler(logger: null!));
 
             Assert.Equal("logger", exception.ParamName);
         }
@@ -37,7 +37,7 @@ namespace NuGet.Protocol.Plugins.Tests
 
             var exception = await Assert.ThrowsAsync<ArgumentNullException>(
                 () => test.Handler.HandleResponseAsync(
-                    connection: null,
+                    connection: null!,
                     request: test.Request,
                     responseHandler: Mock.Of<IResponseHandler>(),
                     cancellationToken: CancellationToken.None));
@@ -53,7 +53,7 @@ namespace NuGet.Protocol.Plugins.Tests
             var exception = await Assert.ThrowsAsync<ArgumentNullException>(
                 () => test.Handler.HandleResponseAsync(
                     Mock.Of<IConnection>(),
-                    request: null,
+                    request: null!,
                     responseHandler: Mock.Of<IResponseHandler>(),
                     cancellationToken: CancellationToken.None));
 
@@ -69,7 +69,7 @@ namespace NuGet.Protocol.Plugins.Tests
                 () => test.Handler.HandleResponseAsync(
                     Mock.Of<IConnection>(),
                     test.Request,
-                    responseHandler: null,
+                    responseHandler: null!,
                     cancellationToken: CancellationToken.None));
 
             Assert.Equal("responseHandler", exception.ParamName);
@@ -170,7 +170,7 @@ namespace NuGet.Protocol.Plugins.Tests
         {
             var test = new LogRequestHandlerTest();
             var exception = Assert.Throws<ArgumentNullException>(
-                () => test.Handler.SetLogger(logger: null));
+                () => test.Handler.SetLogger(logger: null!));
 
             Assert.Equal("logger", exception.ParamName);
         }
@@ -189,7 +189,7 @@ namespace NuGet.Protocol.Plugins.Tests
                     It.IsNotNull<Message>(),
                     It.IsNotNull<LogResponse>(),
                     It.IsAny<CancellationToken>()))
-                .Returns(Task.FromResult(0));
+                .Returns(Task.CompletedTask);
 
             await test.Handler.HandleResponseAsync(
                 Mock.Of<IConnection>(),
@@ -206,7 +206,7 @@ namespace NuGet.Protocol.Plugins.Tests
         public void GetLogLevel_ThrowsForNullLogger()
         {
             var exception = Assert.Throws<ArgumentNullException>(
-                () => LogRequestHandler.GetLogLevel(logger: null));
+                () => LogRequestHandler.GetLogLevel(logger: null!));
 
             Assert.Equal("logger", exception.ParamName);
         }
@@ -250,7 +250,7 @@ namespace NuGet.Protocol.Plugins.Tests
                     It.Is<Message>(message => message == request),
                     It.Is<LogResponse>(response => response.ResponseCode == responseCode),
                     It.IsAny<CancellationToken>()))
-                .Returns(Task.FromResult(0));
+                .Returns(Task.CompletedTask);
 
             if (expectLog)
             {

@@ -13,7 +13,7 @@ namespace NuGet.Protocol
 
         public ODataServiceDocumentResourceV2(string baseAddress, DateTime requestTime)
         {
-            _baseAddress = baseAddress.Trim('/');
+            _baseAddress = (baseAddress ?? throw new ArgumentNullException(nameof(baseAddress))).Trim('/');
             _requestTime = requestTime;
         }
 

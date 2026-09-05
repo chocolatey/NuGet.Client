@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.IO;
 using System.Linq;
@@ -13,6 +15,8 @@ namespace NuGet.Test.Utility
 {
     public class SimpleTestSettingsContext
     {
+        public const string DefaultPackageSourceName = "source";
+
         /// <summary>
         /// NuGet.Config path on disk
         /// </summary>
@@ -63,12 +67,57 @@ namespace NuGet.Test.Utility
             Save();
         }
 
+        /// <summary>
+        /// Just disable “Automatically check for missing packages during build in Visual Studio” and save the file.
+        /// </summary>
+        public void DisableAutomaticInPackageRestoreSection()
+        {
+            var section = GetOrAddSection(XML, "packageRestore");
+
+            AddEntry(section, "enabled", "True");
+            AddEntry(section, "automatic", "false");
+
+            Save();
+        }
+
+        /// <summary>
+        /// Set default package management format to PackageReference.
+        /// </summary>
+        public void SetPackageFormatToPackageReference()
+        {
+            var section = GetOrAddSection(XML, "packageManagement");
+
+            AddEntry(section, "format", "1");
+            AddEntry(section, "disabled", "False");
+            Save();
+        }
+
+        /// <summary>
+        /// Set default package management format to packages.config.
+        /// </summary>
+        public void SetPackageFormatToPackagesConfig()
+        {
+            var section = GetOrAddSection(XML, "packageManagement");
+
+            AddEntry(section, "format", "0");
+            AddEntry(section, "disabled", "False");
+            Save();
+        }
+
+        public void SetDependencyVersion(string dependencyVersion)
+        {
+            var section = GetOrAddSection(XML, "config");
+
+            AddEntry(section, "dependencyVersion", dependencyVersion);
+            Save();
+        }
+
         private static XDocument GetDefault(string userPackagesFolder, string packagesV2, string fallbackFolder, string packageSource)
         {
             var doc = GetEmptyConfig();
 
             var packageSources = GetOrAddSection(doc, "packageSources");
-            AddEntry(packageSources, "source", packageSource);
+            AddEntry(packageSources, DefaultPackageSourceName, packageSource);
 
             var fallbackFolders = GetOrAddSection(doc, "fallbackPackageFolders");
             AddEntry(fallbackFolders, "shared", fallbackFolder);
@@ -87,11 +136,13 @@ namespace NuGet.Test.Utility
 
             var config = GetOrAddSection(doc, "config");
             var packageSources = GetOrAddSection(doc, "packageSources");
+            var auditSources = GetOrAddSection(doc, "auditSources");
             var disabledSources = GetOrAddSection(doc, "disabledPackageSources");
             var fallbackFolders = GetOrAddSection(doc, "fallbackPackageFolders");
             var packageSourceMapping = GetOrAddSection(doc, "packageSourceMapping");
 
             packageSources.Add(new XElement(XName.Get("clear")));
+            auditSources.Add(new XElement(XName.Get("clear")));
             disabledSources.Add(new XElement(XName.Get("clear")));
             packageSourceMapping.Add(new XElement(XName.Get("clear")));
 
@@ -151,6 +202,16 @@ namespace NuGet.Test.Utility
             section.Add(setting);
         }
 
+        public static void AddEntry(XElement section, string key, string value, string additionalAtrributeName, string additionalAttributeValue, string additionalAtrributeName2, string additionalAttributeValue2)
+        {
+            var setting = new XElement(XName.Get("add"));
+            setting.Add(new XAttribute(XName.Get("key"), key));
+            setting.Add(new XAttribute(XName.Get("value"), value));
+            setting.Add(new XAttribute(XName.Get(additionalAtrributeName), additionalAttributeValue));
+            setting.Add(new XAttribute(XName.Get(additionalAtrributeName2), additionalAttributeValue2));
+            section.Add(setting);
+        }
+
         public static void AddSetting(XDocument doc, string key, string value)
         {
             RemoveSetting(doc, key);
@@ -166,7 +227,7 @@ namespace NuGet.Test.Utility
         {
             var config = GetOrAddSection(doc, "config");
 
-            foreach (var item in config.Elements(XName.Get("add")).Where(e => e.Name.LocalName.Equals(key, StringComparison.OrdinalIgnoreCase)).ToArray())
+            foreach (var item in config.Elements(XName.Get("add")).Where(e => e.FirstAttribute.Value.Equals(key, StringComparison.OrdinalIgnoreCase)).ToArray())
             {
                 item.Remove();
             }
@@ -193,10 +254,37 @@ namespace NuGet.Test.Utility
             Save();
         }
 
+        public void RemoveSource(string key)
+        {
+            RemoveSource(XML, key);
+            Save();
+        }
+
         public void AddSource(string sourceName, string sourceUri)
         {
             var section = GetOrAddSection(XML, "packageSources");
             AddEntry(section, sourceName, sourceUri);
+            Save();
+        }
+
+        public void AddSource(string sourceName, string sourceUri, string allowInsecureConnectionsValue)
+        {
+            var section = GetOrAddSection(XML, "packageSources");
+            AddEntry(section, sourceName, sourceUri, "allowInsecureConnections", allowInsecureConnectionsValue);
+            Save();
+        }
+
+        public void AddSource(string sourceName, string sourceUri, string attributeName, string attributeValue)
+        {
+            var section = GetOrAddSection(XML, "packageSources");
+            AddEntry(section, sourceName, sourceUri, attributeName, attributeValue);
+            Save();
+        }
+
+        public void AddAuditSource(string sourceName, string sourceUri, string allowInsecureConnectionsValue)
+        {
+            var section = GetOrAddSection(XML, "auditSources");
+            AddEntry(section, sourceName, sourceUri, "allowInsecureConnections", allowInsecureConnectionsValue);
             Save();
         }
 

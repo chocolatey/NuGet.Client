@@ -4,6 +4,7 @@
 #if NET5_0_OR_GREATER
 
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.X509Certificates;
 
 namespace NuGet.Packaging.Signing
@@ -20,13 +21,13 @@ namespace NuGet.Packaging.Signing
         {
         }
 
-        internal static bool TryCreate(out SystemCertificateBundleX509ChainFactory factory)
+        internal static bool TryCreate([NotNullWhen(returnValue: true)] out SystemCertificateBundleX509ChainFactory? factory)
         {
             return TryCreate(ProbePaths, out factory);
         }
 
         // For testing purposes only.
-        internal static bool TryCreate(IReadOnlyList<string> probePaths, out SystemCertificateBundleX509ChainFactory factory)
+        internal static bool TryCreate(IReadOnlyList<string> probePaths, [NotNullWhen(returnValue: true)] out SystemCertificateBundleX509ChainFactory? factory)
         {
             factory = null;
 

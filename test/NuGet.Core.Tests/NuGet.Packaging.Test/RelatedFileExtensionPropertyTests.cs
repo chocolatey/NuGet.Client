@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System.Collections.Generic;
 using NuGet.ContentModel;
 using Xunit;
@@ -15,7 +17,7 @@ namespace NuGet.Packaging.Test
                                                            "lib/net50/system.exe",
                                                            "lib/net50/system.winmd" }, null)]
         [InlineData("lib/net50/system.dll", new string[] { "lib/net50/system.dll",
-                                                           "lib/net50/system.Core.dll" }, null)]
+                                                          "lib/net50/system.Core.dll" }, null)]
         [InlineData("lib/net50/system.dll", new string[] { "lib/net50/system.dll",
                                                            "lib/net50/system.EXE",
                                                            "lib/net50/system.Core.DLL"}, null)]
@@ -33,6 +35,8 @@ namespace NuGet.Packaging.Test
         [InlineData("lib/net50/system.test.dll", new string[] { "lib/net50/system.test.dll",
                                                                 "lib/net50/system.test.PDB",
                                                                 "lib/net50/system.test.XML", }, ".PDB;.XML")]
+        [InlineData("lib/net50/system.test.dll", new string[] { "lib/net50/system.test.dll",
+                                                                "lib/net50/noextension" }, null)]
 
         public void GetRelatedFileExtensionProperty_SingleAssemblyAsset_GetNullProperty(string assembly, string[] assetsPaths, string expectedRelatedProperty)
         {
@@ -64,7 +68,7 @@ namespace NuGet.Packaging.Test
             string relatedProperty = collection.GetRelatedFileExtensionProperty(assembly, CreateAssetsFromPathList(paths));
 
             // Assert
-            Assert.Equal(null, relatedProperty);
+            Assert.Null(relatedProperty);
         }
 
 
@@ -73,8 +77,10 @@ namespace NuGet.Packaging.Test
             List<Asset> assets = new List<Asset>();
             foreach (string path in paths)
             {
-                Asset asset = new Asset();
-                asset.Path = path;
+                Asset asset = new Asset
+                {
+                    Path = path
+                };
                 assets.Add(asset);
             }
             return assets;

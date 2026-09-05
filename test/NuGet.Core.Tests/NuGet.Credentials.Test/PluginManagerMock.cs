@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -13,10 +15,11 @@ using NuGet.Configuration;
 using NuGet.Protocol;
 using NuGet.Protocol.Plugins;
 using NuGet.Test.Utility;
-using NuGet.Versioning;
 
 namespace NuGet.Credentials.Test
 {
+    using SemanticVersion = Versioning.SemanticVersion;
+
     internal sealed class TestExpectation
     {
         internal IEnumerable<OperationClaim> OperationClaims { get; }
@@ -32,6 +35,14 @@ namespace NuGet.Credentials.Test
         public string ProxyPassword { get; }
         public bool PluginLaunched { get; }
         public bool CanShowDialog { get; }
+        public bool MessageCodeNotFound { get; }
+
+        /// <summary>
+        /// <see langword="true" /> to have the connection answer the credential request with <see langword="null" />,
+        /// as <see cref="IConnection.SendRequestAndReceiveResponseAsync{TOutbound, TInbound}" /> does once the
+        /// connection is closing or closed.
+        /// </summary>
+        public bool ConnectionClosed { get; }
 
         internal TestExpectation(
             IEnumerable<OperationClaim> operationClaims,
@@ -44,7 +55,9 @@ namespace NuGet.Credentials.Test
             string proxyUsername = null,
             string proxyPassword = null,
             bool pluginLaunched = true,
-            bool canShowDialog = true)
+            bool canShowDialog = true,
+            bool messageCodeNotFound = false,
+            bool connectionClosed = false)
         {
             OperationClaims = operationClaims;
             ClientConnectionOptions = connectionOptions;
@@ -57,6 +70,8 @@ namespace NuGet.Credentials.Test
             ProxyUsername = proxyUsername;
             PluginLaunched = pluginLaunched;
             CanShowDialog = canShowDialog;
+            MessageCodeNotFound = messageCodeNotFound;
+            ConnectionClosed = connectionClosed;
         }
     }
 
@@ -64,7 +79,7 @@ namespace NuGet.Credentials.Test
     {
         private readonly Mock<IConnection> _connection;
         private readonly TestExpectation _expectations;
-        private readonly Mock<IPluginFactory> _factory;
+        private readonly Mock<PluginFactory> _factory;
         private readonly Mock<IPlugin> _plugin;
         private readonly Mock<IPluginDiscoverer> _pluginDiscoverer;
         private readonly Mock<IEnvironmentVariableReader> _reader;
@@ -95,7 +110,7 @@ namespace NuGet.Credentials.Test
             _plugin = new Mock<IPlugin>(MockBehavior.Strict);
             EnsurePluginSetupCalls();
 
-            _factory = new Mock<IPluginFactory>(MockBehavior.Strict);
+            _factory = new Mock<PluginFactory>(MockBehavior.Strict);
             EnsureFactorySetupCalls(pluginFilePath);
 
             // Setup connection
@@ -138,6 +153,36 @@ namespace NuGet.Credentials.Test
                         It.Is<GetAuthenticationCredentialsRequest>(e => e.Uri.Equals(expectations.Uri) && e.CanShowDialog.Equals(expectations.CanShowDialog)),
                         It.IsAny<CancellationToken>()))
                     .ReturnsAsync(new GetAuthenticationCredentialsResponse(expectations.AuthenticationUsername, expectations.AuthenticationPassword, message: null, authenticationTypes: null, responseCode: MessageResponseCode.Success));
+            }
+
+            if (_expectations.MessageCodeNotFound)
+            {
+                _connection.Setup(x => x.SendRequestAndReceiveResponseAsync<SetLogLevelRequest, SetLogLevelResponse>(
+                        It.Is<MessageMethod>(m => m == MessageMethod.SetLogLevel),
+                        It.IsAny<SetLogLevelRequest>(),
+                        It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new SetLogLevelResponse(MessageResponseCode.Success));
+
+                _connection.Setup(x => x.SendRequestAndReceiveResponseAsync<GetAuthenticationCredentialsRequest, GetAuthenticationCredentialsResponse>(
+                        It.Is<MessageMethod>(m => m == MessageMethod.GetAuthenticationCredentials),
+                        It.Is<GetAuthenticationCredentialsRequest>(e => e.Uri.Equals(expectations.Uri) && e.CanShowDialog.Equals(expectations.CanShowDialog)),
+                        It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new GetAuthenticationCredentialsResponse(expectations.AuthenticationUsername, expectations.AuthenticationPassword, message: null, authenticationTypes: null, responseCode: MessageResponseCode.NotFound));
+            }
+
+            if (_expectations.ConnectionClosed)
+            {
+                _connection.Setup(x => x.SendRequestAndReceiveResponseAsync<SetLogLevelRequest, SetLogLevelResponse>(
+                        It.Is<MessageMethod>(m => m == MessageMethod.SetLogLevel),
+                        It.IsAny<SetLogLevelRequest>(),
+                        It.IsAny<CancellationToken>()))
+                    .ReturnsAsync((SetLogLevelResponse)null);
+
+                _connection.Setup(x => x.SendRequestAndReceiveResponseAsync<GetAuthenticationCredentialsRequest, GetAuthenticationCredentialsResponse>(
+                        It.Is<MessageMethod>(m => m == MessageMethod.GetAuthenticationCredentials),
+                        It.Is<GetAuthenticationCredentialsRequest>(e => e.Uri.Equals(expectations.Uri) && e.CanShowDialog.Equals(expectations.CanShowDialog)),
+                        It.IsAny<CancellationToken>()))
+                    .ReturnsAsync((GetAuthenticationCredentialsResponse)null);
             }
 
             PluginManager = new PluginManager(
@@ -262,7 +307,7 @@ namespace NuGet.Credentials.Test
         {
             _factory.Setup(x => x.Dispose());
             _factory.Setup(x => x.GetOrCreateAsync(
-                    It.Is<string>(p => p == pluginFilePath),
+                    It.Is<PluginFile>(p => p.Path == pluginFilePath),
                     It.IsNotNull<IEnumerable<string>>(),
                     It.IsNotNull<IRequestHandlers>(),
                     It.IsNotNull<ConnectionOptions>(),

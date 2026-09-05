@@ -1,11 +1,15 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using NuGet.Commands;
 using NuGet.Common;
 using NuGet.Frameworks;
@@ -38,7 +42,11 @@ namespace NuGet.Build.Tasks.Pack
                 BasePath = request.NuspecBasePath,
                 NoPackageAnalysis = request.NoPackageAnalysis,
                 NoDefaultExcludes = request.NoDefaultExcludes,
+                Deterministic = request.Deterministic,
+                DeterministicTimestamp = request.DeterministicTimestamp,
                 WarningProperties = WarningProperties.GetWarningProperties(request.TreatWarningsAsErrors, request.WarningsAsErrors, request.NoWarn, request.WarningsNotAsErrors),
+                SdkAnalysisLevel = MSBuildRestoreUtility.GetSdkAnalysisLevel(request.SdkAnalysisLevel),
+                UsingMicrosoftNETSdk = MSBuildRestoreUtility.GetUsingMicrosoftNETSdk(request.UsingMicrosoftNETSdk),
                 PackTargetArgs = new MSBuildPackTargetArgs()
             };
 
@@ -59,11 +67,7 @@ namespace NuGet.Build.Tasks.Pack
             }
 
             LockFile assetsFile = GetAssetsFile(request);
-            var aliases = new Dictionary<string, string>();
-            foreach (var tfm in assetsFile.PackageSpec.TargetFrameworks)
-            {
-                aliases[tfm.TargetAlias] = tfm.FrameworkName.GetShortFolderName();
-            }
+            (Dictionary<string, string> targetAliasToNuGetFramework, Dictionary<string, List<string>> nuGetFrameworkToDuplicateAliases) = BuildAliasFrameworkMappings(assetsFile);
 
             InitCurrentDirectoryAndFileName(request, packArgs);
             InitNuspecOutputPath(request, packArgs);
@@ -71,26 +75,19 @@ namespace NuGet.Build.Tasks.Pack
 
             if (!string.IsNullOrEmpty(request.NuspecFile))
             {
-                if (request.NuspecProperties != null && request.NuspecProperties.Any())
-                {
-                    packArgs.Properties.AddRange(ParsePropertiesAsDictionary(request.NuspecProperties));
-                    if (packArgs.Properties.ContainsKey("version"))
-                    {
-                        packArgs.Version = packArgs.Properties["version"];
-                    }
-                }
+                SetPackArgsPropertiesFromNuspecProperties(packArgs, request.NuspecProperties);
             }
             else
             {
                 // This only needs to happen when packing via csproj, not nuspec.
                 packArgs.PackTargetArgs.AllowedOutputExtensionsInPackageBuildOutputFolder = InitOutputExtensions(request.AllowedOutputExtensionsInPackageBuildOutputFolder);
                 packArgs.PackTargetArgs.AllowedOutputExtensionsInSymbolsPackageBuildOutputFolder = InitOutputExtensions(request.AllowedOutputExtensionsInSymbolsPackageBuildOutputFolder);
-                packArgs.PackTargetArgs.TargetPathsToAssemblies = InitLibFiles(request.BuildOutputInPackage, aliases);
-                packArgs.PackTargetArgs.TargetPathsToSymbols = InitLibFiles(request.TargetPathsToSymbols, aliases);
+                packArgs.PackTargetArgs.TargetPathsToAssemblies = InitLibFiles(request.BuildOutputInPackage, targetAliasToNuGetFramework, nuGetFrameworkToDuplicateAliases);
+                packArgs.PackTargetArgs.TargetPathsToSymbols = InitLibFiles(request.TargetPathsToSymbols, targetAliasToNuGetFramework, nuGetFrameworkToDuplicateAliases);
                 packArgs.PackTargetArgs.AssemblyName = request.AssemblyName;
                 packArgs.PackTargetArgs.IncludeBuildOutput = request.IncludeBuildOutput;
                 packArgs.PackTargetArgs.BuildOutputFolder = request.BuildOutputFolders;
-                packArgs.PackTargetArgs.TargetFrameworks = ParseFrameworks(request, aliases);
+                packArgs.PackTargetArgs.TargetFrameworks = ParseFrameworks(request, targetAliasToNuGetFramework);
 
                 if (request.IncludeSource)
                 {
@@ -126,7 +123,8 @@ namespace NuGet.Build.Tasks.Pack
                 ReleaseNotes = request.ReleaseNotes,
                 RequireLicenseAcceptance = request.RequireLicenseAcceptance,
                 EmitRequireLicenseAcceptance = request.RequireLicenseAcceptance,
-                PackageTypes = ParsePackageTypes(request)
+                PackageTypes = ParsePackageTypes(request),
+                DeterministicTimestamp = request.DeterministicTimestamp,
             };
 
             if (request.DevelopmentDependency)
@@ -226,38 +224,22 @@ namespace NuGet.Build.Tasks.Pack
                     msbuildItem => msbuildItem.GetProperty("ProjectVersion"), PathUtility.GetStringComparerBasedOnOS());
             }
 
-            var aliases = new Dictionary<string, string>();
-            foreach (var tfm in assetsFile.PackageSpec.TargetFrameworks)
-            {
-                aliases[tfm.TargetAlias] = tfm.FrameworkName.GetShortFolderName();
-            }
+            (Dictionary<string, string> targetAliasToNuGetFramework, Dictionary<string, List<string>> nuGetFrameworkToDuplicateAliases) = BuildAliasFrameworkMappings(assetsFile);
 
-            var nuGetFrameworkComparer = new NuGetFrameworkFullComparer();
-            var frameworksWithSuppressedDependencies = new HashSet<NuGetFramework>(nuGetFrameworkComparer);
+            var frameworksWithSuppressedDependencies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (request.FrameworksWithSuppressedDependencies != null && request.FrameworksWithSuppressedDependencies.Any())
             {
-                frameworksWithSuppressedDependencies =
-                    new HashSet<NuGetFramework>(request.FrameworksWithSuppressedDependencies
-                    .Select(t =>
-                    {
-                        if (aliases.TryGetValue(t.Identity, out string translated))
-                        {
-                            return NuGetFramework.Parse(translated);
-                        }
-                        else
-                        {
-                            return NuGetFramework.Parse(t.Identity);
-                        }
-                    }).ToList(), nuGetFrameworkComparer);
+                frameworksWithSuppressedDependencies = [.. request.FrameworksWithSuppressedDependencies.Select(t => t.Identity)];
             }
 
             PopulateProjectAndPackageReferences(builder,
                 assetsFile,
                 projectRefToVersionMap,
-                frameworksWithSuppressedDependencies);
+                frameworksWithSuppressedDependencies,
+                nuGetFrameworkToDuplicateAliases);
 
             PopulateFrameworkAssemblyReferences(builder, request);
-            PopulateFrameworkReferences(builder, assetsFile);
+            PopulateFrameworkReferences(builder, assetsFile, targetAliasToNuGetFramework, nuGetFrameworkToDuplicateAliases);
 
             return builder;
         }
@@ -373,7 +355,54 @@ namespace NuGet.Build.Tasks.Pack
             var lockFileFormat = new LockFileFormat();
             return lockFileFormat.Read(assetsFilePath);
         }
-        private void PopulateFrameworkAssemblyReferences(PackageBuilder builder, IPackTaskRequest<IMSBuildItem> request)
+
+        /// <summary>
+        /// Builds mappings from target alias to NuGet framework short name, and identifies
+        /// frameworks that have multiple aliases resolving to the same NuGet framework.
+        /// </summary>
+        /// <returns>
+        /// A tuple of (targetAliasToNuGetFramework, duplicateAliases).
+        /// duplicateAliases is null when there are no duplicate frameworks; otherwise it contains
+        /// only the entries where multiple aliases map to the same framework.
+        /// </returns>
+        private static (Dictionary<string, string> targetAliasToNuGetFramework, Dictionary<string, List<string>> duplicateAliases)
+            BuildAliasFrameworkMappings(LockFile assetsFile)
+        {
+            var targetAliasToNuGetFramework = new Dictionary<string, string>();
+            var frameworkToAliases = new Dictionary<string, List<string>>();
+            bool hasDuplicates = false;
+
+            foreach (var tfm in assetsFile.PackageSpec.TargetFrameworks)
+            {
+                var tfmShortName = tfm.FrameworkName.GetShortFolderName();
+                targetAliasToNuGetFramework[tfm.TargetAlias] = tfmShortName;
+
+                if (!frameworkToAliases.TryGetValue(tfmShortName, out List<string> list))
+                {
+                    frameworkToAliases[tfmShortName] = [tfm.TargetAlias];
+                }
+                else
+                {
+                    list.Add(tfm.TargetAlias);
+                    hasDuplicates = true;
+                }
+            }
+
+            if (!hasDuplicates)
+            {
+                return (targetAliasToNuGetFramework, null);
+            }
+
+            // Keep only entries where more than one alias maps to the same framework.
+            foreach (var key in frameworkToAliases.Where(e => e.Value.Count <= 1).Select(e => e.Key).ToList())
+            {
+                frameworkToAliases.Remove(key);
+            }
+
+            return (targetAliasToNuGetFramework, frameworkToAliases);
+        }
+
+        private static void PopulateFrameworkAssemblyReferences(PackageBuilder builder, IPackTaskRequest<IMSBuildItem> request)
         {
             // First add all the assembly references which are not specific to a certain TFM.
             var tfmSpecificRefs = new Dictionary<string, IList<string>>(StringComparer.OrdinalIgnoreCase);
@@ -400,21 +429,44 @@ namespace NuGet.Build.Tasks.Pack
                             )));
         }
 
-        private void PopulateFrameworkReferences(PackageBuilder builder, LockFile assetsFile)
+        private static void PopulateFrameworkReferences(
+            PackageBuilder builder,
+            LockFile assetsFile,
+            Dictionary<string, string> targetAliasToNuGetFramework,
+            Dictionary<string, List<string>> nuGetFrameworkToDuplicateAliases)
         {
             var tfmSpecificRefs = new Dictionary<string, ISet<string>>();
             bool hasAnyRefs = false;
 
             foreach (var framework in assetsFile.PackageSpec.TargetFrameworks)
             {
-                var frameworkShortFolderName = framework.FrameworkName.GetShortFolderName();
-                tfmSpecificRefs.Add(frameworkShortFolderName, new HashSet<string>(ComparisonUtility.FrameworkReferenceNameComparer));
+                var frameworkShortFolderName = targetAliasToNuGetFramework[framework.TargetAlias];
+
+                var refNames = new HashSet<string>(ComparisonUtility.FrameworkReferenceNameComparer);
                 foreach (var frameworkRef in framework.FrameworkReferences.Where(e => e.PrivateAssets != FrameworkDependencyFlags.All))
                 {
-                    var frameworkRefNames = tfmSpecificRefs[frameworkShortFolderName];
-                    frameworkRefNames.Add(frameworkRef.Name);
+                    refNames.Add(frameworkRef.Name);
                     hasAnyRefs = true;
                 }
+
+                if (!tfmSpecificRefs.ContainsKey(frameworkShortFolderName))
+                {
+                    tfmSpecificRefs.Add(frameworkShortFolderName, refNames);
+                }
+                else if (!tfmSpecificRefs[frameworkShortFolderName].SetEquals(refNames))
+                {
+                    List<string> duplicates = nuGetFrameworkToDuplicateAliases[frameworkShortFolderName];
+
+                    throw new PackagingException(NuGetLogCode.NU5051,
+                            string.Format(CultureInfo.CurrentCulture,
+                                Strings.DuplicateFrameworks,
+                                string.Join(", ", duplicates) + " => " + frameworkShortFolderName,
+                                string.Format(
+                                    CultureInfo.CurrentCulture,
+                                    Strings.AmbigiousFrameworkReferences,
+                                    string.Join(", ", duplicates))));
+                }
+                // else: same framework refs as already stored — skip.
             }
 
             if (hasAnyRefs)
@@ -447,15 +499,18 @@ namespace NuGet.Build.Tasks.Pack
             return runner.RunPackageBuild();
         }
 
-        private IEnumerable<OutputLibFile> InitLibFiles(IMSBuildItem[] libFiles, IDictionary<string, string> aliases)
+        private static IEnumerable<OutputLibFile> InitLibFiles(IMSBuildItem[] libFiles, IDictionary<string, string> targetAliasToNuGetFramework, Dictionary<string, List<string>> nuGetFrameworkToDuplicateAliases)
         {
             var assemblies = new List<OutputLibFile>();
             if (libFiles == null)
             {
                 return assemblies;
             }
-
-
+            Dictionary<string, string> duplicateTargetPath = null;
+            if (nuGetFrameworkToDuplicateAliases != null)
+            {
+                duplicateTargetPath = new Dictionary<string, string>();
+            }
             foreach (var assembly in libFiles)
             {
                 var finalOutputPath = assembly.GetProperty("FinalOutputPath");
@@ -468,7 +523,7 @@ namespace NuGet.Build.Tasks.Pack
                 }
 
                 var targetPath = assembly.GetProperty("TargetPath");
-                var targetFramework = assembly.GetProperty("TargetFramework");
+                var targetFrameworkProperty = assembly.GetProperty("TargetFramework");
 
                 if (!File.Exists(finalOutputPath))
                 {
@@ -476,11 +531,8 @@ namespace NuGet.Build.Tasks.Pack
                 }
 
                 string translated = null;
-                var succeeded = aliases.TryGetValue(targetFramework, out translated);
-                if (succeeded)
-                {
-                    targetFramework = translated;
-                }
+                var succeeded = targetAliasToNuGetFramework.TryGetValue(targetFrameworkProperty, out translated);
+                string targetFramework = succeeded ? translated : targetFrameworkProperty;
 
                 // If target path is not set, default it to the file name. Only satellite DLLs have a special target path
                 // where culture is part of the target path. This condition holds true for files like runtimeconfig.json file
@@ -489,6 +541,17 @@ namespace NuGet.Build.Tasks.Pack
                 {
                     targetPath = Path.GetFileName(finalOutputPath);
                 }
+
+                if (duplicateTargetPath?.TryGetValue(targetPath, out string existingTfm) == true)
+                {
+                    throw new PackagingException(NuGetLogCode.NU5051,
+                        string.Format(CultureInfo.CurrentCulture,
+                            Strings.DuplicateFrameworks,
+                            existingTfm + ", " + targetFrameworkProperty + " => " + targetFramework,
+                            string.Format(CultureInfo.CurrentCulture, Strings.AmbigiousPackageAssemblies, targetPath)));
+                }
+
+                duplicateTargetPath?.Add(targetPath, targetFrameworkProperty);
 
                 if (string.IsNullOrEmpty(targetFramework) || NuGetFramework.Parse(targetFramework).IsSpecificFramework == false)
                 {
@@ -506,7 +569,7 @@ namespace NuGet.Build.Tasks.Pack
             return assemblies;
         }
 
-        private ISet<NuGetFramework> ParseFrameworks(IPackTaskRequest<IMSBuildItem> request, IDictionary<string, string> aliases)
+        private static ISet<NuGetFramework> ParseFrameworks(IPackTaskRequest<IMSBuildItem> request, IDictionary<string, string> targetAliasToNuGetFramework)
         {
             var nugetFrameworks = new HashSet<NuGetFramework>();
             if (request.TargetFrameworks != null)
@@ -514,7 +577,7 @@ namespace NuGet.Build.Tasks.Pack
                 nugetFrameworks = new HashSet<NuGetFramework>(request.TargetFrameworks.Select(targetFramework =>
                 {
                     string translated = null;
-                    var succeeded = aliases.TryGetValue(targetFramework, out translated);
+                    var succeeded = targetAliasToNuGetFramework.TryGetValue(targetFramework, out translated);
                     if (succeeded)
                     {
                         targetFramework = translated;
@@ -805,9 +868,29 @@ namespace NuGet.Build.Tasks.Pack
 
         private void PopulateProjectAndPackageReferences(PackageBuilder packageBuilder, LockFile assetsFile,
             IDictionary<string, string> projectRefToVersionMap,
-            ISet<NuGetFramework> frameworksWithSuppressedDependencies)
+            ISet<string> frameworksWithSuppressedDependencies,
+            Dictionary<string, List<string>> nuGetFrameworkToDuplicateAliases)
         {
-            var dependenciesByFramework = new Dictionary<NuGetFramework, HashSet<LibraryDependency>>();
+            if (nuGetFrameworkToDuplicateAliases != null)
+            {
+                foreach (var duplicates in nuGetFrameworkToDuplicateAliases)
+                {
+                    var unsuppressedAliases = duplicates.Value
+                        .Where(alias => !frameworksWithSuppressedDependencies.Contains(alias))
+                        .ToList();
+
+                    if (unsuppressedAliases.Count > 1)
+                    {
+                        throw new PackagingException(NuGetLogCode.NU5051,
+                            string.Format(CultureInfo.CurrentCulture,
+                                Strings.DuplicateFrameworks,
+                                string.Join(", ", duplicates.Value) + " => " + duplicates.Key,
+                                string.Format(CultureInfo.CurrentCulture, Strings.AmbigiousPackageDependencies, string.Join(", ", unsuppressedAliases))));
+                    }
+                }
+            }
+
+            var dependenciesByFramework = new Dictionary<NuGetFramework, HashSet<LibraryDependency>>(NuGetFrameworkFullComparer.Instance);
 
             InitializeProjectDependencies(assetsFile, dependenciesByFramework, projectRefToVersionMap, frameworksWithSuppressedDependencies);
             InitializePackageDependencies(assetsFile, dependenciesByFramework, frameworksWithSuppressedDependencies);
@@ -822,7 +905,7 @@ namespace NuGet.Build.Tasks.Pack
             LockFile assetsFile,
             IDictionary<NuGetFramework, HashSet<LibraryDependency>> dependenciesByFramework,
             IDictionary<string, string> projectRefToVersionMap,
-            ISet<NuGetFramework> frameworkWithSuppressedDependencies)
+            ISet<string> frameworkWithSuppressedDependencies)
         {
             // From the package spec, all we know is each absolute path to the project reference the the target
             // framework that project reference applies to.
@@ -846,8 +929,8 @@ namespace NuGet.Build.Tasks.Pack
             // Consider all of the project references, grouped by target framework.
             foreach (var framework in assetsFile.PackageSpec.RestoreMetadata.TargetFrameworks)
             {
-                var target = assetsFile.GetTarget(framework.FrameworkName, runtimeIdentifier: null);
-                if (target == null || frameworkWithSuppressedDependencies.Contains(framework.FrameworkName))
+                var target = assetsFile.GetTarget(framework.TargetAlias, runtimeIdentifier: null);
+                if (target == null || frameworkWithSuppressedDependencies.Contains(framework.TargetAlias))
                 {
                     continue;
                 }
@@ -889,7 +972,7 @@ namespace NuGet.Build.Tasks.Pack
                     //   https://github.com/NuGet/Home/issues/3891
                     //
                     // For now, assume the project reference is a package dependency.
-                    var projectDependency = new LibraryDependency
+                    var projectDependency = new LibraryDependency()
                     {
                         LibraryRange = new LibraryRange(
                             targetLibrary.Name,
@@ -907,88 +990,155 @@ namespace NuGet.Build.Tasks.Pack
         private void InitializePackageDependencies(
             LockFile assetsFile,
             Dictionary<NuGetFramework, HashSet<LibraryDependency>> dependenciesByFramework,
-            ISet<NuGetFramework> frameworkWithSuppressedDependencies)
+            ISet<string> frameworkWithSuppressedDependencies)
         {
             var packageSpecificNoWarnProperties = new Dictionary<string, HashSet<(NuGetLogCode, NuGetFramework)>>(StringComparer.OrdinalIgnoreCase);
+            var frameworks = assetsFile.PackageSpec.TargetFrameworks;
 
             // From the package spec, we know the direct package dependencies of this project.
-            foreach (TargetFrameworkInformation framework in assetsFile.PackageSpec.TargetFrameworks)
+            for (var i = 0; i < frameworks.Count; i++)
             {
-                if (frameworkWithSuppressedDependencies.Contains(framework.FrameworkName))
+                var framework = frameworks[i];
+
+                if (frameworkWithSuppressedDependencies.Contains(framework.TargetAlias))
                 {
                     continue;
                 }
 
-                IEnumerable<LibraryDependency> centralTransitiveDependencies = assetsFile
-                    .CentralTransitiveDependencyGroups
-                    .Where(centralTDG => centralTDG.FrameworkName.Equals(framework.FrameworkName.ToString(), StringComparison.OrdinalIgnoreCase))
-                    .SelectMany(centralTDG => centralTDG.TransitiveDependencies);
+                // First, the framework-specific dependencies
+                var newFrameworkDependencies = AddDependencies(framework.Dependencies, dependenciesByFramework, framework, assetsFile, packageSpecificNoWarnProperties);
+                framework = new TargetFrameworkInformation(framework) { Dependencies = newFrameworkDependencies };
 
-                // First, add each of the generic package dependencies to the framework-specific list.
-                var packageDependencies = assetsFile
-                    .PackageSpec
-                    .Dependencies
-                    .Concat(framework.Dependencies)
-                    .Concat(centralTransitiveDependencies);
-
-                HashSet<LibraryDependency> dependencies;
-                if (!dependenciesByFramework.TryGetValue(framework.FrameworkName, out dependencies))
+                // Next, the central transitive dependencies
+                foreach (var centralTDG in assetsFile.CentralTransitiveDependencyGroups)
                 {
-                    dependencies = new HashSet<LibraryDependency>();
-                    dependenciesByFramework[framework.FrameworkName] = dependencies;
+                    if (centralTDG.FrameworkName.Equals(framework.FrameworkName.ToString(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        AddDependencies(centralTDG.TransitiveDependencies.ToList(), dependenciesByFramework, framework, assetsFile, packageSpecificNoWarnProperties);
+                    }
                 }
 
-                // Add each package dependency.
-                foreach (var packageDependency in packageDependencies)
-                {
-                    // If we have a floating package dependency like 1.2.3-xyz-*, we
-                    // use the version of the package that restore resolved it to.
-                    if (packageDependency.LibraryRange.VersionRange.IsFloating)
-                    {
-                        var lockFileTarget = assetsFile.GetTarget(framework.FrameworkName, runtimeIdentifier: null);
-                        var package = lockFileTarget.Libraries.First(
-                            library =>
-                                string.Equals(library.Name, packageDependency.Name, StringComparison.OrdinalIgnoreCase));
-                        if (package != null)
-                        {
-                            if (packageDependency.LibraryRange.VersionRange.HasUpperBound)
-                            {
-                                packageDependency.LibraryRange.VersionRange = new VersionRange(
-                                    minVersion: package.Version,
-                                    includeMinVersion: packageDependency.LibraryRange.VersionRange.IsMinInclusive,
-                                    maxVersion: packageDependency.LibraryRange.VersionRange.MaxVersion,
-                                    includeMaxVersion: packageDependency.LibraryRange.VersionRange.IsMaxInclusive);
-                            }
-                            else
-                            {
-                                packageDependency.LibraryRange.VersionRange = new VersionRange(
-                                    minVersion: package.Version,
-                                    includeMinVersion: packageDependency.LibraryRange.VersionRange.IsMinInclusive);
-                            }
-                        }
-                    }
-
-                    if (packageDependency.NoWarn.Count > 0)
-                    {
-                        HashSet<(NuGetLogCode, NuGetFramework)> nowarnProperties = null;
-
-                        if (!packageSpecificNoWarnProperties.TryGetValue(packageDependency.Name, out nowarnProperties))
-                        {
-                            nowarnProperties = new HashSet<(NuGetLogCode, NuGetFramework)>();
-                        }
-
-                        nowarnProperties.AddRange(packageDependency.NoWarn.Select(n => (n, framework.FrameworkName)));
-                        packageSpecificNoWarnProperties[packageDependency.Name] = nowarnProperties;
-                    }
-
-                    PackCommandRunner.AddLibraryDependency(packageDependency, dependencies);
-                }
+                var dependencies = dependenciesByFramework[framework.FrameworkName];
+                dependencies.RemoveWhere(dependency => IsDependencyPruned(dependency, framework.PackagesToPrune));
+                frameworks[i] = framework;
             }
 
             if (packageSpecificNoWarnProperties.Keys.Count > 0)
             {
                 _packageSpecificWarningProperties = PackageSpecificWarningProperties.CreatePackageSpecificWarningProperties(packageSpecificNoWarnProperties);
             }
+
+            static bool IsDependencyPruned(LibraryDependency dependency, IReadOnlyDictionary<string, PrunePackageReference> packagesToPrune)
+            {
+                if (packagesToPrune?.TryGetValue(dependency.Name, out PrunePackageReference packageToPrune) == true
+                    && dependency.LibraryRange.VersionRange.Satisfies(packageToPrune.VersionRange.MaxVersion))
+                {
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        private static void AddDependencies(
+            IList<LibraryDependency> packageDependencies,
+            Dictionary<NuGetFramework, HashSet<LibraryDependency>> dependenciesByFramework,
+            TargetFrameworkInformation framework,
+            LockFile assetsFile,
+            Dictionary<string, HashSet<(NuGetLogCode, NuGetFramework)>> packageSpecificNoWarnProperties)
+        {
+            HashSet<LibraryDependency> dependencies;
+            if (!dependenciesByFramework.TryGetValue(framework.FrameworkName, out dependencies))
+            {
+                dependencies = new HashSet<LibraryDependency>();
+                dependenciesByFramework[framework.FrameworkName] = dependencies;
+            }
+
+            // Add each package dependency.
+            for (int i = 0; i < packageDependencies.Count; i++)
+            {
+                var updatedPackageDependency = GetUpdatedPackageDependency(packageDependencies[i], assetsFile, framework, packageSpecificNoWarnProperties, dependencies);
+                packageDependencies[i] = updatedPackageDependency;
+            }
+        }
+
+        private static ImmutableArray<LibraryDependency> AddDependencies(
+            ImmutableArray<LibraryDependency> packageDependencies,
+            Dictionary<NuGetFramework, HashSet<LibraryDependency>> dependenciesByFramework,
+            TargetFrameworkInformation framework,
+            LockFile assetsFile,
+            Dictionary<string, HashSet<(NuGetLogCode, NuGetFramework)>> packageSpecificNoWarnProperties)
+        {
+            HashSet<LibraryDependency> dependencies;
+            if (!dependenciesByFramework.TryGetValue(framework.FrameworkName, out dependencies))
+            {
+                dependencies = new HashSet<LibraryDependency>();
+                dependenciesByFramework[framework.FrameworkName] = dependencies;
+            }
+
+            LibraryDependency[] updatedDependencies = new LibraryDependency[packageDependencies.Length];
+
+            // Add each package dependency.
+            for (var i = 0; i < packageDependencies.Length; i++)
+            {
+                var updatedPackageDependency = GetUpdatedPackageDependency(packageDependencies[i], assetsFile, framework, packageSpecificNoWarnProperties, dependencies);
+                updatedDependencies[i] = updatedPackageDependency;
+            }
+
+            return ImmutableCollectionsMarshal.AsImmutableArray(updatedDependencies);
+        }
+
+        private static LibraryDependency GetUpdatedPackageDependency(
+            LibraryDependency packageDependency,
+            LockFile assetsFile,
+            TargetFrameworkInformation framework,
+            Dictionary<string, HashSet<(NuGetLogCode, NuGetFramework)>> packageSpecificNoWarnProperties,
+            HashSet<LibraryDependency> dependencies)
+        {
+            // If we have a floating package dependency like 1.2.3-xyz-*, we
+            // use the version of the package that restore resolved it to.
+            if (packageDependency.LibraryRange.VersionRange.IsFloating)
+            {
+                var lockFileTarget = assetsFile.GetTarget(framework.FrameworkName, runtimeIdentifier: null);
+                var package = lockFileTarget.Libraries.First(
+                    library =>
+                        string.Equals(library.Name, packageDependency.Name, StringComparison.OrdinalIgnoreCase));
+
+                VersionRange versionRange;
+                if (packageDependency.LibraryRange.VersionRange.HasUpperBound)
+                {
+                    versionRange = new VersionRange(
+                        minVersion: package.Version,
+                        includeMinVersion: packageDependency.LibraryRange.VersionRange.IsMinInclusive,
+                        maxVersion: packageDependency.LibraryRange.VersionRange.MaxVersion,
+                        includeMaxVersion: packageDependency.LibraryRange.VersionRange.IsMaxInclusive);
+                }
+                else
+                {
+                    versionRange = new VersionRange(
+                        minVersion: package.Version,
+                        includeMinVersion: packageDependency.LibraryRange.VersionRange.IsMinInclusive);
+                }
+
+                var libraryRange = new LibraryRange(packageDependency.LibraryRange) { VersionRange = versionRange };
+                packageDependency = new LibraryDependency(packageDependency) { LibraryRange = libraryRange };
+            }
+
+            if (packageDependency.NoWarn.Length > 0)
+            {
+                HashSet<(NuGetLogCode, NuGetFramework)> nowarnProperties = null;
+
+                if (!packageSpecificNoWarnProperties.TryGetValue(packageDependency.Name, out nowarnProperties))
+                {
+                    nowarnProperties = new HashSet<(NuGetLogCode, NuGetFramework)>();
+                }
+
+                nowarnProperties.AddRange(packageDependency.NoWarn.Select(n => (n, framework.FrameworkName)));
+                packageSpecificNoWarnProperties[packageDependency.Name] = nowarnProperties;
+            }
+
+            PackCommandRunner.AddLibraryDependency(packageDependency, dependencies);
+
+            return packageDependency;
         }
 
         private static IDictionary<string, string> ParsePropertiesAsDictionary(string[] properties)
@@ -1018,6 +1168,27 @@ namespace NuGet.Build.Tasks.Pack
             }
 
             return dictionary;
+        }
+
+        internal static void SetPackArgsPropertiesFromNuspecProperties(PackArgs packArgs, string[] nuspecProperties)
+        {
+            if (nuspecProperties == null || !nuspecProperties.Any())
+            {
+                return;
+            }
+
+            packArgs.Properties.AddRange(ParsePropertiesAsDictionary(nuspecProperties));
+            if (packArgs.Properties.TryGetValue("version", out var packageVersion))
+            {
+                if (!NuGetVersion.TryParse(packageVersion, out var version))
+                {
+                    throw new ArgumentException(string.Format(
+                        CultureInfo.CurrentCulture,
+                        Strings.InvalidPackageVersion,
+                        packageVersion));
+                }
+                packArgs.Version = version.ToNormalizedString();
+            }
         }
 
         private HashSet<string> InitOutputExtensions(IEnumerable<string> outputExtensions)

@@ -35,10 +35,10 @@ namespace NuGet.Protocol.Core.Types
         /// <param name="cancellationToken">A cancellation token.</param>
         /// <returns>A task that represents the asynchronous operation.
         /// The task result (<see cref="Task{TResult}.Result" />) returns a Tuple&lt;bool, INuGetResource&gt;</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="source"/> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="source"/> is <see langword="null" />.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="cancellationToken"/>
         /// is cancelled.</exception>
-        public override async Task<Tuple<bool, INuGetResource>> TryCreate(
+        public override async Task<Tuple<bool, INuGetResource?>> TryCreate(
             SourceRepository source,
             CancellationToken cancellationToken)
         {
@@ -49,7 +49,7 @@ namespace NuGet.Protocol.Core.Types
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            PluginResource resource = null;
+            PluginResource? resource = null;
 
             var pluginCreationResults = await _pluginManager.CreatePluginsAsync(source, cancellationToken);
 
@@ -61,7 +61,7 @@ namespace NuGet.Protocol.Core.Types
                     HttpHandlerResourceV3.CredentialService?.Value);
             }
 
-            return new Tuple<bool, INuGetResource>(resource != null, resource);
+            return new Tuple<bool, INuGetResource?>(resource != null, resource);
         }
     }
 }

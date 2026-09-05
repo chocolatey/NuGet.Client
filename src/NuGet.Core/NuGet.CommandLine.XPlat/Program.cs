@@ -2,39 +2,61 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
+using System.CommandLine;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
-using System.Reflection;
-using Microsoft.Extensions.CommandLineUtils;
+using NuGet.CommandLine.XPlat.Commands;
+using NuGet.CommandLine.XPlat.Commands.NuGet.Add;
+using NuGet.CommandLine.XPlat.Commands.NuGet.Disable;
+using NuGet.CommandLine.XPlat.Commands.NuGet.Enable;
+using NuGet.CommandLine.XPlat.Commands.NuGet.List;
+using NuGet.CommandLine.XPlat.Commands.NuGet.Remove;
+using NuGet.CommandLine.XPlat.Commands.NuGet.Update;
+using NuGet.CommandLine.XPlat.Commands.Why;
 using NuGet.Commands;
 using NuGet.Common;
 
+#if DEBUG
+using NuGet.CommandLine.XPlat.Commands.Package.Update;
+using NuGet.CommandLine.XPlat.Commands.Package.PackageDownload;
+#endif
+
 namespace NuGet.CommandLine.XPlat
 {
-    internal class Program
+    public static class Program
     {
 #if DEBUG
         private const string DebugOption = "--debug";
 #endif
-        private const string DotnetNuGetAppName = "dotnet nuget";
-        private const string DotnetPackageAppName = "NuGet.CommandLine.XPlat.dll package";
 
-        public static int Main(string[] args)
+        internal static int Main(string[] args)
+        {
+#pragma warning disable IL2026 // Main is the entry point and cannot carry [RequiresUnreferencedCode]; this exe intentionally runs MSBuild in-process.
+            return MainInternal(args, virtualProjectBuilder: null);
+#pragma warning restore IL2026
+        }
+
+        [RequiresUnreferencedCode("In-process MSBuild execution loads task assemblies and loggers via reflection and is not trim-safe.")]
+        public static int Run(string[] args, IVirtualProjectBuilder virtualProjectBuilder)
+        {
+            return MainInternal(args, virtualProjectBuilder);
+        }
+
+        [RequiresUnreferencedCode("In-process MSBuild execution loads task assemblies and loggers via reflection and is not trim-safe.")]
+        private static int MainInternal(string[] args, IVirtualProjectBuilder? virtualProjectBuilder)
         {
             var log = new CommandOutputLogger(LogLevel.Information);
-            return MainInternal(args, log);
+            return MainInternal(args, log, EnvironmentVariableWrapper.Instance, virtualProjectBuilder);
         }
 
         /// <summary>
         /// Internal Main. This is used for testing.
         /// </summary>
-        public static int MainInternal(string[] args, CommandOutputLogger log)
+        internal static int MainInternal(string[] args, CommandOutputLogger log, IEnvironmentVariableReader environmentVariableReader, IVirtualProjectBuilder? virtualProjectBuilder = null)
         {
-#if DEBUG
-            // Uncomment the following when debugging. Also uncomment the PackageReference for Microsoft.Build.Locator.
-            /*try
+#if USEMSBUILDLOCATOR
+            try
             {
                 // .NET JIT compiles one method at a time. If this method calls `MSBuildLocator` directly, the
                 // try block is never entered if Microsoft.Build.Locator.dll can't be found. So, run it in a
@@ -45,14 +67,16 @@ namespace NuGet.CommandLine.XPlat
             {
                 // MSBuildLocator is used only to enable Visual Studio debugging.
                 // It's not needed when using a patched dotnet sdk, so it doesn't matter if it fails.
-            }*/
+            }
+#endif
 
-            var debugNuGetXPlat = Environment.GetEnvironmentVariable("DEBUG_NUGET_XPLAT");
+#if DEBUG
+            string? debugNuGetXPlat = environmentVariableReader.GetEnvironmentVariable("DEBUG_NUGET_XPLAT");
 
             if (args.Contains(DebugOption) || string.Equals(bool.TrueString, debugNuGetXPlat, StringComparison.OrdinalIgnoreCase))
             {
                 args = args.Where(arg => !StringComparer.OrdinalIgnoreCase.Equals(arg, DebugOption)).ToArray();
-                Debugger.Launch();
+                System.Diagnostics.Debugger.Launch();
             }
 #endif
 
@@ -63,98 +87,101 @@ namespace NuGet.CommandLine.XPlat
             }
             else
             {
-                UILanguageOverride.Setup(log);
+                UILanguageOverride.Setup(log, environmentVariableReader);
             }
             log.LogDebug(string.Format(CultureInfo.CurrentCulture, Strings.Debug_CurrentUICulture, CultureInfo.DefaultThreadCurrentUICulture));
 
             NuGet.Common.Migrations.MigrationRunner.Run();
 
-            var app = InitializeApp(args, log);
-
-            // Remove the correct item in array for "package" commands. Only do this when "add package", "remove package", etc... are being run.
-            if (app.Name == DotnetPackageAppName)
+            Func<ILoggerWithColor> getHidePrefixLogger = () =>
             {
-                // package add ...
-                args[0] = null;
-                args = args
-                    .Where(e => e != null)
-                    .ToArray();
+                log.HidePrefixForInfoAndMinimal = true;
+                return log;
+            };
+
+            Action<LogLevel> setLogLevel = (logLevel) => log.VerbosityLevel = logLevel;
+
+            RootCommand rootCommand = new RootCommand();
+            rootCommand.Options.Add(new Option<bool>(CommandConstants.ForceEnglishOutputOption)
+            {
+                Description = Strings.ForceEnglishOutput_Description,
+                Arity = ArgumentArity.Zero,
+                Recursive = true
+            });
+            Option<bool> interactiveOption = new Option<bool>("--interactive")
+            {
+                Description = Strings.AddPkg_InteractiveDescription,
+                DefaultValueFactory = _ => Console.IsOutputRedirected
+            };
+
+            if (args.Length > 0 && args[0] == "package")
+            {
+                var packageCommand = new Command("package");
+                rootCommand.Subcommands.Add(packageCommand);
+
+                var msbuild = new MSBuildAPIUtility(log, virtualProjectBuilder);
+
+                PackageSearchCommand.Register(packageCommand, getHidePrefixLogger);
+                AddPackageReferenceCommand.Register(packageCommand, () => log, () => new AddPackageReferenceCommandRunner(), () => msbuild.VirtualProjectBuilder);
+                RemovePackageReferenceCommand.Register(packageCommand, () => log, () => new RemovePackageReferenceCommandRunner(), () => msbuild.VirtualProjectBuilder);
+#pragma warning disable IL2026 // ListPackageCommand.Register intentionally uses MSBuild in-process for list package; annotated at the public boundary (Run/IListPackageCommandRunner).
+                ListPackageCommand.Register(packageCommand, getHidePrefixLogger, setLogLevel, () => new ListPackageCommandRunner(msbuild));
+#pragma warning restore IL2026
+#if DEBUG
+                PackageUpdateCommand.Register(packageCommand, interactiveOption, virtualProjectBuilder);
+                PackageDownloadCommand.Register(packageCommand, interactiveOption);
+#endif
+            }
+            else
+            {
+                var nugetCommand = new Command("nuget");
+                rootCommand.Subcommands.Add(nugetCommand);
+
+                var lazyConsole = new Lazy<Spectre.Console.IAnsiConsole>(() => Spectre.Console.AnsiConsole.Console);
+
+                ConfigCommand.Register(rootCommand, getHidePrefixLogger);
+                WhyCommand.Register(rootCommand, lazyConsole, virtualProjectBuilder);
+                DeleteCommand.Register(rootCommand, getHidePrefixLogger);
+                PushCommand.Register(rootCommand, getHidePrefixLogger);
+                LocalsCommand.Register(rootCommand, getHidePrefixLogger);
+                VerifyCommand.Register(rootCommand, getHidePrefixLogger, setLogLevel, () => new VerifyCommandRunner());
+                SignCommand.Register(rootCommand, getHidePrefixLogger, setLogLevel, () => new SignCommandRunner());
+                TrustedSignersCommand.Register(rootCommand, getHidePrefixLogger, setLogLevel);
+
+                // Source/client-cert verb commands
+                DotnetNuGetAddCommand.Register(rootCommand, getHidePrefixLogger);
+                DotnetNuGetDisableCommand.Register(rootCommand, getHidePrefixLogger);
+                DotnetNuGetEnableCommand.Register(rootCommand, getHidePrefixLogger);
+                DotnetNuGetListCommand.Register(rootCommand, getHidePrefixLogger);
+                DotnetNuGetRemoveCommand.Register(rootCommand, getHidePrefixLogger);
+                DotnetNuGetUpdateCommand.Register(rootCommand, getHidePrefixLogger);
+
+                // These commands have the same parser as the dotnet CLI, so they can be used interchangeably with "dotnet nuget *"
+                ConfigCommand.Register(nugetCommand, getHidePrefixLogger);
+                WhyCommand.Register(nugetCommand, lazyConsole, virtualProjectBuilder);
             }
 
             NetworkProtocolUtility.SetConnectionLimit();
-
             XPlatUtility.SetUserAgent();
 
-            app.OnExecute(() =>
-            {
-                app.ShowHelp();
-
-                return 0;
-            });
-
-            log.LogVerbose(string.Format(CultureInfo.CurrentCulture, Strings.OutputNuGetVersion, app.FullName, app.LongVersionGetter()));
-
             int exitCode = 0;
+            ParseResult parseResult = rootCommand.Parse(args);
+            var invocationConfig = new InvocationConfiguration
+            {
+                EnableDefaultExceptionHandler = false
+            };
 
             try
             {
-                exitCode = app.Execute(args);
+                exitCode = parseResult.Invoke(invocationConfig);
             }
             catch (Exception e)
             {
-                bool handled = false;
-                string verb = null;
-                if (args.Length > 1)
-                {
-                    // Redirect users nicely if they do 'dotnet nuget sources add' or 'dotnet nuget add sources'
-                    if (StringComparer.OrdinalIgnoreCase.Compare(args[0], "sources") == 0)
-                    {
-                        verb = args[1];
-                    }
-                    else if (StringComparer.OrdinalIgnoreCase.Compare(args[1], "sources") == 0)
-                    {
-                        verb = args[0];
-                    }
-
-                    if (verb != null)
-                    {
-                        switch (verb.ToLowerInvariant())
-                        {
-                            case "add":
-                            case "remove":
-                            case "update":
-                            case "enable":
-                            case "disable":
-                            case "list":
-                                log.LogMinimal(string.Format(CultureInfo.CurrentCulture,
-                                    Strings.Sources_Redirect, $"dotnet nuget {verb} source"));
-                                handled = true;
-                                break;
-                            default:
-                                break;
-                        }
-                    }
-                }
-
-                if (!handled)
-                {
-                    // Log the error
-                    if (ExceptionLogger.Instance.ShowStack)
-                    {
-                        log.LogError(e.ToString());
-                    }
-                    else
-                    {
-                        log.LogError(ExceptionUtilities.DisplayMessage(e));
-                    }
-
-                    // Log the stack trace as verbose output.
-                    log.LogVerbose(e.ToString());
-
-                    exitCode = 1;
-
-                    ShowBestHelp(app, args);
-                }
+                LogException(e, log);
+                // Commands that let exceptions propagate to here (e.g. push, source, client-cert)
+                // have historically returned exit code 1 on failure. Preserve that contract rather
+                // than returning ExitCodes.Error (2), which is reserved for commands that set it explicitly.
+                exitCode = 1;
             }
 
             // Limit the exit code range to 0-255 to support POSIX
@@ -166,75 +193,20 @@ namespace NuGet.CommandLine.XPlat
             return exitCode;
         }
 
-
-        private static CommandLineApplication InitializeApp(string[] args, CommandOutputLogger log)
+        internal static void LogException(Exception e, ILogger log)
         {
-            // Many commands don't want prefixes output. Use this func instead of () => log to set the HidePrefix property first.
-            Func<ILogger> getHidePrefixLogger = () =>
+            // Log the error
+            if (ExceptionLogger.Instance.ShowStack)
             {
-                log.HidePrefixForInfoAndMinimal = true;
-                return log;
-            };
-
-            // Allow commands to set the NuGet log level
-            Action<LogLevel> setLogLevel = (logLevel) => log.VerbosityLevel = logLevel;
-
-            var app = new CommandLineApplication();
-
-            if (args.Any() && args[0] == "package")
-            {
-                // "dotnet * package" commands
-                app.Name = DotnetPackageAppName;
-                AddPackageReferenceCommand.Register(app, () => log, () => new AddPackageReferenceCommandRunner());
-                RemovePackageReferenceCommand.Register(app, () => log, () => new RemovePackageReferenceCommandRunner());
-                ListPackageCommand.Register(app, getHidePrefixLogger, setLogLevel, () => new ListPackageCommandRunner());
+                log.LogError(e.ToString());
             }
             else
             {
-                // "dotnet nuget *" commands
-                app.Name = DotnetNuGetAppName;
-                CommandParsers.Register(app, getHidePrefixLogger);
-                DeleteCommand.Register(app, getHidePrefixLogger);
-                PushCommand.Register(app, getHidePrefixLogger);
-                LocalsCommand.Register(app, getHidePrefixLogger);
-                VerifyCommand.Register(app, getHidePrefixLogger, setLogLevel, () => new VerifyCommandRunner());
-                TrustedSignersCommand.Register(app, getHidePrefixLogger, setLogLevel);
-                SignCommand.Register(app, getHidePrefixLogger, setLogLevel, () => new SignCommandRunner());
+                log.LogError(ExceptionUtilities.DisplayMessage(e));
             }
 
-            app.FullName = Strings.App_FullName;
-            app.HelpOption(XPlatUtility.HelpOption);
-            app.VersionOption("--version", typeof(Program).GetTypeInfo().Assembly.GetName().Version.ToString());
-
-            return app;
-        }
-
-        private static void ShowBestHelp(CommandLineApplication app, string[] args)
-        {
-            CommandLineApplication lastCommand = null;
-            List<CommandLineApplication> commands = app.Commands;
-            // tunnel down into the args, and show the best help possible.
-            foreach (string arg in args)
-            {
-                foreach (CommandLineApplication command in commands)
-                {
-                    if (arg == command.Name)
-                    {
-                        lastCommand = command;
-                        commands = command.Commands;
-                        break;
-                    }
-                }
-            }
-
-            if (lastCommand != null)
-            {
-                lastCommand.ShowHelp();
-            }
-            else
-            {
-                app.ShowHelp();
-            }
+            // Log the stack trace as verbose output.
+            log.LogVerbose(e.ToString());
         }
     }
 }

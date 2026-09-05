@@ -32,8 +32,9 @@ namespace NuGet.Commands
 
         private const int MACOS_INVALID_CERT = -25257;
 
+        private const int CRYPT_E_BAD_DECODE = unchecked((int)0x80092002);
 
-#if IS_SIGNING_SUPPORTED && IS_CORECLR
+#if IS_CORECLR
         //Generic exception ASN1 corrupted data
         private const int OPENSSL_ASN1_CORRUPTED_DATA_ERROR = unchecked((int)0x80131501);
 #else
@@ -60,6 +61,14 @@ namespace NuGet.Commands
 
                     resultCollection = new X509Certificate2Collection(cert);
                 }
+                catch (CryptographicException ex) when (ex.InnerException is FileNotFoundException)
+                {
+                    throw new SignCommandException(
+                        LogMessage.CreateError(NuGetLogCode.NU3001,
+                            string.Format(CultureInfo.CurrentCulture,
+                                Strings.SignCommandCertificateFileNotFound,
+                                options.CertificatePath)));
+                }
                 catch (CryptographicException ex)
                 {
                     switch (ex.HResult)
@@ -83,7 +92,8 @@ namespace NuGet.Commands
                                     options.CertificatePath)));
 
                         case CRYPT_E_NO_MATCH_HRESULT:
-#if IS_SIGNING_SUPPORTED && IS_CORECLR
+                        case CRYPT_E_BAD_DECODE:
+#if IS_CORECLR
                         case OPENSSL_ASN1_CORRUPTED_DATA_ERROR:
 #else
                         case OPENSSL_ERR_R_NESTED_ASN1_ERROR:
@@ -116,13 +126,22 @@ namespace NuGet.Commands
             return resultCollection;
         }
 
-        private static async Task<X509Certificate2> LoadCertificateFromFileAsync(CertificateSourceOptions options)
+        private static
+#if IS_DESKTOP
+            async
+#endif
+            Task<X509Certificate2> LoadCertificateFromFileAsync(CertificateSourceOptions options)
         {
             X509Certificate2 cert;
 
             if (!string.IsNullOrEmpty(options.CertificatePassword))
             {
-                cert = new X509Certificate2(options.CertificatePath, options.CertificatePassword); // use the password if the user provided it.
+                // use the password if the user provided it
+#if NET9_0_OR_GREATER
+                cert = X509CertificateLoader.LoadPkcs12FromFile(options.CertificatePath, options.CertificatePassword);
+#else
+                cert = new X509Certificate2(options.CertificatePath, options.CertificatePassword);
+#endif
             }
             else
             {
@@ -148,16 +167,24 @@ namespace NuGet.Commands
                     }
                 }
 #else
+#if NET9_0_OR_GREATER
+                cert = X509CertificateLoader.LoadPkcs12FromFile(options.CertificatePath, null);
+#else
                 cert = new X509Certificate2(options.CertificatePath);
+#endif
 #endif
             }
 
+#if IS_DESKTOP
             return cert;
+#else
+            return Task.FromResult(cert);
+#endif
         }
 
         private static X509Certificate2Collection LoadCertificateFromStore(CertificateSourceOptions options)
         {
-            X509Certificate2Collection resultCollection = null;
+            X509Certificate2Collection resultCollection = new();
 
             using var store = new X509Store(options.StoreName, options.StoreLocation);
 
@@ -169,9 +196,27 @@ namespace NuGet.Commands
             // validity checks ourselves.
             const bool validOnly = false;
 
-            if (!string.IsNullOrEmpty(options.Fingerprint))
+            if (!string.IsNullOrEmpty(options.Fingerprint) &&
+                CertificateUtility.TryDeduceHashAlgorithm(options.Fingerprint, out Common.HashAlgorithmName hashAlgorithmName))
             {
-                resultCollection = store.Certificates.Find(X509FindType.FindByThumbprint, options.Fingerprint, validOnly);
+                if (hashAlgorithmName == Common.HashAlgorithmName.SHA1)
+                {
+                    resultCollection = store.Certificates.Find(X509FindType.FindByThumbprint, options.Fingerprint, validOnly);
+                }
+                else if (hashAlgorithmName != Common.HashAlgorithmName.Unknown)
+                {
+                    foreach (var cert in store.Certificates)
+                    {
+                        string actualFingerprint = CertificateUtility.GetHashString(cert, hashAlgorithmName);
+
+                        if (string.Equals(actualFingerprint, options.Fingerprint, StringComparison.InvariantCultureIgnoreCase))
+                        {
+                            resultCollection.Add(cert);
+                            break;
+                        }
+                    }
+
+                }
             }
             else if (!string.IsNullOrEmpty(options.SubjectName))
             {
@@ -180,8 +225,7 @@ namespace NuGet.Commands
 
             store.Close();
 
-            resultCollection = resultCollection ?? new X509Certificate2Collection();
-            resultCollection = GetValidCertificates(resultCollection);
+            resultCollection = GetValidCertificates(resultCollection, options.AllowUntrustedRoot);
 
             return resultCollection;
         }
@@ -208,13 +252,13 @@ namespace NuGet.Commands
             }
         }
 
-        private static X509Certificate2Collection GetValidCertificates(X509Certificate2Collection certificates)
+        private static X509Certificate2Collection GetValidCertificates(X509Certificate2Collection certificates, bool allowUntrustedRoot = false)
         {
             var validCertificates = new X509Certificate2Collection();
 
             foreach (var certificate in certificates)
             {
-                if (IsValid(certificate, certificates))
+                if (IsValid(certificate, certificates, allowUntrustedRoot))
                 {
                     validCertificates.Add(certificate);
                 }
@@ -223,7 +267,7 @@ namespace NuGet.Commands
             return validCertificates;
         }
 
-        private static bool IsValid(X509Certificate2 certificate, X509Certificate2Collection extraStore)
+        private static bool IsValid(X509Certificate2 certificate, X509Certificate2Collection extraStore, bool allowUntrustedRoot = false)
         {
             try
             {
@@ -231,7 +275,8 @@ namespace NuGet.Commands
                     certificate,
                     extraStore,
                     NullLogger.Instance,
-                    CertificateType.Signature))
+                    CertificateType.Signature,
+                    allowUntrustedRoot))
                 {
                     return chain != null && chain.Count > 0;
                 }

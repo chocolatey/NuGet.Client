@@ -1,4 +1,3 @@
-using System;
 using System.Text;
 using NuGet.Protocol.Plugins;
 using NuGet.Protocol.Plugins.Tests;
@@ -61,7 +60,7 @@ namespace NuGet.Protocol.Tests.Plugins
             string[] authenticationTypes,
             MessageResponseCode messageResponseCode)
         {
-            var response = JsonSerializationUtilities.Deserialize<GetAuthenticationCredentialsResponse>(json);
+            var response = JsonSerializationUtilities.Deserialize<GetAuthenticationCredentialsResponse>(json)!;
             Assert.Equal(response.Username, username);
             Assert.Equal(response.Password, password);
             Assert.Equal(response.Message, message);

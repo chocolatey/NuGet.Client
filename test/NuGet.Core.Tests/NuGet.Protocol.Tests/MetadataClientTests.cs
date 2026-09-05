@@ -1,12 +1,13 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Moq;
 using NuGet.Frameworks;
 using NuGet.Packaging.Core;
 using NuGet.Protocol.Core.Types;
@@ -28,14 +29,14 @@ namespace NuGet.Protocol.Tests
 
             var repo = StaticHttpHandler.CreateSource("http://testsource.com/v3/index.json", Repository.Provider.GetCoreV3(), responses);
 
-            var resource = await repo.GetResourceAsync<DependencyInfoResource>();
+            var resource = await repo.GetResourceAsync<DependencyInfoResource>(CancellationToken.None);
 
             // Act
             using (var sourceCacheContext = new SourceCacheContext())
             {
                 var results = await resource.ResolvePackages("deepequal", NuGetFramework.Parse("net45"), sourceCacheContext, Common.NullLogger.Instance, CancellationToken.None);
 
-                var target = results.Where(p => p.Version == NuGetVersion.Parse("1.4.0")).Single();
+                var target = results.Single(p => p.Version == NuGetVersion.Parse("1.4.0"));
 
                 // Assert
                 Assert.Equal(19, results.Count());
@@ -54,7 +55,7 @@ namespace NuGet.Protocol.Tests
 
             var repo = StaticHttpHandler.CreateSource("http://testsource.com/v3/index.json", Repository.Provider.GetCoreV3(), responses);
 
-            var resource = await repo.GetResourceAsync<DependencyInfoResource>();
+            var resource = await repo.GetResourceAsync<DependencyInfoResource>(CancellationToken.None);
 
             var package = new PackageIdentity("deepequal", NuGetVersion.Parse("0.9.0"));
 
@@ -78,7 +79,7 @@ namespace NuGet.Protocol.Tests
 
             var repo = StaticHttpHandler.CreateSource("http://testsource.com/v3/index.json", Repository.Provider.GetCoreV3(), responses);
 
-            var resource = await repo.GetResourceAsync<DependencyInfoResource>();
+            var resource = await repo.GetResourceAsync<DependencyInfoResource>(CancellationToken.None);
 
             // Act
             using (var sourceCacheContext = new SourceCacheContext())
@@ -102,7 +103,7 @@ namespace NuGet.Protocol.Tests
             // Owin is not added
             var repo = StaticHttpHandler.CreateSource("http://testsource.com/v3/index.json", Repository.Provider.GetCoreV3(), responses);
 
-            var resource = await repo.GetResourceAsync<DependencyInfoResource>();
+            var resource = await repo.GetResourceAsync<DependencyInfoResource>(CancellationToken.None);
 
             // Act
             using (var sourceCacheContext = new SourceCacheContext())
@@ -126,7 +127,7 @@ namespace NuGet.Protocol.Tests
             // Owin is not added
             var repo = StaticHttpHandler.CreateSource("http://testsource.com/v3/index.json", Repository.Provider.GetCoreV3(), responses);
 
-            var resource = await repo.GetResourceAsync<DependencyInfoResource>();
+            var resource = await repo.GetResourceAsync<DependencyInfoResource>(CancellationToken.None);
 
             // Act
             using (var sourceCacheContext = new SourceCacheContext())
@@ -149,7 +150,7 @@ namespace NuGet.Protocol.Tests
             // Owin is not added
             var repo = StaticHttpHandler.CreateSource("http://testsource.com/v3/index.json", Repository.Provider.GetCoreV3(), responses);
 
-            var resource = await repo.GetResourceAsync<DependencyInfoResource>();
+            var resource = await repo.GetResourceAsync<DependencyInfoResource>(CancellationToken.None);
 
             var package = new PackageIdentity("owin", NuGetVersion.Parse("1.0.0"));
 
@@ -174,7 +175,7 @@ namespace NuGet.Protocol.Tests
 
             var repo = StaticHttpHandler.CreateSource("http://testsource.com/v3/index.json", Repository.Provider.GetCoreV3(), responses);
 
-            var resource = await repo.GetResourceAsync<DependencyInfoResource>();
+            var resource = await repo.GetResourceAsync<DependencyInfoResource>(CancellationToken.None);
 
             var package = new PackageIdentity("unlistedpackagea", NuGetVersion.Parse("1.0.0"));
 
@@ -202,7 +203,7 @@ namespace NuGet.Protocol.Tests
 
             var repo = StaticHttpHandler.CreateSource("http://testsource.com/v3/index.json", Repository.Provider.GetCoreV3(), responses);
 
-            var resource = await repo.GetResourceAsync<DependencyInfoResource>();
+            var resource = await repo.GetResourceAsync<DependencyInfoResource>(CancellationToken.None);
 
             var package = new PackageIdentity("unlistedpackagec", NuGetVersion.Parse("1.0.0"));
 

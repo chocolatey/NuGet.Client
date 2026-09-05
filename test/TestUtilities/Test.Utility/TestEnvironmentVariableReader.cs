@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using NuGet.Common;
@@ -11,6 +13,8 @@ namespace Test.Utility
     {
         private readonly IReadOnlyDictionary<string, string> _variables;
 
+        private readonly string _toStringSuffix;
+
         public static IEnvironmentVariableReader EmptyInstance { get; } = new TestEnvironmentVariableReader();
 
         private TestEnvironmentVariableReader()
@@ -18,9 +22,10 @@ namespace Test.Utility
             _variables = new Dictionary<string, string>();
         }
 
-        public TestEnvironmentVariableReader(IReadOnlyDictionary<string, string> variables)
+        public TestEnvironmentVariableReader(IReadOnlyDictionary<string, string> variables, string toStringSuffix = null)
         {
             _variables = variables ?? throw new ArgumentNullException(nameof(variables));
+            _toStringSuffix = toStringSuffix;
         }
 
         public string GetEnvironmentVariable(string variable)
@@ -31,6 +36,15 @@ namespace Test.Utility
             }
 
             return null;
+        }
+
+        public override string ToString()
+        {
+            if (string.IsNullOrEmpty(_toStringSuffix))
+            {
+                return base.ToString();
+            }
+            return $"{base.ToString()}({_toStringSuffix})";
         }
     }
 }

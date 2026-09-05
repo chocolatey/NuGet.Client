@@ -1,7 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if IS_SIGNING_SUPPORTED && IS_CORECLR
+#if IS_CORECLR
 using System;
 using System.Linq;
 using System.Security.Cryptography;
@@ -14,15 +14,15 @@ namespace NuGet.Packaging.Signing
 
         public Rfc3161TimestampTokenInfoNetstandard21Wrapper(byte[] timestampTokenInfo)
         {
-            bool success = System.Security.Cryptography.Pkcs.Rfc3161TimestampTokenInfo.TryDecode(
+            if (!System.Security.Cryptography.Pkcs.Rfc3161TimestampTokenInfo.TryDecode(
                 new ReadOnlyMemory<byte>(timestampTokenInfo),
-                out _rfc3161TimestampTokenInfo,
-                out var _);
-
-            if (!success)
+                out var rfc3161TimestampTokenInfo,
+                out var _))
             {
                 throw new CryptographicException(Strings.InvalidAsn1);
             }
+
+            _rfc3161TimestampTokenInfo = rfc3161TimestampTokenInfo;
         }
 
         public Rfc3161TimestampTokenInfoNetstandard21Wrapper(System.Security.Cryptography.Pkcs.Rfc3161TimestampTokenInfo timestampTokenInfo)
@@ -30,7 +30,7 @@ namespace NuGet.Packaging.Signing
             _rfc3161TimestampTokenInfo = timestampTokenInfo;
         }
 
-        public string PolicyId => _rfc3161TimestampTokenInfo.PolicyId.ToString();
+        public string PolicyId => _rfc3161TimestampTokenInfo.PolicyId.ToString()!;
 
         public DateTimeOffset Timestamp => _rfc3161TimestampTokenInfo.Timestamp;
 

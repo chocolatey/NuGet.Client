@@ -1,9 +1,12 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Common;
 using NuGet.Configuration;
@@ -16,7 +19,10 @@ namespace NuGet.Commands
     /// </summary>
     public static class PushRunner
     {
-        public static async Task Run(
+        internal const string ApiKeyEnvironmentVariableName = "NUGET_API_KEY";
+        internal const string SymbolApiKeyEnvironmentVariableName = "NUGET_SYMBOL_API_KEY";
+
+        public static Task Run(
             ISettings settings,
             IPackageSourceProvider sourceProvider,
             IList<string> packagePaths,
@@ -29,61 +35,31 @@ namespace NuGet.Commands
             bool noSymbols,
             bool noServiceEndpoint,
             bool skipDuplicate,
+            bool allowInsecureConnections,
             ILogger logger)
         {
-            source = CommandRunnerUtility.ResolveSource(sourceProvider, source);
-            symbolSource = CommandRunnerUtility.ResolveSymbolSource(sourceProvider, symbolSource);
-
-            if (timeoutSeconds == 0)
-            {
-                timeoutSeconds = 5 * 60;
-            }
-            PackageSource packageSource = CommandRunnerUtility.GetOrCreatePackageSource(sourceProvider, source);
-            var packageUpdateResource = await CommandRunnerUtility.GetPackageUpdateResource(sourceProvider, packageSource);
-
-            // Only warn for V3 style sources because they have a service index which is different from the final push url.
-            if (packageSource.IsHttp && !packageSource.IsHttps &&
-                (packageSource.ProtocolVersion == 3 || packageSource.Source.EndsWith("json", StringComparison.OrdinalIgnoreCase)))
-            {
-                logger.LogWarning(string.Format(CultureInfo.CurrentCulture, Strings.Warning_HttpServerUsage, "push", packageSource.Source));
-            }
-
-            packageUpdateResource.Settings = settings;
-            SymbolPackageUpdateResourceV3 symbolPackageUpdateResource = null;
-
-            // figure out from index.json if pushing snupkg is supported
-            var sourceUri = packageUpdateResource.SourceUri;
-            if (string.IsNullOrEmpty(symbolSource)
-                && !noSymbols
-                && !sourceUri.IsFile
-                && sourceUri.IsAbsoluteUri)
-            {
-                symbolPackageUpdateResource = await CommandRunnerUtility.GetSymbolPackageUpdateResource(sourceProvider, source);
-                if (symbolPackageUpdateResource != null)
-                {
-                    symbolSource = symbolPackageUpdateResource.SourceUri.AbsoluteUri;
-                    symbolApiKey = apiKey;
-                }
-            }
-
-            await packageUpdateResource.Push(
+            return Run(
+                settings,
+                sourceProvider,
                 packagePaths,
+                source,
+                apiKey,
                 symbolSource,
+                symbolApiKey,
                 timeoutSeconds,
                 disableBuffering,
-                endpoint => apiKey ?? CommandRunnerUtility.GetApiKey(settings, endpoint, source),
-                symbolsEndpoint => symbolApiKey ?? CommandRunnerUtility.GetApiKey(settings, symbolsEndpoint, symbolSource),
+                noSymbols,
                 noServiceEndpoint,
                 skipDuplicate,
-                symbolPackageUpdateResource,
-                logger);
+                allowInsecureConnections,
+                logger,
+                environmentVariableReader: EnvironmentVariableWrapper.Instance);
         }
 
-        [Obsolete("Use Run method which takes multiple package paths.")]
-        public static Task Run(
+        internal static async Task Run(
             ISettings settings,
             IPackageSourceProvider sourceProvider,
-            string packagePath,
+            IList<string> packagePaths,
             string source,
             string apiKey,
             string symbolSource,
@@ -93,21 +69,85 @@ namespace NuGet.Commands
             bool noSymbols,
             bool noServiceEndpoint,
             bool skipDuplicate,
-            ILogger logger)
+            bool allowInsecureConnections,
+            ILogger logger,
+            IEnvironmentVariableReader environmentVariableReader)
         {
-            return Run(settings: settings,
-                sourceProvider: sourceProvider,
-                packagePaths: new[] { packagePath },
-                source: source,
-                apiKey: apiKey,
-                symbolSource: symbolSource,
-                symbolApiKey: symbolApiKey,
-                timeoutSeconds: timeoutSeconds,
-                disableBuffering: disableBuffering,
-                noSymbols: noSymbols,
-                noServiceEndpoint: noServiceEndpoint,
-                skipDuplicate: skipDuplicate,
-                logger: logger);
+            source = CommandRunnerUtility.ResolveSource(sourceProvider, source);
+            symbolSource = CommandRunnerUtility.ResolveSymbolSource(sourceProvider, symbolSource);
+
+            if (timeoutSeconds == 0)
+            {
+                timeoutSeconds = 5 * 60;
+            }
+            PackageSource packageSource = CommandRunnerUtility.GetOrCreatePackageSource(sourceProvider, source);
+            var packageUpdateResource = await CommandRunnerUtility.GetPackageUpdateResource(sourceProvider, packageSource, CancellationToken.None);
+
+            // Throw an error if an http source is used without setting AllowInsecureConnections
+            if (!allowInsecureConnections && packageSource.IsHttp && !packageSource.IsHttps && !packageSource.AllowInsecureConnections)
+            {
+                throw new ArgumentException(string.Format(CultureInfo.CurrentCulture, Strings.Error_HttpSource_Single, "push", packageSource.Source));
+            }
+
+            packageUpdateResource.Settings = settings;
+            bool allowSnupkg = false;
+            SymbolPackageUpdateResourceV3 symbolPackageUpdateResource = null;
+
+            // figure out from index.json if pushing snupkg is supported
+            var sourceUri = packageUpdateResource.SourceUri;
+            var symbolSourceUri = symbolSource;
+
+            if (!string.IsNullOrEmpty(symbolSource) && !noSymbols)
+            {
+                //If the symbol source is set we try to get the symbol package resource to determine if Snupkg are supported.
+                symbolPackageUpdateResource = await CommandRunnerUtility.GetSymbolPackageUpdateResource(sourceProvider, symbolSource, CancellationToken.None);
+                if (symbolPackageUpdateResource != null)
+                {
+                    allowSnupkg = true;
+                    symbolSourceUri = symbolPackageUpdateResource.SourceUri.AbsoluteUri;
+                }
+            }
+            else if (!noSymbols
+                && !sourceUri.IsFile
+                && sourceUri.IsAbsoluteUri)
+            {
+                symbolPackageUpdateResource = await CommandRunnerUtility.GetSymbolPackageUpdateResource(sourceProvider, source, CancellationToken.None);
+                if (symbolPackageUpdateResource != null)
+                {
+                    allowSnupkg = true;
+                    symbolSource = symbolSourceUri = symbolPackageUpdateResource.SourceUri.AbsoluteUri;
+                }
+            }
+
+            // Precedence for package API key: -ApiKey param, environment variable, config
+            apiKey ??= environmentVariableReader.GetEnvironmentVariable(ApiKeyEnvironmentVariableName);
+            apiKey ??= CommandRunnerUtility.GetApiKey(settings, packageUpdateResource.SourceUri.AbsoluteUri, source);
+
+            // Precedence for symbol package API key: -SymbolApiKey param, environment variable, config, package API key (Only for symbol source from SymbolPackagePublish service)
+            if (!string.IsNullOrEmpty(symbolSource))
+            {
+                symbolApiKey ??= environmentVariableReader.GetEnvironmentVariable(SymbolApiKeyEnvironmentVariableName);
+                symbolApiKey ??= CommandRunnerUtility.GetApiKey(settings, symbolSourceUri, symbolSource);
+
+                // Only allow falling back to API key when the symbol source was obtained from SymbolPackagePublish service
+                if (symbolPackageUpdateResource != null)
+                {
+                    symbolApiKey ??= apiKey;
+                }
+            }
+
+            await packageUpdateResource.PushAsync(
+                packagePaths,
+                symbolSourceUri,
+                timeoutSeconds,
+                disableBuffering,
+                _ => apiKey,
+                _ => symbolApiKey,
+                noServiceEndpoint,
+                skipDuplicate,
+                allowSnupkg,
+                allowInsecureConnections || packageSource.AllowInsecureConnections,
+                logger);
         }
     }
 }

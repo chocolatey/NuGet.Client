@@ -30,7 +30,7 @@ namespace NuGet.Protocol.Core.Types
         /// </remarks>
         /// <param name="source">Source repository</param>
         /// <returns>True if this provider handles the input source.</returns>
-        Task<Tuple<bool, INuGetResource>> TryCreate(SourceRepository source, CancellationToken token);
+        Task<Tuple<bool, INuGetResource?>> TryCreate(SourceRepository source, CancellationToken token);
 
         /// <summary>
         /// Resource type provided

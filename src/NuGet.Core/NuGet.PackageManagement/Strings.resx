@@ -160,7 +160,7 @@
     <value>Restoring NuGet package {0}.</value>
   </data>
   <data name="SolutionDirectoryNotAvailable" xml:space="preserve">
-    <value>Solution is not opened or not saved. Please ensure you have an open and saved solution.</value>
+    <value>Solution is not opened or not saved. Ensure you have an open and saved solution.</value>
   </data>
   <data name="SolutionManagerNotAvailableForUninstall" xml:space="preserve">
     <value>Uninstall is not supported when SolutionManager is not available</value>
@@ -226,13 +226,13 @@
     <value>Resolution was successful but resulted in no action</value>
   </data>
   <data name="ExceptionWhenTryingToAddSource" xml:space="preserve">
-    <value>Exception '{0}' thrown when trying to add source '{1}'. Please verify all your online package sources are available.</value>
+    <value>Exception '{0}' thrown when trying to add source '{1}'. Verify all your online package sources are available.</value>
   </data>
   <data name="PackageNotFoundInPrimarySources" xml:space="preserve">
-    <value>Package '{0}' is not found in the following primary source(s): '{1}'. Please verify all your online package sources are available (OR) package id, version are specified correctly.</value>
+    <value>Package '{0}' is not found in the following primary source(s): '{1}'. Verify all your online package sources are available (OR) package id, version are specified correctly.</value>
   </data>
   <data name="UnableToGatherPackageFromSource" xml:space="preserve">
-    <value>Unable to gather package '{0}' from source '{1}'. Please verify all your online package sources are available. </value>
+    <value>Unable to gather package '{0}' from source '{1}'. Verify all your online package sources are available.</value>
   </data>
   <data name="NoUpdatesAvailable" xml:space="preserve">
     <value>There are no new updates available.</value>
@@ -429,7 +429,22 @@
     <value>Package source mapping match not found for package ID '{0}'</value>
     <comment>{0} - package id</comment>
   </data>
-  <data name="Warning_HttpServerUsage" xml:space="preserve">
-    <value>You are running the '{0}' operation with an 'http' source, '{1}'. Support for 'http' sources will be removed in a future version.</value>
+  <data name="Error_VulnerabilityDataFetch" xml:space="preserve">
+    <value>Error occurred while getting package vulnerability data: {0}</value>
+  </data>
+  <data name="Warning_PackageWithKnownVulnerability" xml:space="preserve">
+    <value>Package '{0}' {1} has a known {2} severity vulnerability, {3}</value>
+    <comment>{0} - package id
+{1} - package version
+{2} - severity, for example low, moderate, high, or critical
+{3} - URL for more info on the known vulnerability</comment>
+  </data>
+  <data name="Error_HttpSource_Single" xml:space="preserve">
+    <value>You are running the '{0}' operation with an 'HTTP' source: {1}. NuGet requires HTTPS sources. To use an HTTP source, you must explicitly set 'allowInsecureConnections' to true in your NuGet.Config file. Refer to https://aka.ms/nuget-https-everywhere for more information.</value>
+    <comment>0 - The command name. Ex. Push/Delete. 1 - server uri.</comment>
+  </data>
+  <data name="Warning_AuditSourceWithoutData" xml:space="preserve">
+    <value>Audit source '{0}' did not provide any vulnerability data.</value>
+    <comment>{0} is the source name</comment>
   </data>
 </root>
