@@ -98,6 +98,11 @@ namespace NuGet.Packaging.Xml
             AddElementIfNotNull(elem, ns, "softwareDisplayName", metadata.SoftwareDisplayName);
             AddElementIfNotNull(elem, ns, "softwareDisplayVersion", metadata.SoftwareDisplayVersion);
 
+            if (metadata.SupportsInstances)
+            {
+                elem.Add(new XElement(ns + "supportsInstances", metadata.SupportsInstances));
+            }
+
             //////////////////////////////////////////////////////////
             // End - Chocolatey Specific Modification
             //////////////////////////////////////////////////////////

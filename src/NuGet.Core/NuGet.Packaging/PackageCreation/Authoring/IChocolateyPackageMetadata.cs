@@ -24,5 +24,12 @@ namespace NuGet.Packaging
 
         string SoftwareDisplayName { get; }
         string SoftwareDisplayVersion { get; }
+
+        // NOTE: SupportsInstances is deliberately NOT on this interface. Package Instances have to
+        // ship in a 2.x release of Chocolatey CLI, which cannot take breaking changes in the
+        // dependencies it uses, and adding a member to this interface breaks every external
+        // implementer. It lives only on the concrete ManifestMetadata / PackageBuilder /
+        // NuspecReader surface until the next breaking release of Chocolatey CLI (3.x), where it
+        // should be added here.
     }
 }

@@ -175,6 +175,9 @@ namespace NuGet.Packaging
                     case "softwareDisplayVersion":
                         manifestMetadata.SoftwareDisplayVersion = value;
                         break;
+                    case "supportsInstances":
+                        manifestMetadata.SupportsInstances = XmlConvert.ToBoolean(value);
+                        break;
                     //////////////////////////////////////////////////////////
                     // End - Chocolatey Specific Modification
                     //////////////////////////////////////////////////////////
