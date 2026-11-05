@@ -13,6 +13,7 @@ using System.Xml.Linq;
 // Start - Chocolatey Specific Modification
 //////////////////////////////////////////////////////////
 using Chocolatey.NuGet.Frameworks;
+using Moq;
 //////////////////////////////////////////////////////////
 // End - Chocolatey Specific Modification
 //////////////////////////////////////////////////////////
@@ -751,6 +752,29 @@ namespace NuGet.Packaging.Test
                 AssertFile(expectedFiles[i], actualFiles[i]);
             }
         }
+
+        //////////////////////////////////////////////////////////
+        // Start - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
+
+        // Test that SupportsInstances is carried across from any IPackageMetadata implementation,
+        // not only from the concrete ManifestMetadata and PackageBuilder types.
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void ManifestMetadataCopiesSupportsInstancesFromAnyPackageMetadata(bool supportsInstances)
+        {
+            var packageMetadata = new Mock<IPackageMetadata>();
+            packageMetadata.SetupGet(m => m.SupportsInstances).Returns(supportsInstances);
+
+            var manifestMetadata = new ManifestMetadata(packageMetadata.Object);
+
+            Assert.Equal(supportsInstances, manifestMetadata.SupportsInstances);
+        }
+
+        //////////////////////////////////////////////////////////
+        // End - Chocolatey Specific Modification
+        //////////////////////////////////////////////////////////
 
         private void AssertManifest(Manifest expected, Manifest actual)
         {
