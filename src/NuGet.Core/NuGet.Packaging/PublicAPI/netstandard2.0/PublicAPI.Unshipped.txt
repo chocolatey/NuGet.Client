@@ -1,5 +1,0 @@
-NuGet.Packaging.ManifestMetadata.SupportsInstances.get -> bool
-NuGet.Packaging.ManifestMetadata.SupportsInstances.set -> void
-NuGet.Packaging.NuspecReader.GetSupportsInstances() -> string
-NuGet.Packaging.PackageBuilder.SupportsInstances.get -> bool
-NuGet.Packaging.PackageBuilder.SupportsInstances.set -> void
