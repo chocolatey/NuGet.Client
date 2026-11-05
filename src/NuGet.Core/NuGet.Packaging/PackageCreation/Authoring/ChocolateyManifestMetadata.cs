@@ -39,13 +39,7 @@ namespace NuGet.Packaging
             Conflicts = copy.Conflicts;
             SoftwareDisplayName = copy.SoftwareDisplayName;
             SoftwareDisplayVersion = copy.SoftwareDisplayVersion;
-
-            // SupportsInstances is not on IPackageMetadata, as adding it would break external
-            // implementers and Chocolatey CLI 2.x cannot take a breaking change in its dependencies,
-            // so carry it across from the concrete types that hold it. Any other implementer yields false.
-            SupportsInstances = (copy as ManifestMetadata)?.SupportsInstances
-                ?? (copy as PackageBuilder)?.SupportsInstances
-                ?? false;
+            SupportsInstances = copy.SupportsInstances;
         }
 
         public void SetProjectSourceUrl(string projectSourceUrl)

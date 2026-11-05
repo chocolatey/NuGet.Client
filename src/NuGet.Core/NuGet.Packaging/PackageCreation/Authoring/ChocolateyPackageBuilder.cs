@@ -65,13 +65,7 @@ namespace NuGet.Packaging
             BugTrackerUrl = metadata.BugTrackerUrl;
             SoftwareDisplayName = metadata.SoftwareDisplayName;
             SoftwareDisplayVersion = metadata.SoftwareDisplayVersion;
-
-            // SupportsInstances is not on IPackageMetadata, as adding it would break external
-            // implementers and Chocolatey CLI 2.x cannot take a breaking change in its dependencies,
-            // so carry it across from the concrete types that hold it. Any other implementer yields false.
-            SupportsInstances = (metadata as ManifestMetadata)?.SupportsInstances
-                ?? (metadata as PackageBuilder)?.SupportsInstances
-                ?? false;
+            SupportsInstances = metadata.SupportsInstances;
 
             Replaces.AddRange(metadata.Replaces);
             Provides.AddRange(metadata.Provides);
