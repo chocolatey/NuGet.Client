@@ -69,5 +69,10 @@ namespace NuGet.Packaging
         {
             return GetMetadataValue("softwareDisplayVersion");
         }
+
+        public string GetSupportsInstances()
+        {
+            return GetMetadataValue("supportsInstances");
+        }
     }
 }
