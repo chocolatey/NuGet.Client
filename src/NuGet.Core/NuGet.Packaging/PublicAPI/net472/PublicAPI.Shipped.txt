@@ -527,6 +527,8 @@ NuGet.Packaging.ManifestMetadata.SoftwareDisplayVersion.get -> string
 NuGet.Packaging.ManifestMetadata.SoftwareDisplayVersion.set -> void
 NuGet.Packaging.ManifestMetadata.Summary.get -> string
 NuGet.Packaging.ManifestMetadata.Summary.set -> void
+NuGet.Packaging.ManifestMetadata.SupportsInstances.get -> bool
+NuGet.Packaging.ManifestMetadata.SupportsInstances.set -> void
 NuGet.Packaging.ManifestMetadata.Tags.get -> string
 NuGet.Packaging.ManifestMetadata.Tags.set -> void
 NuGet.Packaging.ManifestMetadata.Title.get -> string
@@ -583,6 +585,7 @@ NuGet.Packaging.NuspecReader.GetRequireLicenseAcceptance() -> bool
 NuGet.Packaging.NuspecReader.GetSoftwareDisplayName() -> string
 NuGet.Packaging.NuspecReader.GetSoftwareDisplayVersion() -> string
 NuGet.Packaging.NuspecReader.GetSummary() -> string
+NuGet.Packaging.NuspecReader.GetSupportsInstances() -> string
 NuGet.Packaging.NuspecReader.GetTags() -> string
 NuGet.Packaging.NuspecReader.GetTitle() -> string
 NuGet.Packaging.NuspecReader.GetWikiUrl() -> string
@@ -696,6 +699,8 @@ NuGet.Packaging.PackageBuilder.SoftwareDisplayVersion.get -> string
 NuGet.Packaging.PackageBuilder.SoftwareDisplayVersion.set -> void
 NuGet.Packaging.PackageBuilder.Summary.get -> string
 NuGet.Packaging.PackageBuilder.Summary.set -> void
+NuGet.Packaging.PackageBuilder.SupportsInstances.get -> bool
+NuGet.Packaging.PackageBuilder.SupportsInstances.set -> void
 NuGet.Packaging.PackageBuilder.Tags.get -> System.Collections.Generic.ISet<string>
 NuGet.Packaging.PackageBuilder.TargetFrameworks.get -> System.Collections.Generic.IList<Chocolatey.NuGet.Frameworks.NuGetFramework>
 NuGet.Packaging.PackageBuilder.TargetFrameworks.set -> void

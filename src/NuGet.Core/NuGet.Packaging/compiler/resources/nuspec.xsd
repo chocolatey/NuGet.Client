@@ -82,6 +82,7 @@
                             <xs:element name="conflicts" maxOccurs="1" minOccurs="0" type="xs:string" />
                             <xs:element name="softwareDisplayName" maxOccurs="1" minOccurs="0" type="xs:string" />
                             <xs:element name="softwareDisplayVersion" maxOccurs="1" minOccurs="0" type="xs:string" />
+                            <xs:element name="supportsInstances" maxOccurs="1" minOccurs="0" type="xs:boolean" />
 
                             <!-- //////////////////////////////////////////////////////////
                                  // Start - Chocolatey Specific Modification
