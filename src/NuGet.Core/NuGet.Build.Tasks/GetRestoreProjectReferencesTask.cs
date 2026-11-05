@@ -1,18 +1,30 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using Newtonsoft.Json;
 
 namespace NuGet.Build.Tasks
 {
+#if !NETFRAMEWORK
+    [MSBuildMultiThreadableTask]
+#endif
     public class GetRestoreProjectReferencesTask : Microsoft.Build.Utilities.Task
+#if !NETFRAMEWORK
+        , IMultiThreadableTask
+#endif
     {
+#if !NETFRAMEWORK
+        /// <inheritdoc />
+        public TaskEnvironment TaskEnvironment { get; set; } = TaskEnvironment.Fallback;
+#endif
+
         /// <summary>
         /// Full path to the msbuild project.
         /// </summary>
@@ -41,13 +53,6 @@ namespace NuGet.Build.Tasks
 
         public override bool Execute()
         {
-            // Log inputs
-            var log = new MSBuildLogger(Log);
-            log.LogDebug($"(in) ProjectUniqueName '{ProjectUniqueName}'");
-            log.LogDebug($"(in) TargetFrameworks '{TargetFrameworks}'");
-            log.LogDebug($"(in) ProjectReferences '{string.Join(";", ProjectReferences.Select(p => p.ItemSpec))}'");
-            log.LogDebug($"(in) ParentProjectPath '{ParentProjectPath}'");
-
             var entries = new List<ITaskItem>();
 
             // Filter obvious duplicates without considering OS case sensitivity.
@@ -66,7 +71,12 @@ namespace NuGet.Build.Tasks
                     || Boolean.TrueString.Equals(refOutput, StringComparison.OrdinalIgnoreCase))
                 {
                     // Get the absolute path
-                    var referencePath = Path.GetFullPath(Path.Combine(parentDirectory, project.ItemSpec));
+                    var combinedPath = Path.Combine(parentDirectory, project.ItemSpec);
+#if !NETFRAMEWORK
+                    var referencePath = Path.GetFullPath(TaskEnvironment.GetAbsolutePath(combinedPath));
+#else
+                    var referencePath = Path.GetFullPath(combinedPath);
+#endif
 
                     if (!seen.Add(referencePath))
                     {

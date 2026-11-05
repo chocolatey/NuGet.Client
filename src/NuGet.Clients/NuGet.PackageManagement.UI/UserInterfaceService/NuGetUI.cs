@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,11 +11,15 @@ using System.Threading.Tasks;
 using System.Windows;
 using Microsoft;
 using Microsoft.ServiceHub.Framework;
+using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Threading;
 using NuGet.Commands;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Frameworks;
+using NuGet.PackageManagement.Telemetry;
+using NuGet.PackageManagement.UI.ViewModels;
 using NuGet.PackageManagement.VisualStudio;
 using NuGet.Packaging;
 using NuGet.Packaging.Core;
@@ -23,6 +29,7 @@ using NuGet.Protocol.Core.Types;
 using NuGet.Resolver;
 using NuGet.VisualStudio;
 using NuGet.VisualStudio.Internal.Contracts;
+using NuGet.VisualStudio.Telemetry;
 using StreamJsonRpc;
 using Task = System.Threading.Tasks.Task;
 
@@ -33,10 +40,13 @@ namespace NuGet.PackageManagement.UI
         public const string LogEntrySource = "NuGet Package Manager";
 
         private readonly NuGetUIProjectContext _projectContext;
+        private PackageManagerControl _packageManagerControl;
+        private string _selectedPackageId;
 
         private NuGetUI(
             ICommonOperations commonOperations,
             NuGetUIProjectContext projectContext,
+            INuGetTelemetryProvider nuGetTelemetryProvider,
             INuGetUILogger logger)
         {
             CommonOperations = commonOperations;
@@ -51,6 +61,7 @@ namespace NuGet.PackageManagement.UI
             Projects = Enumerable.Empty<IProjectContextInfo>();
             DisplayPreviewWindow = true;
             DisplayDeprecatedFrameworkWindow = true;
+            NuGetTelemetryProvider = nuGetTelemetryProvider ?? throw new ArgumentNullException(nameof(nuGetTelemetryProvider));
         }
 
         // For testing purposes only.
@@ -58,10 +69,13 @@ namespace NuGet.PackageManagement.UI
             ICommonOperations commonOperations,
             NuGetUIProjectContext projectContext,
             INuGetUILogger logger,
-            NuGetUIContext uiContext)
-            : this(commonOperations, projectContext, logger)
+            INuGetUIContext uiContext,
+            IPackageManagerControlViewModel packageManagerControlViewModel,
+            INuGetTelemetryProvider nuGetTelemetryProvider)
+            : this(commonOperations, projectContext, nuGetTelemetryProvider, logger)
         {
             UIContext = uiContext;
+            PackageManagerControlViewModel = packageManagerControlViewModel;
         }
 
         public static async Task<NuGetUI> CreateAsync(
@@ -79,6 +93,7 @@ namespace NuGet.PackageManagement.UI
             INuGetLockService lockService,
             INuGetUILogger logger,
             IRestoreProgressReporter restoreProgressReporter,
+            INuGetTelemetryProvider nuGetTelemetryProvider,
             CancellationToken cancellationToken,
             params IProjectContextInfo[] projects)
         {
@@ -102,21 +117,22 @@ namespace NuGet.PackageManagement.UI
             var nuGetUi = new NuGetUI(
                 commonOperations,
                 projectContext,
-                logger)
-            {
-                UIContext = await NuGetUIContext.CreateAsync(
-                    serviceBroker,
-                    sourceRepositoryProvider,
-                    settings,
-                    solutionManager,
-                    packageRestoreManager,
-                    optionsPageActivator,
-                    solutionUserOptions,
-                    deleteOnRestartManager,
-                    lockService,
-                    restoreProgressReporter,
-                    cancellationToken)
-            };
+                nuGetTelemetryProvider,
+                logger);
+
+            nuGetUi.UIContext = await NuGetUIContext.CreateAsync(
+                serviceBroker,
+                sourceRepositoryProvider,
+                settings,
+                solutionManager,
+                packageRestoreManager,
+                optionsPageActivator,
+                solutionUserOptions,
+                deleteOnRestartManager,
+                lockService,
+                restoreProgressReporter,
+                nuGetTelemetryProvider,
+                cancellationToken);
 
             nuGetUi.UIContext.Projects = projects;
 
@@ -239,16 +255,64 @@ namespace NuGet.PackageManagement.UI
             UIUtility.LaunchExternalLink(url);
         }
 
+        public void LaunchNuGetOptionsDialog(PackageSourceMappingActionViewModel packageSourceMappingActionViewModel)
+        {
+            LaunchNuGetOptionsDialog(OptionsPage.PackageSourceMapping);
+
+            if (packageSourceMappingActionViewModel == null)
+            {
+                return;
+            }
+
+            bool isPackageSourceMappingEnabled = packageSourceMappingActionViewModel.IsPackageSourceMappingEnabled;
+            bool isPackageMapped = packageSourceMappingActionViewModel._isPackageMapped; // Read from cache to avoid recalculating.
+            PackageSourceMappingStatus packageSourceMappingStatus;
+            if (!isPackageSourceMappingEnabled)
+            {
+                packageSourceMappingStatus = PackageSourceMappingStatus.Disabled;
+            }
+            else
+            {
+                packageSourceMappingStatus = isPackageMapped ? PackageSourceMappingStatus.Mapped : PackageSourceMappingStatus.NotMapped;
+            }
+
+            var evt = NavigatedTelemetryEvent.CreateWithPMUIConfigurePackageSourceMapping(
+                UIUtility.ToContractsItemFilter(PackageManagerControlViewModel.ActiveFilter),
+                PackageManagerControlViewModel.IsSolution,
+                packageSourceMappingStatus);
+            NuGetTelemetryProvider.EmitEvent(evt);
+        }
+
         public void LaunchNuGetOptionsDialog(OptionsPage optionsPageToOpen)
         {
             if (UIContext?.OptionsPageActivator != null)
             {
-                InvokeOnUIThread(() => { UIContext.OptionsPageActivator.ActivatePage(optionsPageToOpen, null); });
+                InvokeOnUIThread(() =>
+                {
+                    if (optionsPageToOpen == OptionsPage.PackageSourceMapping)
+                    {
+                        SetSelectedPackageInNuGetUIOptionsContextService();
+                    }
+
+                    UIContext.OptionsPageActivator.ActivatePage(optionsPageToOpen, null);
+                });
             }
             else
             {
                 MessageBox.Show("Options dialog is not available in the standalone UI");
             }
+        }
+
+        private void SetSelectedPackageInNuGetUIOptionsContextService()
+        {
+            NuGetUIThreadHelper.JoinableTaskFactory.RunAsync(async delegate
+            {
+#pragma warning disable ISB001 // Dispose of proxies
+                IComponentModel componentModelMapping = await ServiceLocator.GetComponentModelAsync();
+                var nuGetUIOptionsContext = componentModelMapping.GetService<INuGetUIOptionsContext>();
+                nuGetUIOptionsContext.SelectedPackageId = SelectedPackageId;
+#pragma warning restore ISB001 // Dispose of proxies, disposed in disposing event or in ClearSettings
+            }).PostOnFailure(nameof(NuGetUI), nameof(LaunchNuGetOptionsDialog));
         }
 
         public bool PromptForPreviewAcceptance(IEnumerable<PreviewResult> actions)
@@ -290,6 +354,8 @@ namespace NuGet.PackageManagement.UI
 
         public INuGetUILogger UILogger { get; }
 
+        public INuGetTelemetryProvider NuGetTelemetryProvider { get; }
+
         public INuGetProjectContext ProjectContext => _projectContext;
 
         public IEnumerable<IProjectContextInfo> Projects { get; set; }
@@ -306,7 +372,14 @@ namespace NuGet.PackageManagement.UI
 
         public bool ForceRemove { get; set; }
 
-        public PackageIdentity SelectedPackage { get; set; }
+        public string SelectedPackageId
+        {
+            get => _selectedPackageId;
+            set
+            {
+                _selectedPackageId = value;
+            }
+        }
 
         public int SelectedIndex { get; set; }
 
@@ -320,15 +393,28 @@ namespace NuGet.PackageManagement.UI
 
         public IEnumerable<int> TopLevelVulnerablePackagesMaxSeverities { get; set; }
 
+        public int TransitiveVulnerablePackagesCount { get; set; }
+
+        public IEnumerable<int> TransitiveVulnerablePackagesMaxSeverities { get; set; }
+
         public PackageSourceMoniker ActivePackageSourceMoniker
         {
             get
             {
+                if (PackageManagerControl is null)
+                {
+                    return null;
+                }
+
                 PackageSourceMoniker source = null;
 
-                if (PackageManagerControl != null)
+                if (!ThreadHelper.CheckAccess())
                 {
                     InvokeOnUIThread(() => { source = PackageManagerControl.SelectedSource; });
+                }
+                else
+                {
+                    source = PackageManagerControl.SelectedSource;
                 }
 
                 return source;
@@ -350,7 +436,17 @@ namespace NuGet.PackageManagement.UI
             }
         }
 
-        internal PackageManagerControl PackageManagerControl { get; set; }
+        public IPackageManagerControlViewModel PackageManagerControlViewModel { get; private set; }
+
+        internal PackageManagerControl PackageManagerControl
+        {
+            get => _packageManagerControl;
+            set
+            {
+                _packageManagerControl = value;
+                PackageManagerControlViewModel = value;
+            }
+        }
 
         private void InvokeOnUIThread(Action action)
         {

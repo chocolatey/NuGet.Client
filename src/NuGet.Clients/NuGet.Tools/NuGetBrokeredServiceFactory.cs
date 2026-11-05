@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -77,13 +79,11 @@ namespace NuGetVSExtension
         {
             await _lazyInitializer.InitializeAsync(cancellationToken);
 
-#pragma warning disable CA2000 // Dispose objects before losing scope
             var service = new NuGetSourcesService(
                 options,
                 serviceBroker,
                 authorizationServiceClient,
-                _sharedServiceState);
-#pragma warning restore CA2000 // Dispose objects before losing scope
+                _sharedServiceState.SourceRepositoryProvider.PackageSourceProvider);
 
             return service;
         }
@@ -113,11 +113,14 @@ namespace NuGetVSExtension
         {
             await _lazyInitializer.InitializeAsync(cancellationToken);
 
+            INuGetTelemetryProvider telemetryProvider = await _lazyTelemetryProvider.GetValueAsync(cancellationToken);
+
 #pragma warning disable CA2000 // Dispose objects before losing scope
             var service = new NuGetProjectManagerService(
                 options,
                 serviceBroker,
                 authorizationServiceClient,
+                telemetryProvider,
                 _projectManagerServiceSharedState,
                 _sharedServiceState);
 #pragma warning restore CA2000 // Dispose objects before losing scope

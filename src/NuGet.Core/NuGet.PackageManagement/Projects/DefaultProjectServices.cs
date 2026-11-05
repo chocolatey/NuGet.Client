@@ -1,9 +1,10 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Frameworks;
@@ -18,7 +19,6 @@ namespace NuGet.ProjectManagement
     /// </summary>
     internal sealed class DefaultProjectServices
         : INuGetProjectServices
-        , IProjectBuildProperties
         , IProjectScriptHostService
         , IProjectSystemCapabilities
         , IProjectSystemReferencesReader
@@ -26,8 +26,6 @@ namespace NuGet.ProjectManagement
         , IProjectSystemService
     {
         public static INuGetProjectServices Instance { get; } = new DefaultProjectServices();
-
-        public IProjectBuildProperties BuildProperties => this;
         public IProjectSystemCapabilities Capabilities => this;
         public IProjectSystemReferencesReader ReferencesReader => this;
         public IProjectSystemService ProjectSystem => this;
@@ -56,17 +54,13 @@ namespace NuGet.ProjectManagement
             Common.ILogger _,
             CancellationToken __)
         {
-            return Task.FromResult(Enumerable.Empty<ProjectRestoreReference>());
+            return TaskResult.EmptyEnumerable<ProjectRestoreReference>();
         }
 
-        public string GetPropertyValue(string propertyName)
+        public Task<IReadOnlyList<(string id, string[] metadata)>> GetItemsAsync(string itemTypeName, params string[] metadataNames)
         {
-            return null;
-        }
-
-        public Task<string> GetPropertyValueAsync(string propertyName)
-        {
-            return Task.FromResult<string>(null);
+            IReadOnlyList<(string, string[])> items = Array.Empty<(string, string[])>();
+            return Task.FromResult(items);
         }
 
         public T GetGlobalService<T>() where T : class
@@ -82,7 +76,7 @@ namespace NuGet.ProjectManagement
         public Task SaveProjectAsync(CancellationToken _)
         {
             // do nothing
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         public Task ExecutePackageScriptAsync(
@@ -94,7 +88,7 @@ namespace NuGet.ProjectManagement
             CancellationToken _)
         {
             // No-op
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         public Task<bool> ExecutePackageInitScriptAsync(
@@ -105,7 +99,7 @@ namespace NuGet.ProjectManagement
             CancellationToken _)
         {
             // No-op
-            return Task.FromResult(false);
+            return TaskResult.False;
         }
     }
 }

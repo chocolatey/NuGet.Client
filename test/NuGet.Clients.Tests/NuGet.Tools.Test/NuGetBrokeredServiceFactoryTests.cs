@@ -1,12 +1,13 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.ComponentModel.Composition.Hosting;
 using System.ComponentModel.Composition.Primitives;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.ServiceHub.Framework;
@@ -34,6 +35,7 @@ using Task = System.Threading.Tasks.Task;
 namespace NuGet.Tools.Test
 {
     [Collection(MockedVS.Collection)]
+    [UseCulture("en-US")] // We are asserting exception messages in English
     public class NuGetBrokeredServiceFactoryTests : IAsyncServiceProvider, SVsBrokeredServiceContainer, IBrokeredServiceContainer
     {
         private readonly Dictionary<ServiceRpcDescriptor, BrokeredServiceFactory> _serviceFactories;
@@ -86,8 +88,8 @@ namespace NuGet.Tools.Test
         {
             using (await NuGetBrokeredServiceFactory.ProfferServicesAsync(this))
             {
-                Assert.Equal(ServicesAndFactories.Count(), _serviceFactories.Count);
-                Assert.Equal(ServicesAndAuthorizingFactories.Count(), _authorizingServiceFactories.Count);
+                Assert.Equal(ServicesAndFactories.Count, _serviceFactories.Count);
+                Assert.Equal(ServicesAndAuthorizingFactories.Count, _authorizingServiceFactories.Count);
             }
         }
 
@@ -147,12 +149,12 @@ namespace NuGet.Tools.Test
             }
         }
 
-        public static TheoryData ServicesAndFactories => new TheoryData<ServiceRpcDescriptor, Type>
+        public static TheoryData<ServiceRpcDescriptor, Type> ServicesAndFactories => new()
             {
                 { ContractsNuGetServices.NuGetProjectServiceV1, typeof(NuGetProjectService) }
             };
 
-        public static TheoryData ServicesAndAuthorizingFactories => new TheoryData<ServiceRpcDescriptor, Type>
+        public static TheoryData<ServiceRpcDescriptor, Type> ServicesAndAuthorizingFactories => new()
             {
                 { NuGetServices.ProjectManagerService, typeof(NuGetProjectManagerService) },
                 { NuGetServices.ProjectUpgraderService, typeof(NuGetProjectUpgraderService) },

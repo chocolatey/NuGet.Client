@@ -3,14 +3,12 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using FluentAssertions;
 using NuGet.Frameworks;
 using NuGet.Packaging.Core;
 using NuGet.Test.Utility;
-using Test.Utility;
 using Xunit;
 
 namespace NuGet.CommandLine.Test
@@ -64,7 +62,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -123,7 +121,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -211,7 +209,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -301,7 +299,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
@@ -391,7 +389,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
@@ -451,7 +449,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -510,7 +508,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -568,7 +566,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
@@ -644,7 +642,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
@@ -721,7 +719,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -779,7 +777,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
@@ -855,7 +853,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -932,7 +930,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -990,7 +988,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -1048,7 +1046,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 1);
@@ -1125,7 +1123,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -1202,7 +1200,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -1281,7 +1279,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -1349,7 +1347,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -1408,7 +1406,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -1467,7 +1465,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -1535,7 +1533,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -1604,7 +1602,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -1672,7 +1670,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -1733,7 +1731,7 @@ namespace NuGet.CommandLine.Test
 
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -1804,7 +1802,7 @@ namespace NuGet.CommandLine.Test
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
                 solution.Projects.Add(projectC);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -1876,7 +1874,7 @@ namespace NuGet.CommandLine.Test
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
                 solution.Projects.Add(projectC);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -1948,14 +1946,14 @@ namespace NuGet.CommandLine.Test
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
                 solution.Projects.Add(projectC);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
 
                 // Assert
                 r.Success.Should().BeTrue();
-                GetSubstringCount(r.AllOutput, "NU1603", ignoreCase: false).Should().Be(3);
+                GetSubstringCount(r.AllOutput, "NU1603", ignoreCase: false).Should().Be(2);
             }
         }
 
@@ -2028,7 +2026,7 @@ namespace NuGet.CommandLine.Test
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
                 solution.Projects.Add(projectC);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -2106,7 +2104,7 @@ namespace NuGet.CommandLine.Test
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
                 solution.Projects.Add(projectC);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -2187,7 +2185,7 @@ namespace NuGet.CommandLine.Test
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
                 solution.Projects.Add(projectC);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -2268,7 +2266,7 @@ namespace NuGet.CommandLine.Test
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
                 solution.Projects.Add(projectC);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -2340,7 +2338,7 @@ namespace NuGet.CommandLine.Test
                 solution.Projects.Add(projectA);
                 solution.Projects.Add(projectB);
                 solution.Projects.Add(projectC);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -2452,7 +2450,7 @@ namespace NuGet.CommandLine.Test
                 solution.Projects.Add(projectD);
                 solution.Projects.Add(projectE);
                 solution.Projects.Add(projectF);
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -2514,16 +2512,16 @@ namespace NuGet.CommandLine.Test
                     projects.Add(project);
                 }
 
-                for (var i = 1; i < projects.Count(); i++)
+                for (var i = 1; i < projects.Count; i++)
                 {
                     var project = projects[i];
                     project.AddPackageToAllFrameworks(referencedPackages[i]);
                 }
 
-                for (var i = 0; i < projects.Count() - 1; i++)
+                for (var i = 0; i < projects.Count - 1; i++)
                 {
                     var projectA = projects[i];
-                    for (var j = i + 1; j < projects.Count(); j++)
+                    for (var j = i + 1; j < projects.Count; j++)
                     {
                         var projectB = projects[j];
                         projectA.AddProjectToAllFrameworks(projectB);
@@ -2536,7 +2534,7 @@ namespace NuGet.CommandLine.Test
                     solution.Projects.Add(project);
                 }
 
-                solution.Create(pathContext.SolutionRoot);
+                solution.Create();
 
                 // Act
                 var r = Util.RestoreSolution(pathContext, expectedExitCode: 0);
@@ -2556,8 +2554,7 @@ namespace NuGet.CommandLine.Test
                 StringComparison.Ordinal;
 
             return words
-                .Where(word => string.Equals(word, substr, comparisonType))
-                .Count();
+                .Count(word => string.Equals(word, substr, comparisonType));
         }
     }
 }

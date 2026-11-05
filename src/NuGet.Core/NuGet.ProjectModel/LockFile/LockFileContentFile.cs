@@ -19,7 +19,7 @@ namespace NuGet.ProjectModel
         {
         }
 
-        public string OutputPath
+        public string? OutputPath
         {
             get
             {
@@ -31,7 +31,7 @@ namespace NuGet.ProjectModel
             }
         }
 
-        public string PPOutputPath
+        public string? PPOutputPath
         {
             get
             {
@@ -57,7 +57,7 @@ namespace NuGet.ProjectModel
             }
         }
 
-        public string CodeLanguage
+        public string? CodeLanguage
         {
             get
             {

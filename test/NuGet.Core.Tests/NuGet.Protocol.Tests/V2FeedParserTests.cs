@@ -1,10 +1,14 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
@@ -45,7 +49,7 @@ namespace NuGet.Protocol.Tests
                 CancellationToken.None);
 
             // Assert
-            Assert.Equal(47, packages.Count());
+            Assert.Equal(47, packages.Count);
         }
 
         [Fact]
@@ -72,7 +76,7 @@ namespace NuGet.Protocol.Tests
             var packages = await parser.FindPackagesByIdAsync("ravendb.client", NullSourceCacheContext.Instance, NullLogger.Instance, CancellationToken.None);
 
             // Assert
-            Assert.Equal(300, packages.Count());
+            Assert.Equal(300, packages.Count);
         }
 
         [Fact]
@@ -116,7 +120,7 @@ namespace NuGet.Protocol.Tests
             Assert.Equal("A client library for working with Microsoft Azure storage services including blobs, files, tables, and queues.", latest.Summary);
             Assert.Equal("Microsoft Azure Storage Table Blob File Queue Scalable windowsazureofficial", latest.Tags);
             Assert.Equal("Microsoft.Data.OData:5.6.4:dotnet54|Microsoft.Data.Services.Client:5.6.4:dotnet54|System.Spatial:5.6.4:dotnet54|Newtonsoft.Json:6.0.8:dotnet54|System.Collections:4.0.11-beta-23225:dotnet54|System.Collections.Concurrent:4.0.11-beta-23225:dotnet54|System.Collections.Specialized:4.0.0-beta-23109:dotnet54|System.Diagnostics.Debug:4.0.11-beta-23225:dotnet54|System.Diagnostics.Tools:4.0.1-beta-23225:dotnet54|System.Diagnostics.TraceSource:4.0.0-beta-23225:dotnet54|System.Diagnostics.Tracing:4.0.21-beta-23225:dotnet54|System.Dynamic.Runtime:4.0.11-beta-23225:dotnet54|System.Globalization:4.0.11-beta-23225:dotnet54|System.IO:4.0.11-beta-23225:dotnet54|System.IO.FileSystem:4.0.1-beta-23225:dotnet54|System.IO.FileSystem.Primitives:4.0.1-beta-23225:dotnet54|System.Linq:4.0.1-beta-23225:dotnet54|System.Linq.Expressions:4.0.11-beta-23225:dotnet54|System.Linq.Queryable:4.0.0-beta-23109:dotnet54|System.Net.Http:4.0.1-beta-23225:dotnet54|System.Net.Primitives:4.0.11-beta-23225:dotnet54|System.Reflection:4.1.0-beta-23225:dotnet54|System.Reflection.Extensions:4.0.1-beta-23225:dotnet54|System.Reflection.TypeExtensions:4.0.1-beta-23225:dotnet54|System.Runtime:4.0.20-beta-23109:dotnet54|System.Runtime.Extensions:4.0.11-beta-23225:dotnet54|System.Runtime.InteropServices:4.0.21-beta-23225:dotnet54|System.Runtime.Serialization.Primitives:4.0.0-beta-23109:dotnet54|System.Runtime.Serialization.Xml:4.0.10-beta-23109:dotnet54|System.Security.Cryptography.Encoding:4.0.0-beta-23225:dotnet54|System.Security.Cryptography.Primitives:4.0.0-beta-23225:dotnet54|System.Security.Cryptography.Algorithms:4.0.0-beta-23225:dotnet54|System.Text.Encoding:4.0.11-beta-23225:dotnet54|System.Text.Encoding.Extensions:4.0.11-beta-23225:dotnet54|System.Text.RegularExpressions:4.0.11-beta-23225:dotnet54|System.Threading:4.0.11-beta-23225:dotnet54|System.Threading.Tasks:4.0.11-beta-23225:dotnet54|System.Threading.Thread:4.0.0-beta-23225:dotnet54|System.Threading.ThreadPool:4.0.10-beta-23225:dotnet54|System.Threading.Timer:4.0.1-beta-23225:dotnet54|System.Xml.ReaderWriter:4.0.11-beta-23225:dotnet54|System.Xml.XDocument:4.0.11-beta-23225:dotnet54|System.Xml.XmlSerializer:4.0.0-beta-23109:dotnet54|Microsoft.Data.OData:5.6.4:net40-Client|Newtonsoft.Json:6.0.8:net40-Client|Microsoft.Data.Services.Client:5.6.4:net40-Client|Microsoft.Azure.KeyVault.Core:1.0.0:net40-Client|Microsoft.Data.OData:5.6.4:win80|Newtonsoft.Json:6.0.8:win80|Microsoft.Data.OData:5.6.4:wpa|Newtonsoft.Json:6.0.8:wpa|Microsoft.Data.OData:5.6.4:wp80|Newtonsoft.Json:6.0.8:wp80|Microsoft.Azure.KeyVault.Core:1.0.0:wp80|Microsoft.Data.OData:5.6.4:portable-net45+win+wpa81+MonoAndroid10+MonoTouch10|Newtonsoft.Json:6.0.8:portable-net45+win+wpa81+MonoAndroid10+MonoTouch10", latest.Dependencies);
-            Assert.Equal(6, latest.DependencySets.Count());
+            Assert.Equal(6, latest.DependencySets.Count);
             Assert.Equal("dotnet54", latest.DependencySets.First().TargetFramework.GetShortFolderName());
         }
 
@@ -181,6 +185,71 @@ namespace NuGet.Protocol.Tests
         }
 
         [Fact]
+        public async Task V2FeedParser_Search_WhenSourceReturnsInvalidXml_ThrowsFatalProtocolException()
+        {
+            // Arrange
+            var serviceAddress = ProtocolUtility.CreateServiceAddress();
+            var searchUri = serviceAddress + "Search()?$filter=IsLatestVersion&searchTerm='azure'&targetFramework='net40-client'" +
+                "&includePrerelease=false&$skip=0&$top=1&semVerLevel=2.0.0";
+
+            var responses = new Dictionary<string, string>();
+            // An HTML page instead of a feed, like the one a web UI URL returns when it's used as a source
+            responses.Add(searchUri, "<html><body><a href=\"/feed?a=1&b=2\">feed</a></body></html>");
+            responses.Add(serviceAddress, string.Empty);
+
+            var httpSource = new TestHttpSource(new PackageSource(serviceAddress), responses);
+
+            V2FeedParser parser = new V2FeedParser(httpSource, serviceAddress);
+            var searchFilter = new SearchFilter(includePrerelease: false)
+            {
+                SupportedFrameworks = new string[] { "net40-Client" }
+            };
+
+            // Act
+            var exception = await Assert.ThrowsAsync<FatalProtocolException>(
+                () => parser.Search("azure", searchFilter, 0, 1, NullLogger.Instance, CancellationToken.None));
+
+            // Assert
+            Assert.StartsWith(string.Format(CultureInfo.CurrentCulture, Strings.Log_FailedToFetchV2FeedHttp, searchUri, string.Empty), exception.Message);
+            Assert.IsType<System.Xml.XmlException>(exception.InnerException);
+        }
+
+        [Fact]
+        public async Task V2FeedParser_Search_FirstRequestIsNotMarkedAsRetry()
+        {
+            // Arrange
+            var serviceAddress = ProtocolUtility.CreateServiceAddress();
+            var feed = ProtocolUtility.GetResource("NuGet.Protocol.Tests.compiler.resources.AzureSearch.xml", GetType());
+
+            var requests = new List<HttpRetryHandlerRequest>();
+            var retryHandler = new Mock<IHttpRetryHandler>();
+            retryHandler
+                .Setup(x => x.SendAsync(
+                    It.IsAny<HttpRetryHandlerRequest>(),
+                    It.IsAny<string>(),
+                    It.IsAny<ILogger>(),
+                    It.IsAny<CancellationToken>()))
+                .Returns<HttpRetryHandlerRequest, string, ILogger, CancellationToken>((request, _, __, ___) =>
+                {
+                    requests.Add(request);
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(feed) });
+                });
+
+            var httpSource = new TestHttpSource(new PackageSource(serviceAddress), new Dictionary<string, string>());
+            httpSource.RetryHandler = retryHandler.Object;
+
+            V2FeedParser parser = new V2FeedParser(httpSource, serviceAddress);
+            var searchFilter = new SearchFilter(includePrerelease: false);
+
+            // Act
+            await parser.Search("azure", searchFilter, 0, 1, NullLogger.Instance, CancellationToken.None);
+
+            // Assert
+            var request = Assert.Single(requests);
+            Assert.False(request.IsRetry);
+        }
+
+        [Fact]
         public async Task V2FeedParser_Search()
         {
             // Arrange
@@ -226,7 +295,7 @@ namespace NuGet.Protocol.Tests
             Assert.Equal("A client library for working with Microsoft Azure storage services including blobs, files, tables, and queues.", package.Summary);
             Assert.Equal("Microsoft Azure Storage Table Blob File Queue Scalable windowsazureofficial", package.Tags);
             Assert.Equal("Microsoft.Data.OData:5.6.4:net40-Client|Newtonsoft.Json:6.0.8:net40-Client|Microsoft.Data.Services.Client:5.6.4:net40-Client|Microsoft.Azure.KeyVault.Core:1.0.0:net40-Client|Microsoft.Data.OData:5.6.4:win80|Newtonsoft.Json:6.0.8:win80|Microsoft.Data.OData:5.6.4:wpa|Newtonsoft.Json:6.0.8:wpa|Microsoft.Data.OData:5.6.4:wp80|Newtonsoft.Json:6.0.8:wp80|Microsoft.Azure.KeyVault.Core:1.0.0:wp80", package.Dependencies);
-            Assert.Equal(4, package.DependencySets.Count());
+            Assert.Equal(4, package.DependencySets.Count);
             Assert.Equal("net40-client", package.DependencySets.First().TargetFramework.GetShortFolderName());
         }
 
@@ -325,7 +394,7 @@ namespace NuGet.Protocol.Tests
             var packages = await parser.Search("azure", searchFilter, 0, 100, NullLogger.Instance, CancellationToken.None);
 
             // Assert
-            Assert.Equal(100, packages.Count());
+            Assert.Equal(100, packages.Count);
         }
 
         [Fact]
@@ -441,7 +510,7 @@ namespace NuGet.Protocol.Tests
             Assert.Equal("A client library for working with Microsoft Azure storage services including blobs, files, tables, and queues.", package.Summary);
             Assert.Equal("Microsoft Azure Storage Table Blob File Queue Scalable windowsazureofficial", package.Tags);
             Assert.Equal("Microsoft.Data.OData:5.6.3:aspnetcore50|Microsoft.Data.Services.Client:5.6.3:aspnetcore50|System.Spatial:5.6.3:aspnetcore50|System.Collections:4.0.10-beta-22231:aspnetcore50|System.Collections.Concurrent:4.0.0-beta-22231:aspnetcore50|System.Collections.Specialized:4.0.0-beta-22231:aspnetcore50|System.Diagnostics.Debug:4.0.10-beta-22231:aspnetcore50|System.Diagnostics.Tools:4.0.0-beta-22231:aspnetcore50|System.Diagnostics.TraceSource:4.0.0-beta-22231:aspnetcore50|System.Diagnostics.Tracing:4.0.10-beta-22231:aspnetcore50|System.Dynamic.Runtime:4.0.0-beta-22231:aspnetcore50|System.Globalization:4.0.10-beta-22231:aspnetcore50|System.IO:4.0.10-beta-22231:aspnetcore50|System.IO.FileSystem:4.0.0-beta-22231:aspnetcore50|System.IO.FileSystem.Primitives:4.0.0-beta-22231:aspnetcore50|System.Linq:4.0.0-beta-22231:aspnetcore50|System.Linq.Expressions:4.0.0-beta-22231:aspnetcore50|System.Linq.Queryable:4.0.0-beta-22231:aspnetcore50|System.Net.Http:4.0.0-beta-22231:aspnetcore50|System.Net.Primitives:4.0.10-beta-22231:aspnetcore50|System.Reflection:4.0.10-beta-22231:aspnetcore50|System.Reflection.Extensions:4.0.0-beta-22231:aspnetcore50|System.Reflection.TypeExtensions:4.0.0-beta-22231:aspnetcore50|System.Runtime:4.0.20-beta-22231:aspnetcore50|System.Runtime.Extensions:4.0.10-beta-22231:aspnetcore50|System.Runtime.InteropServices:4.0.20-beta-22231:aspnetcore50|System.Runtime.Serialization.Primitives:4.0.0-beta-22231:aspnetcore50|System.Runtime.Serialization.Xml:4.0.10-beta-22231:aspnetcore50|System.Security.Cryptography.Encoding:4.0.0-beta-22231:aspnetcore50|System.Security.Cryptography.Encryption:4.0.0-beta-22231:aspnetcore50|System.Security.Cryptography.Hashing:4.0.0-beta-22231:aspnetcore50|System.Security.Cryptography.Hashing.Algorithms:4.0.0-beta-22231:aspnetcore50|System.Text.Encoding:4.0.10-beta-22231:aspnetcore50|System.Text.Encoding.Extensions:4.0.10-beta-22231:aspnetcore50|System.Text.RegularExpressions:4.0.10-beta-22231:aspnetcore50|System.Threading:4.0.0-beta-22231:aspnetcore50|System.Threading.Tasks:4.0.10-beta-22231:aspnetcore50|System.Threading.Thread:4.0.0-beta-22231:aspnetcore50|System.Threading.ThreadPool:4.0.10-beta-22231:aspnetcore50|System.Threading.Timer:4.0.0-beta-22231:aspnetcore50|System.Xml.ReaderWriter:4.0.10-beta-22231:aspnetcore50|System.Xml.XDocument:4.0.0-beta-22231:aspnetcore50|System.Xml.XmlSerializer:4.0.0-beta-22231:aspnetcore50|Microsoft.Data.OData:5.6.3:aspnet50|Microsoft.Data.Services.Client:5.6.3:aspnet50|System.Spatial:5.6.3:aspnet50|Microsoft.Data.OData:5.6.2:net40-Client|Newtonsoft.Json:5.0.8:net40-Client|Microsoft.Data.Services.Client:5.6.2:net40-Client|Microsoft.WindowsAzure.ConfigurationManager:1.8.0.0:net40-Client|Microsoft.Data.OData:5.6.2:win80|Microsoft.Data.OData:5.6.2:wpa|Microsoft.Data.OData:5.6.2:wp80|Newtonsoft.Json:5.0.8:wp80", package.Dependencies);
-            Assert.Equal(6, package.DependencySets.Count());
+            Assert.Equal(6, package.DependencySets.Count);
             Assert.Equal("aspnetcore50", package.DependencySets.First().TargetFramework.GetShortFolderName());
         }
 
@@ -510,7 +579,7 @@ namespace NuGet.Protocol.Tests
             Assert.Equal("A client library for working with Microsoft Azure storage services including blobs, files, tables, and queues.", package.Summary);
             Assert.Equal("Microsoft Azure Storage Table Blob File Queue Scalable windowsazureofficial", package.Tags);
             Assert.Equal("Microsoft.Data.OData:5.6.3:aspnetcore50|Microsoft.Data.Services.Client:5.6.3:aspnetcore50|System.Spatial:5.6.3:aspnetcore50|System.Collections:4.0.10-beta-22231:aspnetcore50|System.Collections.Concurrent:4.0.0-beta-22231:aspnetcore50|System.Collections.Specialized:4.0.0-beta-22231:aspnetcore50|System.Diagnostics.Debug:4.0.10-beta-22231:aspnetcore50|System.Diagnostics.Tools:4.0.0-beta-22231:aspnetcore50|System.Diagnostics.TraceSource:4.0.0-beta-22231:aspnetcore50|System.Diagnostics.Tracing:4.0.10-beta-22231:aspnetcore50|System.Dynamic.Runtime:4.0.0-beta-22231:aspnetcore50|System.Globalization:4.0.10-beta-22231:aspnetcore50|System.IO:4.0.10-beta-22231:aspnetcore50|System.IO.FileSystem:4.0.0-beta-22231:aspnetcore50|System.IO.FileSystem.Primitives:4.0.0-beta-22231:aspnetcore50|System.Linq:4.0.0-beta-22231:aspnetcore50|System.Linq.Expressions:4.0.0-beta-22231:aspnetcore50|System.Linq.Queryable:4.0.0-beta-22231:aspnetcore50|System.Net.Http:4.0.0-beta-22231:aspnetcore50|System.Net.Primitives:4.0.10-beta-22231:aspnetcore50|System.Reflection:4.0.10-beta-22231:aspnetcore50|System.Reflection.Extensions:4.0.0-beta-22231:aspnetcore50|System.Reflection.TypeExtensions:4.0.0-beta-22231:aspnetcore50|System.Runtime:4.0.20-beta-22231:aspnetcore50|System.Runtime.Extensions:4.0.10-beta-22231:aspnetcore50|System.Runtime.InteropServices:4.0.20-beta-22231:aspnetcore50|System.Runtime.Serialization.Primitives:4.0.0-beta-22231:aspnetcore50|System.Runtime.Serialization.Xml:4.0.10-beta-22231:aspnetcore50|System.Security.Cryptography.Encoding:4.0.0-beta-22231:aspnetcore50|System.Security.Cryptography.Encryption:4.0.0-beta-22231:aspnetcore50|System.Security.Cryptography.Hashing:4.0.0-beta-22231:aspnetcore50|System.Security.Cryptography.Hashing.Algorithms:4.0.0-beta-22231:aspnetcore50|System.Text.Encoding:4.0.10-beta-22231:aspnetcore50|System.Text.Encoding.Extensions:4.0.10-beta-22231:aspnetcore50|System.Text.RegularExpressions:4.0.10-beta-22231:aspnetcore50|System.Threading:4.0.0-beta-22231:aspnetcore50|System.Threading.Tasks:4.0.10-beta-22231:aspnetcore50|System.Threading.Thread:4.0.0-beta-22231:aspnetcore50|System.Threading.ThreadPool:4.0.10-beta-22231:aspnetcore50|System.Threading.Timer:4.0.0-beta-22231:aspnetcore50|System.Xml.ReaderWriter:4.0.10-beta-22231:aspnetcore50|System.Xml.XDocument:4.0.0-beta-22231:aspnetcore50|System.Xml.XmlSerializer:4.0.0-beta-22231:aspnetcore50|Microsoft.Data.OData:5.6.3:aspnet50|Microsoft.Data.Services.Client:5.6.3:aspnet50|System.Spatial:5.6.3:aspnet50|Microsoft.Data.OData:5.6.2:net40-Client|Newtonsoft.Json:5.0.8:net40-Client|Microsoft.Data.Services.Client:5.6.2:net40-Client|Microsoft.WindowsAzure.ConfigurationManager:1.8.0.0:net40-Client|Microsoft.Data.OData:5.6.2:win80|Microsoft.Data.OData:5.6.2:wpa|Microsoft.Data.OData:5.6.2:wp80|Newtonsoft.Json:5.0.8:wp80", package.Dependencies);
-            Assert.Equal(6, package.DependencySets.Count());
+            Assert.Equal(6, package.DependencySets.Count);
             Assert.Equal("aspnetcore50", package.DependencySets.First().TargetFramework.GetShortFolderName());
         }
 
@@ -661,8 +730,8 @@ namespace NuGet.Protocol.Tests
             Assert.Equal(DateTimeOffset.Parse("2016-04-06T12:46:30.942Z"), latest.Created.Value);
             Assert.Equal(DateTimeOffset.Parse("2017-04-06T12:46:30.942Z"), latest.LastEdited.Value);
             Assert.Equal("PackageB:null|EntityFramework:6.1.3|PackageC:3.7.0.15|PackageD:3.14.15:null", latest.Dependencies);
-            Assert.Equal(1, latest.DependencySets.Count());
-            Assert.Equal(VersionRange.All, latest.DependencySets.Single().Packages.Where(p => p.Id == "PackageB").Single().VersionRange);
+            Assert.Equal(1, latest.DependencySets.Count);
+            Assert.Equal(VersionRange.All, latest.DependencySets.Single().Packages.Single(p => p.Id == "PackageB").VersionRange);
             Assert.Equal("any", latest.DependencySets.First().TargetFramework.GetShortFolderName());
         }
 
@@ -859,7 +928,7 @@ namespace NuGet.Protocol.Tests
             var packages = await parser.FindPackagesByIdAsync("WindowsAzure.ServiceBus", new SourceCacheContext(), NullLogger.Instance, CancellationToken.None);
 
             // Assert
-            Assert.Equal(110, packages.Count());
+            Assert.Equal(110, packages.Count);
         }
     }
 }

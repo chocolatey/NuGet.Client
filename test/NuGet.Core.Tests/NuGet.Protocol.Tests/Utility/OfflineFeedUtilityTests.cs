@@ -1,6 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#if !IS_CORECLR
 using System;
 using System.IO;
 using System.Threading;
@@ -14,6 +15,7 @@ using NuGet.Protocol.Core.Types;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
 using Xunit;
+#endif
 
 namespace NuGet.Protocol.Tests
 {
@@ -79,7 +81,7 @@ namespace NuGet.Protocol.Tests
         {
             var exception = await Assert.ThrowsAsync<ArgumentNullException>(
                 () => OfflineFeedUtility.AddPackageToSource(
-                    offlineFeedAddContext: null,
+                    offlineFeedAddContext: null!,
                     token: CancellationToken.None));
 
             Assert.Equal("offlineFeedAddContext", exception.ParamName);

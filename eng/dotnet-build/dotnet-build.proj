@@ -1,0 +1,22 @@
+<Project>
+
+  <PropertyGroup>
+    <ProjectRoot>$(MSBuildThisFileDirectory)../../</ProjectRoot>
+  </PropertyGroup>
+
+  <Target Name="Restore">
+    <MSBuild Projects="$(ProjectRoot)build/build.proj"
+             Targets="RestoreXPlat" />
+  </Target>
+
+  <Target Name="Pack">
+    <MSBuild Projects="$(ProjectRoot)build/build.proj"
+             Targets="PackXPlat" />
+  </Target>
+
+  <Target Name="Build">
+    <MSBuild Projects="$(ProjectRoot)build/build.proj"
+             Targets="BuildXPlat" />
+  </Target>
+
+</Project>

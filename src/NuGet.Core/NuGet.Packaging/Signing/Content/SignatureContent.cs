@@ -100,7 +100,7 @@ namespace NuGet.Packaging.Signing
         private static SignatureContent Load(Stream stream, SigningSpecifications signingSpecifications)
         {
             var hashAlgorithm = HashAlgorithmName.Unknown;
-            string hash = null;
+            string? hash = null;
 
             using (var reader = new KeyPairFileReader(stream, signingSpecifications.Encoding))
             {
@@ -130,7 +130,7 @@ namespace NuGet.Packaging.Signing
                 }
             }
 
-            return new SignatureContent(signingSpecifications, hashAlgorithm, hash);
+            return new SignatureContent(signingSpecifications, hashAlgorithm, hash!);
         }
 
         private static void ThrowIfEmpty(Dictionary<string, string> properties)
@@ -168,7 +168,7 @@ namespace NuGet.Packaging.Signing
         {
             const string Version = "Version";
 
-            string signatureFormatVersion;
+            string? signatureFormatVersion;
             if (!properties.TryGetValue(Version, out signatureFormatVersion))
             {
                 throw new SignatureException(Strings.InvalidSignatureContent);

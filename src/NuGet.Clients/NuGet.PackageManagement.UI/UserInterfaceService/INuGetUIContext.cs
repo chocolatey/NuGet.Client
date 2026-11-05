@@ -3,10 +3,9 @@
 
 using System;
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.ServiceHub.Framework;
-using NuGet.PackageManagement.UI.Utility;
+using NuGet.Configuration;
 using NuGet.PackageManagement.VisualStudio;
 using NuGet.VisualStudio.Internal.Contracts;
 
@@ -18,7 +17,7 @@ namespace NuGet.PackageManagement.UI
 
         IServiceBroker ServiceBroker { get; }
 
-        IReconnectingNuGetSearchService ReconnectingSearchService { get; }
+        INuGetSearchService NuGetSearchService { get; }
 
         IVsSolutionManager SolutionManager { get; }
 
@@ -38,7 +37,7 @@ namespace NuGet.PackageManagement.UI
 
         IUserSettingsManager UserSettingsManager { get; }
 
-        Task<bool> IsNuGetProjectUpgradeableAsync(IProjectContextInfo project, CancellationToken cancellationToken);
+        PackageSourceMapping PackageSourceMapping { get; }
 
         Task<IModalProgressDialogSession> StartModalProgressDialogAsync(string caption, ProgressDialogData initialData, INuGetUI uiService);
 

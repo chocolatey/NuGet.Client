@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -286,8 +288,6 @@ namespace NuGet.Commands.Test
                 var dgSpec = new DependencyGraphSpec();
                 var configJson = @"
                 {
-                    ""dependencies"": {
-                    },
                      ""frameworks"": {
                         ""net45"": { }
                     }
@@ -325,6 +325,111 @@ namespace NuGet.Commands.Test
                     logger.VerboseMessages);
                 Assert.True(File.Exists(dgSpecPath));
             }
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task CommitAsync_WithExistingDGSpecAndDidDGHashChange_WritesDependencyGraphSpecWhenDGHashChanged(bool didDGHashChange)
+        {
+            // Arrange
+            using var td = TestDirectory.Create();
+            var path = Path.Combine(td, "project.assets.json");
+            var cachePath = Path.Combine(td, "project.csproj.nuget.cache");
+            var dgSpecPath = Path.Combine(td, "project1.nuget.g.dgspec.json");
+            File.WriteAllText(dgSpecPath, "{}");
+
+            var dgSpec = new DependencyGraphSpec();
+            var configJson = @"
+                {
+                     ""frameworks"": {
+                        ""net45"": { }
+                    }
+                }";
+
+            var spec = JsonPackageSpecReader.GetPackageSpec(configJson, "TestProject", Path.Combine(td, "project.csproj")).WithTestRestoreMetadata();
+            dgSpec.AddProject(spec);
+            dgSpec.AddRestore(spec.Name);
+
+            var logger = new TestLogger();
+            var result = new RestoreResult(
+                success: true,
+                restoreGraphs: null,
+                compatibilityCheckResults: null,
+                lockFile: new LockFile(),
+                previousLockFile: null, // different lock file
+                lockFilePath: path,
+                msbuildFiles: Enumerable.Empty<MSBuildOutputFile>(),
+                cacheFile: new CacheFile("NotSoRandomString"),
+                cacheFilePath: cachePath,
+                packagesLockFilePath: null,
+                packagesLockFile: null,
+                dependencyGraphSpecFilePath: dgSpecPath,
+                dependencyGraphSpec: dgSpec,
+                projectStyle: ProjectStyle.Unknown,
+                elapsedTime: TimeSpan.MinValue)
+            {
+                DidDGHashChange = didDGHashChange
+            };
+
+            // Act
+            await result.CommitAsync(logger, CancellationToken.None);
+
+            // Assert
+            Assert.Empty(logger.MinimalMessages);
+            Assert.Equal(didDGHashChange, logger.VerboseMessages.Contains($"Persisting dg to {dgSpecPath}"));
+            Assert.True(File.Exists(dgSpecPath));
+        }
+
+        [Fact]
+        public async Task CommitAsync_WhenDoNotWriteDependencyGraphSpecIsTrue_DoesNotWriteDgSpec()
+        {
+            // Arrange
+            using var td = TestDirectory.Create();
+            var path = Path.Combine(td, "project.assets.json");
+            var cachePath = Path.Combine(td, "project.csproj.nuget.cache");
+            var dgSpecPath = Path.Combine(td, "project1.nuget.g.dgspec.json");
+            var dgSpec = new DependencyGraphSpec();
+            var configJson = @"
+                {
+                     ""frameworks"": {
+                        ""net45"": { }
+                    }
+                }";
+
+            var spec = JsonPackageSpecReader.GetPackageSpec(configJson, "TestProject", Path.Combine(td, "project.csproj")).WithTestRestoreMetadata();
+            dgSpec.AddProject(spec);
+            dgSpec.AddRestore(spec.Name);
+
+            var logger = new TestLogger();
+            var result = new RestoreResult(
+                success: true,
+                restoreGraphs: null,
+                compatibilityCheckResults: null,
+                lockFile: new LockFile(),
+                previousLockFile: null,
+                lockFilePath: path,
+                msbuildFiles: Enumerable.Empty<MSBuildOutputFile>(),
+                cacheFile: new CacheFile("NotSoRandomString"),
+                cacheFilePath: cachePath,
+                packagesLockFilePath: null,
+                packagesLockFile: null,
+                dependencyGraphSpecFilePath: dgSpecPath,
+                dependencyGraphSpec: dgSpec,
+                projectStyle: ProjectStyle.Unknown,
+                elapsedTime: TimeSpan.MinValue)
+            {
+                DoNotWriteDependencyGraphSpec = true
+            };
+
+            // Act
+            await result.CommitAsync(logger, CancellationToken.None);
+
+            // Assert
+            Assert.DoesNotContain(
+                logger.VerboseMessages,
+                m => m.Contains("Persisting dg"));
+            Assert.False(File.Exists(dgSpecPath));
         }
 
         [Fact]

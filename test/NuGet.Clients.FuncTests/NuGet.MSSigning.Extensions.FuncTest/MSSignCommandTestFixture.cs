@@ -1,13 +1,14 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Configuration;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
-using NuGet.Packaging.Signing;
-using Test.Utility.Signing;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
 
 namespace NuGet.MSSigning.Extensions.FuncTest.Commands
 {
@@ -97,7 +98,7 @@ namespace NuGet.MSSigning.Extensions.FuncTest.Commands
             var testServer = await _testServer.Value;
             var rootCa = CertificateAuthority.Create(testServer.Url);
             var intermediateCa = rootCa.CreateIntermediateCertificateAuthority();
-            var rootCertificate = new X509Certificate2(rootCa.Certificate.GetEncoded());
+            var rootCertificate = new X509Certificate2(rootCa.Certificate);
             StoreLocation storeLocation = CertificateStoreUtilities.GetTrustedCertificateStoreLocation();
 
             _trustedTimestampRoot = TrustedTestCert.Create(

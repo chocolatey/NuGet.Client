@@ -17,10 +17,10 @@ namespace NuGet.Packaging.Licenses
             switch (expression.Type)
             {
                 case LicenseExpressionType.License:
-                    return (expression as NuGetLicense).IsStandardLicense;
+                    return ((NuGetLicense)expression).IsStandardLicense;
 
                 case LicenseExpressionType.Operator:
-                    var licenseOperator = expression as LicenseOperator;
+                    var licenseOperator = (LicenseOperator)expression;
                     switch (licenseOperator.OperatorType)
                     {
                         case LicenseOperatorType.LogicalOperator:
@@ -44,7 +44,7 @@ namespace NuGet.Packaging.Licenses
         /// <param name="expression">The expression to be walked.</param>
         /// <param name="licenseProcessor">A processor for the licenses.</param>
         /// <param name="exceptionProcessor">A processor for the exceptions.</param>
-        public static void OnEachLeafNode(this NuGetLicenseExpression expression, Action<NuGetLicense> licenseProcessor, Action<NuGetLicenseException> exceptionProcessor)
+        public static void OnEachLeafNode(this NuGetLicenseExpression expression, Action<NuGetLicense>? licenseProcessor, Action<NuGetLicenseException>? exceptionProcessor)
         {
             switch (expression.Type)
             {

@@ -5,21 +5,18 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-#if IS_SIGNING_SUPPORTED
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
-#endif
 using NuGet.Common;
 
 namespace NuGet.Packaging.Signing
 {
     public sealed class RepositoryCountersignature : Signature, IRepositorySignature
     {
-#if IS_SIGNING_SUPPORTED
         private readonly PrimarySignature _primarySignature;
 
         public Uri V3ServiceIndexUrl { get; }
-        public IReadOnlyList<string> PackageOwners { get; }
+        public IReadOnlyList<string>? PackageOwners { get; }
 
         public override string FriendlyName => Strings.RepositoryCountersignatureFriendlyName;
 
@@ -27,7 +24,7 @@ namespace NuGet.Packaging.Signing
             PrimarySignature primarySignature,
             SignerInfo counterSignerInfo,
             Uri v3ServiceIndexUrl,
-            IReadOnlyList<string> packageOwners)
+            IReadOnlyList<string>? packageOwners)
             : base(counterSignerInfo, SignatureType.Repository)
         {
             _primarySignature = primarySignature;
@@ -35,7 +32,7 @@ namespace NuGet.Packaging.Signing
             PackageOwners = packageOwners;
         }
 
-        public static RepositoryCountersignature GetRepositoryCountersignature(PrimarySignature primarySignature)
+        public static RepositoryCountersignature? GetRepositoryCountersignature(PrimarySignature primarySignature)
         {
             if (primarySignature == null)
             {
@@ -43,7 +40,7 @@ namespace NuGet.Packaging.Signing
             }
 
             var countersignatures = primarySignature.SignerInfo.CounterSignerInfos;
-            RepositoryCountersignature repositoryCountersignature = null;
+            RepositoryCountersignature? repositoryCountersignature = null;
 
             // Only look for repository countersignatures.
             foreach (var countersignature in countersignatures)
@@ -76,7 +73,7 @@ namespace NuGet.Packaging.Signing
             return repositoryCountersignature;
         }
 
-        public override byte[] GetSignatureValue()
+        public override byte[]? GetSignatureValue()
         {
             using (ICms cms = CmsFactory.Create(_primarySignature.GetBytes()))
             {
@@ -109,13 +106,8 @@ namespace NuGet.Packaging.Signing
 
             var summary = base.Verify(timestamp, settings, fingerprintAlgorithm, certificateExtraStore);
 
-            return new SignatureVerificationSummary(
-                summary.SignatureType,
-                summary.Status,
-                summary.Flags,
-                summary.Timestamp,
-                summary.ExpirationTime,
-                issues.Concat(summary.Issues));
+            summary.Issues = issues.Concat(summary.Issues);
+            return summary;
         }
 
         internal bool IsRelated(PrimarySignature primarySignature)
@@ -127,11 +119,5 @@ namespace NuGet.Packaging.Signing
 
             return ReferenceEquals(_primarySignature, primarySignature);
         }
-#else
-        public static RepositoryCountersignature GetRepositoryCountersignature(PrimarySignature primarySignature)
-        {
-            throw new NotSupportedException();
-        }
-#endif
     }
 }

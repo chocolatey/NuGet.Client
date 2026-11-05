@@ -61,6 +61,11 @@ namespace NuGet.Resolver
                 throw new ArgumentNullException(nameof(packageSources));
             }
 
+            if (log == null)
+            {
+                throw new ArgumentNullException(nameof(log));
+            }
+
             DependencyBehavior = dependencyBehavior;
             TargetIds = new HashSet<string>(targetIds, StringComparer.OrdinalIgnoreCase);
 

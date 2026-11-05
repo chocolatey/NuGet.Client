@@ -23,7 +23,7 @@ namespace NuGet.Packaging.Test
         public void Constructor_TwoArguments_WithNullStream_Throws()
         {
             var exception = Assert.Throws<ArgumentNullException>(
-                () => new ReadOnlyBufferedStream(stream: null, leaveOpen: false));
+                () => new ReadOnlyBufferedStream(stream: null!, leaveOpen: false));
 
             Assert.Equal("stream", exception.ParamName);
         }
@@ -56,7 +56,7 @@ namespace NuGet.Packaging.Test
         public void Constructor_ThreeArguments_WithNullStream_Throws()
         {
             var exception = Assert.Throws<ArgumentNullException>(
-                () => new ReadOnlyBufferedStream(stream: null, leaveOpen: false, bufferSize: 4096));
+                () => new ReadOnlyBufferedStream(stream: null!, leaveOpen: false, bufferSize: 4096));
 
             Assert.Equal("stream", exception.ParamName);
         }
@@ -249,7 +249,6 @@ namespace NuGet.Packaging.Test
             }
         }
 
-#if IS_SIGNING_SUPPORTED
         [Fact]
         public void Close_WhenLeaveOpenFalse_DisposesUnderlyingStream()
         {
@@ -271,7 +270,6 @@ namespace NuGet.Packaging.Test
                 Assert.Equal(0, test.UnderlyingStream.DisposeCallCount);
             }
         }
-#endif
 
         [Fact]
         public void CopyTo_WithCurrentPositionOfSourceStreamAtStart_CopiesEntireStream()
@@ -374,7 +372,7 @@ namespace NuGet.Packaging.Test
             using (var test = CreateTest())
             {
                 var exception = Assert.Throws<ArgumentNullException>(
-                    () => test.BufferedReadStream.Read(buffer: null, offset: 0, count: 0));
+                    () => test.BufferedReadStream.Read(buffer: null!, offset: 0, count: 0));
 
                 Assert.Equal("buffer", exception.ParamName);
             }

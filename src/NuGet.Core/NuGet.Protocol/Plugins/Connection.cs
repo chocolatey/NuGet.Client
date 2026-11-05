@@ -28,12 +28,12 @@ namespace NuGet.Protocol.Plugins
         /// <summary>
         /// Occurs when an unrecoverable fault has been caught.
         /// </summary>
-        public event EventHandler<ProtocolErrorEventArgs> Faulted;
+        public event EventHandler<ProtocolErrorEventArgs>? Faulted;
 
         /// <summary>
         /// Occurs when a message has been received.
         /// </summary>
-        public event EventHandler<MessageEventArgs> MessageReceived;
+        public event EventHandler<MessageEventArgs>? MessageReceived;
 
         /// <summary>
         /// Gets the message dispatcher.
@@ -46,9 +46,9 @@ namespace NuGet.Protocol.Plugins
         public ConnectionOptions Options { get; }
 
         /// <summary>
-        /// Gets the negotiated protocol version, or <c>null</c> if not yet connected.
+        /// Gets the negotiated protocol version, or <see langword="null" /> if not yet connected.
         /// </summary>
-        public SemanticVersion ProtocolVersion { get; private set; }
+        public SemanticVersion? ProtocolVersion { get; private set; }
 
         /// <summary>
         /// Instantiates a new instance of the <see cref="Connection" /> class.
@@ -57,10 +57,10 @@ namespace NuGet.Protocol.Plugins
         /// <param name="sender">A sender.</param>
         /// <param name="receiver">A receiver.</param>
         /// <param name="options">Connection options.</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="dispatcher" /> is <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="sender" /> is <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="receiver" /> is <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="options" /> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="dispatcher" /> is <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="sender" /> is <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="receiver" /> is <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="options" /> is <see langword="null" />.</exception>
         public Connection(IMessageDispatcher dispatcher, ISender sender, IReceiver receiver, ConnectionOptions options)
             : this(dispatcher, sender, receiver, options, PluginLogger.DefaultInstance)
         {
@@ -74,11 +74,11 @@ namespace NuGet.Protocol.Plugins
         /// <param name="receiver">A receiver.</param>
         /// <param name="options">Connection options.</param>
         /// <param name="logger">A plugin logger.</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="dispatcher" /> is <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="sender" /> is <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="receiver" /> is <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="options" /> is <c>null</c>.</exception>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="dispatcher" /> is <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="sender" /> is <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="receiver" /> is <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="options" /> is <see langword="null" />.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> is <see langword="null" />.</exception>
         internal Connection(IMessageDispatcher dispatcher, ISender sender, IReceiver receiver, ConnectionOptions options, IPluginLogger logger)
         {
             if (dispatcher == null)
@@ -218,7 +218,7 @@ namespace NuGet.Protocol.Plugins
         /// <param name="message">The message to be sent.</param>
         /// <param name="cancellationToken">A cancellation token.</param>
         /// <returns>A task that represents the asynchronous operation.</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="message" /> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="message" /> is <see langword="null" />.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="cancellationToken" />
         /// is cancelled.</exception>
         /// <exception cref="InvalidOperationException">Thrown if not connected.</exception>
@@ -269,7 +269,7 @@ namespace NuGet.Protocol.Plugins
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="cancellationToken" />
         /// is cancelled.</exception>
         /// <exception cref="InvalidOperationException">Thrown if not connected.</exception>
-        public Task<TInbound> SendRequestAndReceiveResponseAsync<TOutbound, TInbound>(
+        public Task<TInbound?> SendRequestAndReceiveResponseAsync<TOutbound, TInbound>(
             MessageMethod method,
             TOutbound payload,
             CancellationToken cancellationToken)
@@ -279,7 +279,7 @@ namespace NuGet.Protocol.Plugins
             if (State == ConnectionState.Closing ||
                 State == ConnectionState.Closed)
             {
-                return Task.FromResult<TInbound>(null);
+                return TaskResult.Null<TInbound>();
             }
 
             if (_state < (int)ConnectionState.Connecting)
@@ -292,7 +292,7 @@ namespace NuGet.Protocol.Plugins
             return MessageDispatcher.DispatchRequestAsync<TOutbound, TInbound>(method, payload, cancellationToken);
         }
 
-        private void OnMessageReceived(object sender, MessageEventArgs e)
+        private void OnMessageReceived(object? sender, MessageEventArgs e)
         {
             if (_logger.IsEnabled)
             {
@@ -302,7 +302,7 @@ namespace NuGet.Protocol.Plugins
             MessageReceived?.Invoke(this, e);
         }
 
-        private void OnFaulted(object sender, ProtocolErrorEventArgs e)
+        private void OnFaulted(object? sender, ProtocolErrorEventArgs e)
         {
             Faulted?.Invoke(this, e);
         }

@@ -62,9 +62,16 @@ namespace NuGet.Protocol.Core.Types
         /// <summary>
         /// The content url of this resource.
         /// </summary>
+        /// <remarks>
+        /// NULL_INC: Annotated as non-null but no runtime check is enforced in the constructor
+        /// to avoid introducing a new throw in a previously-permissive code path.
+        /// This maps to the <c>packageContent</c> field in the NuGet V3 registration API
+        /// (https://learn.microsoft.com/en-us/nuget/api/registration-base-url-resource#registration-leaf-object-in-a-page)
+        /// which is required by protocol, so null is not expected in practice.
+        /// </remarks>
         public string ContentUri { get; set; }
 
-        public bool Equals(RemoteSourceDependencyInfo other)
+        public bool Equals(RemoteSourceDependencyInfo? other)
         {
             return other != null &&
                    Identity.Equals(other.Identity) &&
@@ -72,19 +79,14 @@ namespace NuGet.Protocol.Core.Types
                    string.Equals(ContentUri, other.ContentUri, StringComparison.Ordinal);
         }
 
-        public override bool Equals(object obj) => Equals(obj as PackageDependencyInfo);
+        public override bool Equals(object? obj) => Equals(obj as RemoteSourceDependencyInfo);
 
         public override int GetHashCode()
         {
             var combiner = new HashCodeCombiner();
 
             combiner.AddObject(Identity);
-
-            foreach (var hash in DependencyGroups.Select(group => group.GetHashCode()).OrderBy(x => x))
-            {
-                combiner.AddObject(hash);
-            }
-
+            combiner.AddUnorderedSequence(DependencyGroups);
             combiner.AddObject(ContentUri);
 
             return combiner.CombinedHash;

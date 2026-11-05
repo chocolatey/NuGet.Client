@@ -13,13 +13,13 @@ namespace NuGet.Protocol.Plugins
         /// <summary>
         /// The output line read.
         /// </summary>
-        public string Line { get; }
+        public string? Line { get; }
 
         /// <summary>
         /// Instantiates a new <see cref="LineReadEventArgs" /> class.
         /// </summary>
         /// <param name="line">The output line read.</param>
-        public LineReadEventArgs(string line)
+        public LineReadEventArgs(string? line)
         {
             Line = line;
         }

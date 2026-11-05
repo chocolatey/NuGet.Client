@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using NuGet.Configuration;
 using NuGet.Shared;
 using NuGet.Test.Utility;
@@ -30,8 +31,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     NuGetExePath,
                     testFolder,
-                    $"setApiKey {testApiKey} -ConfigFile {configFile}",
-                    waitForExit: true);
+                    $"setApiKey {testApiKey} -ConfigFile {configFile}");
 
                 // Assert
                 Assert.True(0 == result.ExitCode, $"{result.Output} {result.Errors}");
@@ -91,8 +91,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     NuGetExePath,
                     pathContext.WorkingDirectory,
-                    $"setApiKey {testApiKey} -Source {sourceKey} -ConfigFile {settings.ConfigPath}",
-                    waitForExit: true);
+                    $"setApiKey {testApiKey} -Source {sourceKey} -ConfigFile {settings.ConfigPath}");
 
                 var iSettings = Configuration.Settings.LoadDefaultSettings(
                     Path.GetDirectoryName(settings.ConfigPath),
@@ -142,8 +141,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     NuGetExePath,
                     pathContext.WorkingDirectory,
-                    $"setApiKey {testApiKey} -Source {serverUri} -ConfigFile {settings.ConfigPath}",
-                    waitForExit: true);
+                    $"setApiKey {testApiKey} -Source {serverUri} -ConfigFile {settings.ConfigPath}");
 
                 var iSettings = Configuration.Settings.LoadDefaultSettings(
                     Path.GetDirectoryName(settings.ConfigPath),

@@ -8,7 +8,10 @@ using NuGet.Versioning;
 
 namespace NuGet.LibraryModel
 {
-    public class DownloadDependency : IEquatable<DownloadDependency>, IComparable<DownloadDependency>
+    /// <remarks>
+    /// Immutable.
+    /// </remarks>
+    public sealed class DownloadDependency : IEquatable<DownloadDependency>, IComparable<DownloadDependency>
     {
         public string Name { get; }
 
@@ -18,12 +21,17 @@ namespace NuGet.LibraryModel
             string name,
             VersionRange versionRange)
         {
+            if (name == null) throw new ArgumentNullException(nameof(name));
+            if (versionRange == null) throw new ArgumentNullException(nameof(versionRange));
+
             Name = name;
             VersionRange = versionRange;
         }
 
         public static implicit operator LibraryRange(DownloadDependency library)
         {
+            if (library == null) throw new ArgumentNullException(nameof(library));
+
             return new LibraryRange
             {
                 Name = library.Name,
@@ -32,8 +40,9 @@ namespace NuGet.LibraryModel
             };
         }
 
-        public int CompareTo(DownloadDependency other)
+        public int CompareTo(DownloadDependency? other)
         {
+            if (other == null) return 1;
 
             var compare = string.Compare(Name, other.Name, StringComparison.OrdinalIgnoreCase);
             if (compare == 0)
@@ -79,12 +88,12 @@ namespace NuGet.LibraryModel
             return hashCode.CombinedHash;
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return Equals(obj as DownloadDependency);
         }
 
-        public bool Equals(DownloadDependency other)
+        public bool Equals(DownloadDependency? other)
         {
             if (other == null)
             {
@@ -98,11 +107,6 @@ namespace NuGet.LibraryModel
 
             return Name.Equals(other.Name, StringComparison.OrdinalIgnoreCase) &&
                    EqualityUtility.EqualsWithNullCheck(VersionRange, other.VersionRange);
-        }
-
-        public DownloadDependency Clone()
-        {
-            return new DownloadDependency(Name, VersionRange);
         }
     }
 }

@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Concurrent;
 using System.ComponentModel.Composition;
@@ -10,7 +12,6 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Threading;
 using NuGet.Configuration;
-using NuGet.PackageManagement;
 using NuGet.PackageManagement.VisualStudio;
 using NuGet.Packaging;
 using NuGet.Packaging.Core;
@@ -30,9 +31,6 @@ namespace NuGetConsole
 
         [Import]
         private Lazy<ISettings> Settings { get; set; }
-
-        [Import]
-        private ISolutionManager SolutionManager { get; set; }
 
         [Import]
         public IPowerConsoleWindow PowerConsoleWindow { get; set; }

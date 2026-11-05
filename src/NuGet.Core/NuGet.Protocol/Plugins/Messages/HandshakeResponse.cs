@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Newtonsoft.Json;
 using NuGet.Versioning;
@@ -21,26 +22,34 @@ namespace NuGet.Protocol.Plugins
 
         /// <summary>
         /// Gets the handshake responder's plugin protocol version if the handshake was successful;
-        /// otherwise, <c>null</c>.
+        /// otherwise, <see langword="null" />.
         /// </summary>
-        public SemanticVersion ProtocolVersion { get; }
+        [System.Text.Json.Serialization.JsonConverter(typeof(StjSemanticVersionConverter))]
+        public SemanticVersion? ProtocolVersion { get; }
+
+        /// <summary>
+        /// Gets a value indicating whether the handshake succeeded. When <see langword="true" />,
+        /// <see cref="ProtocolVersion" /> is guaranteed to be non-<see langword="null" />.
+        /// </summary>
+        [MemberNotNullWhen(true, nameof(ProtocolVersion))]
+        internal bool IsSuccess => ResponseCode == MessageResponseCode.Success;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="HandshakeResponse" /> class.
         /// </summary>
         /// <param name="responseCode">The handshake responder's handshake response code.</param>
         /// <param name="protocolVersion">The handshake responder's plugin protocol version
-        /// if the handshake was successful; otherwise, <c>null</c>.</param>
+        /// if the handshake was successful; otherwise, <see langword="null" />.</param>
         /// <exception cref="ArgumentException">Thrown if <paramref name="responseCode" />
         /// is an undefined <see cref="MessageResponseCode" /> value.</exception>
         /// <exception cref="ArgumentException">Thrown if <paramref name="responseCode" />
         /// is <see cref="MessageResponseCode.Success" /> and <paramref name="protocolVersion" />
-        /// is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
         /// <exception cref="ArgumentException">Thrown if <paramref name="responseCode" />
         /// is not <see cref="MessageResponseCode.Success" /> and <paramref name="protocolVersion" />
-        /// is not <c>null</c>.</exception>
+        /// is not <see langword="null" />.</exception>
         [JsonConstructor]
-        public HandshakeResponse(MessageResponseCode responseCode, SemanticVersion protocolVersion)
+        public HandshakeResponse(MessageResponseCode responseCode, SemanticVersion? protocolVersion)
         {
             if (!Enum.IsDefined(typeof(MessageResponseCode), responseCode))
             {

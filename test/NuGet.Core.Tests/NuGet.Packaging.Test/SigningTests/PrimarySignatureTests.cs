@@ -1,7 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if IS_SIGNING_SUPPORTED
 using System;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
@@ -32,7 +31,7 @@ namespace NuGet.Packaging.Test
         public void Load_WhenDataNull_Throws()
         {
             var exception = Assert.Throws<ArgumentNullException>(
-                () => PrimarySignature.Load(data: null));
+                () => PrimarySignature.Load(data: null!));
 
             Assert.Equal("data", exception.ParamName);
         }
@@ -204,4 +203,3 @@ namespace NuGet.Packaging.Test
         }
     }
 }
-#endif

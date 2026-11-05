@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -11,8 +13,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Configuration;
 using NuGet.Frameworks;
-using NuGet.LibraryModel;
-using NuGet.Packaging;
 using NuGet.Packaging.Core;
 using NuGet.ProjectManagement;
 using NuGet.ProjectModel;
@@ -62,7 +62,6 @@ namespace ProjectManagement.Test
                 Assert.Equal(projectTargetFramework, actual.TargetFrameworks[0].FrameworkName);
                 Assert.Empty(actual.TargetFrameworks[0].Imports);
 
-                Assert.Empty(actual.Dependencies);
                 Assert.Empty(actual.TargetFrameworks[0].Dependencies);
                 Assert.Empty(actual.RestoreMetadata.TargetFrameworks.SelectMany(e => e.ProjectReferences));
             }
@@ -1909,7 +1908,7 @@ namespace ProjectManagement.Test
                 // Assert
                 // Check that the packages.config file exists after the installation
                 Assert.True(File.Exists(packagesProjectNameConfigPath));
-                Assert.True(msBuildNuGetProjectSystem.Files.Contains(Path.GetFileName(packagesProjectNameConfigPath)));
+                Assert.Contains(Path.GetFileName(packagesProjectNameConfigPath), msBuildNuGetProjectSystem.Files);
 
                 // Check the number of packages and packages returned by PackagesConfigProject after the installation
                 packagesInPackagesConfig = (await msBuildNuGetProject.PackagesConfigNuGetProject.GetInstalledPackagesAsync(token)).ToList();
@@ -2031,8 +2030,6 @@ namespace ProjectManagement.Test
         {
             public IDictionary<string, int> ScriptsExecuted { get; } = new Dictionary<string, int>();
 
-            public IProjectBuildProperties BuildProperties => throw new NotImplementedException();
-
             public IProjectSystemCapabilities Capabilities => throw new NotImplementedException();
 
             public IProjectSystemReferencesReader ReferencesReader => throw new NotImplementedException();
@@ -2046,11 +2043,6 @@ namespace ProjectManagement.Test
             public TestMSBuildNuGetProject(IMSBuildProjectSystem msbuildNuGetProjectSystem, string folderNuGetProjectPath, string packagesConfigFolderPath) : base(msbuildNuGetProjectSystem, folderNuGetProjectPath, packagesConfigFolderPath)
             {
                 ProjectServices = this;
-            }
-
-            public T GetGlobalService<T>() where T : class
-            {
-                throw new NotImplementedException();
             }
 
             public Task ExecutePackageScriptAsync(PackageIdentity packageIdentity, string packageInstallPath, string scriptRelativePath, INuGetProjectContext projectContext, bool throwOnFailure, CancellationToken token)
@@ -2068,7 +2060,7 @@ namespace ProjectManagement.Test
                 }
 
                 ScriptsExecuted[scriptRelativePath]++;
-                return Task.FromResult(0);
+                return Task.CompletedTask;
             }
 
             public Task<bool> ExecutePackageInitScriptAsync(PackageIdentity packageIdentity, string packageInstallPath, INuGetProjectContext projectContext, bool throwOnFailure, CancellationToken token)

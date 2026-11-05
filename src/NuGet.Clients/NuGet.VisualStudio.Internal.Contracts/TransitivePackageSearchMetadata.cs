@@ -15,37 +15,41 @@ namespace NuGet.VisualStudio.Internal.Contracts
     {
         public IReadOnlyCollection<PackageIdentity> TransitiveOrigins { get; private set; }
 
-        public string Authors => _packageSearchMetadata.Authors;
+        public string? Authors => _packageSearchMetadata.Authors;
 
         public IEnumerable<PackageDependencyGroup> DependencySets => _packageSearchMetadata.DependencySets;
 
-        public string Description => _packageSearchMetadata.Description;
+        public string? Description => _packageSearchMetadata.Description;
 
         public long? DownloadCount => _packageSearchMetadata.DownloadCount;
 
-        public Uri IconUrl => _packageSearchMetadata.IconUrl;
+        public Uri? IconUrl => _packageSearchMetadata.IconUrl;
 
         public PackageIdentity Identity => _packageSearchMetadata.Identity;
 
-        public Uri LicenseUrl => _packageSearchMetadata.LicenseUrl;
+        public Uri? LicenseUrl => _packageSearchMetadata.LicenseUrl;
 
-        public Uri ProjectUrl => _packageSearchMetadata.ProjectUrl;
+        public Uri? ProjectUrl => _packageSearchMetadata.ProjectUrl;
 
-        public Uri ReadmeUrl => _packageSearchMetadata.ReadmeUrl;
+        public Uri? ReadmeUrl => _packageSearchMetadata.ReadmeUrl;
 
-        public Uri ReportAbuseUrl => _packageSearchMetadata.ReportAbuseUrl;
+        public string? ReadmeFileUrl => _packageSearchMetadata.ReadmeFileUrl;
 
-        public Uri PackageDetailsUrl => _packageSearchMetadata.PackageDetailsUrl;
+        public Uri? ReportAbuseUrl => _packageSearchMetadata.ReportAbuseUrl;
+
+        public Uri? PackageDetailsUrl => _packageSearchMetadata.PackageDetailsUrl;
 
         public DateTimeOffset? Published => _packageSearchMetadata.Published;
 
-        public string Owners => _packageSearchMetadata.Owners;
+        public IReadOnlyList<string>? OwnersList => _packageSearchMetadata.OwnersList;
+
+        public string? Owners => _packageSearchMetadata.Owners;
 
         public bool RequireLicenseAcceptance => _packageSearchMetadata.RequireLicenseAcceptance;
 
-        public string Summary => _packageSearchMetadata.Summary;
+        public string? Summary => _packageSearchMetadata.Summary;
 
-        public string Tags => _packageSearchMetadata.Tags;
+        public string? Tags => _packageSearchMetadata.Tags;
 
         public string Title => _packageSearchMetadata.Title;
 
@@ -53,9 +57,9 @@ namespace NuGet.VisualStudio.Internal.Contracts
 
         public bool PrefixReserved => _packageSearchMetadata.PrefixReserved;
 
-        public LicenseMetadata LicenseMetadata => _packageSearchMetadata.LicenseMetadata;
+        public LicenseMetadata? LicenseMetadata => _packageSearchMetadata.LicenseMetadata;
 
-        public IEnumerable<PackageVulnerabilityMetadata> Vulnerabilities => _packageSearchMetadata.Vulnerabilities;
+        public IEnumerable<PackageVulnerabilityMetadata>? Vulnerabilities => _packageSearchMetadata.Vulnerabilities;
 
         private readonly IPackageSearchMetadata _packageSearchMetadata;
 
@@ -65,7 +69,7 @@ namespace NuGet.VisualStudio.Internal.Contracts
             TransitiveOrigins = transitiveOrigins ?? throw new ArgumentNullException(nameof(transitiveOrigins));
         }
 
-        public Task<PackageDeprecationMetadata> GetDeprecationMetadataAsync()
+        public Task<PackageDeprecationMetadata?> GetDeprecationMetadataAsync()
         {
             return _packageSearchMetadata.GetDeprecationMetadataAsync();
         }

@@ -1,6 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
 
 namespace NuGet.ProjectManagement
 {
@@ -27,6 +28,7 @@ namespace NuGet.ProjectManagement
         public const string TargetPlatformMoniker = nameof(TargetPlatformMoniker);
         public const string TargetPlatformMinVersion = nameof(TargetPlatformMinVersion);
         public const string CLRSupport = nameof(CLRSupport);
+        public const string WindowsTargetPlatformMinVersion = nameof(WindowsTargetPlatformMinVersion);
         public const string TargetPlatformVersion = nameof(TargetPlatformVersion);
         public const string Version = nameof(Version);
         public const string RestorePackagesPath = nameof(RestorePackagesPath);
@@ -55,5 +57,14 @@ namespace NuGet.ProjectManagement
         public const string CentralPackageVersionOverrideEnabled = nameof(CentralPackageVersionOverrideEnabled);
         public const string AssemblyName = nameof(AssemblyName);
         public const string CentralPackageTransitivePinningEnabled = nameof(CentralPackageTransitivePinningEnabled);
+        public const string NuGetAudit = nameof(NuGetAudit);
+        public const string NuGetAuditLevel = nameof(NuGetAuditLevel);
+        public const string NuGetAuditMode = nameof(NuGetAuditMode);
+        public const string CentralPackageFloatingVersionsEnabled = nameof(CentralPackageFloatingVersionsEnabled);
+        public const string SdkAnalysisLevel = nameof(SdkAnalysisLevel);
+        public const string UsingMicrosoftNETSdk = nameof(UsingMicrosoftNETSdk);
+        public const string RestoreUseLegacyDependencyResolver = nameof(RestoreUseLegacyDependencyResolver);
+        public const string RestoreEnablePackagePruning = nameof(RestoreEnablePackagePruning);
+        public const string RestorePackagePruningDefault = nameof(RestorePackagePruningDefault);
     }
 }

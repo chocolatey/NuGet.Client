@@ -3,13 +3,14 @@
 
 using System;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
+using System.Text.Json;
 using NuGet.Common;
 using NuGet.Configuration;
 
@@ -88,13 +89,18 @@ namespace NuGet.Credentials
         /// <returns>A credential object.</returns>
         public Task<CredentialResponse> GetAsync(
             Uri uri,
-            IWebProxy proxy,
+            IWebProxy? proxy,
             CredentialRequestType type,
-            string message,
+            string? message,
             bool isRetry,
             bool nonInteractive,
             CancellationToken cancellationToken)
         {
+            if (uri == null)
+            {
+                throw new ArgumentNullException(nameof(uri));
+            }
+
             CredentialResponse taskResponse;
             if (type == CredentialRequestType.Proxy)
             {
@@ -121,7 +127,7 @@ namespace NuGet.Credentials
                 {
                     response = GetPluginResponse(request, cancellationToken);
                 }
-                catch (PluginUnexpectedStatusException) when (PassVerbosityFlag(request))
+                catch (PluginUnexpectedStatusException) when (PassVerbosityFlag(request.Verbosity))
                 {
                     // older providers may throw if the verbosity flag is sent,
                     // so retry without it
@@ -178,9 +184,10 @@ namespace NuGet.Credentials
 
             // only apply -verbosity flag if set and != Normal
             // since normal is default
-            if (PassVerbosityFlag(request))
+            string? verbosity = request.Verbosity;
+            if (PassVerbosityFlag(verbosity))
             {
-                argumentString += $" -verbosity {request.Verbosity.ToLower(CultureInfo.InvariantCulture)}";
+                argumentString += $" -verbosity {verbosity.ToLower(CultureInfo.InvariantCulture)}";
             }
 
             var startInfo = new ProcessStartInfo
@@ -198,8 +205,7 @@ namespace NuGet.Credentials
                 StandardErrorEncoding = Encoding.UTF8,
             };
 
-            string stdOut = null;
-            var exitCode = Execute(startInfo, cancellationToken, out stdOut);
+            var exitCode = Execute(startInfo, cancellationToken, out string stdOut);
 
             var status = (PluginCredentialResponseExitCode)exitCode;
 
@@ -207,8 +213,10 @@ namespace NuGet.Credentials
             try
             {
                 // Mono will add utf-16 byte order mark to the start of stdOut, remove it here.
-                credentialResponse =
-                    JsonConvert.DeserializeObject<PluginCredentialResponse>(stdOut.Trim(new char[] { '\uFEFF' }))
+                var trimmedOutput = stdOut.Trim(new char[] { '\uFEFF' });
+                credentialResponse = string.IsNullOrWhiteSpace(trimmedOutput)
+                    ? new PluginCredentialResponse()
+                    : JsonSerializer.Deserialize(trimmedOutput, PluginCredentialResponseJsonContext.Default.PluginCredentialResponse)
                     ?? new PluginCredentialResponse();
             }
             catch (Exception)
@@ -244,13 +252,15 @@ namespace NuGet.Credentials
             }
         }
 
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
         public virtual int Execute(ProcessStartInfo startInfo, CancellationToken cancellationToken, out string stdOut)
+#pragma warning restore CS1591 // Missing XML comment for publicly visible type or member
         {
             var outBuffer = new StringBuilder();
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            var process = Process.Start(startInfo);
+            using var process = Process.Start(startInfo);
             if (process == null)
             {
                 throw PluginException.CreateNotStartedMessage(Path);
@@ -262,12 +272,13 @@ namespace NuGet.Credentials
             // It should be logged at the Information level so it will appear if Verbosity >= Normal.
             process.ErrorDataReceived += (object o, DataReceivedEventArgs e) =>
             {
-                if (!string.IsNullOrWhiteSpace(e?.Data))
+                string? data = e?.Data;
+                if (!string.IsNullOrWhiteSpace(data))
                 {
                     // This is a workaround for mono issue: https://github.com/NuGet/Home/issues/4004
                     if (!process.HasExited)
                     {
-                        _logger.LogInformation($"{process.ProcessName}: {e.Data}");
+                        _logger.LogInformation($"{process.ProcessName}: {data}");
                     }
                 }
             };
@@ -297,10 +308,10 @@ namespace NuGet.Credentials
             return process.ExitCode;
         }
 
-        private bool PassVerbosityFlag(PluginCredentialRequest request)
+        private static bool PassVerbosityFlag([NotNullWhen(true)] string? verbosity)
         {
-            return request.Verbosity != null
-                && !string.Equals(request.Verbosity, NormalVerbosity, StringComparison.OrdinalIgnoreCase);
+            return verbosity != null
+                && !string.Equals(verbosity, NormalVerbosity, StringComparison.OrdinalIgnoreCase);
         }
 
         private static void Kill(Process p)

@@ -3,6 +3,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
 using NuGet.Common;
 using NuGet.Shared;
 
@@ -12,38 +14,41 @@ namespace NuGet.ProjectModel
     {
         internal const int CurrentVersion = 2;
 
-        public string DgSpecHash { get; }
-
+        [JsonPropertyName("version")]
         public int Version { get; set; }
 
+        [JsonPropertyName("dgSpecHash")]
+        public string? DgSpecHash { get; }
+
+        [JsonPropertyName("success")]
         public bool Success { get; set; }
-
-        /// <summary>
-        /// Gets or sets a list of package paths that must exist in order for the project to be considered up-to-date.
-        /// </summary>
-        public IList<string> ExpectedPackageFilePaths { get; set; }
-
-        /// <summary>
-        /// Gets or sets a value indicating if one or more of the expected files are missing.
-        /// </summary>
-        public bool HasAnyMissingPackageFiles { get; set; }
 
         /// <summary>
         /// Gets or sets the full path to the project file.
         /// </summary>
-        public string ProjectFilePath { get; set; }
+        [JsonPropertyName("projectFilePath")]
+        public string? ProjectFilePath { get; set; }
 
-        public IList<IAssetsLogMessage> LogMessages { get; set; }
+        /// <summary>
+        /// Gets or sets a list of package paths that must exist in order for the project to be considered up-to-date.
+        /// </summary>
+        [JsonPropertyName("expectedPackageFiles")]
+        public IList<string>? ExpectedPackageFilePaths { get; set; }
 
+        [JsonPropertyName("logs")]
+        public IList<IAssetsLogMessage>? LogMessages { get; set; }
+
+        [JsonIgnore]
+        [MemberNotNullWhen(true, nameof(DgSpecHash))]
         public bool IsValid { get { return Version == CurrentVersion && Success && DgSpecHash != null; } }
 
-        public CacheFile(string dgSpecHash)
+        public CacheFile(string? dgSpecHash)
         {
             DgSpecHash = dgSpecHash;
             Version = CurrentVersion;
         }
 
-        public bool Equals(CacheFile other)
+        public bool Equals(CacheFile? other)
         {
             if (other == null)
             {
@@ -58,7 +63,7 @@ namespace NuGet.ProjectModel
             return Version == other.Version && Success == other.Success && StringComparer.Ordinal.Equals(DgSpecHash, other.DgSpecHash) && PathUtility.GetStringComparerBasedOnOS().Equals(ProjectFilePath, other.ProjectFilePath);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return Equals(obj as CacheFile);
         }

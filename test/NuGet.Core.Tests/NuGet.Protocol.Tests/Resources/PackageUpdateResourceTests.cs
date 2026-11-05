@@ -1,13 +1,17 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using FluentAssertions;
 using NuGet.Common;
 using NuGet.Protocol.Core.Types;
 using NuGet.Test.Utility;
@@ -16,10 +20,13 @@ using Xunit;
 
 namespace NuGet.Protocol.Tests
 {
+    [UseCulture("en-US")] // We are asserting exception messages in English
     public class PackageUpdateResourceTests
     {
         private const string ApiKeyHeader = "X-NuGet-ApiKey";
         private const string NuGetClientVersionHeader = "X-NuGet-Client-Version";
+        private const int TempApiKeyRequestTimeoutInSeconds = 10;
+        private const int PushTimeoutInSeconds = 10;
 
         [Fact]
         public async Task PackageUpdateResource_IncludesApiKeyWhenDeletingAsync()
@@ -42,7 +49,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 var apiKey = "SomeApiKey";
 
                 // Act
@@ -90,7 +97,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 var apiKey = string.Empty;
 
                 // Act
@@ -137,7 +144,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 var apiKey = "SomeApiKey";
 
                 var packageInfo = await SimpleTestPackageUtility.CreateFullPackageAsync(workingDir, "test", "1.0.0");
@@ -146,7 +153,7 @@ namespace NuGet.Protocol.Tests
                 await resource.Push(
                     packagePaths: new[] { packageInfo.FullName },
                     symbolSource: null,
-                    timeoutInSecond: 5,
+                    timeoutInSecond: PushTimeoutInSeconds,
                     disableBuffering: false,
                     getApiKey: _ => apiKey,
                     getSymbolApiKey: _ => null,
@@ -191,7 +198,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 var apiKey = string.Empty;
 
                 var packageInfo = await SimpleTestPackageUtility.CreateFullPackageAsync(workingDir, "test", "1.0.0");
@@ -200,7 +207,7 @@ namespace NuGet.Protocol.Tests
                 await resource.Push(
                     packagePaths: new[] { packageInfo.FullName },
                     symbolSource: null,
-                    timeoutInSecond: 5,
+                    timeoutInSecond: PushTimeoutInSeconds,
                     disableBuffering: false,
                     getApiKey: _ => apiKey,
                     getSymbolApiKey: _ => null,
@@ -271,10 +278,14 @@ namespace NuGet.Protocol.Tests
                         "https://www.nuget.org/api/v2/package/create-verification-key/test/1.0.0",
                         request =>
                         {
-                            var content = new StringContent(string.Format(JsonData.TempApiKeyJsonData,"tempkey"), Encoding.UTF8, "application/json");
-                            var response = new HttpResponseMessage(HttpStatusCode.OK){
-                            Content = content
-};
+                            var content = new StringContent(
+                                string.Format(JsonData.TempApiKeyJsonData, "tempkey"),
+                                Encoding.UTF8,
+                                "application/json");
+                            var response = new HttpResponseMessage(HttpStatusCode.OK)
+                            {
+                                Content = content
+                            };
                             return Task.FromResult(response);
                         }
                     }
@@ -282,14 +293,14 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
 
                 // Act
                 await resource.Push(
                     packagePaths: new[] { packageInfo.FullName },
                     symbolSource: symbolSource,
-                    timeoutInSecond: 5,
+                    timeoutInSecond: PushTimeoutInSeconds,
                     disableBuffering: false,
                     getApiKey: _ => apiKey,
                     getSymbolApiKey: _ => apiKey,
@@ -348,14 +359,14 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
                 var logger = new TestLogger();
                 // Act
                 await resource.Push(
                     packagePaths: new[] { packageInfo.FullName },
                     symbolSource: symbolSource,
-                    timeoutInSecond: 5,
+                    timeoutInSecond: PushTimeoutInSeconds,
                     disableBuffering: false,
                     getApiKey: _ => apiKey,
                     getSymbolApiKey: _ => apiKey,
@@ -423,14 +434,14 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
 
                 // Act
                 await resource.Push(
                     packagePaths: new[] { packageInfo.FullName },
                     symbolSource: symbolSource,
-                    timeoutInSecond: 5,
+                    timeoutInSecond: TempApiKeyRequestTimeoutInSeconds,
                     disableBuffering: false,
                     getApiKey: _ => apiKey,
                     getSymbolApiKey: _ => apiKey,
@@ -488,10 +499,14 @@ namespace NuGet.Protocol.Tests
                         "https://www.nuget.org/api/v2/package/create-verification-key/test/1.0.0",
                         request =>
                         {
-                            var content = new StringContent(string.Format(JsonData.TempApiKeyJsonData,"tempkey"), Encoding.UTF8, "application/json");
-                            var response = new HttpResponseMessage(HttpStatusCode.OK){
-                            Content = content
-};
+                            var content = new StringContent(
+                                string.Format(JsonData.TempApiKeyJsonData, "tempkey"),
+                                Encoding.UTF8,
+                                "application/json");
+                            var response = new HttpResponseMessage(HttpStatusCode.OK)
+                            {
+                                Content = content
+                            };
                             return Task.FromResult(response);
                         }
                     }
@@ -499,20 +514,21 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
 
                 // Act
                 await resource.Push(
                     packagePaths: new[] { packageInfo.FullName },
                     symbolSource: null,
-                    timeoutInSecond: 5,
+                    timeoutInSecond: TempApiKeyRequestTimeoutInSeconds,
                     disableBuffering: false,
                     getApiKey: _ => apiKey,
                     getSymbolApiKey: _ => null,
                     noServiceEndpoint: false,
                     skipDuplicate: false,
                     symbolPackageUpdateResource: null,
+                    allowInsecureConnections: true,
                     log: NullLogger.Instance);
 
                 // Assert
@@ -552,14 +568,14 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
 
                 // Act
                 await resource.Push(
                     packagePaths: new[] { packageInfo.FullName },
                     symbolSource: null,
-                    timeoutInSecond: 5,
+                    timeoutInSecond: PushTimeoutInSeconds,
                     disableBuffering: false,
                     getApiKey: _ => apiKey,
                     getSymbolApiKey: _ => null,
@@ -602,14 +618,14 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
 
                 // Act
                 await resource.Push(
                     packagePaths: new[] { packageInfo.FullName },
                     symbolSource: null,
-                    timeoutInSecond: 5,
+                    timeoutInSecond: PushTimeoutInSeconds,
                     disableBuffering: false,
                     getApiKey: _ => apiKey,
                     getSymbolApiKey: _ => null,
@@ -654,10 +670,14 @@ namespace NuGet.Protocol.Tests
                         "https://www.nuget.org/api/v2/package/create-verification-key/test/1.0.0",
                         request =>
                         {
-                            var content = new StringContent(string.Format(JsonData.TempApiKeyJsonData, "tempkey"), Encoding.UTF8, "application/json");
-                            var response = new HttpResponseMessage(HttpStatusCode.OK){
-                            Content = content
-};
+                            var content = new StringContent(
+                                string.Format(JsonData.TempApiKeyJsonData, "tempkey"),
+                                Encoding.UTF8,
+                                "application/json");
+                            var response = new HttpResponseMessage(HttpStatusCode.OK)
+                            {
+                                Content = content
+                            };
                             return Task.FromResult(response);
                         }
                     }
@@ -665,14 +685,14 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
 
                 // Act
                 await resource.Push(
                     packagePaths: new[] { packageInfo.FullName },
                     symbolSource: null,
-                    timeoutInSecond: 5,
+                    timeoutInSecond: TempApiKeyRequestTimeoutInSeconds,
                     disableBuffering: false,
                     getApiKey: _ => apiKey,
                     getSymbolApiKey: _ => null,
@@ -734,7 +754,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
 
                 // Act
@@ -742,7 +762,7 @@ namespace NuGet.Protocol.Tests
                     async () => await resource.Push(
                         packagePaths: new[] { packageInfo.FullName },
                         symbolSource: symbolSource,
-                        timeoutInSecond: 5,
+                        timeoutInSecond: TempApiKeyRequestTimeoutInSeconds,
                         disableBuffering: false,
                         getApiKey: _ => apiKey,
                         getSymbolApiKey: _ => apiKey,
@@ -752,8 +772,7 @@ namespace NuGet.Protocol.Tests
                         log: NullLogger.Instance));
 
                 // Assert
-                Assert.True(ex.Message.Contains("Response status code does not indicate success: 500 (Internal Server Error)"));
-
+                Assert.Contains("Response status code does not indicate success: 500 (Internal Server Error)", ex.Message);
             }
         }
 
@@ -788,28 +807,32 @@ namespace NuGet.Protocol.Tests
                     },
                     {
                         "https://www.nuget.org/api/v2/package/create-verification-key/test/1.0.0",
-                         request =>
-                         {
+                        request =>
+                        {
                             createKeyRequestCount++;
-                            var content = new StringContent(string.Format(JsonData.TempApiKeyJsonData, $"tempkey{createKeyRequestCount}"), Encoding.UTF8, "application/json");
-                            var response = new HttpResponseMessage(HttpStatusCode.OK){
-                            Content = content
-};
+                            var content = new StringContent(
+                                string.Format(JsonData.TempApiKeyJsonData, $"tempkey{createKeyRequestCount}"),
+                                Encoding.UTF8,
+                                "application/json");
+                            var response = new HttpResponseMessage(HttpStatusCode.OK)
+                            {
+                                Content = content
+                            };
                             return Task.FromResult(response);
-                         }
+                        }
                     }
 
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
 
                 // Act
                 await resource.Push(
                     packagePaths: new[] { symbolPackageInfo.FullName },
                     symbolSource: null,
-                    timeoutInSecond: 5,
+                    timeoutInSecond: TempApiKeyRequestTimeoutInSeconds,
                     disableBuffering: false,
                     getApiKey: _ => apiKey,
                     getSymbolApiKey: _ => null,
@@ -832,8 +855,10 @@ namespace NuGet.Protocol.Tests
             }
         }
 
-        [Fact]
-        public async Task Push_WithAnHttpSource_NupkgOnly_Warns()
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        public async Task Push_WithAnHttpSourceAndAllowInsecureConnections_NupkgOnly_Errors(bool allowInsecureConnections, bool isErrorExpected)
         {
             // Arrange
             using var workingDir = TestDirectory.Create();
@@ -852,31 +877,41 @@ namespace NuGet.Protocol.Tests
                         }
                     },
                 };
-            var resource = await StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses).GetResourceAsync<PackageUpdateResource>();
+            var resource = await StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses).GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
             var logger = new TestLogger();
 
             // Act
             await resource.Push(
                 packagePaths: new[] { packageInfo.FullName },
                 symbolSource: string.Empty,
-                timeoutInSecond: 5,
+                timeoutInSecond: PushTimeoutInSeconds,
                 disableBuffering: false,
                 getApiKey: _ => "serverapikey",
                 getSymbolApiKey: _ => null,
                 noServiceEndpoint: false,
                 skipDuplicate: false,
                 symbolPackageUpdateResource: null,
+                allowInsecureConnections: allowInsecureConnections,
                 log: logger);
 
             // Assert
-            Assert.NotNull(sourceRequest);
-            Assert.Equal(1, logger.WarningMessages.Count);
-            Assert.Contains("You are running the 'push' operation with an 'HTTP' source", logger.WarningMessages.First());
+            if (isErrorExpected)
+            {
+                Assert.Equal(1, logger.ErrorMessages.Count);
+                logger.ErrorMessages.Should().Contain(string.Format(Strings.Error_HttpServerUsage, "push", source));
+            }
+            else
+            {
+                Assert.NotNull(sourceRequest);
+                Assert.Equal(0, logger.WarningMessages.Count);
+            }
 
         }
 
-        [Fact]
-        public async Task Push_WhenPushingToAnHttpSymbolSource_Warns()
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        public async Task Push_WhenPushingToAnHttpSymbolSourceAndAllowInsecureConnections_logsError(bool allowInsecureConnections, bool isErrorExpected)
         {
             // Arrange
             using var workingDir = TestDirectory.Create();
@@ -909,7 +944,7 @@ namespace NuGet.Protocol.Tests
                     },
                 };
 
-            var resource = await StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses).GetResourceAsync<PackageUpdateResource>();
+            var resource = await StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses).GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
             UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
             var logger = new TestLogger();
 
@@ -917,24 +952,34 @@ namespace NuGet.Protocol.Tests
             await resource.Push(
                 packagePaths: new[] { packageInfo.FullName },
                 symbolSource: symbolSource,
-                timeoutInSecond: 5,
+                timeoutInSecond: PushTimeoutInSeconds,
                 disableBuffering: false,
                 getApiKey: _ => apiKey,
                 getSymbolApiKey: _ => apiKey,
                 noServiceEndpoint: false,
                 skipDuplicate: false,
                 symbolPackageUpdateResource: null,
+                allowInsecureConnections: allowInsecureConnections,
                 log: logger);
 
             // Assert
-            Assert.NotNull(sourceRequest);
-            Assert.NotNull(symbolRequest);
-            Assert.Equal(1, logger.WarningMessages.Count);
-            Assert.Contains("You are running the 'push' operation with an 'HTTP' source", logger.WarningMessages.First());
+            if (isErrorExpected)
+            {
+                Assert.Equal(1, logger.ErrorMessages.Count);
+                logger.ErrorMessages.Should().Contain(string.Format(Strings.Error_HttpServerUsage, "push", "http://other.smbsrc.net/api/v2/package/"));
+            }
+            else
+            {
+                Assert.NotNull(sourceRequest);
+                Assert.NotNull(symbolRequest);
+                Assert.Equal(0, logger.WarningMessages.Count);
+            }
         }
 
-        [Fact]
-        public async Task Push_WhenPushingToAnHttpSourceAndSymbolSource_WarnsForBoth()
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        public async Task Push_WhenPushingToAnHttpSourceAndSymbolSourceWithAllowInsecureConnections_ErrorsForOne(bool allowInsecureConnections, bool isErrorExpected)
         {
             // Arrange
             using var workingDir = TestDirectory.Create();
@@ -967,7 +1012,7 @@ namespace NuGet.Protocol.Tests
                     },
                 };
 
-            var resource = await StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses).GetResourceAsync<PackageUpdateResource>();
+            var resource = await StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses).GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
             UserAgent.SetUserAgentString(new UserAgentStringBuilder("test client"));
             var logger = new TestLogger();
 
@@ -975,30 +1020,37 @@ namespace NuGet.Protocol.Tests
             await resource.Push(
                 packagePaths: new[] { packageInfo.FullName },
                 symbolSource: symbolSource,
-                timeoutInSecond: 5,
+                timeoutInSecond: PushTimeoutInSeconds,
                 disableBuffering: false,
                 getApiKey: _ => apiKey,
                 getSymbolApiKey: _ => apiKey,
                 noServiceEndpoint: false,
                 skipDuplicate: false,
                 symbolPackageUpdateResource: null,
+                allowInsecureConnections: allowInsecureConnections,
                 log: logger);
 
             // Assert
-            Assert.NotNull(sourceRequest);
-            Assert.NotNull(symbolRequest);
-            Assert.Equal(2, logger.WarningMessages.Count);
-            Assert.Contains("You are running the 'push' operation with an 'HTTP' source, 'http://www.nuget.org/api/v2/'. Non-HTTPS access will be removed in a future version. Consider migrating to an 'HTTPS' source.", logger.WarningMessages.First());
-            Assert.Contains("You are running the 'push' operation with an 'HTTP' source, 'http://other.smbsrc.net/api/v2/package/'. Non-HTTPS access will be removed in a future version. Consider migrating to an 'HTTPS' source.", logger.WarningMessages.Last());
+            if (isErrorExpected)
+            {
+                Assert.Equal(1, logger.ErrorMessages.Count);
+                logger.ErrorMessages.Should().Contain(string.Format(Strings.Error_HttpServerUsage, "push", source));
+            }
+            else
+            {
+                Assert.NotNull(sourceRequest);
+                Assert.NotNull(symbolRequest);
+                Assert.Equal(0, logger.WarningMessages.Count);
+            }
         }
 
         [Fact]
-        public async Task Delete_WhenDeletingFromHTTPSource_Warns()
+        public async Task Delete_WhenDeletingFromHTTPSource_LogsAnError()
         {
             // Arrange
             using (var workingDir = TestDirectory.Create())
             {
-                var source = "http://www.nuget.org/api/v2";
+                var source = "http://www.nuget.org/api/v2/";
                 HttpRequestMessage actualRequest = null;
                 var responses = new Dictionary<string, Func<HttpRequestMessage, Task<HttpResponseMessage>>>
                 {
@@ -1013,7 +1065,7 @@ namespace NuGet.Protocol.Tests
                 };
 
                 var repo = StaticHttpHandler.CreateSource(source, Repository.Provider.GetCoreV3(), responses);
-                var resource = await repo.GetResourceAsync<PackageUpdateResource>();
+                var resource = await repo.GetResourceAsync<PackageUpdateResource>(CancellationToken.None);
                 var apiKey = string.Empty;
                 var logger = new TestLogger();
 
@@ -1027,10 +1079,8 @@ namespace NuGet.Protocol.Tests
                     log: logger);
 
                 // Assert
-                Assert.NotNull(actualRequest);
-                Assert.Equal(HttpMethod.Delete, actualRequest.Method);
-                Assert.Equal(3, logger.WarningMessages.Count);
-                Assert.Contains("You are running the 'delete' operation with an 'HTTP' source, 'http://www.nuget.org/api/v2/'. Non-HTTPS access will be removed in a future version. Consider migrating to an 'HTTPS' source.", logger.WarningMessages.Last());
+                Assert.Equal(1, logger.Errors);
+                logger.ErrorMessages.Should().Contain(string.Format(Strings.Error_HttpServerUsage, "delete", source));
             }
         }
     }

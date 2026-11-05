@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,21 +11,15 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Moq;
-using NuGet.Commands;
 using NuGet.Common;
 using NuGet.Configuration;
-using NuGet.DependencyResolver;
 using NuGet.Frameworks;
-using NuGet.LibraryModel;
 using NuGet.Packaging;
 using NuGet.Packaging.Core;
 using NuGet.ProjectManagement;
-using NuGet.ProjectModel;
 using NuGet.Protocol.Core.Types;
 using NuGet.Test;
-using NuGet.Test.Utility;
 using NuGet.Versioning;
-using Test.Utility;
 using Xunit;
 
 namespace NuGet.PackageManagement.Test
@@ -99,7 +95,7 @@ namespace NuGet.PackageManagement.Test
             Assert.Equal(
                 "The 'PackageA 1.0.0' package requires NuGet client version '10.0.0' or above, " +
                 $"but the current NuGet version is '{MinClientVersionUtility.GetNuGetClientVersion()}'. " +
-                "To upgrade NuGet, please go to https://docs.nuget.org/consume/installing-nuget",
+                "To upgrade NuGet, go to https://docs.nuget.org/consume/installing-nuget",
                 ex.Message);
 
             tc.PackageReader.Verify(x => x.GetMinClientVersion(), Times.Never);
@@ -297,78 +293,6 @@ namespace NuGet.PackageManagement.Test
                 PackageReader.Verify(x => x.GetPackageTypes(), Times.Never);
                 NuspecReader.Verify(x => x.GetMinClientVersion(), Times.Once);
                 NuspecReader.Verify(x => x.GetPackageTypes(), Times.Once);
-            }
-
-            public RestoreResult GetRestoreResult(IEnumerable<PackageIdentity> identities)
-            {
-                var node = new GraphNode<RemoteResolveResult>(new LibraryRange("project", LibraryDependencyTarget.All))
-                {
-                    Item = new GraphItem<RemoteResolveResult>(
-                        new LibraryIdentity(
-                            "project",
-                            new NuGetVersion("1.0.0"),
-                            LibraryType.Project))
-                    {
-                        Data = new RemoteResolveResult
-                        {
-                            Match = new RemoteMatch
-                            {
-                                Provider = null
-                            }
-                        }
-                    }
-                };
-
-                foreach (var identity in identities)
-                {
-                    var dependencyNode = new GraphNode<RemoteResolveResult>(
-                        new LibraryRange(
-                            identity.Id,
-                            new VersionRange(identity.Version),
-                            LibraryDependencyTarget.All))
-                    {
-                        Item = new GraphItem<RemoteResolveResult>(
-                            new LibraryIdentity(
-                                identity.Id,
-                                identity.Version,
-                                LibraryType.Package))
-                        {
-                            Data = new RemoteResolveResult
-                            {
-                                Match = new RemoteMatch
-                                {
-                                    Provider = null
-                                }
-                            }
-                        }
-                    };
-
-                    dependencyNode.OuterNode = node;
-                    node.InnerNodes.Add(dependencyNode);
-                }
-
-                var graph = RestoreTargetGraph.Create(
-                    new[] { node },
-                    new TestRemoteWalkContext(),
-                    NullLogger.Instance,
-                    FrameworkConstants.CommonFrameworks.NetStandard10);
-
-                return new RestoreResult(
-                    true,
-                    new[] { graph },
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    ProjectStyle.Unknown,
-                    TimeSpan.MinValue);
             }
         }
     }

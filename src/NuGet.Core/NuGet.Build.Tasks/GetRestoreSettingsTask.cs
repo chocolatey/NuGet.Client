@@ -1,12 +1,16 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
+#if !NETFRAMEWORK
+using System.Diagnostics;
+#endif
 using System.IO;
 using System.Linq;
 using Microsoft.Build.Framework;
-using Microsoft.Build.Utilities;
 using Newtonsoft.Json;
 using NuGet.Commands;
 using NuGet.Common;
@@ -17,8 +21,21 @@ namespace NuGet.Build.Tasks
     /// <summary>
     /// Get all the settings to be used for project restore.
     /// </summary>
+    [MSBuildMultiThreadableTask]
     public class GetRestoreSettingsTask : Microsoft.Build.Utilities.Task
     {
+        private readonly IEnvironmentVariableReader _environmentVariableReader;
+
+        public GetRestoreSettingsTask()
+            : this(EnvironmentVariableWrapper.Instance)
+        {
+        }
+
+        internal GetRestoreSettingsTask(IEnvironmentVariableReader environmentVariableReader)
+        {
+            _environmentVariableReader = environmentVariableReader ?? throw new ArgumentNullException(nameof(environmentVariableReader));
+        }
+
         [Required]
         public string ProjectUniqueName { get; set; }
 
@@ -95,29 +112,13 @@ namespace NuGet.Build.Tasks
         public override bool Execute()
         {
 #if DEBUG
-            var debugRestoreTask = Environment.GetEnvironmentVariable("DEBUG_RESTORE_SETTINGS_TASK");
+            var debugRestoreTask = _environmentVariableReader.GetEnvironmentVariable("DEBUG_RESTORE_SETTINGS_TASK");
             if (!string.IsNullOrEmpty(debugRestoreTask) && debugRestoreTask.Equals(bool.TrueString, StringComparison.OrdinalIgnoreCase))
             {
                 System.Diagnostics.Debugger.Launch();
             }
 #endif
             var log = new MSBuildLogger(Log);
-
-            // Log Inputs
-            BuildTasksUtility.LogInputParam(log, nameof(ProjectUniqueName), ProjectUniqueName);
-            BuildTasksUtility.LogInputParam(log, nameof(RestoreSources), RestoreSources);
-            BuildTasksUtility.LogInputParam(log, nameof(RestorePackagesPath), RestorePackagesPath);
-            BuildTasksUtility.LogInputParam(log, nameof(RestoreRepositoryPath), RestoreRepositoryPath);
-            BuildTasksUtility.LogInputParam(log, nameof(RestoreFallbackFolders), RestoreFallbackFolders);
-            BuildTasksUtility.LogInputParam(log, nameof(RestoreConfigFile), RestoreConfigFile);
-            BuildTasksUtility.LogInputParam(log, nameof(RestoreSolutionDirectory), RestoreSolutionDirectory);
-            BuildTasksUtility.LogInputParam(log, nameof(RestoreRootConfigDirectory), RestoreRootConfigDirectory);
-            BuildTasksUtility.LogInputParam(log, nameof(RestorePackagesPathOverride), RestorePackagesPathOverride);
-            BuildTasksUtility.LogInputParam(log, nameof(RestoreSourcesOverride), RestoreSourcesOverride);
-            BuildTasksUtility.LogInputParam(log, nameof(RestoreFallbackFoldersOverride), RestoreFallbackFoldersOverride);
-            BuildTasksUtility.LogInputParam(log, nameof(RestoreProjectStyle), RestoreProjectStyle);
-            BuildTasksUtility.LogInputParam(log, nameof(MSBuildStartupDirectory), MSBuildStartupDirectory);
-
 
             try
             {
@@ -135,6 +136,13 @@ namespace NuGet.Build.Tasks
                     // Fail due to invalid fallback combination
                     return false;
                 }
+
+#if !NETFRAMEWORK
+                Debug.Assert(Path.IsPathFullyQualified(ProjectUniqueName));
+                Debug.Assert(Path.IsPathFullyQualified(MSBuildStartupDirectory));
+                Debug.Assert(string.IsNullOrEmpty(RestoreRootConfigDirectory) || Path.IsPathFullyQualified(RestoreRootConfigDirectory));
+                Debug.Assert(string.IsNullOrEmpty(RestoreSolutionDirectory) || Path.IsPathFullyQualified(RestoreSolutionDirectory));
+#endif
 
                 // Settings
                 // Find the absolute path of nuget.config, this should only be set on the command line. Setting the path in project files
@@ -188,13 +196,6 @@ namespace NuGet.Build.Tasks
                 ExceptionUtilities.LogException(ex, log);
                 return false;
             }
-
-            // Log Outputs
-            BuildTasksUtility.LogOutputParam(log, nameof(OutputPackagesPath), OutputPackagesPath);
-            BuildTasksUtility.LogOutputParam(log, nameof(OutputRepositoryPath), OutputRepositoryPath);
-            BuildTasksUtility.LogOutputParam(log, nameof(OutputSources), OutputSources);
-            BuildTasksUtility.LogOutputParam(log, nameof(OutputFallbackFolders), OutputFallbackFolders);
-            BuildTasksUtility.LogOutputParam(log, nameof(OutputConfigFilePaths), OutputConfigFilePaths);
 
             return true;
         }

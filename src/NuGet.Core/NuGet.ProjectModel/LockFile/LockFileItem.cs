@@ -10,19 +10,36 @@ namespace NuGet.ProjectModel
     public class LockFileItem : IEquatable<LockFileItem>
     {
         public static readonly string AliasesProperty = "aliases";
+        public static readonly string CompilerApiVersionProperty = "compilerApiVersion";
+        private static readonly object PropertiesLock = new object();
 
         public LockFileItem(string path)
         {
-            Path = path;
+            Path = path ?? throw new ArgumentNullException(nameof(path));
         }
 
         public string Path { get; }
 
-        public IDictionary<string, string> Properties { get; } = new Dictionary<string, string>();
+        private Dictionary<string, string>? _properties;
+        public IDictionary<string, string> Properties
+        {
+            get
+            {
+                if (_properties == null)
+                {
+                    lock (PropertiesLock)
+                    {
+                        _properties ??= new Dictionary<string, string>();
+                    }
+                }
+
+                return _properties;
+            }
+        }
 
         public override string ToString() => Path;
 
-        public bool Equals(LockFileItem other)
+        public bool Equals(LockFileItem? other)
         {
             if (other == null)
             {
@@ -36,13 +53,24 @@ namespace NuGet.ProjectModel
 
             if (string.Equals(Path, other.Path, StringComparison.OrdinalIgnoreCase))
             {
-                return Properties.OrderedEquals(other.Properties, pair => pair.Key, StringComparer.Ordinal);
+                // Handle null/empty dictionaries (treat them as equal)
+                bool thisEmpty = _properties == null || _properties.Count == 0;
+                bool otherEmpty = other._properties == null || other._properties.Count == 0;
+
+                if (thisEmpty || otherEmpty)
+                {
+                    return thisEmpty && otherEmpty;
+                }
+                else
+                {
+                    return _properties.OrderedEquals(other._properties, pair => pair.Key, StringComparer.Ordinal);
+                }
             }
 
             return false;
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return Equals(obj as LockFileItem);
         }
@@ -59,16 +87,32 @@ namespace NuGet.ProjectModel
 
         public static implicit operator LockFileItem(string path) => new LockFileItem(path);
 
-        protected string GetProperty(string name)
+        protected string? GetProperty(string name)
         {
-            string value;
-            Properties.TryGetValue(name, out value);
+            if (name == null)
+            {
+                throw new ArgumentNullException(nameof(name));
+            }
+
+            Properties.TryGetValue(name, out string? value);
             return value;
         }
 
-        protected void SetProperty(string name, string value)
+        protected void SetProperty(string name, string? value)
         {
-            Properties[name] = value;
+            if (name == null)
+            {
+                throw new ArgumentNullException(nameof(name));
+            }
+
+            if (value == null)
+            {
+                Properties.Remove(name);
+            }
+            else
+            {
+                Properties[name] = value;
+            }
         }
     }
 }

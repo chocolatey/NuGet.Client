@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -78,7 +80,11 @@ namespace NuGet.PackageManagement.VisualStudio
             {
                 if (_targetFramework == null)
                 {
-                    _targetFramework = NuGetUIThreadHelper.JoinableTaskFactory.Run(VsProjectAdapter.GetTargetFrameworkAsync);
+                    _targetFramework = NuGetUIThreadHelper.JoinableTaskFactory.Run(async () =>
+                    {
+                        await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                        return VsProjectAdapter.GetTargetFramework();
+                    });
                 }
 
                 return _targetFramework;
@@ -96,9 +102,9 @@ namespace NuGet.PackageManagement.VisualStudio
             NuGetProjectContext = nuGetProjectContext;
         }
 
-        public async Task InitializeProperties()
+        public void InitializeProperties()
         {
-            _targetFramework = await VsProjectAdapter.GetTargetFrameworkAsync();
+            _targetFramework = VsProjectAdapter.GetTargetFramework();
         }
 
         public virtual void AddFile(string path, Stream stream)
@@ -136,7 +142,10 @@ namespace NuGet.PackageManagement.VisualStudio
             // it into the project.
             // Other exceptions are 'web.config' and 'app.config'
             var fileName = Path.GetFileName(path);
+#pragma warning disable CS0618 // Type or member is obsolete
+            // Need to validate no project systems get this property via DTE, and if so, switch to GetPropertyValue
             var lockFileFullPath = PackagesConfigLockFileUtility.GetPackagesLockFilePath(ProjectFullPath, GetPropertyValue("NuGetLockFilePath")?.ToString(), ProjectName);
+#pragma warning restore CS0618 // Type or member is obsolete
             if (File.Exists(Path.Combine(ProjectFullPath, path))
                 && !fileExistsInProject
                 && !fileName.Equals(ProjectManagement.Constants.PackageReferenceFile, StringComparison.Ordinal)
@@ -399,13 +408,14 @@ namespace NuGet.PackageManagement.VisualStudio
                 });
         }
 
+        [Obsolete("New properties should use IVsProjectBuildProperties.GetPropertyValue instead. Ideally we should migrate existing properties to stop using DTE as well.")]
         public virtual dynamic GetPropertyValue(string propertyName)
         {
             return NuGetUIThreadHelper.JoinableTaskFactory.Run(async delegate
             {
                 await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-                return VsProjectAdapter.BuildProperties.GetPropertyValue(propertyName);
+                return VsProjectAdapter.BuildProperties.GetPropertyValueWithDteFallback(propertyName);
 
             });
         }
@@ -493,11 +503,11 @@ namespace NuGet.PackageManagement.VisualStudio
                         await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
                         await InitForBindingRedirectsAsync();
-                        if (IsBindingRedirectSupported && VSSolutionManager != null)
+                        if (IsBindingRedirectSupported && _vsSolutionManager != null)
                         {
-                            await RuntimeHelpers.AddBindingRedirectsAsync(VSSolutionManager,
+                            await RuntimeHelpers.AddBindingRedirectsAsync(_vsSolutionManager,
                                 VsProjectAdapter,
-                                VSFrameworkMultiTargeting,
+                                _vsFrameworkMultiTargeting,
                                 NuGetProjectContext);
                         }
                     }
@@ -512,7 +522,7 @@ namespace NuGet.PackageManagement.VisualStudio
                         NuGetProjectContext.Log(level,
                             Strings.FailedToUpdateBindingRedirects,
                             fileName,
-                            ex.Message);
+                            ExceptionUtilities.DisplayMessage(ex));
 
                         if (behavior.FailOperations)
                         {
@@ -524,16 +534,16 @@ namespace NuGet.PackageManagement.VisualStudio
         }
 
         private readonly bool _bindingRedirectsRelatedInitialized = false;
-        private VSSolutionManager VSSolutionManager { get; set; }
-        private IVsFrameworkMultiTargeting VSFrameworkMultiTargeting { get; set; }
+        private VSSolutionManager _vsSolutionManager;
+        private IVsFrameworkMultiTargeting _vsFrameworkMultiTargeting;
 
         private async Task InitForBindingRedirectsAsync()
         {
             if (!_bindingRedirectsRelatedInitialized)
             {
                 var solutionManager = await ServiceLocator.GetComponentModelServiceAsync<ISolutionManager>();
-                VSSolutionManager = (solutionManager != null) ? (solutionManager as VSSolutionManager) : null;
-                VSFrameworkMultiTargeting = await ServiceLocator.GetGlobalServiceAsync<SVsFrameworkMultiTargeting, IVsFrameworkMultiTargeting>();
+                _vsSolutionManager = (solutionManager != null) ? (solutionManager as VSSolutionManager) : null;
+                _vsFrameworkMultiTargeting = await ServiceLocator.GetGlobalServiceAsync<SVsFrameworkMultiTargeting, IVsFrameworkMultiTargeting>();
             }
         }
 

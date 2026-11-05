@@ -1,6 +1,9 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
+using System;
 using NuGet.ProjectModel.ProjectLockFile;
 using NuGet.ProjectModel.Test.Builders;
 using NuGet.Versioning;
@@ -10,6 +13,13 @@ namespace NuGet.ProjectModel.Test.ProjectLockFile
 {
     public class LockFileDependencyComparerWithoutContentHashTests
     {
+        [Fact]
+        public void GetHashCode_WhenDependencyIsNull_Throws()
+        {
+            Assert.Throws<ArgumentNullException>(
+                () => LockFileDependencyComparerWithoutContentHash.Default.GetHashCode(null));
+        }
+
         [Fact]
         public void Equals_WhenBothArgumentsAreNull_ReturnsTrue()
         {

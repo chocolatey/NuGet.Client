@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -8,10 +10,13 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Moq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Protocol.Core.Types;
+using NuGet.Shared;
 using NuGet.Versioning;
 using Test.Utility;
 using Xunit;
@@ -79,16 +84,20 @@ namespace NuGet.Protocol.Tests
         }
 
         [Theory]
-        [InlineData("not-valid-json")]
+        [InlineData("not-valid-json", false)]
+        [InlineData("not-valid-json", true)]
         [InlineData(@"<?xml version=""1.0"" encoding=""utf-8""?><service xml:base=""http://www.nuget.org/api/v2/""
 xmlns=""http://www.w3.org/2007/app"" xmlns:atom=""http://www.w3.org/2005/Atom""><workspace><atom:title>Default</atom:title>
-<collection href=""Packages""><atom:title>Packages</atom:title></collection></workspace></service>")]
-        public async Task TryCreate_Throws_IfSourceLocationDoesNotReturnValidJson(string content)
+<collection href=""Packages""><atom:title>Packages</atom:title></collection></workspace></service>", false)]
+        [InlineData(@"<?xml version=""1.0"" encoding=""utf-8""?><service xml:base=""http://www.nuget.org/api/v2/""
+xmlns=""http://www.w3.org/2007/app"" xmlns:atom=""http://www.w3.org/2005/Atom""><workspace><atom:title>Default</atom:title>
+<collection href=""Packages""><atom:title>Packages</atom:title></collection></workspace></service>", true)]
+        public async Task TryCreate_Throws_IfSourceLocationDoesNotReturnValidJson(string content, bool useStj)
         {
             // Arrange
             var source = $"https://fake.server-{new Guid().ToString()}/users.json";
             var httpProvider = StaticHttpSource.CreateHttpSource(new Dictionary<string, string> { { source, content } });
-            var provider = new ServiceIndexResourceV3Provider();
+            var provider = CreateProvider(useStj);
             var sourceRepository = new SourceRepository(new PackageSource(source),
                 new INuGetResourceProvider[] { httpProvider, provider });
 
@@ -99,18 +108,27 @@ xmlns=""http://www.w3.org/2007/app"" xmlns:atom=""http://www.w3.org/2005/Atom"">
             });
 
             Assert.IsType<InvalidDataException>(exception.InnerException);
-            Assert.IsType<JsonReaderException>(exception.InnerException.InnerException);
+            if (useStj)
+            {
+                Assert.IsAssignableFrom<System.Text.Json.JsonException>(exception.InnerException.InnerException);
+            }
+            else
+            {
+                Assert.IsType<JsonReaderException>(exception.InnerException.InnerException);
+            }
         }
 
         [Theory]
-        [InlineData("{ version: \"not-semver\" } ")]
-        [InlineData("{ version: \"3.0.0.0\" } ")] // not strict semver
-        public async Task TryCreate_Throws_IfInvalidVersionInJson(string content)
+        [InlineData("{ \"version\": \"not-semver\" }", false)]
+        [InlineData("{ \"version\": \"not-semver\" }", true)]
+        [InlineData("{ \"version\": \"3.0.0.0\" }", false)] // not strict semver
+        [InlineData("{ \"version\": \"3.0.0.0\" }", true)] // not strict semver
+        public async Task TryCreate_Throws_IfInvalidVersionInJson(string content, bool useStj)
         {
             // Arrange
             var source = $"https://fake.server-{new Guid().ToString()}/users.json";
             var httpProvider = StaticHttpSource.CreateHttpSource(new Dictionary<string, string> { { source, content } });
-            var provider = new ServiceIndexResourceV3Provider();
+            var provider = CreateProvider(useStj);
             var sourceRepository = new SourceRepository(new PackageSource(source),
                 new INuGetResourceProvider[] { httpProvider, provider });
 
@@ -125,15 +143,15 @@ xmlns=""http://www.w3.org/2007/app"" xmlns:atom=""http://www.w3.org/2005/Atom"">
         }
 
         [Theory]
-        [InlineData("{ json: \"that does not contain version.\" }")]
-        [InlineData("{ version: 3 } ")] // version is not a string
-        [InlineData("{ version: { value: 3 } } ")] // version is not a string
-        public async Task TryCreate_Throws_IfNoVersionInJson(string content)
+        [InlineData("{ \"json\": \"that does not contain version.\" }", false)]
+        [InlineData("{ \"json\": \"that does not contain version.\" }", true)]
+        public async Task TryCreate_Throws_IfNoVersionInJson(string content, bool useStj)
         {
             // Arrange
             var source = $"https://fake.server-{new Guid().ToString()}/users.json";
+            var expectedMessage = Strings.Protocol_MissingVersion;
             var httpProvider = StaticHttpSource.CreateHttpSource(new Dictionary<string, string> { { source, content } });
-            var provider = new ServiceIndexResourceV3Provider();
+            var provider = CreateProvider(useStj);
             var sourceRepository = new SourceRepository(new PackageSource(source),
                 new INuGetResourceProvider[] { httpProvider, provider });
 
@@ -144,17 +162,69 @@ xmlns=""http://www.w3.org/2007/app"" xmlns:atom=""http://www.w3.org/2005/Atom"">
             });
 
             // Assert
-            Assert.Equal("The source does not have the 'version' property.", exception.InnerException.Message);
+            Assert.IsType<InvalidDataException>(exception.InnerException);
+            Assert.Equal(expectedMessage, exception.InnerException.Message);
         }
 
-        [Fact]
-        public async Task TryCreate_ReturnsTrue_IfSourceLocationReturnsValidJson()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task TryCreate_Throws_IfVersionValueIsNull(bool useStj)
+        {
+            // Arrange
+            var content = "{ \"version\": null }";
+            var source = "https://contoso.test/index.json";
+            var expectedMessage = Strings.Protocol_MissingVersion;
+            var httpProvider = StaticHttpSource.CreateHttpSource(new Dictionary<string, string> { { source, content } });
+            var provider = CreateProvider(useStj);
+            var sourceRepository = new SourceRepository(new PackageSource(source),
+                new INuGetResourceProvider[] { httpProvider, provider });
+
+            // Act
+            var exception = await Assert.ThrowsAsync<FatalProtocolException>(async () =>
+            {
+                var result = await provider.TryCreate(sourceRepository, default(CancellationToken));
+            });
+
+            // Assert
+            Assert.IsType<InvalidDataException>(exception.InnerException);
+            Assert.Equal(expectedMessage, exception.InnerException.Message);
+        }
+
+        [Theory]
+        [InlineData("{ \"version\": 3 }", false)] // version is not a string
+        [InlineData("{ \"version\": 3 }", true)] // version is not a string
+        [InlineData("{ \"version\": { \"value\": 3 } }", false)] // version is not a string
+        [InlineData("{ \"version\": { \"value\": 3 } }", true)] // version is not a string
+        public async Task TryCreate_Throws_IfVersionFieldIsWrongType(string content, bool useStj)
+        {
+            // Arrange
+            var source = "https://contoso.test/index.json";
+            var httpProvider = StaticHttpSource.CreateHttpSource(new Dictionary<string, string> { { source, content } });
+            var provider = CreateProvider(useStj);
+            var sourceRepository = new SourceRepository(new PackageSource(source),
+                new INuGetResourceProvider[] { httpProvider, provider });
+
+            // Act
+            var exception = await Assert.ThrowsAsync<FatalProtocolException>(async () =>
+            {
+                var result = await provider.TryCreate(sourceRepository, default(CancellationToken));
+            });
+
+            // Assert
+            Assert.IsType<InvalidDataException>(exception.InnerException);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task TryCreate_ReturnsTrue_IfSourceLocationReturnsValidJson(bool useStj)
         {
             // Arrange
             var source = $"https://some-site-{new Guid().ToString()}.org/test.json";
-            var content = @"{ version: '3.1.0-beta' }";
+            var content = @"{ ""version"": ""3.1.0-beta"" }";
             var httpProvider = StaticHttpSource.CreateHttpSource(new Dictionary<string, string> { { source, content } });
-            var provider = new ServiceIndexResourceV3Provider();
+            var provider = CreateProvider(useStj);
             var sourceRepository = new SourceRepository(new PackageSource(source),
                 new INuGetResourceProvider[] { httpProvider, provider });
 
@@ -165,15 +235,17 @@ xmlns=""http://www.w3.org/2007/app"" xmlns:atom=""http://www.w3.org/2005/Atom"">
             Assert.True(result.Item1);
         }
 
-        [Fact]
-        public async Task Query_For_Particular_Resource()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task Query_For_Particular_Resource(bool useStj)
         {
             // Arrange
             var source = $"https://some-site-{new Guid().ToString()}.org/test.json";
             var content = CreateTestIndex();
 
             var httpProvider = StaticHttpSource.CreateHttpSource(new Dictionary<string, string> { { source, content } });
-            var provider = new ServiceIndexResourceV3Provider();
+            var provider = CreateProvider(useStj);
             var sourceRepository = new SourceRepository(new PackageSource(source),
                 new INuGetResourceProvider[] { httpProvider, provider });
 
@@ -189,21 +261,23 @@ xmlns=""http://www.w3.org/2007/app"" xmlns:atom=""http://www.w3.org/2005/Atom"">
 
             var endpoints = resource.GetServiceEntryUris(new NuGetVersion(4, 0, 0), "Citrus");
 
-            Assert.True(endpoints.Count == 1);
+            Assert.Equal(1, endpoints.Count);
 
             var endpointSet = new HashSet<string>(endpoints.Select(u => u.AbsoluteUri));
-            Assert.True(endpointSet.Contains("http://tempuri.org/orange"));
+            Assert.Contains("http://tempuri.org/orange", endpointSet);
         }
 
-        [Fact]
-        public async Task Query_For_Particular_Multi_Value_Resource()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task Query_For_Particular_Multi_Value_Resource(bool useStj)
         {
             // Arrange
             var source = $"https://some-site-{new Guid().ToString()}.org/test.json";
             var content = CreateTestIndex();
 
             var httpProvider = StaticHttpSource.CreateHttpSource(new Dictionary<string, string> { { source, content } });
-            var provider = new ServiceIndexResourceV3Provider();
+            var provider = CreateProvider(useStj);
             var sourceRepository = new SourceRepository(new PackageSource(source),
                 new INuGetResourceProvider[] { httpProvider, provider });
 
@@ -219,23 +293,25 @@ xmlns=""http://www.w3.org/2007/app"" xmlns:atom=""http://www.w3.org/2005/Atom"">
 
             var endpoints = resource.GetServiceEntryUris(new NuGetVersion(4, 0, 0), "Fruit");
 
-            Assert.True(endpoints.Count == 3);
+            Assert.Equal(3, endpoints.Count);
 
             var endpointSet = new HashSet<string>(endpoints.Select(u => u.AbsoluteUri));
-            Assert.True(endpointSet.Contains("http://tempuri.org/banana"));
-            Assert.True(endpointSet.Contains("http://tempuri.org/apple"));
-            Assert.True(endpointSet.Contains("http://tempuri.org/orange"));
+            Assert.Contains("http://tempuri.org/banana", endpointSet);
+            Assert.Contains("http://tempuri.org/apple", endpointSet);
+            Assert.Contains("http://tempuri.org/orange", endpointSet);
         }
 
-        [Fact]
-        public async Task Query_For_Resource_With_Precedence()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task Query_For_Resource_With_Precedence(bool useStj)
         {
             // Arrange
             var source = $"https://some-site-{new Guid().ToString()}.org/test.json";
             var content = CreateTestIndex();
 
             var httpProvider = StaticHttpSource.CreateHttpSource(new Dictionary<string, string> { { source, content } });
-            var provider = new ServiceIndexResourceV3Provider();
+            var provider = CreateProvider(useStj);
             var sourceRepository = new SourceRepository(new PackageSource(source),
                 new INuGetResourceProvider[] { httpProvider, provider });
 
@@ -251,21 +327,23 @@ xmlns=""http://www.w3.org/2007/app"" xmlns:atom=""http://www.w3.org/2005/Atom"">
 
             var endpoints = resource.GetServiceEntryUris(new NuGetVersion(4, 0, 0), "Chocolate", "Vegetable");
 
-            Assert.True(endpoints.Count == 1);
+            Assert.Equal(1, endpoints.Count);
 
             var endpointSet = new HashSet<string>(endpoints.Select(u => u.AbsoluteUri));
-            Assert.True(endpointSet.Contains("http://tempuri.org/chocolate"));
+            Assert.Contains("http://tempuri.org/chocolate", endpointSet);
         }
 
-        [Fact]
-        public async Task Query_For_Resource_With_VersionPrecedence_ExactMatch()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task Query_For_Resource_With_VersionPrecedence_ExactMatch(bool useStj)
         {
             // Arrange
             var source = $"https://some-site-{new Guid().ToString()}.org/test.json";
             var content = CreateVersionedTestIndex();
 
             var httpProvider = StaticHttpSource.CreateHttpSource(new Dictionary<string, string> { { source, content } });
-            var provider = new ServiceIndexResourceV3Provider();
+            var provider = CreateProvider(useStj);
             var sourceRepository = new SourceRepository(new PackageSource(source),
                 new INuGetResourceProvider[] { httpProvider, provider });
 
@@ -281,21 +359,23 @@ xmlns=""http://www.w3.org/2007/app"" xmlns:atom=""http://www.w3.org/2005/Atom"">
 
             var endpoints = resource.GetServiceEntryUris(new NuGetVersion(4, 0, 0), "A", "B");
 
-            Assert.True(endpoints.Count == 1);
+            Assert.Equal(1, endpoints.Count);
 
             var endpointSet = new HashSet<string>(endpoints.Select(u => u.AbsoluteUri));
-            Assert.True(endpointSet.Contains("http://tempuri.org/A/4.0.0"));
+            Assert.Contains("http://tempuri.org/A/4.0.0", endpointSet);
         }
 
-        [Fact]
-        public async Task Query_For_Resource_With_NoCompatibleVersion()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task Query_For_Resource_With_NoCompatibleVersion(bool useStj)
         {
             // Arrange
             var source = $"https://some-site-{new Guid().ToString()}.org/test.json";
             var content = CreateVersionedTestIndex();
 
             var httpProvider = StaticHttpSource.CreateHttpSource(new Dictionary<string, string> { { source, content } });
-            var provider = new ServiceIndexResourceV3Provider();
+            var provider = CreateProvider(useStj);
             var sourceRepository = new SourceRepository(new PackageSource(source),
                 new INuGetResourceProvider[] { httpProvider, provider });
 
@@ -311,18 +391,20 @@ xmlns=""http://www.w3.org/2007/app"" xmlns:atom=""http://www.w3.org/2005/Atom"">
 
             var endpoints = resource.GetServiceEntryUris(NuGetVersion.Parse("0.0.0-beta"), "A");
 
-            Assert.True(endpoints.Count == 0);
+            Assert.Equal(0, endpoints.Count);
         }
 
-        [Fact]
-        public async Task Query_For_Resource_With_VersionPrecedence_LowerVersion()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task Query_For_Resource_With_VersionPrecedence_LowerVersion(bool useStj)
         {
             // Arrange
             var source = $"https://some-site-{new Guid().ToString()}.org/test.json";
             var content = CreateVersionedTestIndex();
 
             var httpProvider = StaticHttpSource.CreateHttpSource(new Dictionary<string, string> { { source, content } });
-            var provider = new ServiceIndexResourceV3Provider();
+            var provider = CreateProvider(useStj);
             var sourceRepository = new SourceRepository(new PackageSource(source),
                 new INuGetResourceProvider[] { httpProvider, provider });
 
@@ -338,21 +420,23 @@ xmlns=""http://www.w3.org/2007/app"" xmlns:atom=""http://www.w3.org/2005/Atom"">
 
             var endpoints = resource.GetServiceEntryUris(new NuGetVersion(4, 1, 0), "A", "B");
 
-            Assert.True(endpoints.Count == 1);
+            Assert.Equal(1, endpoints.Count);
 
             var endpointSet = new HashSet<string>(endpoints.Select(u => u.AbsoluteUri));
-            Assert.True(endpointSet.Contains("http://tempuri.org/A/4.0.0"));
+            Assert.Contains("http://tempuri.org/A/4.0.0", endpointSet);
         }
 
-        [Fact]
-        public async Task Query_For_Resource_With_VersionPrecedence_NoFallbackBetweenTypes()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task Query_For_Resource_With_VersionPrecedence_NoFallbackBetweenTypes(bool useStj)
         {
             // Arrange
             var source = $"https://some-site-{new Guid().ToString()}.org/test.json";
             var content = CreateVersionedTestIndex2();
 
             var httpProvider = StaticHttpSource.CreateHttpSource(new Dictionary<string, string> { { source, content } });
-            var provider = new ServiceIndexResourceV3Provider();
+            var provider = CreateProvider(useStj);
             var sourceRepository = new SourceRepository(new PackageSource(source),
                 new INuGetResourceProvider[] { httpProvider, provider });
 
@@ -368,21 +452,23 @@ xmlns=""http://www.w3.org/2007/app"" xmlns:atom=""http://www.w3.org/2005/Atom"">
 
             var endpoints = resource.GetServiceEntryUris(new NuGetVersion(4, 1, 0), "A", "B");
 
-            Assert.True(endpoints.Count == 1);
+            Assert.Equal(1, endpoints.Count);
 
             var endpointSet = new HashSet<string>(endpoints.Select(u => u.AbsoluteUri));
-            Assert.True(endpointSet.Contains("http://tempuri.org/B"));
+            Assert.Contains("http://tempuri.org/B", endpointSet);
         }
 
-        [Fact]
-        public async Task Query_For_Resource_ReturnAllOfSameTypeVersion()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task Query_For_Resource_ReturnAllOfSameTypeVersion(bool useStj)
         {
             // Arrange
             var source = $"https://some-site-{new Guid().ToString()}.org/test.json";
             var content = CreateVersionedTestIndex3();
 
             var httpProvider = StaticHttpSource.CreateHttpSource(new Dictionary<string, string> { { source, content } });
-            var provider = new ServiceIndexResourceV3Provider();
+            var provider = CreateProvider(useStj);
             var sourceRepository = new SourceRepository(new PackageSource(source),
                 new INuGetResourceProvider[] { httpProvider, provider });
 
@@ -398,11 +484,11 @@ xmlns=""http://www.w3.org/2007/app"" xmlns:atom=""http://www.w3.org/2005/Atom"">
 
             var endpoints = resource.GetServiceEntryUris(new NuGetVersion(5, 0, 0), "A", "B");
 
-            Assert.True(endpoints.Count == 2);
+            Assert.Equal(2, endpoints.Count);
 
             var endpointSet = new HashSet<string>(endpoints.Select(u => u.AbsoluteUri));
-            Assert.True(endpointSet.Contains("http://tempuri.org/A/5.0.0/1"));
-            Assert.True(endpointSet.Contains("http://tempuri.org/A/5.0.0/2"));
+            Assert.Contains("http://tempuri.org/A/5.0.0/1", endpointSet);
+            Assert.Contains("http://tempuri.org/A/5.0.0/2", endpointSet);
         }
 
         [Fact]
@@ -414,7 +500,6 @@ xmlns=""http://www.w3.org/2007/app"" xmlns:atom=""http://www.w3.org/2005/Atom"">
             //Create an HTTP provider that will cancel the token.
             var httpProvider = StaticHttpSource.CreateHttpSource(
                 new Dictionary<string, string> { { source, content } },
-                errorContent: string.Empty,
                 httpSource: null,
                 throwOperationCancelledException: true);
             var provider = new ServiceIndexResourceV3Provider();
@@ -429,6 +514,18 @@ xmlns=""http://www.w3.org/2007/app"" xmlns:atom=""http://www.w3.org/2005/Atom"">
                 // Assert
                 await Assert.ThrowsAsync<OperationCanceledException>(task);
             }
+        }
+
+        private ServiceIndexResourceV3Provider CreateProvider(bool useStj)
+            => useStj
+                ? new ServiceIndexResourceV3Provider(CreateStjEnabledEnvReader())
+                : new ServiceIndexResourceV3Provider();
+
+        private static IEnvironmentVariableReader CreateStjEnabledEnvReader()
+        {
+            var envReader = new Mock<IEnvironmentVariableReader>();
+            envReader.Setup(e => e.GetEnvironmentVariable(NuGetFeatureFlags.UseSystemTextJsonDeserializationEnvVar)).Returns("true");
+            return envReader.Object;
         }
 
         private static string CreateTestIndex()

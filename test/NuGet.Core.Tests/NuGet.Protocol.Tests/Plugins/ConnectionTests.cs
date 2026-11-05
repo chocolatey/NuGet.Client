@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -11,11 +13,12 @@ using System.Threading.Tasks;
 using Moq;
 using NuGet.Common;
 using NuGet.Protocol.Tests;
-using NuGet.Versioning;
 using Xunit;
 
 namespace NuGet.Protocol.Plugins.Tests
 {
+    using SemanticVersion = Versioning.SemanticVersion;
+
     [Collection(nameof(NotThreadSafeResourceCollection))]
     public class ConnectionTests
     {
@@ -310,7 +313,7 @@ namespace NuGet.Protocol.Plugins.Tests
                         MessageMethod.Initialize,
                         new RequestHandler<InitializeResponse>(new InitializeResponse(MessageResponseCode.Success)));
 
-                    var message = new Message(
+                    var message = MessageUtilities.Create(
                         requestId: "a",
                         type: MessageType.Response,
                         method: MessageMethod.Initialize);
@@ -351,7 +354,7 @@ namespace NuGet.Protocol.Plugins.Tests
                         MessageMethod.Initialize,
                         new RequestHandler<InitializeResponse>(new InitializeResponse(MessageResponseCode.Success)));
 
-                    var message = new Message(
+                    var message = MessageUtilities.Create(
                         requestId: "a",
                         type: MessageType.Request,
                         method: MessageMethod.Initialize);
@@ -384,7 +387,7 @@ namespace NuGet.Protocol.Plugins.Tests
         [Fact]
         public async Task SendAsync_ThrowsIfCancelled()
         {
-            var message = new Message(
+            var message = MessageUtilities.Create(
                 requestId: "a",
                 type: MessageType.Request,
                 method: MessageMethod.Initialize);
@@ -399,7 +402,7 @@ namespace NuGet.Protocol.Plugins.Tests
         [Fact]
         public async Task SendAsync_ThrowsIfNotConnected()
         {
-            var message = new Message(
+            var message = MessageUtilities.Create(
                 requestId: "a",
                 type: MessageType.Request,
                 method: MessageMethod.Initialize);
@@ -416,7 +419,7 @@ namespace NuGet.Protocol.Plugins.Tests
         {
             using (var test = new MockConnectionTest())
             {
-                var message = new Message(
+                var message = MessageUtilities.Create(
                     requestId: "a",
                     type: MessageType.Request,
                     method: MessageMethod.Initialize);
@@ -460,7 +463,7 @@ namespace NuGet.Protocol.Plugins.Tests
         {
             using (var test = new MockConnectionTest())
             {
-                var message = new Message(
+                var message = MessageUtilities.Create(
                     requestId: "a",
                     type: MessageType.Request,
                     method: MessageMethod.Initialize);

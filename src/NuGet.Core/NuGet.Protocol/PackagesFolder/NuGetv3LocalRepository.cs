@@ -5,7 +5,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading;
 using NuGet.Common;
 using NuGet.Packaging;
 using NuGet.Protocol;
@@ -33,7 +32,7 @@ namespace NuGet.Repositories
             = new ConcurrentDictionary<string, object>(StringComparer.OrdinalIgnoreCase);
 
         // Cache nuspecs lazily
-        private readonly LocalPackageFileCache _packageFileCache = null;
+        private readonly LocalPackageFileCache _packageFileCache;
 
         private readonly bool _isFallbackFolder;
 
@@ -48,13 +47,18 @@ namespace NuGet.Repositories
         {
         }
 
-        public NuGetv3LocalRepository(string path, LocalPackageFileCache packageFileCache, bool isFallbackFolder)
+        public NuGetv3LocalRepository(string path, LocalPackageFileCache? packageFileCache, bool isFallbackFolder)
             : this(path, packageFileCache, isFallbackFolder, updateLastAccessTime: false)
         {
         }
 
-        public NuGetv3LocalRepository(string path, LocalPackageFileCache packageFileCache, bool isFallbackFolder, bool updateLastAccessTime)
+        public NuGetv3LocalRepository(string path, LocalPackageFileCache? packageFileCache, bool isFallbackFolder, bool updateLastAccessTime)
         {
+            if (path == null)
+            {
+                throw new ArgumentNullException(nameof(path));
+            }
+
             RepositoryRoot = path;
             PathResolver = new VersionFolderPathResolver(path);
             _packageFileCache = packageFileCache ?? new LocalPackageFileCache();
@@ -67,11 +71,31 @@ namespace NuGet.Repositories
         /// </summary>
         public bool Exists(string packageId, NuGetVersion version)
         {
+            if (packageId == null)
+            {
+                throw new ArgumentNullException(nameof(packageId));
+            }
+
+            if (version == null)
+            {
+                throw new ArgumentNullException(nameof(version));
+            }
+
             return FindPackageImpl(packageId, version) != null;
         }
 
-        public LocalPackageInfo FindPackage(string packageId, NuGetVersion version)
+        public LocalPackageInfo? FindPackage(string packageId, NuGetVersion version)
         {
+            if (packageId == null)
+            {
+                throw new ArgumentNullException(nameof(packageId));
+            }
+
+            if (version == null)
+            {
+                throw new ArgumentNullException(nameof(version));
+            }
+
             var package = FindPackageImpl(packageId, version);
 
             if (package == null)
@@ -132,7 +156,7 @@ namespace NuGet.Repositories
             }
         }
 
-        private LocalPackageInfo FindPackageImpl(string packageId, NuGetVersion version)
+        private LocalPackageInfo? FindPackageImpl(string packageId, NuGetVersion version)
         {
             var installPath = PathResolver.GetInstallPath(packageId, version);
             lock (GetLockObj(installPath))
@@ -154,13 +178,13 @@ namespace NuGet.Repositories
 
             foreach (var fullVersionDir in Directory.EnumerateDirectories(packageIdRoot))
             {
-                LocalPackageInfo package;
+                LocalPackageInfo? package;
                 if (!_packageCache.TryGetValue(fullVersionDir, out package))
                 {
                     var versionPart = fullVersionDir.Substring(packageIdRoot.Length).TrimStart(Path.DirectorySeparatorChar);
 
                     // Get the version part and parse it
-                    NuGetVersion version;
+                    NuGetVersion? version;
                     if (!NuGetVersion.TryParse(versionPart, out version))
                     {
                         continue;
@@ -179,7 +203,7 @@ namespace NuGet.Repositories
             return packages;
         }
 
-        private LocalPackageInfo GetPackage(string packageId, NuGetVersion version, string path)
+        private LocalPackageInfo? GetPackage(string packageId, NuGetVersion version, string path)
         {
             if (!_packageCache.TryGetValue(path, out var package))
             {
@@ -235,6 +259,11 @@ namespace NuGet.Repositories
         /// </summary>
         public void ClearCacheForIds(IEnumerable<string> packageIds)
         {
+            if (packageIds == null)
+            {
+                throw new ArgumentNullException(nameof(packageIds));
+            }
+
             foreach (var packageId in packageIds)
             {
                 // Clearers must wait for all requests to complete

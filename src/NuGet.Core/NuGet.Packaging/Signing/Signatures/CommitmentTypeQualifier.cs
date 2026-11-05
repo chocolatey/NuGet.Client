@@ -19,9 +19,9 @@ namespace NuGet.Packaging.Signing
     public sealed class CommitmentTypeQualifier
     {
         public Oid CommitmentTypeIdentifier { get; }
-        public byte[] Qualifier { get; }
+        public byte[]? Qualifier { get; }
 
-        private CommitmentTypeQualifier(Oid commitmentTypeIdentifier, byte[] qualifier)
+        private CommitmentTypeQualifier(Oid commitmentTypeIdentifier, byte[]? qualifier)
         {
             CommitmentTypeIdentifier = commitmentTypeIdentifier;
             Qualifier = qualifier;
@@ -38,7 +38,7 @@ namespace NuGet.Packaging.Signing
         {
             var commitmentTypeQualifierReader = reader.ReadSequence();
             var commitmentTypeIdentifier = commitmentTypeQualifierReader.ReadOid();
-            byte[] qualifier = null;
+            byte[]? qualifier = null;
 
             if (commitmentTypeQualifierReader.HasData)
             {

@@ -18,7 +18,7 @@ namespace NuGet.Protocol.Plugins
         /// <returns>A <see cref="TimeSpan" /> object that represents a timeout interval.</returns>
         /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="fallbackTimeout" /> is an invalid
         /// timeout.</exception>
-        public static TimeSpan GetTimeout(string timeoutInSeconds, TimeSpan fallbackTimeout)
+        public static TimeSpan GetTimeout(string? timeoutInSeconds, TimeSpan fallbackTimeout)
         {
             if (!IsValid(fallbackTimeout))
             {
@@ -52,7 +52,7 @@ namespace NuGet.Protocol.Plugins
         /// Determines if a timeout is valid.
         /// </summary>
         /// <param name="timeout">A timeout.</param>
-        /// <returns><c>true</c> if the timeout is valid; otherwise, <c>false</c>.</returns>
+        /// <returns><see langword="true" /> if the timeout is valid; otherwise, <see langword="false" />.</returns>
         public static bool IsValid(TimeSpan timeout)
         {
             if (ProtocolConstants.MinTimeout <= timeout && timeout <= ProtocolConstants.MaxTimeout)

@@ -36,7 +36,7 @@ namespace Microsoft.Build.NuGetSdkResolver
         /// Initializes a new instance of the NuGetLogger class.
         /// </summary>
         /// <param name="sdkLogger">A <see cref="SdkLogger"/> to forward events to.</param>
-        /// <exception cref="ArgumentNullException"><paramref name="sdkLogger" /> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="sdkLogger" /> is <see langword="null" />.</exception>
         public NuGetSdkLogger(SdkLogger sdkLogger)
         {
             _sdkLogger = sdkLogger ?? throw new ArgumentNullException(nameof(sdkLogger));
@@ -80,6 +80,29 @@ namespace Microsoft.Build.NuGetSdkResolver
                 case LogLevel.Error:
                     _errors.Add(data);
                     break;
+            }
+
+            if (SdkResolverEventSource.Instance.IsEnabled())
+            {
+                switch (level)
+                {
+                    case LogLevel.Debug:
+                    case LogLevel.Verbose:
+                        SdkResolverEventSource.Instance.LogMessageVerbose((int)level, data);
+                        break;
+                    case LogLevel.Information:
+                        SdkResolverEventSource.Instance.LogMessageInformational((int)level, data);
+                        break;
+                    case LogLevel.Minimal:
+                        SdkResolverEventSource.Instance.LogMessageAlways((int)level, data);
+                        break;
+                    case LogLevel.Warning:
+                        SdkResolverEventSource.Instance.LogMessageWarning((int)level, data);
+                        break;
+                    case LogLevel.Error:
+                        SdkResolverEventSource.Instance.LogMessageError((int)level, data);
+                        break;
+                }
             }
         }
 

@@ -2,14 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
-using Castle.DynamicProxy.Generators.Emitters.SimpleAST;
 using NuGet.Common;
 using NuGet.Packaging.Rules;
 using Xunit;
@@ -149,8 +143,8 @@ namespace NuGet.Packaging.Test
             var singleIssue = missingReferences.Single(t => t.MissingFrom.Equals("ref"));
             Assert.Equal("net462", missingReferences.First().Tfm);
             Assert.Equal(2, missingReferences.First().MissingItems.Length);
-            Assert.True(missingReferences.First().MissingItems.Contains("MyLib.dll"));
-            Assert.True(missingReferences.First().MissingItems.Contains("MyHelpers.dll"));
+            Assert.Contains("MyLib.dll", missingReferences.First().MissingItems);
+            Assert.Contains("MyHelpers.dll", missingReferences.First().MissingItems);
         }
 
         [Fact]
@@ -277,8 +271,8 @@ namespace NuGet.Packaging.Test
             var singleMissingReference = missingReferences.Single(t => t.MissingFrom.Equals("ref"));
             Assert.Equal("net472", singleMissingReference.Tfm);
             Assert.Equal(2, singleMissingReference.MissingItems.Length);
-            Assert.True(singleMissingReference.MissingItems.Contains("MyLib.dll"));
-            Assert.True(singleMissingReference.MissingItems.Contains("MyHelpers.dll"));
+            Assert.Contains("MyLib.dll", singleMissingReference.MissingItems);
+            Assert.Contains("MyHelpers.dll", singleMissingReference.MissingItems);
         }
         [Fact]
         public void Compare_NuspecHasFilesWithNoSpecificTfmWithMissingRefFiles_ShouldWarnOnce()
@@ -302,7 +296,7 @@ namespace NuGet.Packaging.Test
             var singleMissingReference = missingReferences.Single(t => t.MissingFrom.Equals("ref"));
             Assert.Equal("net462", singleMissingReference.Tfm);
             Assert.Equal(1, singleMissingReference.MissingItems.Length);
-            Assert.True(singleMissingReference.MissingItems.Contains("MyHelpers.dll"));
+            Assert.Contains("MyHelpers.dll", singleMissingReference.MissingItems);
         }
 
         [Fact]
@@ -328,7 +322,7 @@ namespace NuGet.Packaging.Test
             var singleMissingReference = missingReferences.Single(t => t.MissingFrom.Equals("nuspec"));
             Assert.Equal("net462", singleMissingReference.Tfm);
             Assert.Equal(1, singleMissingReference.MissingItems.Length);
-            Assert.True(singleMissingReference.MissingItems.Contains("MyHelpers.dll"));
+            Assert.Contains("MyHelpers.dll", singleMissingReference.MissingItems);
         }
         [Fact]
         public void GenerateWarnings_PackageWithReferencesMissingFromTheNuspec_ShouldWarn()

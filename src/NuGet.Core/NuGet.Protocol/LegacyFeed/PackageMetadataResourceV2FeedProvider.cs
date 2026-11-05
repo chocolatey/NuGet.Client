@@ -17,20 +17,22 @@ namespace NuGet.Protocol
         {
         }
 
-        public override async Task<Tuple<bool, INuGetResource>> TryCreate(SourceRepository source, CancellationToken token)
+        public override async Task<Tuple<bool, INuGetResource?>> TryCreate(SourceRepository source, CancellationToken token)
         {
-            PackageMetadataResourceV2Feed resource = null;
+            PackageMetadataResourceV2Feed? resource = null;
 
             if (await source.GetFeedType(token) == FeedType.HttpV2)
             {
-                var httpSourceResource = await source.GetResourceAsync<HttpSourceResource>(token);
+                var httpSourceResource = await source.GetResourceAsync<HttpSourceResource>(token)
+                    ?? throw new InvalidOperationException($"The source '{source.PackageSource.Source}' does not provide {nameof(HttpSourceResource)}.");
 
-                var serviceDocument = await source.GetResourceAsync<ODataServiceDocumentResourceV2>(token);
+                var serviceDocument = await source.GetResourceAsync<ODataServiceDocumentResourceV2>(token)
+                    ?? throw new InvalidOperationException($"The source '{source.PackageSource.Source}' does not provide {nameof(ODataServiceDocumentResourceV2)}.");
 
                 resource = new PackageMetadataResourceV2Feed(httpSourceResource, serviceDocument.BaseAddress, source.PackageSource);
             }
 
-            return new Tuple<bool, INuGetResource>(resource != null, resource);
+            return new Tuple<bool, INuGetResource?>(resource != null, resource);
         }
     }
 }

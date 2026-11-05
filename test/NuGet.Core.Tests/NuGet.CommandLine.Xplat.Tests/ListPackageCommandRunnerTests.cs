@@ -1,16 +1,22 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Moq;
 using NuGet.CommandLine.XPlat;
 using NuGet.CommandLine.XPlat.ListPackage;
 using NuGet.CommandLine.XPlat.Utility;
 using NuGet.Common;
 using NuGet.Configuration;
+using NuGet.Protocol.Core.Types;
 using Xunit;
 
 namespace NuGet.CommandLine.Xplat.Tests
@@ -106,7 +112,7 @@ namespace NuGet.CommandLine.Xplat.Tests
                 bool includeTransitivePositives)
             {
                 // Arrange
-                var packages = new FrameworkPackages("net40");
+                var packages = new FrameworkPackages("net40", "net40");
                 var topLevelPackages =
                     new List<InstalledPackageReference>
                     {
@@ -132,24 +138,148 @@ namespace NuGet.CommandLine.Xplat.Tests
                         resolvedPackageVersionString: "2.0.0", latestPackageVersionString: "3.0.0"));
                 }
 
+                var output = new StringBuilder();
+                var error = new StringBuilder();
+                using TextWriter consoleOut = new StringWriter(output);
+                using TextWriter consoleError = new StringWriter(error);
+
                 packages.TopLevelPackages = topLevelPackages;
                 packages.TransitivePackages = transitivePackages;
                 var allPackages = new List<FrameworkPackages> { packages };
-                var listPackageArgs = new ListPackageArgs(path: "", packageSources: Enumerable.Empty<PackageSource>(),
-                    frameworks: Enumerable.Empty<string>(),
-                    ReportType.Outdated,
-                    new ListPackageConsoleRenderer(),
+                var listPackageArgs = new ListPackageArgs(path: "", packageSources: new List<PackageSource>(),
+                    frameworks: new List<string>(),
+                    reportType: ReportType.Outdated,
+                    renderer: new ListPackageConsoleRenderer(consoleOut, consoleError),
                     includeTransitive: true, prerelease: false, highestPatch: false, highestMinor: false,
+                    auditSources: null,
                     logger: new Mock<ILogger>().Object,
-                    CancellationToken.None);
+                    cancellationToken: CancellationToken.None);
 
                 // Act
                 var isFilteredSetNonEmpty = ListPackageCommandRunner.FilterPackages(allPackages, listPackageArgs);
+
+                var a = new ListPackageCommandRunner(new MSBuildAPIUtility(NullLogger.Instance, virtualProjectBuilder: null));
+                var b = a.UpdatePackagesWithSourceMetadata(allPackages, null, listPackageArgs);
 
                 // Assert
                 Assert.Equal(includeTopLevelPositives || includeTransitivePositives, isFilteredSetNonEmpty);
                 Assert.Equal(includeTopLevelPositives ? 1 : 0, allPackages.First().TopLevelPackages.Count());
                 Assert.Equal(includeTransitivePositives ? 1 : 0, allPackages.First().TransitivePackages.Count());
+            }
+
+            [Fact]
+            public async Task UpdatePackages_WithNullSourceMetadata_Succeeds()
+            {
+                // Arrange
+                ListPackageCommandRunner listPackageRunner = new ListPackageCommandRunner(new MSBuildAPIUtility(NullLogger.Instance, virtualProjectBuilder: null));
+                FrameworkPackages packages = new FrameworkPackages("net40", "net40");
+                List<InstalledPackageReference> topLevelPackages =
+                    new List<InstalledPackageReference>
+                    {
+                        ListPackageTestHelper.CreateInstalledPackageReference(resolvedPackageVersionString: "2.0.0",
+                            latestPackageVersionString: "3.0.0")
+                    };
+                List<InstalledPackageReference> transitivePackages =
+                    new List<InstalledPackageReference>
+                    {
+                        ListPackageTestHelper.CreateInstalledPackageReference(resolvedPackageVersionString: "2.0.0",
+                            latestPackageVersionString: "3.0.0")
+                    };
+
+                var output = new StringBuilder();
+                var error = new StringBuilder();
+                using TextWriter consoleOut = new StringWriter(output);
+                using TextWriter consoleError = new StringWriter(error);
+
+                packages.TopLevelPackages = topLevelPackages;
+                packages.TransitivePackages = transitivePackages;
+                List<FrameworkPackages> allPackages = new List<FrameworkPackages> { packages };
+                ListPackageArgs listPackageArgs = new ListPackageArgs(path: "", packageSources: new List<PackageSource>(),
+                    frameworks: new List<string>(),
+                    reportType: ReportType.Outdated,
+                    renderer: new ListPackageConsoleRenderer(consoleOut, consoleError),
+                    includeTransitive: true, prerelease: false, highestPatch: true, highestMinor: true,
+                    auditSources: null,
+                    logger: new Mock<ILogger>().Object,
+                    cancellationToken: CancellationToken.None);
+
+                // Act
+                var emptyPackageSearchMetadata = new Dictionary<string, List<IPackageSearchMetadata>>(capacity: allPackages.Count);
+                Exception exception = await Record.ExceptionAsync(async () => await listPackageRunner.UpdatePackagesWithSourceMetadata(allPackages, emptyPackageSearchMetadata, listPackageArgs));
+
+                // Assert
+                Assert.Null(exception);
+            }
+
+            [Theory]
+            [InlineData(false, "1.0.0-preview", true, false, false, false, null, nameof(UpdateLevel.NoUpdate))]
+            [InlineData(true, "1.0.0-preview", true, false, false, false, null, nameof(UpdateLevel.NoUpdate))]
+            [InlineData(false, "1.0.0-preview", true, true, false, false, "1.0.0-preview", nameof(UpdateLevel.NoUpdate))]
+            [InlineData(true, "1.0.0-preview", true, true, false, false, "1.0.0-preview", nameof(UpdateLevel.NoUpdate))]
+            [InlineData(false, "2.0.0", false, false, false, false, null, nameof(UpdateLevel.NoUpdate))]
+            [InlineData(true, "2.0.0", false, false, false, false, null, nameof(UpdateLevel.NoUpdate))]
+            [InlineData(false, "1.1.0", true, false, true, false, null, nameof(UpdateLevel.NoUpdate))]
+            [InlineData(true, "1.1.0", true, false, true, false, null, nameof(UpdateLevel.NoUpdate))]
+            [InlineData(false, "2.0.0", true, false, false, true, null, nameof(UpdateLevel.NoUpdate))]
+            [InlineData(true, "2.0.0", true, false, false, true, null, nameof(UpdateLevel.NoUpdate))]
+            [InlineData(false, "2.0.0", true, false, false, false, "2.0.0", nameof(UpdateLevel.Major))]
+            [InlineData(true, "2.0.0", true, false, false, false, "2.0.0", nameof(UpdateLevel.Major))]
+            [InlineData(true, "1.1.0", true, false, false, true, "1.1.0", nameof(UpdateLevel.Minor))]
+            [InlineData(true, "1.0.1", true, false, true, false, "1.0.1", nameof(UpdateLevel.Patch))]
+            public async Task UpdatePackages_WithSourceMetadata_RespectsVersionConstraints(
+                bool isTransitive,
+                string sourceVersion,
+                bool isListed,
+                bool includePrerelease,
+                bool highestPatch,
+                bool highestMinor,
+                string expectedVersion,
+                string expectedUpdateLevel)
+            {
+                var runner = new ListPackageCommandRunner(new MSBuildAPIUtility(NullLogger.Instance, virtualProjectBuilder: null));
+                var installedPackage = ListPackageTestHelper.CreateInstalledPackageReference(
+                    resolvedPackageVersionString: "1.0.0-preview",
+                    latestPackageVersionString: sourceVersion);
+                installedPackage.UpdateLevel = UpdateLevel.Major;
+
+                var sourceMetadata = new Mock<IPackageSearchMetadata>();
+                sourceMetadata.Setup(m => m.Identity).Returns(installedPackage.LatestPackageMetadata.Identity);
+                sourceMetadata.Setup(m => m.IsListed).Returns(isListed);
+                var metadata = new Dictionary<string, List<IPackageSearchMetadata>>
+                {
+                    [installedPackage.Name] = new List<IPackageSearchMetadata> { sourceMetadata.Object }
+                };
+                var framework = new FrameworkPackages("net10.0", "net10.0")
+                {
+                    TopLevelPackages = isTransitive ? new List<InstalledPackageReference>() : new List<InstalledPackageReference> { installedPackage },
+                    TransitivePackages = isTransitive ? new List<InstalledPackageReference> { installedPackage } : new List<InstalledPackageReference>()
+                };
+                var args = new ListPackageArgs(
+                    path: "",
+                    packageSources: new List<PackageSource>(),
+                    frameworks: new List<string>(),
+                    reportType: ReportType.Outdated,
+                    renderer: new ListPackageConsoleRenderer(TextWriter.Null, TextWriter.Null),
+                    includeTransitive: true,
+                    prerelease: includePrerelease,
+                    highestPatch: highestPatch,
+                    highestMinor: highestMinor,
+                    auditSources: null,
+                    logger: NullLogger.Instance,
+                    cancellationToken: CancellationToken.None);
+
+                await runner.UpdatePackagesWithSourceMetadata(new List<FrameworkPackages> { framework }, metadata, args);
+
+                if (expectedVersion is null)
+                {
+                    Assert.Null(installedPackage.LatestPackageMetadata);
+                }
+                else
+                {
+                    Assert.Same(sourceMetadata.Object, installedPackage.LatestPackageMetadata);
+                    Assert.Equal(expectedVersion, installedPackage.LatestPackageMetadata.Identity.Version.ToNormalizedString());
+                }
+                Assert.Equal(expectedUpdateLevel, installedPackage.UpdateLevel.ToString());
             }
         }
 
@@ -193,7 +323,7 @@ namespace NuGet.CommandLine.Xplat.Tests
                 bool includeTransitivePositives)
             {
                 // Arrange
-                var packages = new FrameworkPackages("net40");
+                var packages = new FrameworkPackages("net40", "net40");
                 var topLevelPackages =
                     new List<InstalledPackageReference> { ListPackageTestHelper.CreateInstalledPackageReference() };
                 var transitivePackages =
@@ -201,21 +331,26 @@ namespace NuGet.CommandLine.Xplat.Tests
                 if (includeTopLevelPositives)
                 {
                     topLevelPackages.Add(ListPackageTestHelper.CreateInstalledPackageReference(isDeprecated: true));
-                };
+                }
                 if (includeTransitivePositives)
                 {
                     transitivePackages.Add(ListPackageTestHelper.CreateInstalledPackageReference(isDeprecated: true));
                 }
 
+                var output = new StringBuilder();
+                var error = new StringBuilder();
+                using TextWriter consoleOut = new StringWriter(output);
+                using TextWriter consoleError = new StringWriter(error);
+
                 packages.TopLevelPackages = topLevelPackages;
                 packages.TransitivePackages = transitivePackages;
                 var allPackages = new List<FrameworkPackages> { packages };
-                var listPackageArgs = new ListPackageArgs(path: "", packageSources: Enumerable.Empty<PackageSource>(),
-                    frameworks: Enumerable.Empty<string>(),
-                    ReportType.Deprecated,
-                    new ListPackageConsoleRenderer(),
-                    includeTransitive: true, prerelease: false, highestPatch: false, highestMinor: false, logger: new Mock<ILogger>().Object,
-                    CancellationToken.None);
+                var listPackageArgs = new ListPackageArgs(path: "", packageSources: new List<PackageSource>(),
+                    frameworks: new List<string>(),
+                    reportType: ReportType.Deprecated,
+                    renderer: new ListPackageConsoleRenderer(consoleOut, consoleError),
+                    includeTransitive: true, prerelease: false, highestPatch: false, highestMinor: false, auditSources: null, logger: new Mock<ILogger>().Object,
+                    cancellationToken: CancellationToken.None);
 
                 // Act
                 var isFilteredSetNonEmpty = ListPackageCommandRunner.FilterPackages(allPackages, listPackageArgs);
@@ -267,7 +402,7 @@ namespace NuGet.CommandLine.Xplat.Tests
                 bool includeTransitivePositives)
             {
                 // Arrange
-                var packages = new FrameworkPackages("net40");
+                var packages = new FrameworkPackages("net40", "net40");
                 var topLevelPackages =
                     new List<InstalledPackageReference> { ListPackageTestHelper.CreateInstalledPackageReference() };
                 var transitivePackages =
@@ -275,21 +410,26 @@ namespace NuGet.CommandLine.Xplat.Tests
                 if (includeTopLevelPositives)
                 {
                     topLevelPackages.Add(ListPackageTestHelper.CreateInstalledPackageReference(vulnerabilityCount: 1));
-                };
+                }
                 if (includeTransitivePositives)
                 {
                     transitivePackages.Add(ListPackageTestHelper.CreateInstalledPackageReference(vulnerabilityCount: 1));
                 }
 
+                var output = new StringBuilder();
+                var error = new StringBuilder();
+                using TextWriter consoleOut = new StringWriter(output);
+                using TextWriter consoleError = new StringWriter(error);
+
                 packages.TopLevelPackages = topLevelPackages;
                 packages.TransitivePackages = transitivePackages;
                 var allPackages = new List<FrameworkPackages> { packages };
-                var listPackageArgs = new ListPackageArgs(path: "", packageSources: Enumerable.Empty<PackageSource>(),
-                    frameworks: Enumerable.Empty<string>(),
-                    ReportType.Vulnerable,
-                    new ListPackageConsoleRenderer(),
-                    includeTransitive: true, prerelease: false, highestPatch: false, highestMinor: false, logger: new Mock<ILogger>().Object,
-                    CancellationToken.None);
+                var listPackageArgs = new ListPackageArgs(path: "", packageSources: new List<PackageSource>(),
+                    frameworks: new List<string>(),
+                    reportType: ReportType.Vulnerable,
+                    renderer: new ListPackageConsoleRenderer(consoleOut, consoleError),
+                    includeTransitive: true, prerelease: false, highestPatch: false, highestMinor: false, auditSources: null, logger: new Mock<ILogger>().Object,
+                    cancellationToken: CancellationToken.None);
 
                 // Act
                 var isFilteredSetNonEmpty = ListPackageCommandRunner.FilterPackages(allPackages, listPackageArgs);
@@ -299,6 +439,49 @@ namespace NuGet.CommandLine.Xplat.Tests
                 Assert.Equal(includeTopLevelPositives ? 1 : 0, allPackages.First().TopLevelPackages.Count());
                 Assert.Equal(includeTransitivePositives ? 1 : 0, allPackages.First().TransitivePackages.Count());
             }
+        }
+
+        [Fact]
+        public async Task GetPackageMetadataAsync_WithEmptyPackageSources_DoesNotThrowDivideByZero()
+        {
+            // Arrange
+            var packages = new FrameworkPackages("net40", "net40");
+            var topLevelPackages = new List<InstalledPackageReference>
+            {
+                ListPackageTestHelper.CreateInstalledPackageReference("TestPackage")
+            };
+            packages.TopLevelPackages = topLevelPackages;
+            var allPackages = new List<FrameworkPackages> { packages };
+
+            var output = new StringBuilder();
+            var error = new StringBuilder();
+            using TextWriter consoleOut = new StringWriter(output);
+            using TextWriter consoleError = new StringWriter(error);
+
+            // Create ListPackageArgs with empty packageSources list to trigger the divide by zero scenario
+            var listPackageArgs = new ListPackageArgs(
+                path: "",
+                packageSources: new List<PackageSource>(), // Empty package sources - this would cause divide by zero
+                frameworks: new List<string>(),
+                reportType: ReportType.Outdated, // This will trigger the code path that calls GetPackageMetadataAsync
+                renderer: new ListPackageConsoleRenderer(consoleOut, consoleError),
+                includeTransitive: false,
+                prerelease: false,
+                highestPatch: false,
+                highestMinor: false,
+                auditSources: null,
+                logger: new Mock<ILogger>().Object,
+                cancellationToken: CancellationToken.None);
+
+            var listPackageRunner = new ListPackageCommandRunner(new MSBuildAPIUtility(NullLogger.Instance, virtualProjectBuilder: null));
+
+            // Act & Assert - Call the method directly since it's now internal
+            Exception exception = await Record.ExceptionAsync(async () =>
+            {
+                await listPackageRunner.GetPackageMetadataAsync(allPackages, listPackageArgs);
+            });
+
+            Assert.Null(exception);
         }
     }
 }

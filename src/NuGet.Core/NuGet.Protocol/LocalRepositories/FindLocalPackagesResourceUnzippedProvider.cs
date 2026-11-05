@@ -21,9 +21,9 @@ namespace NuGet.Protocol
         {
         }
 
-        public override async Task<Tuple<bool, INuGetResource>> TryCreate(SourceRepository source, CancellationToken token)
+        public override async Task<Tuple<bool, INuGetResource?>> TryCreate(SourceRepository source, CancellationToken token)
         {
-            FindLocalPackagesResource curResource = null;
+            FindLocalPackagesResource? curResource = null;
 
             if (await source.GetFeedType(token) == FeedType.FileSystemUnzipped)
             {
@@ -31,7 +31,7 @@ namespace NuGet.Protocol
                     (packageSource) => new FindLocalPackagesResourceUnzipped(packageSource.Source));
             }
 
-            return new Tuple<bool, INuGetResource>(curResource != null, curResource);
+            return new Tuple<bool, INuGetResource?>(curResource != null, curResource);
         }
     }
 }

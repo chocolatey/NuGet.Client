@@ -22,9 +22,9 @@ namespace NuGet.Packaging.Signing
     public sealed class CommitmentTypeIndication
     {
         public Oid CommitmentTypeId { get; }
-        public IReadOnlyList<CommitmentTypeQualifier> Qualifiers { get; }
+        public IReadOnlyList<CommitmentTypeQualifier>? Qualifiers { get; }
 
-        private CommitmentTypeIndication(Oid commitmentTypeId, IReadOnlyList<CommitmentTypeQualifier> qualifiers)
+        private CommitmentTypeIndication(Oid commitmentTypeId, IReadOnlyList<CommitmentTypeQualifier>? qualifiers)
         {
             CommitmentTypeId = commitmentTypeId;
             Qualifiers = qualifiers;
@@ -51,7 +51,7 @@ namespace NuGet.Packaging.Signing
         {
             var indicationReader = reader.ReadSequence();
             var commitmentTypeId = indicationReader.ReadOid();
-            List<CommitmentTypeQualifier> qualifiers = null;
+            List<CommitmentTypeQualifier>? qualifiers = null;
 
             if (indicationReader.HasData)
             {

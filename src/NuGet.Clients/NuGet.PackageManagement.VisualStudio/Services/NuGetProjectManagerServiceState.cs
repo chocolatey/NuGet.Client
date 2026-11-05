@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#nullable enable
-
 using System;
 using System.Collections.Generic;
 using Microsoft.VisualStudio.Threading;
@@ -14,7 +12,9 @@ namespace NuGet.PackageManagement.VisualStudio
 {
     public sealed class NuGetProjectManagerServiceState : INuGetProjectManagerServiceState
     {
+#pragma warning disable RS0030 // Do not used banned APIs
         private readonly AsyncSemaphore _asyncSemaphore = new AsyncSemaphore(initialCount: 1);
+#pragma warning restore RS0030 // Do not used banned APIs
         private PackageIdentity? _packageidentity;
         private readonly Dictionary<string, ResolvedAction> _resolvedActions = new Dictionary<string, ResolvedAction>();
         private SourceCacheContext? _sourceCacheContext;
@@ -76,7 +76,9 @@ namespace NuGet.PackageManagement.VisualStudio
         {
             if (!_isDisposed)
             {
+#pragma warning disable RS0030 // Do not used banned APIs
                 _asyncSemaphore.Dispose();
+#pragma warning restore RS0030 // Do not used banned APIs
                 _sourceCacheContext?.Dispose();
 
                 GC.SuppressFinalize(this);

@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using NuGet.Frameworks;
 using NuGet.Shared;
 
@@ -35,7 +34,7 @@ namespace NuGet.Packaging
         /// </summary>
         public IEnumerable<FrameworkReference> FrameworkReferences { get; }
 
-        public bool Equals(FrameworkReferenceGroup other)
+        public bool Equals(FrameworkReferenceGroup? other)
         {
             if (ReferenceEquals(other, null))
             {
@@ -51,7 +50,7 @@ namespace NuGet.Packaging
                    FrameworkReferences.OrderedEquals(other.FrameworkReferences, dependency => dependency);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return Equals(obj as FrameworkReferenceGroup);
         }
@@ -61,17 +60,9 @@ namespace NuGet.Packaging
             var combiner = new HashCodeCombiner();
 
             combiner.AddObject(TargetFramework);
-
-            if (FrameworkReferences != null)
-            {
-                foreach (var frameworkReference in FrameworkReferences.OrderBy(e => e))
-                {
-                    combiner.AddObject(frameworkReference);
-                }
-            }
+            combiner.AddUnorderedSequence(FrameworkReferences);
 
             return combiner.CombinedHash;
         }
     }
 }
-

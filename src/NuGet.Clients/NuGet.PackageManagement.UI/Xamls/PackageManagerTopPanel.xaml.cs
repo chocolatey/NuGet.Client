@@ -1,12 +1,15 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using NuGet.PackageManagement.VisualStudio;
 using Resx = NuGet.PackageManagement.UI.Resources;
 
@@ -138,10 +141,7 @@ namespace NuGet.PackageManagement.UI
             }
             else if (hasInstalledVulnerablePackages)
             {
-                warningTooltip = string.Format(
-                    CultureInfo.CurrentCulture,
-                    Resx.Label_Installed_VulnerableWarning,
-                    installedVulnerablePackagesCount);
+                warningTooltip = UIUtility.GetInstalledVulnerablePackagesWarningText(installedVulnerablePackagesCount);
             }
             else if (hasInstalledDeprecatedPackages)
             {
@@ -186,6 +186,8 @@ namespace NuGet.PackageManagement.UI
         public Border SearchControlParent => _searchControlParent;
 
         public CheckBox CheckboxPrerelease => _checkboxPrerelease;
+
+        public CheckBox CheckBoxVulnerabilities => _checkboxVulnerabilities;
 
         public ComboBox SourceRepoList => _sourceRepoList;
 
@@ -238,6 +240,16 @@ namespace NuGet.PackageManagement.UI
             PrereleaseCheckChanged?.Invoke(this, EventArgs.Empty);
         }
 
+        private void _checkboxVulnerabilities_Checked(object sender, RoutedEventArgs e)
+        {
+            VulnerabilitiesCheckChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void _checkboxVulnerabilities_Unchecked(object sender, RoutedEventArgs e)
+        {
+            VulnerabilitiesCheckChanged?.Invoke(this, EventArgs.Empty);
+        }
+
         private void _sourceRepoList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             SourceRepoListSelectionChanged?.Invoke(this, EventArgs.Empty);
@@ -253,6 +265,8 @@ namespace NuGet.PackageManagement.UI
         public event EventHandler<EventArgs> SettingsButtonClicked;
 
         public event EventHandler<EventArgs> PrereleaseCheckChanged;
+
+        public event EventHandler<EventArgs> VulnerabilitiesCheckChanged;
 
         public event EventHandler<EventArgs> SourceRepoListSelectionChanged;
 
@@ -296,6 +310,18 @@ namespace NuGet.PackageManagement.UI
 
             //Store the tag for calculating the ItemFilter without having to access the UI Thread.
             Filter = GetItemFilter(selectedTabItem);
+            if (CheckBoxVulnerabilities is not null) // UI Element can be null 
+            {
+                if (Filter == ItemFilter.Installed)
+                {
+                    CheckBoxVulnerabilities.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    CheckBoxVulnerabilities.Visibility = Visibility.Collapsed;
+                    CheckBoxVulnerabilities.IsChecked = false;
+                }
+            }
 
             if (previousTabItem != null)
             {
@@ -310,6 +336,20 @@ namespace NuGet.PackageManagement.UI
         private static ItemFilter GetItemFilter(TabItem item)
         {
             return (ItemFilter)item.Tag;
+        }
+
+        private void SourceRepoList_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            switch (e.Key)
+            {
+                case Key.Tab:
+                    _sourceRepoList.IsDropDownOpen = false;
+                    base.OnPreviewKeyDown(e);
+                    break;
+                default:
+                    base.OnPreviewKeyDown(e);
+                    break;
+            }
         }
     }
 

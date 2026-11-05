@@ -1,15 +1,14 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
 using System.Windows.Input;
-using Microsoft.TeamFoundation.Common;
 using NuGet.Versioning;
 
 namespace NuGet.PackageManagement.UI
@@ -25,21 +24,6 @@ namespace NuGet.PackageManagement.UI
         public ProjectView()
         {
             InitializeComponent();
-
-            // Change ItemContainerStyle of the _versions combobox so that
-            // for a null value, a separator is generated.
-            var dataTrigger = new DataTrigger();
-            dataTrigger.Binding = new Binding();
-            dataTrigger.Value = null;
-            dataTrigger.Setters.Add(new Setter(TemplateProperty, FindResource("SeparatorControlTemplate")));
-
-            // make sure the separator can't be selected thru keyboard navigation.
-            dataTrigger.Setters.Add(new Setter(IsEnabledProperty, false));
-
-            var style = new Style(typeof(ComboBoxItem), _versions.ItemContainerStyle);
-
-            style.Triggers.Add(dataTrigger);
-            _versions.ItemContainerStyle = style;
         }
 
         private TextBox _textBox;
@@ -87,7 +71,7 @@ namespace NuGet.PackageManagement.UI
             }
         }
 
-        protected override void OnPreviewKeyDown(KeyEventArgs e)
+        private void Versions_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             if (PackageDetailControlModel.IsProjectPackageReference)
             {
@@ -142,11 +126,19 @@ namespace NuGet.PackageManagement.UI
             }
             else
             {
-                base.OnPreviewKeyDown(e);
+                switch (e.Key)
+                {
+                    case Key.Tab:
+                        _versions.IsDropDownOpen = false;
+                        break;
+                    default:
+                        base.OnPreviewKeyDown(e);
+                        break;
+                }
             }
         }
 
-        protected override void OnKeyUp(KeyEventArgs e)
+        private void Versions_KeyUp(object sender, KeyEventArgs e)
         {
             if (PackageDetailControlModel.IsProjectPackageReference)
             {
@@ -167,11 +159,22 @@ namespace NuGet.PackageManagement.UI
                             {
                                 // Search for the best version
                                 NuGetVersion rangeBestVersion = userRequestedVersionRange.FindBestMatch(versions);
-                                bool isBestOption = rangeBestVersion.ToString() == _versions.Items[_versions.SelectedIndex].ToString();
+                                DisplayVersion selectedVersion = (DisplayVersion)_versions.Items.CurrentItem;
+                                bool isBestOption = rangeBestVersion.ToString() == selectedVersion.Version.ToString();
                                 if (isBestOption)
                                 {
-                                    PackageDetailControlModel.SelectedVersion = new DisplayVersion(userRequestedVersionRange, rangeBestVersion, additionalInfo: null);
-                                    _versions.Text = comboboxText;
+                                    // Add vulnerable/deprecated labels to non floating/range versions
+                                    if (userRequestedVersionRange.OriginalString.StartsWith("(", StringComparison.OrdinalIgnoreCase) ||
+                                        userRequestedVersionRange.OriginalString.StartsWith("[", StringComparison.OrdinalIgnoreCase) ||
+                                        userRequestedVersionRange.IsFloating)
+                                    {
+                                        PackageDetailControlModel.SelectedVersion = new DisplayVersion(userRequestedVersionRange, rangeBestVersion, additionalInfo: null);
+                                    }
+                                    else
+                                    {
+                                        PackageDetailControlModel.SelectedVersion = new DisplayVersion(userRequestedVersionRange, rangeBestVersion, additionalInfo: null, isVulnerable: selectedVersion.IsVulnerable, isDeprecated: selectedVersion.IsDeprecated);
+                                    }
+                                    _versions.Text = PackageDetailControlModel.SelectedVersion.ToString();
                                 }
                                 else
                                 {
@@ -219,7 +222,15 @@ namespace NuGet.PackageManagement.UI
             }
             else
             {
-                base.OnKeyUp(e);
+                switch (e.Key)
+                {
+                    case Key.Tab:
+                        e.Handled = true;
+                        break;
+                    default:
+                        base.OnKeyUp(e);
+                        break;
+                }
             }
         }
 
@@ -250,10 +261,11 @@ namespace NuGet.PackageManagement.UI
             for (int i = 0; i < _versions.Items.Count; i++)
             {
                 DisplayVersion currentItem = _versions.Items[i] as DisplayVersion;
-                if (currentItem != null && (comboboxText == _versions.Items[i].ToString() || _versions.Items[i].ToString() == matchVersion?.ToString()))
+                if (currentItem != null && // null, this represent a bar in UI in the Versions combobox 
+                    (comboboxText.Trim() == currentItem.Version.ToNormalizedString() || matchVersion?.ToString() == currentItem.Version.ToNormalizedString())) // trim extra spaces and compare versions without labels
                 {
                     _versions.SelectedIndex = i; // This is the "select" effect in the dropdown
-                    PackageDetailControlModel.SelectedVersion = new DisplayVersion(userRange, matchVersion, additionalInfo: null);
+                    PackageDetailControlModel.SelectedVersion = new DisplayVersion(userRange, matchVersion, additionalInfo: null, isDeprecated: currentItem.IsDeprecated, isVulnerable: currentItem.IsVulnerable);
                 }
             }
         }
@@ -276,7 +288,7 @@ namespace NuGet.PackageManagement.UI
 
         private void Versions_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            PackageDetailControlModel.PreviousSelectedVersion = e.AddedItems.Count > 0 && !e.AddedItems[0].Equals(null) ? e.AddedItems[0].ToString() : string.Empty;
+            PackageDetailControlModel.PreviousSelectedVersion = e.AddedItems.Count > 0 && e.AddedItems[0] != null ? e.AddedItems[0].ToString() : string.Empty;
 
             return;
         }

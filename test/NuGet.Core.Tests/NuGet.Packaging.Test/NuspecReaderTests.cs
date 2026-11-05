@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -939,8 +941,13 @@ namespace NuGet.Packaging.Test
             var reader = GetReader(LicenseExpressionBasic);
 
             // Act
-            var licenseMetadata = reader.GetLicenseMetadata();
+            //var licenseMetadata = reader.GetLicenseMetadata();
 
+#nullable enable
+            LicenseMetadata? licenseMetadata = reader.GetLicenseMetadata();
+            var value = licenseMetadata?.LicenseExpression?.ToString();
+
+#nullable disable
             // Assert
             licenseMetadata.Type.Should().Be(LicenseType.Expression);
             licenseMetadata.LicenseExpression.Should().BeAssignableTo<NuGetLicense>("Because it is a simple license expression");
@@ -982,7 +989,7 @@ namespace NuGet.Packaging.Test
             licenseMetadata.LicenseExpression.Should().BeNull();
             licenseMetadata.License.Should().Be("MIT");
             licenseMetadata.Version.Should().Be(versionSpecified);
-            licenseMetadata.WarningsAndErrors.Count().Should().Be(1);
+            licenseMetadata.WarningsAndErrors.Count.Should().Be(1);
             licenseMetadata.WarningsAndErrors[0].Should().Be(string.Format(Strings.NuGetLicense_LicenseExpressionVersionTooHigh, versionSpecified, LicenseMetadata.CurrentVersion));
         }
 
@@ -1000,7 +1007,7 @@ namespace NuGet.Packaging.Test
             licenseMetadata.LicenseExpression.Should().BeNull();
             licenseMetadata.License.Should().Be(string.Empty);
             licenseMetadata.Version.Should().Be(LicenseMetadata.EmptyVersion);
-            licenseMetadata.WarningsAndErrors.Count().Should().Be(1);
+            licenseMetadata.WarningsAndErrors.Count.Should().Be(1);
             licenseMetadata.WarningsAndErrors[0].Should().Be(Strings.NuGetLicense_LicenseElementMissingValue);
         }
 
@@ -1018,7 +1025,7 @@ namespace NuGet.Packaging.Test
             licenseMetadata.LicenseExpression.Should().BeNull();
             licenseMetadata.License.Should().Be("MIT oR Apache-2.0");
             licenseMetadata.Version.Should().Be(LicenseMetadata.EmptyVersion);
-            licenseMetadata.WarningsAndErrors.Count().Should().Be(1);
+            licenseMetadata.WarningsAndErrors.Count.Should().Be(1);
             licenseMetadata.WarningsAndErrors[0].Should().Contain("Invalid element 'oR'.");
         }
 
@@ -1036,7 +1043,7 @@ namespace NuGet.Packaging.Test
             licenseMetadata.LicenseExpression.Should().BeAssignableTo<NuGetLicense>("Because it is a simple license expression");
             licenseMetadata.License.Should().Be("MIT");
             licenseMetadata.Version.Should().Be(LicenseMetadata.EmptyVersion);
-            licenseMetadata.WarningsAndErrors.Count().Should().Be(1);
+            licenseMetadata.WarningsAndErrors.Count.Should().Be(1);
             licenseMetadata.WarningsAndErrors[0].Should().Contain(string.Format(CultureInfo.CurrentCulture, Strings.NuGetLicense_InvalidLicenseExpressionVersion, "NotAVersion"));
         }
 
@@ -1054,7 +1061,7 @@ namespace NuGet.Packaging.Test
             licenseMetadata.LicenseExpression.Should().NotBeNull();
             licenseMetadata.License.Should().Be("MIT OR CoolLicense");
             licenseMetadata.Version.Should().Be(LicenseMetadata.EmptyVersion);
-            licenseMetadata.WarningsAndErrors.Count().Should().Be(1);
+            licenseMetadata.WarningsAndErrors.Count.Should().Be(1);
 
             licenseMetadata.WarningsAndErrors[0].Should().Be(string.Format(CultureInfo.CurrentCulture, Strings.NuGetLicenseExpression_NonStandardIdentifier, "CoolLicense"));
         }
@@ -1073,7 +1080,7 @@ namespace NuGet.Packaging.Test
             licenseMetadata.LicenseExpression.Should().NotBeNull();
             licenseMetadata.License.Should().Be("BestLicense OR CoolLicense");
             licenseMetadata.Version.Should().Be(LicenseMetadata.EmptyVersion);
-            licenseMetadata.WarningsAndErrors.Count().Should().Be(1);
+            licenseMetadata.WarningsAndErrors.Count.Should().Be(1);
 
             licenseMetadata.WarningsAndErrors[0].Should().Be(string.Format(CultureInfo.CurrentCulture, Strings.NuGetLicenseExpression_NonStandardIdentifier, "BestLicense, CoolLicense"));
         }
@@ -1093,7 +1100,7 @@ namespace NuGet.Packaging.Test
             licenseMetadata.License.Should().Be("UNLICENSED");
             licenseMetadata.LicenseExpression.IsUnlicensed().Should().BeTrue();
             licenseMetadata.Version.Should().Be(LicenseMetadata.EmptyVersion);
-            licenseMetadata.WarningsAndErrors.Count().Should().Be(1);
+            licenseMetadata.WarningsAndErrors.Count.Should().Be(1);
             licenseMetadata.WarningsAndErrors[0].Should().Be(string.Format(CultureInfo.CurrentCulture, Strings.NuGetLicenseExpression_UnlicensedPackageWarning));
         }
 

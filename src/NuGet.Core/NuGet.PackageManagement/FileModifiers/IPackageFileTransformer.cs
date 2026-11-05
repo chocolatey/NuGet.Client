@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -23,9 +25,9 @@ namespace NuGet.ProjectManagement
         /// <param name="cancellationToken">A cancellation token.</param>
         /// <returns>A task that represents the asynchronous operation.</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="streamTaskFactory" />
-        /// is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="projectSystem" />
-        /// is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="cancellationToken" />
         /// is cancelled.</exception>
         Task TransformFileAsync(
@@ -44,11 +46,11 @@ namespace NuGet.ProjectManagement
         /// <param name="cancellationToken">A cancellation token.</param>
         /// <returns>A task that represents the asynchronous operation.</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="streamTaskFactory" />
-        /// is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="matchingFiles" />
-        /// is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="projectSystem" />
-        /// is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="cancellationToken" />
         /// is cancelled.</exception>
         Task RevertFileAsync(

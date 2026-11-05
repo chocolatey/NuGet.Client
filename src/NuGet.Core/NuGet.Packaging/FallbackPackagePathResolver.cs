@@ -21,7 +21,7 @@ namespace NuGet.Packaging
         /// </summary>
         /// <param name="pathContext">NuGet paths loaded from NuGet.Config settings.</param>
         public FallbackPackagePathResolver(INuGetPathContext pathContext)
-            : this(pathContext?.UserPackageFolder, pathContext?.FallbackPackageFolders)
+            : this(pathContext.UserPackageFolder, pathContext.FallbackPackageFolders)
         {
 
         }
@@ -75,7 +75,7 @@ namespace NuGet.Packaging
         /// <param name="packageId">Package id.</param>
         /// <param name="version">Package version.</param>
         /// <returns>Returns the path if the package exists in any of the folders. Null if the package does not exist.</returns>
-        public string GetPackageDirectory(string packageId, string version)
+        public string? GetPackageDirectory(string packageId, string version)
         {
             return GetPackageDirectory(packageId, NuGetVersion.Parse(version));
         }
@@ -86,7 +86,7 @@ namespace NuGet.Packaging
         /// <param name="packageId">Package id.</param>
         /// <param name="version">Package version.</param>
         /// <returns>Returns the path if the package exists in any of the folders. Null if the package does not exist.</returns>
-        public string GetPackageDirectory(string packageId, NuGetVersion version)
+        public string? GetPackageDirectory(string packageId, NuGetVersion version)
         {
             // Find the package
             var info = GetPackageInfo(packageId, version);
@@ -101,7 +101,7 @@ namespace NuGet.Packaging
         /// <param name="packageId">Package id.</param>
         /// <param name="version">Package version.</param>
         /// <returns>Returns the package info if the package exists in any of the folders. Null if the package does not exist.</returns>
-        public FallbackPackagePathInfo GetPackageInfo(string packageId, NuGetVersion version)
+        public FallbackPackagePathInfo? GetPackageInfo(string packageId, NuGetVersion version)
         {
             if (string.IsNullOrEmpty(packageId))
             {
@@ -121,9 +121,18 @@ namespace NuGet.Packaging
             foreach (var resolver in _pathResolvers)
             {
                 var hashPath = resolver.GetHashPath(packageId, version);
+
+                if (File.Exists(hashPath))
+                {
+                    // If the hash exists we can use this path
+                    return new FallbackPackagePathInfo(packageId, version, resolver);
+                }
+
+                // Perf: As hashPath is commonly found and the GetNupkgMetadataPath call is relatively
+                // expensive, only request nupkgMetadataFilePath if hashPath isn't found
                 var nupkgMetadataFilePath = resolver.GetNupkgMetadataPath(packageId, version);
 
-                if (File.Exists(hashPath) || File.Exists(nupkgMetadataFilePath))
+                if (File.Exists(nupkgMetadataFilePath))
                 {
                     // If the hash exists we can use this path
                     return new FallbackPackagePathInfo(packageId, version, resolver);

@@ -12,7 +12,7 @@ namespace NuGet.Protocol
         public override bool CanRead { get { return true; } }
         public override bool CanWrite { get { return false; } }
 
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+        public override object ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
         {
             switch (reader.TokenType)
             {
@@ -22,19 +22,19 @@ namespace NuGet.Protocol
                     return serializer.Deserialize<bool>(reader);
                 case JsonToken.String:
                     bool flag;
-                    if (Boolean.TryParse(reader.Value.ToString().Trim(), out flag))
+                    if (Boolean.TryParse(reader.Value?.ToString()?.Trim(), out flag))
                     {
                         return flag;
                     }
                     return false;
                 case JsonToken.Integer:
-                    return ((long)reader.Value) == 1;
+                    return ((long)reader.Value!) == 1;
                 default:
                     reader.Skip();
                     return false;
             }
         }
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
         {
             throw new NotImplementedException();
         }

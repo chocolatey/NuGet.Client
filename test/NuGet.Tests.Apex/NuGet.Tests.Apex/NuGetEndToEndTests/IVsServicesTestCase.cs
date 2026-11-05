@@ -1,18 +1,17 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
 using System.IO;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Test.Apex.VisualStudio.Solution;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using NuGet.Test.Utility;
-using Xunit;
-using Xunit.Abstractions;
 
 namespace NuGet.Tests.Apex
 {
-    public class IVsServicesTestCase : SharedVisualStudioHostTestClass, IClassFixture<VisualStudioHostFixtureFactory>
+    [TestClass]
+    public class IVsServicesTestCase : SharedVisualStudioHostTestClass
     {
         private const string TestPackageName = "Contoso.A";
         private const string TestPackageVersionV1 = "1.0.0";
@@ -20,14 +19,12 @@ namespace NuGet.Tests.Apex
         private const string PrimarySourceName = "source";
         private const string SecondarySourceName = "SecondarySource";
 
+        internal const int LongerTimeout = 10 * 60 * 1000; // 10 minutes
+
         private readonly SimpleTestPathContext _pathContext = new SimpleTestPathContext();
 
-        public IVsServicesTestCase(VisualStudioHostFixtureFactory visualStudioHostFixtureFactory, ITestOutputHelper output)
-            : base(visualStudioHostFixtureFactory, output)
-        {
-        }
-
-        [StaFact]
+        [TestMethod]
+        [Timeout(LongerTimeout)]
         public void SimpleInstallFromIVsInstaller()
         {
             // Arrange
@@ -35,17 +32,18 @@ namespace NuGet.Tests.Apex
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution();
-            ProjectTestExtension projExt = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
+            ProjectTestExtension projExt = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
             EnvDTE.Project project = VisualStudio.Dte.Solution.Projects.Item(1);
 
             // Act
             nugetTestService.InstallPackage(project.UniqueName, "newtonsoft.json");
 
             // Assert
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, projExt, "newtonsoft.json", XunitLogger);
+            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, projExt, "newtonsoft.json", Logger);
         }
 
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public void SimpleUninstallFromIVsInstaller()
         {
             // Arrange
@@ -53,7 +51,7 @@ namespace NuGet.Tests.Apex
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution();
-            ProjectTestExtension projExt = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
+            ProjectTestExtension projExt = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
             string projectUniqueName = VisualStudio.Dte.Solution.Projects.Item(1).UniqueName;
 
             // Act
@@ -61,11 +59,12 @@ namespace NuGet.Tests.Apex
             nugetTestService.UninstallPackage(projectUniqueName, "newtonsoft.json");
 
             // Assert
-            CommonUtility.AssertPackageNotInPackagesConfig(VisualStudio, projExt, "newtonsoft.json", XunitLogger);
+            CommonUtility.AssertPackageNotInPackagesConfig(VisualStudio, projExt, "newtonsoft.json", Logger);
         }
 
 
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public void IVSPathContextProvider2_WithEmptySolution_WhenTryCreateUserWideContextIsCalled_SolutionWideConfigurationIsNotIncluded()
         {
             // Arrange
@@ -82,58 +81,107 @@ namespace NuGet.Tests.Apex
             userPackagesFolder.Should().NotBe(_pathContext.UserPackagesFolder);
         }
 
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
+        public async Task IVsPathContextProvider_WithAssetsFile_UsesRestoredGlobalPackagesFolderAsync()
+        {
+            using var pathContext = new SimpleTestPathContext();
+            using var testContext = new ApexTestContext(
+                VisualStudio,
+                ProjectTemplate.NetStandardClassLib,
+                Logger,
+                addNetStandardFeeds: true,
+                simpleTestPathContext: pathContext);
+            await CommonUtility.CreatePackageInSourceAsync(pathContext.PackageSource, TestPackageName, TestPackageVersionV1);
+
+            var nugetConsole = GetConsole(testContext.Project);
+            nugetConsole.InstallPackageFromPMC(TestPackageName, TestPackageVersionV1);
+            CommonUtility.AssertPackageInAssetsFile(
+                VisualStudio,
+                testContext.Project,
+                TestPackageName,
+                TestPackageVersionV1,
+                Logger);
+            testContext.SolutionService.SaveAll();
+
+            var projectPath = testContext.Project.FullPath;
+            var solutionPath = testContext.SolutionService.FilePath!;
+            var alternateGlobalPackagesFolder = Path.Combine(pathContext.WorkingDirectory.Path, "alternateGlobalPackages");
+            pathContext.Settings.DisableAutoRestore();
+            SimpleTestSettingsContext.AddSetting(
+                pathContext.Settings.XML,
+                "globalPackagesFolder",
+                alternateGlobalPackagesFolder);
+            pathContext.Settings.Save();
+
+            VisualStudio.ObjectModel.Solution.Close();
+            VisualStudio.ObjectModel.Solution.WaitForFullyLoadedOnOpen = true;
+            VisualStudio.ObjectModel.Solution.Open(solutionPath);
+            VisualStudio.ObjectModel.Solution.Verify.HasProject();
+            testContext.NuGetApexTestService.WaitForAutoRestore();
+
+            var userPackagesFolder = testContext.NuGetApexTestService.GetUserPackagesFolderFromProjectContext(projectPath);
+
+            userPackagesFolder.Should().Be(pathContext.UserPackagesFolder);
+        }
+
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public async Task SimpleInstallFromIVsInstaller_PackageSourceMapping_WithSingleFeed()
         {
             // Arrange
             await CommonUtility.CreatePackageInSourceAsync(_pathContext.PackageSource, TestPackageName, TestPackageVersionV1);
             _pathContext.Settings.AddPackageSourceMapping(PrimarySourceName, "Contoso.*", "Test.*");
-            
+
             NuGetApexTestService nugetTestService = GetNuGetTestService();
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
-            ProjectTestExtension projExt = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
+            ProjectTestExtension projExt = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
             solutionService.SaveAll();
             EnvDTE.Project project = VisualStudio.Dte.Solution.Projects.Item(1);
 
             // Act
             nugetTestService.InstallPackage(project.UniqueName, TestPackageName);
+            solutionService.SaveAll();
 
             // Assert
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, projExt, TestPackageName, XunitLogger);
+            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, projExt, TestPackageName, Logger);
         }
 
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public async Task SimpleUpdateFromIVsInstaller_PackageSourceMapping_WithSingleFeed()
         {
             // Arrange
             await CommonUtility.CreateNetFrameworkPackageInSourceAsync(_pathContext.PackageSource, TestPackageName, TestPackageVersionV1, "Thisisfromprivaterepo1.txt");
             await CommonUtility.CreateNetFrameworkPackageInSourceAsync(_pathContext.PackageSource, TestPackageName, TestPackageVersionV2, "Thisisfromprivaterepo2.txt");
             _pathContext.Settings.AddPackageSourceMapping(PrimarySourceName, "Contoso.*", "Test.*");
-            
+
             NuGetApexTestService nugetTestService = GetNuGetTestService();
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
-            ProjectTestExtension projExt = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
+            ProjectTestExtension projExt = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
             solutionService.SaveAll();
             EnvDTE.Project project = VisualStudio.Dte.Solution.Projects.Item(1);
 
             // Act
             nugetTestService.InstallPackage(project.UniqueName, TestPackageName, TestPackageVersionV1);
             nugetTestService.InstallPackage(project.UniqueName, TestPackageName, TestPackageVersionV2);
+            solutionService.SaveAll();
 
             // Assert
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, projExt, TestPackageName, XunitLogger);
+            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, projExt, TestPackageName, Logger);
 
             string uniqueContentFile = Path.Combine(_pathContext.PackagesV2, TestPackageName + '.' + TestPackageVersionV2, "lib", "net45", "Thisisfromprivaterepo2.txt");
 
             // Make sure version 2 is restored.
-            File.Exists(uniqueContentFile).Should().BeTrue($"'{uniqueContentFile}' should exist");
+            Assert.IsTrue(File.Exists(uniqueContentFile), $"'{uniqueContentFile}' should exist");
         }
 
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public async Task SimpleInstallFromIVsInstaller_PackageSourceMapping_WithMultipleFeedsWithIdenticalPackages_InstallsCorrectPackage()
         {
             // Arrange
@@ -150,23 +198,25 @@ namespace NuGet.Tests.Apex
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
-            ProjectTestExtension projExt = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
+            ProjectTestExtension projExt = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
             solutionService.SaveAll();
             EnvDTE.Project project = VisualStudio.Dte.Solution.Projects.Item(1);
 
             // Act
             nugetTestService.InstallPackage(project.UniqueName, TestPackageName, TestPackageVersionV1);
+            solutionService.SaveAll();
 
             // Assert
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, projExt, TestPackageName, XunitLogger);
+            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, projExt, TestPackageName, Logger);
 
             string uniqueContentFile = Path.Combine(_pathContext.PackagesV2, TestPackageName + '.' + TestPackageVersionV1, "lib", "net45", "Thisisfromprivaterepo1.txt");
 
             // Make sure name squatting package not restored from secondary repository.
-            File.Exists(uniqueContentFile).Should().BeTrue($"'{uniqueContentFile}' should exist");
+            Assert.IsTrue(File.Exists(uniqueContentFile), $"'{uniqueContentFile}' should exist");
         }
 
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public async Task SimpleUpdateFromIVsInstaller_PackageSourceMapping_WithMultipleFeedsWithIdenticalPackages_UpdatesCorrectPackage()
         {
             // Arrange
@@ -183,21 +233,78 @@ namespace NuGet.Tests.Apex
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
-            ProjectTestExtension projExt = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
+            ProjectTestExtension projExt = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
             solutionService.SaveAll();
             EnvDTE.Project project = VisualStudio.Dte.Solution.Projects.Item(1);
 
             // Act
             nugetTestService.InstallPackage(project.UniqueName, TestPackageName, TestPackageVersionV1);
             nugetTestService.InstallPackage(project.UniqueName, TestPackageName, TestPackageVersionV2);
-
+            solutionService.SaveAll();
             // Assert
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, projExt, TestPackageName, XunitLogger);
-
+            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, projExt, TestPackageName, Logger);
             string uniqueContentFile = Path.Combine(_pathContext.PackagesV2, TestPackageName + '.' + TestPackageVersionV2, "lib", "net45", "Thisisfromprivaterepo2.txt");
 
             // Make sure name squatting package not restored from secondary repository.
-            File.Exists(uniqueContentFile).Should().BeTrue($"'{uniqueContentFile}' should exist");
+            Assert.IsTrue(File.Exists(uniqueContentFile), $"'{uniqueContentFile}' should exist");
+        }
+
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
+        public async Task SimpleInstallFromIVsInstaller_PackageSourceMapping_WithMissingMappedSource_Fails()
+        {
+            // Arrange
+            await CommonUtility.CreatePackageInSourceAsync(_pathContext.PackageSource, TestPackageName, TestPackageVersionV1);
+            // Map the package pattern to a non-existent source "SecretPackages" — package exists in primary source but mapping won't route there.
+            _pathContext.Settings.AddPackageSourceMapping("SecretPackages", "Contoso.*", "Test.*");
+
+            NuGetApexTestService nugetTestService = GetNuGetTestService();
+
+            SolutionService solutionService = VisualStudio.Get<SolutionService>();
+            solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
+            ProjectTestExtension projExt = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
+            solutionService.SaveAll();
+            EnvDTE.Project project = VisualStudio.Dte.Solution.Projects.Item(1);
+
+            // Act — InstallPackage swallows InvalidOperationException, so the call returns without throwing.
+            nugetTestService.InstallPackage(project.UniqueName, TestPackageName);
+            solutionService.SaveAll();
+
+            // Assert
+            CommonUtility.AssertPackageNotInPackagesConfig(VisualStudio, projExt, TestPackageName, Logger);
+        }
+
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
+        public async Task SimpleInstallLatestFromIVsInstaller_PackageSourceMapping_WithMultipleFeedsWithIdenticalPackages_InstallsCorrectPackage()
+        {
+            // Arrange
+            string secondarySourcePath = Directory.CreateDirectory(Path.Combine(_pathContext.SolutionRoot, SecondarySourceName)).FullName;
+            await CommonUtility.CreateNetFrameworkPackageInSourceAsync(secondarySourcePath, TestPackageName, TestPackageVersionV1, "Thisisfromsecondaryrepo1.txt");
+            await CommonUtility.CreateNetFrameworkPackageInSourceAsync(secondarySourcePath, TestPackageName, TestPackageVersionV2, "Thisisfromsecondaryrepo2.txt");
+            await CommonUtility.CreateNetFrameworkPackageInSourceAsync(_pathContext.PackageSource, TestPackageName, TestPackageVersionV1, "Thisisfromprivaterepo1.txt");
+            await CommonUtility.CreateNetFrameworkPackageInSourceAsync(_pathContext.PackageSource, TestPackageName, TestPackageVersionV2, "Thisisfromprivaterepo2.txt");
+            _pathContext.Settings.AddSource(SecondarySourceName, secondarySourcePath);
+            _pathContext.Settings.AddPackageSourceMapping(SecondarySourceName, "External.*", "Others.*");
+            _pathContext.Settings.AddPackageSourceMapping(PrimarySourceName, "Contoso.*", "Test.*");
+
+            NuGetApexTestService nugetTestService = GetNuGetTestService();
+
+            SolutionService solutionService = VisualStudio.Get<SolutionService>();
+            solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
+            ProjectTestExtension projExt = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
+            solutionService.SaveAll();
+            EnvDTE.Project project = VisualStudio.Dte.Solution.Projects.Item(1);
+
+            // Act — install latest (no version specified)
+            nugetTestService.InstallPackage(project.UniqueName, TestPackageName);
+            solutionService.SaveAll();
+
+            // Assert — latest version (2.0.0) should be installed from the mapped primary source
+            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, projExt, TestPackageName, Logger);
+
+            string uniqueContentFile = Path.Combine(_pathContext.PackagesV2, TestPackageName + '.' + TestPackageVersionV2, "lib", "net45", "Thisisfromprivaterepo2.txt");
+            Assert.IsTrue(File.Exists(uniqueContentFile), $"'{uniqueContentFile}' should exist");
         }
 
         public override void Dispose()

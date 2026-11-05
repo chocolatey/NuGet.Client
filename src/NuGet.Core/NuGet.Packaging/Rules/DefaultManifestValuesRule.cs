@@ -44,7 +44,7 @@ namespace NuGet.Packaging.Rules
             Uri.TryCreate(nuspecReader.GetLicenseUrl(), UriKind.RelativeOrAbsolute, out var licenseUrl);
             if (licenseUrl == SampleLicenseUrl)
             {
-                yield return CreateIssueFor("licenseUrl", nuspecReader.GetLicenseUrl());
+                yield return CreateIssueFor("licenseUrl", nuspecReader.GetLicenseUrl()!);
             }
 
             Uri.TryCreate(nuspecReader.GetIconUrl(), UriKind.RelativeOrAbsolute, out var iconUrl);

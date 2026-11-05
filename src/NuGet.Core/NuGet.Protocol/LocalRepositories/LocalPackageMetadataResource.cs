@@ -1,6 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -38,23 +39,21 @@ namespace NuGet.Protocol
 
             return Task.Run<IEnumerable<IPackageSearchMetadata>>(() =>
             {
-                var metadataCache = new MetadataReferenceCache();
                 return _localResource.FindPackagesById(packageId, log, token)
                     .Where(p => includePrerelease || !p.Identity.Version.IsPrerelease)
                     .Select(GetPackageMetadata)
-                    .Select(p => metadataCache.GetObject(p))
                     .ToList();
             },
             token);
         }
 
-        public override Task<IPackageSearchMetadata> GetMetadataAsync(
+        public override Task<IPackageSearchMetadata?> GetMetadataAsync(
             PackageIdentity package,
             SourceCacheContext sourceCacheContext,
             ILogger log,
             CancellationToken token)
         {
-            return Task.Run<IPackageSearchMetadata>(() =>
+            return Task.Run<IPackageSearchMetadata?>(() =>
                 {
                     var packageInfo = _localResource.GetPackage(package, log, token);
                     if (packageInfo != null)

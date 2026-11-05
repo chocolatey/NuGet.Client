@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -22,16 +24,6 @@ namespace NuGet.Commands
         private string _lockFilePath;
 
         private Lazy<LockFile> _lockFileLazy;
-
-        [Obsolete("Use constructor with LockFileBuilderCache parameter")]
-        public RestoreRequest(
-            PackageSpec project,
-            RestoreCommandProviders dependencyProviders,
-            SourceCacheContext cacheContext,
-            ClientPolicyContext clientPolicyContext,
-            ILogger log) : this(project, dependencyProviders, cacheContext, clientPolicyContext, packageSourceMapping: null, log, new LockFileBuilderCache())
-        {
-        }
 
         public RestoreRequest(
             PackageSpec project,
@@ -192,6 +184,11 @@ namespace NuGet.Commands
 
         public PackageSourceMapping PackageSourceMapping { get; }
 
+        /// <summary>
+        /// Gets the package ID patterns that are exempt from package source minimum publish age restrictions.
+        /// </summary>
+        public MinPublishAgeExceptions MinPublishAgeExceptions { get; init; }
+
         /// <remarks>
         /// This property should only be used to override the default verifier on tests.
         /// </remarks>
@@ -210,5 +207,11 @@ namespace NuGet.Commands
         /// It can be set to true through the updatePackageLastAccessTime configuration flag
         /// </summary>
         public bool UpdatePackageLastAccessTime { get; set; }
+
+        /// <summary>
+        /// The environment variable reader to use for environment variable lookups during restore.
+        /// Defaults to <see cref="EnvironmentVariableWrapper.Instance"/>.
+        /// </summary>
+        public IEnvironmentVariableReader EnvironmentVariableReader { get; init; } = EnvironmentVariableWrapper.Instance;
     }
 }

@@ -2,6 +2,9 @@
 *.nuget.targets
 *.nuget.props
 
+# Backup files
+*.bak
+
 # Project K
 project.lock.json
 artifacts/
@@ -149,6 +152,7 @@ ClientBin/
 *.[Pp]ublish.xml
 *.pfx
 *.publishsettings
+*.lscache
 
 # RIA/Silverlight projects
 Generated_Code/
@@ -203,3 +207,5 @@ launchSettings.json
 
 # Image manifests are generated at build-time for VSIX
 *.imagemanifest
+
+test/ManualTests/

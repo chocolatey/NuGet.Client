@@ -1,1 +1,2 @@
 #nullable enable
+*REMOVED*~NuGet.Commands.CommandException.CommandException(System.Runtime.Serialization.SerializationInfo info, System.Runtime.Serialization.StreamingContext context) -> void

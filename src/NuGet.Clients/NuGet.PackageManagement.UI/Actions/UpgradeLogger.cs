@@ -1,12 +1,13 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Reflection;
 using System.Xml;
 using System.Xml.Xsl;
 using NuGet.Common;
@@ -149,7 +150,7 @@ namespace NuGet.PackageManagement.UI
         internal void Flush()
         {
 
-            using (var xsltStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(XsltManifestResourceName))
+            using (var xsltStream = typeof(UpgradeLogger).Assembly.GetManifestResourceStream(XsltManifestResourceName))
             {
                 Debug.Assert(xsltStream != null, $"Resource {XsltManifestResourceName} could not be loaded.");
 

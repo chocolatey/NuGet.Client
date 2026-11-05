@@ -32,10 +32,11 @@ For completeness, the feature life-cycle can be divided in a few phases. Note th
 Given that the guide is written with engineers in mind, we will not elaborate on the first phase.
 
 1. Problem statement
-2. Initial design
-3. Design review
-4. Implementation
-5. Shipping and adoption
+1. Initial design
+1. Design review
+1. Threat modeling
+1. Implementation
+1. Shipping and adoption
 
 ### Problem statement
 
@@ -55,6 +56,14 @@ Always follow the [Design Review Guide](design-review-guide.md).
 As the design evolves, ensure you expand the audience as necessary. Review it with the NuGet team first, then with partners and customers as necessary.
 
 When a design is finalized, it is merged in the Home repo.
+
+## Threat modeling
+
+Threat modeling is a process conducted during the design phase for a feature or design change request (DCR) to ensure that potential security threats have been considered.
+It involves analyzing use cases, creating a data flow diagram that includes assets, flows, and trust boundaries, and identifying threats and their mitigations.
+This exercise is crucial for maintaining customer trust.
+The engineering team performs this process internally and stores all artifacts in the NuGet team's SharePoint.
+Please follow DevDiv guidance on the threat modeling process.
 
 ### Implementation
 
@@ -90,12 +99,52 @@ These considerations are also useful for smaller changes that might not require 
 * Partner dependencies considered
   * Partner to NuGet asks
   * NuGet to partner asks
+* Threat model document
+  * Reviewed by the Engineering team
+  * Reviewed by the Security experts
 * Implementation considerations
   * Accessibility considerations
   * Performance considerations
   * Security considerations
   * World readiness considerations
 * User documentation
+
+#### Warnings and defaults
+
+The .NET 9 SDK introduces a new [`SdkAnalysisLevel` property](https://github.com/dotnet/designs/blob/main/proposed/sdk-analysis-level.md), which is intended to allow customers to avoid breaking changes while still upgrading to new versions of the build tools.
+Going forward, any in-scope change to NuGet must compare `SdkAnalysisLevel` to the version of the .NET SDK that corresponds to NuGet's dev branch is going to be inserted into.
+For example, NuGet 6.12 will ship in the .NET 9.0.100 SDK.
+Therefore, any in-scope change to NuGet in NuGet 6.12 must retain existing/previous behavior when `SdkAnalysisVersion` is lower than this version, and the new behavior applies only when it's equal or higher.
+
+Since `SdkAnalysisLevel` will apply to many features, including features that are not part of NuGet, it is not a substitute for having a feature specific configuration.
+`SdkAnalysisLevel` should just be used to decide what the default is for that configuration value.
+
+A non-exhaustive list of examples of in-scope changes to NuGet include:
+
+* New restore warning
+* New pack validation
+* Change a warning to an error
+* Changes to feature opt-in/out, or other changes to configuration defaults
+
+Note that `SdkAnalysisLevel` is only set by the .NET SDK, and only starting from the .NET 9.0.100 SDK.
+Therefore the following logic should apply anywhere NuGet needs to make a decision based on the `SdkAnalysisLevel`:
+
+1. If `SdkAnalysisLevel` is set, regardless of project type, always use that value.
+1. Otherwise, if `UsingMicrosoftNETSdk` has the value `true`, then assume that the `SdkAnalysisLevel` is 8.0.400.
+1. Otherwise, assume `SdkAnalysisLevel` is equal to the highest version that the feature compares to, so always use the latest defaults.
+
+This means that `SdkAnalysisLevel` is used as intended for SDK style projects, but non-SDK style project always use the latest defaults.
+All project types use the same configuration, so that customers can set a single property in a *Directory.Build.props* file, or environment variable.
+
+##### SDKAnalysisLevel and restore
+
+The SDKAnalysisLevel feature should be used with special care in features that ship simultaneously in .NET SDK and Visual Studio.
+For example, when running a restore on an .NET SDK project in Visual Studio, the Visual Studio shipped code and targets will be used. 
+When running a restore on the same project with the .NET CLI, the .NET SDK code will be used.
+
+Because of this, consider the [.NET SDK loading rules](https://learn.microsoft.com/en-us/dotnet/core/porting/versioning-sdk-msbuild-vs#targeting-and-support-rules).
+While Visual Studio 18.0, shipped with .NET 10.0.100 SDK, the minimum version for that .NET SDK is 17.14.
+What that means is that if a feature is available in the NuGet targets in 17.14, it will be enabled by default in 17.14, despite the fact that you may have only intended it to be enabled by default in .NET 10 only.
 
 #### Restore considerations
 
@@ -111,6 +160,7 @@ These considerations are also useful for smaller changes that might not require 
 * Performance considerations
   * How is incremental restore affected?
   * How is full restore affected?
+* Consider [SDKAnalysisLevel](#sdkanalysislevel-and-restore)
 
 #### Pack considerations
 
@@ -125,8 +175,10 @@ These considerations are also useful for smaller changes that might not require 
 
 #### Visual Studio UI considerations
 
-* Ensure screen-readers handles the change correctly
-* Validate all themes
+See [UI Guidelines](ui-guidelines.md) for detailed information. In summary:
+
+* Ensure assistive technologies (eg, screen-readers) handle the change correctly
+* Validate all themes and localizability
 * More complex changes should be reviewed by UX experts
 
 #### CLI (NuGet.exe & dotnet.exe) considerations

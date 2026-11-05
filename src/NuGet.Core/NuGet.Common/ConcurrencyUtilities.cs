@@ -20,12 +20,22 @@ namespace NuGet.Common
         private static readonly TimeSpan SleepDuration = TimeSpan.FromMilliseconds(10);
         private static readonly KeyedLock PerFileLock = new KeyedLock();
 
-        // FileOptions.DeleteOnClose causes concurrency issues on Mac OS X and Linux.
-        // These are fixed in .NET 7 (https://github.com/dotnet/runtime/pull/55327).
-        // To continue working in parallel with older versions of .NET,
-        // we cannot use DeleteOnClose by default until .NET 6 goes EOL (Nov 2024).
-        private static bool UseDeleteOnClose = RuntimeEnvironmentHelper.IsWindows ||
-                                               Environment.GetEnvironmentVariable("NUGET_ConcurrencyUtils_DeleteOnClose") == "1"; // opt-in.
+        internal static IEnvironmentVariableReader EnvironmentVariableReader { get; set; } = EnvironmentVariableWrapper.Instance;
+
+        static ConcurrencyUtilities()
+        {
+            StaticState.BuildEnded += ResetEnvironmentCaches;
+        }
+
+        /// <summary>
+        /// Clears the cached lock-file base path so it is re-read from the current environment on next use.
+        /// The base path also derives from the NuGet home or temp directory; callers should reset
+        /// <see cref="NuGetEnvironment" /> as well.
+        /// </summary>
+        internal static void ResetEnvironmentCaches()
+        {
+            _basePath = null;
+        }
 
         public async static Task<T> ExecuteWithFileLockedAsync<T>(string filePath,
             Func<CancellationToken, Task<T>> action,
@@ -44,7 +54,7 @@ namespace NuGet.Common
 
                 while (true)
                 {
-                    FileStream fs = null;
+                    FileStream? fs = null;
                     var lockPath = string.Empty;
 
                     try
@@ -117,8 +127,12 @@ namespace NuGet.Common
             }
         }
 
-        public static void ExecuteWithFileLocked(string filePath,
-            Action action)
+        public static void ExecuteWithFileLocked(string filePath, Action action)
+        {
+            ExecuteWithFileLocked(filePath, action, AcquireFileStream, NumberOfRetries);
+        }
+
+        internal static void ExecuteWithFileLocked(string filePath, Action action, Func<string, FileStream> acquireFileStream, int numberOfRetries)
         {
             if (string.IsNullOrEmpty(filePath))
             {
@@ -129,11 +143,11 @@ namespace NuGet.Common
             try
             {
                 // limit the number of unauthorized, this should be around 30 seconds.
-                var unauthorizedAttemptsLeft = NumberOfRetries;
+                var unauthorizedAttemptsLeft = numberOfRetries;
 
                 while (true)
                 {
-                    FileStream fs = null;
+                    FileStream? fs = null;
                     var lockPath = string.Empty;
                     try
                     {
@@ -141,7 +155,7 @@ namespace NuGet.Common
                         {
                             lockPath = FileLockPath(filePath);
 
-                            fs = AcquireFileStream(lockPath);
+                            fs = acquireFileStream(lockPath);
                         }
                         catch (DirectoryNotFoundException)
                         {
@@ -212,24 +226,31 @@ namespace NuGet.Common
                 FileAccess.ReadWrite,
                 FileShare.None,
                 bufferSize: 32,
-                options: UseDeleteOnClose ? FileOptions.DeleteOnClose : FileOptions.None);
+                options: FileOptions.DeleteOnClose);
         }
 
-        private static string _basePath;
+        private static string? _basePath;
         private static string BasePath
         {
             get
             {
-                if (_basePath != null)
+                string? basePath = _basePath;
+                if (basePath != null)
                 {
-                    return _basePath;
+                    return basePath;
                 }
 
-                _basePath = Path.Combine(NuGetEnvironment.GetFolderPath(NuGetFolderPath.Temp), "lock");
+                var folder = RuntimeEnvironmentHelper.IsLinux &&
+                    string.IsNullOrEmpty(EnvironmentVariableReader.GetEnvironmentVariable("NUGET_SCRATCH"))
+                    ? NuGetFolderPath.NuGetHome
+                    : NuGetFolderPath.Temp;
+                basePath = Path.Combine(NuGetEnvironment.GetFolderPath(folder), "lock");
 
-                Directory.CreateDirectory(_basePath);
+                Directory.CreateDirectory(basePath);
 
-                return _basePath;
+                _basePath = basePath;
+
+                return basePath;
             }
         }
 

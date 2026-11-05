@@ -37,12 +37,13 @@ namespace NuGet.Configuration
                 switch (parentType)
                 {
                     case SettingElementType.Configuration:
-                        return new ParsedSettingSection(element, origin);
+                        return new ParsedSettingSection(element.Name.LocalName, element, origin);
 
                     case SettingElementType.PackageSourceCredentials:
                         return new CredentialsItem(element, origin);
 
                     case SettingElementType.PackageSources:
+                    case SettingElementType.AuditSources:
                         if (elementType == SettingElementType.Add)
                         {
                             return new SourceItem(element, origin);
@@ -53,6 +54,13 @@ namespace NuGet.Configuration
                         if (elementType == SettingElementType.PackageSource)
                         {
                             return new PackageSourceMappingSourceItem(element, origin);
+                        }
+                        break;
+
+                    case SettingElementType.MinPublishAgeExceptions:
+                        if (elementType == SettingElementType.Package)
+                        {
+                            return new MinPublishAgeExceptionItem(element, origin);
                         }
                         break;
 
@@ -94,12 +102,12 @@ namespace NuGet.Configuration
                 return new UnknownItem(element, origin);
             }
 
-            return null;
+            throw new InvalidOperationException("An invalid code path was taken. This should only happen when a new settings type is not implemented correctly.");
         }
 
         private class SettingElementKeyComparer : IComparer<SettingElement>, IEqualityComparer<SettingElement>
         {
-            public int Compare(SettingElement x, SettingElement y)
+            public int Compare(SettingElement? x, SettingElement? y)
             {
                 if (ReferenceEquals(x, y))
                 {
@@ -121,7 +129,7 @@ namespace NuGet.Configuration
                     y.ElementName + string.Join("", y.Attributes.Select(a => a.Value)));
             }
 
-            public bool Equals(SettingElement x, SettingElement y)
+            public bool Equals(SettingElement? x, SettingElement? y)
             {
                 if (ReferenceEquals(x, y))
                 {
@@ -157,7 +165,7 @@ namespace NuGet.Configuration
 
             HashSet<T> distinctDescendants = new HashSet<T>(comparer);
 
-            List<T> duplicatedDescendants = null;
+            List<T>? duplicatedDescendants = null;
 
             foreach (var item in descendants)
             {
@@ -175,7 +183,7 @@ namespace NuGet.Configuration
             if (xElement.Name.LocalName.Equals(ConfigurationConstants.PackageSourceMapping, StringComparison.OrdinalIgnoreCase) && duplicatedDescendants != null)
             {
                 var duplicatedKey = string.Join(", ", duplicatedDescendants.Select(d => d.Attributes["key"]));
-                var source = duplicatedDescendants.Select(d => d.Origin.ConfigFilePath).First();
+                var source = duplicatedDescendants.Select(d => d.Origin?.ConfigFilePath).First(d => d is not null);
                 throw new NuGetConfigurationException(string.Format(CultureInfo.CurrentCulture, Resources.Error_DuplicatePackageSource, duplicatedKey, source));
             }
 

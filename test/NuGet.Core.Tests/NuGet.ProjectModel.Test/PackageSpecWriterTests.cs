@@ -1,8 +1,12 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
+using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NuGet.Common;
@@ -10,31 +14,24 @@ using NuGet.Configuration;
 using NuGet.Frameworks;
 using NuGet.LibraryModel;
 using NuGet.RuntimeModel;
-using NuGet.Test.Utility;
 using NuGet.Versioning;
+using Test.Utility;
 using Xunit;
 
 namespace NuGet.ProjectModel.Test
 {
     public class PackageSpecWriterTests
     {
-#pragma warning disable CS0618
-        private static readonly PackageSpec EmptyPackageSpec = JsonPackageSpecReader.GetPackageSpec(new JObject());
-#pragma warning restore CS0618
+        private static readonly PackageSpec EmptyPackageSpec = JsonPackageSpecReader.GetPackageSpec("{}", null, null);
 
         [Fact]
         public void RoundTripAutoReferencedProperty()
         {
             // Arrange
             var json = @"{
-                    ""dependencies"": {
-                        ""b"": {
-                            ""version"": ""[1.0.0, )"",
-                            ""autoReferenced"": true
-                        }
-                    },
                   ""frameworks"": {
                     ""net46"": {
+                        ""framework"": ""net46"",
                         ""dependencies"": {
                             ""a"": {
                                 ""version"": ""[1.0.0, )"",
@@ -56,6 +53,7 @@ namespace NuGet.ProjectModel.Test
             var json = @"{
                   ""frameworks"": {
                     ""net46"": {
+                        ""framework"": ""net46"",
                         ""dependencies"": {
                             ""a"": {
                                 ""version"": ""[1.0.0, )"",
@@ -96,79 +94,19 @@ namespace NuGet.ProjectModel.Test
         {
             // Arrange
             var json = @"{
-  ""title"": ""My Title"",
   ""version"": ""1.2.3"",
-  ""description"": ""test"",
-  ""authors"": [
-    ""author1"",
-    ""author2""
-  ],
-  ""copyright"": ""2016"",
-  ""language"": ""en-US"",
-  ""packInclude"": {
-    ""file"": ""file.txt""
-  },
-  ""packOptions"": {
-    ""owners"": [
-      ""owner1"",
-      ""owner2""
-    ],
-    ""tags"": [
-      ""tag1"",
-      ""tag2""
-    ],
-    ""projectUrl"": ""http://my.url.com"",
-    ""iconUrl"": ""http://my.url.com"",
-    ""summary"": ""Sum"",
-    ""releaseNotes"": ""release noted"",
-    ""licenseUrl"": ""http://my.url.com""
-  },
-  ""scripts"": {
-    ""script1"": [
-      ""script.js""
-    ]
-  },
-  ""dependencies"": {
-    ""packageA"": {
-      ""suppressParent"": ""All"",
-      ""target"": ""Project""
-    }
-  },
   ""frameworks"": {
-    ""net46"": {}
-  }
-}";
-            // Act & Assert
-            VerifyJsonPackageSpecRoundTrip(json);
+    ""net46"": {
+        ""framework"": ""net46"",
+        ""dependencies"": {
+            ""packageA"": {
+                ""suppressParent"": ""All"",
+                ""target"": ""Project""
+            }
         }
-
-        [Fact]
-        public void Write_ReadWriteSinglePackageType()
-        {
-            // Arrange
-            var json = @"{
-  ""packOptions"": {
-    ""packageType"": ""DotNetTool""
+    }
   }
 }";
-
-            // Act & Assert
-            VerifyJsonPackageSpecRoundTrip(json);
-        }
-
-        [Fact]
-        public void Write_ReadWriteMultiplePackageType()
-        {
-            // Arrange
-            var json = @"{
-  ""packOptions"": {
-    ""packageType"": [
-      ""Dependency"",
-      ""DotNetTool""
-    ]
-  }
-}";
-
             // Act & Assert
             VerifyJsonPackageSpecRoundTrip(json);
         }
@@ -177,7 +115,7 @@ namespace NuGet.ProjectModel.Test
         public void Write_ReadWriteWarningProperties()
         {
             // Arrange
-            var json = @"{  
+            var json = @"{
                             ""restore"": {
     ""projectUniqueName"": ""projectUniqueName"",
     ""projectName"": ""projectName"",
@@ -187,6 +125,7 @@ namespace NuGet.ProjectModel.Test
     ""outputPath"": ""outputPath"",
     ""projectStyle"": ""PackageReference"",
     ""crossTargeting"": true,
+    ""restoreUseLegacyDependencyResolver"": true,
     ""fallbackFolders"": [
       ""b"",
       ""a"",
@@ -207,6 +146,7 @@ namespace NuGet.ProjectModel.Test
     },
     ""frameworks"": {
       ""net45"": {
+        ""framework"": ""net45"",
         ""projectReferences"": {}
       }
     },
@@ -231,24 +171,117 @@ namespace NuGet.ProjectModel.Test
         }
 
         [Fact]
-        public void WriteToFile_ThrowsForNullPackageSpec()
+        public void Write_ReadWrite_RestoreDoNotWriteDependencyGraphSpec_True()
         {
-            // Assert
-            Assert.Throws<ArgumentNullException>(() => PackageSpecWriter.WriteToFile(packageSpec: null, filePath: @"C:\a.json"));
+            // Arrange
+            var json = @"{
+                            ""restore"": {
+    ""projectUniqueName"": ""projectUniqueName"",
+    ""projectName"": ""projectName"",
+    ""projectPath"": ""projectPath"",
+    ""packagesPath"": ""packagesPath"",
+    ""outputPath"": ""outputPath"",
+    ""projectStyle"": ""PackageReference"",
+    ""restoreDoNotWriteDependencyGraphSpec"": true,
+    ""frameworks"": {
+      ""net45"": {
+        ""framework"": ""net45"",
+        ""projectReferences"": {}
+      }
+    }
+  }
+}";
+            // Act & Assert
+            VerifyJsonPackageSpecRoundTrip(json);
         }
 
         [Fact]
-        public void WriteToFile_ThrowsForNullFilePath()
+        public void Write_ReadWrite_RestoreDoNotWriteDependencyGraphSpec_DefaultFalse_NotWritten()
         {
-            // Assert
-            Assert.Throws<ArgumentException>(() => PackageSpecWriter.WriteToFile(EmptyPackageSpec, filePath: null));
+            // Arrange - when RestoreDoNotWriteDependencyGraphSpec is false (default), it should not appear in output
+            var json = @"{
+                            ""restore"": {
+    ""projectUniqueName"": ""projectUniqueName"",
+    ""projectName"": ""projectName"",
+    ""projectPath"": ""projectPath"",
+    ""packagesPath"": ""packagesPath"",
+    ""outputPath"": ""outputPath"",
+    ""projectStyle"": ""PackageReference"",
+    ""frameworks"": {
+      ""net45"": {
+        ""framework"": ""net45"",
+        ""projectReferences"": {}
+      }
+    }
+  }
+}";
+            // Act
+            var spec = JsonPackageSpecReader.GetPackageSpec(json, "TestProject", "project.csproj");
+
+            // Assert - default value should be false
+            spec.RestoreMetadata.RestoreDoNotWriteDependencyGraphSpec.Should().BeFalse();
+
+            // And it should not appear in the serialized output
+            var output = GetJsonString(spec);
+            output.Should().NotContain("restoreDoNotWriteDependencyGraphSpec");
         }
 
         [Fact]
-        public void WriteToFile_ThrowsForEmptyFilePath()
+        public void Write_ReadWrite_RestoreEnableAnalyzerAssets_True()
         {
+            // Arrange
+            var spec = new PackageSpec(new[]
+            {
+                new TargetFrameworkInformation
+                {
+                    FrameworkName = NuGetFramework.Parse("net45")
+                }
+            })
+            {
+                RestoreMetadata = new ProjectRestoreMetadata
+                {
+                    ProjectUniqueName = "projectUniqueName",
+                    ProjectName = "projectName",
+                    ProjectStyle = ProjectStyle.PackageReference,
+                    RestoreEnableAnalyzerAssets = true
+                }
+            };
+
+            // Act
+            var json = GetJsonString(spec);
+            var roundTripped = JsonPackageSpecReader.GetPackageSpec(json, "projectName", "project.csproj");
+
             // Assert
-            Assert.Throws<ArgumentException>(() => PackageSpecWriter.WriteToFile(EmptyPackageSpec, filePath: null));
+            json.Should().Contain("restoreEnableAnalyzerAssets");
+            roundTripped.RestoreMetadata.RestoreEnableAnalyzerAssets.Should().BeTrue();
+        }
+
+        [Fact]
+        public void Write_ReadWrite_RestoreEnableAnalyzerAssets_DefaultFalse_NotWritten()
+        {
+            // Arrange
+            var spec = new PackageSpec(new[]
+            {
+                new TargetFrameworkInformation
+                {
+                    FrameworkName = NuGetFramework.Parse("net45")
+                }
+            })
+            {
+                RestoreMetadata = new ProjectRestoreMetadata
+                {
+                    ProjectUniqueName = "projectUniqueName",
+                    ProjectName = "projectName",
+                    ProjectStyle = ProjectStyle.PackageReference
+                }
+            };
+
+            // Act
+            var output = GetJsonString(spec);
+
+            // Assert
+            spec.RestoreMetadata.RestoreEnableAnalyzerAssets.Should().BeFalse();
+            output.Should().NotContain("restoreEnableAnalyzerAssets");
         }
 
         [Fact]
@@ -260,7 +293,7 @@ namespace NuGet.ProjectModel.Test
             var actualJson = GetJsonString(packageSpec);
 
             // Assert
-            Assert.Equal(expectedJson, actualJson);
+            actualJson.Should().Be(expectedJson);
         }
 
         [Fact]
@@ -272,7 +305,7 @@ namespace NuGet.ProjectModel.Test
             var actualJson = GetJsonString(packageSpec);
 
             // Assert
-            Assert.Equal(expectedJson, actualJson);
+            actualJson.Should().Be(expectedJson);
         }
 
         [Fact]
@@ -412,16 +445,9 @@ namespace NuGet.ProjectModel.Test
         {
             // Arrange
             var json = @"{
-                    ""dependencies"": {
-                        ""b"": {
-                                ""version"": ""[1.0.0, )"",
-                        },
-                        ""a"": {
-                            ""version"": ""[1.0.0, )"",
-                        }
-                    },
                   ""frameworks"": {
                     ""net46"": {
+                        ""framework"": ""net46"",
                         ""dependencies"": {
                             ""b"": {
                                 ""version"": ""[1.0.0, )"",
@@ -447,12 +473,9 @@ namespace NuGet.ProjectModel.Test
                 }";
 
             var expectedJson = @"{
-                  ""dependencies"": {
-                    ""a"": ""[1.0.0, )"",
-                    ""b"": ""[1.0.0, )""
-                  },
                   ""frameworks"": {
                     ""net46"": {
+                      ""framework"": ""net46"",
                       ""dependencies"": {
                         ""a"": ""[1.0.0, )"",
                         ""b"": ""[1.0.0, )""
@@ -481,13 +504,9 @@ namespace NuGet.ProjectModel.Test
         {
             // Arrange
             var json = @"{
-                    ""dependencies"": {
-                        ""a"": {
-                                ""version"": ""1.0.0"",
-                        },
-                    },
                   ""frameworks"": {
                     ""net46"": {
+                        ""framework"": ""net46"",
                         ""dependencies"": {
                             ""a"": {
                                 ""version"": ""1.0.0"",
@@ -501,11 +520,9 @@ namespace NuGet.ProjectModel.Test
                 }";
 
             var expectedJson = @"{
-                  ""dependencies"": {
-                    ""a"": ""[1.0.0, )""
-                  },
                   ""frameworks"": {
                     ""net46"": {
+                      ""framework"": ""net46"",
                       ""dependencies"": {
                         ""a"": ""[1.0.0, )""
                       },
@@ -526,6 +543,7 @@ namespace NuGet.ProjectModel.Test
             var json = @"{
                   ""frameworks"": {
                     ""net46"": {
+                        ""framework"": ""net46"",
                         ""dependencies"": {
                             ""a"": {
                                 ""version"": ""[1.0.0, )"",
@@ -555,22 +573,24 @@ namespace NuGet.ProjectModel.Test
             var json = @"{
                   ""frameworks"": {
                     ""netcoreapp3.0"": {
+                        ""framework"": ""netcoreapp3.0"",
                         ""dependencies"": {
                             ""a"": {
                                 ""version"": ""[1.0.0, )"",
                                 ""autoReferenced"": true
                             }
                         },
-                        ""runtimeIdentifierGraphPath"": ""path\\to\\sdk\\3.0.100\\runtime.json"" 
+                        ""runtimeIdentifierGraphPath"": ""path\\to\\sdk\\3.0.100\\runtime.json""
                     },
                     ""netcoreapp3.1"": {
+                        ""framework"": ""netcoreapp3.1"",
                         ""dependencies"": {
                             ""a"": {
                                 ""version"": ""[2.0.0, )"",
                                 ""autoReferenced"": true
                             }
                         },
-                        ""runtimeIdentifierGraphPath"": ""path\\to\\sdk\\3.1.100\\runtime.json"" 
+                        ""runtimeIdentifierGraphPath"": ""path\\to\\sdk\\3.1.100\\runtime.json""
                     }
                   }
                 }";
@@ -586,6 +606,7 @@ namespace NuGet.ProjectModel.Test
             var json = @"{
                   ""frameworks"": {
                     ""net46"": {
+                        ""framework"": ""net46"",
                         ""dependencies"": {
                             ""a"": {
                                 ""version"": ""[1.0.0, )"",
@@ -607,6 +628,7 @@ namespace NuGet.ProjectModel.Test
             var json = @"{
                   ""frameworks"": {
                     ""net46"": {
+                        ""framework"": ""net46"",
                         ""dependencies"": {
                             ""a"": {
                                 ""version"": ""[1.0.0, )"",
@@ -628,6 +650,7 @@ namespace NuGet.ProjectModel.Test
             var json = @"{
                   ""frameworks"": {
                     ""net46"": {
+                        ""framework"": ""net46"",
                         ""dependencies"": {
                             ""a"": {
                                 ""version"": ""[1.0.0, )"",
@@ -645,7 +668,7 @@ namespace NuGet.ProjectModel.Test
         [Fact]
         public void RoundTripTargetFrameworkAliases()
         {
-            var json = @"{  
+            var json = @"{
                         ""restore"": {
                         ""projectUniqueName"": ""projectUniqueName"",
                         ""projectName"": ""projectName"",
@@ -655,14 +678,16 @@ namespace NuGet.ProjectModel.Test
                         ""outputPath"": ""outputPath"",
                         ""projectStyle"": ""PackageReference"",
                         ""frameworks"": {
-                          ""net45"": {
+                          ""minNetVersion"": {
+                            ""framework"": ""net45"",
                             ""targetAlias"" : ""minNetVersion"",
                             ""projectReferences"": {}
                           }
                         }
                       },
                   ""frameworks"": {
-                    ""net46"": {
+                    ""minNetVersion"": {
+                        ""framework"" : ""net45"",
                         ""targetAlias"" : ""minNetVersion"",
                         ""dependencies"": {
                             ""a"": {
@@ -686,6 +711,7 @@ namespace NuGet.ProjectModel.Test
             var json = @"{
                   ""frameworks"": {
                     ""net5.0"": {
+                        ""framework"": ""net5.0"",
                         ""dependencies"": {
                             ""a"": {
                                 ""version"": ""[1.0.0, )"",
@@ -698,6 +724,173 @@ namespace NuGet.ProjectModel.Test
                         ],
                         ""assetTargetFallback"" : true,
                         ""secondaryFramework"" : ""native""
+                    }
+                  }
+                }";
+
+            // Act & Assert
+            VerifyJsonPackageSpecRoundTrip(json);
+        }
+
+        [Fact]
+        public void Write_RestoreAuditProperties_RoundTrips()
+        {
+            // Arrange
+            var json = @"{
+                  ""restore"": {
+                    ""projectUniqueName"": ""projectUniqueName"",
+                    ""restoreAuditProperties"": {
+                        ""enableAudit"": ""true"",
+                        ""auditLevel"": ""moderate"",
+                        ""auditMode"": ""all""
+                    }
+                  }
+                }";
+
+            // Act & Assert
+            VerifyJsonPackageSpecRoundTrip(json);
+        }
+
+        [Fact]
+        public void Write_RestoreSdkAnalysisLevel_RoundTrips()
+        {
+            // Arrange
+            var json = @"{
+                  ""restore"": {
+                    ""projectUniqueName"": ""projectUniqueName"",
+                    ""SdkAnalysisLevel"": ""9.0.100""
+                  }
+                }";
+
+            // Act & Assert
+            VerifyJsonPackageSpecRoundTrip(json);
+        }
+
+        [Fact]
+        public void Write_RestoreUsingMicrosoftNetSdk_RoundTrips()
+        {
+            // Arrange
+            var json = @"{
+                  ""restore"": {
+                    ""projectUniqueName"": ""projectUniqueName"",
+                    ""UsingMicrosoftNETSdk"": false
+                  }
+                }";
+
+            // Act & Assert
+            VerifyJsonPackageSpecRoundTrip(json);
+        }
+
+        [Fact]
+        public void Write_RestoreAuditPropertiesWithSuppressions_RoundTrips()
+        {
+            // Arrange
+            var json = @"{
+                  ""restore"": {
+                    ""projectUniqueName"": ""projectUniqueName"",
+                    ""restoreAuditProperties"": {
+                        ""enableAudit"": ""true"",
+                        ""auditLevel"": ""moderate"",
+                        ""auditMode"": ""all"",
+                        ""suppressedAdvisories"": {
+                            ""https://github.com/advisories/example-cve-1"": null,
+                            ""https://github.com/advisories/example-cve-2"": null
+                        },
+                    }
+                  }
+                }";
+
+            // Act & Assert
+            VerifyJsonPackageSpecRoundTrip(json);
+        }
+
+        [Fact]
+        public void RestoreMetadataWithMacros_RoundTrips()
+        {
+            // Arrange
+            var json = @"{
+                            ""restore"": {
+    ""projectUniqueName"": ""C:\\users\\me\\source\\code\\project.csproj"",
+    ""projectName"": ""project"",
+    ""projectPath"": ""C:\\users\\me\\source\\code\\project.csproj"",
+    ""projectJsonPath"": ""C:\\users\\me\\source\\code\\project.json"",
+    ""packagesPath"": ""$(User).nuget\\packages"",
+    ""outputPath"": ""C:\\users\\me\\source\\code\\obj"",
+    ""projectStyle"": ""PackageReference"",
+    ""crossTargeting"": true,
+    ""fallbackFolders"": [
+        ""C:\\Program Files\\dotnet\\sdk\\NuGetFallbackFolder"",
+        ""$(User)fallbackFolder""
+
+
+    ],
+    ""configFilePaths"": [
+        ""$(User)source\\code\\NuGet.Config"",
+        ""$(User)AppData\\Roaming\\NuGet\\NuGet.Config"",
+        ""C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config"",
+        ""C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config""
+    ]
+  }
+}";
+            var environmentReader = new TestEnvironmentVariableReader(new Dictionary<string, string>()
+                {
+                    { MacroStringsUtility.NUGET_ENABLE_EXPERIMENTAL_MACROS, "true" }
+            });
+
+            // Act
+            var actual = PackageSpecTestUtility.RoundTripJson(json, environmentReader);
+
+            // Assert
+            var metadata = actual.RestoreMetadata;
+            var userSettingsDirectory = NuGetEnvironment.GetFolderPath(NuGetFolderPath.UserSettingsDirectory);
+
+            Assert.NotNull(metadata);
+            metadata.PackagesPath.Should().Be(@$"{userSettingsDirectory}.nuget\packages");
+
+            metadata.ConfigFilePaths.Should().Contain(@$"{userSettingsDirectory}source\code\NuGet.Config");
+            metadata.ConfigFilePaths.Should().Contain(@"C:\Program Files (x86)\NuGet\Config\Microsoft.VisualStudio.FallbackLocation.config");
+            metadata.ConfigFilePaths.Should().Contain(@"C:\Program Files (x86)\NuGet\Config\Microsoft.VisualStudio.Offline.config");
+            metadata.ConfigFilePaths.Should().Contain(@$"{userSettingsDirectory}AppData\Roaming\NuGet\NuGet.Config");
+
+            metadata.FallbackFolders.Should().Contain(@"C:\Program Files\dotnet\sdk\NuGetFallbackFolder");
+            metadata.FallbackFolders.Should().Contain(@$"{userSettingsDirectory}fallbackFolder");
+        }
+
+        [Fact]
+        public void RoundTripPackagesToPrune()
+        {
+            // Arrange
+            var json = @"{
+                  ""frameworks"": {
+                    ""net46"": {
+                        ""framework"": ""net46"",
+                        ""packagesToPrune"": {
+                            ""a"": ""(, 2.1.3]""
+                        }
+                    }
+                  }
+                }";
+
+            // Act & Assert
+            VerifyJsonPackageSpecRoundTrip(json);
+        }
+
+
+        [Fact]
+        public void RoundTripAliasedFrameworks()
+        {
+            // Arrange
+            var json = @"{
+                  ""frameworks"": {
+                    ""latestNet"": {
+                        ""framework"": ""net10.0"",
+                        ""targetAlias"": ""latestNet"",
+                        ""dependencies"": {
+                            ""a"": {
+                                ""version"": ""[1.0.0, )"",
+                                ""autoReferenced"": true
+                            }
+                        }
                     }
                   }
                 }";
@@ -730,14 +923,14 @@ namespace NuGet.ProjectModel.Test
             {
                 IncludeType = LibraryIncludeFlags.Build,
                 LibraryRange = libraryRangeWithNoWarn,
-                NoWarn = new List<NuGetLogCode> { NuGetLogCode.NU1500, NuGetLogCode.NU1601 }
+                NoWarn = [NuGetLogCode.NU1500, NuGetLogCode.NU1601]
             };
 
             var libraryDependencyWithNoWarnGlobal = new LibraryDependency()
             {
                 IncludeType = LibraryIncludeFlags.Build,
                 LibraryRange = libraryRangeWithNoWarnGlobal,
-                NoWarn = new List<NuGetLogCode> { NuGetLogCode.NU1500, NuGetLogCode.NU1608 }
+                NoWarn = [NuGetLogCode.NU1500, NuGetLogCode.NU1608]
             };
 
             var nugetFramework = new NuGetFramework("frameworkIdentifier", new Version("1.2.3"), "frameworkProfile");
@@ -745,35 +938,6 @@ namespace NuGet.ProjectModel.Test
 
             var packageSpec = new PackageSpec()
             {
-#pragma warning disable CS0612 // Type or member is obsolete
-                Authors = unsortedArray,
-                BuildOptions = new BuildOptions() { OutputName = "outputName" },
-                ContentFiles = new List<string>(unsortedArray),
-                Copyright = "copyright",
-                Dependencies = new List<LibraryDependency>() { libraryDependency, libraryDependencyWithNoWarnGlobal },
-                Description = "description",
-                HasVersionSnapshot = true,
-                IconUrl = "iconUrl",
-                IsDefaultVersion = false,
-                Language = "language",
-                LicenseUrl = "licenseUrl",
-                Owners = unsortedArray,
-                PackOptions = new PackOptions()
-                {
-                    IncludeExcludeFiles = new IncludeExcludeFiles()
-                    {
-                        Exclude = unsortedReadOnlyList,
-                        ExcludeFiles = unsortedReadOnlyList,
-                        Include = unsortedReadOnlyList,
-                        IncludeFiles = unsortedReadOnlyList
-                    }
-                },
-                ProjectUrl = "projectUrl",
-                ReleaseNotes = "releaseNotes",
-                RequireLicenseAcceptance = true,
-                Summary = "summary",
-                Tags = unsortedArray,
-#pragma warning restore CS0612 // Type or member is obsolete
                 Name = "name",
                 FilePath = "filePath",
                 RestoreMetadata = new ProjectRestoreMetadata()
@@ -799,7 +963,6 @@ namespace NuGet.ProjectModel.Test
                             new ProjectRestoreMetadataFrameworkInfo(nugetFramework)
                         }
                 },
-                Title = "title",
                 Version = new NuGetVersion("1.2.3")
             };
 
@@ -812,12 +975,6 @@ namespace NuGet.ProjectModel.Test
             {
                 packageSpec.RestoreMetadata.ProjectWideWarningProperties = warningProperties;
             }
-
-#pragma warning disable CS0612 // Type or member is obsolete
-            packageSpec.PackInclude.Add("b", "d");
-            packageSpec.PackInclude.Add("a", "e");
-            packageSpec.PackInclude.Add("c", "f");
-#pragma warning restore CS0612 // Type or member is obsolete
 
             var runtimeDependencySet = new RuntimeDependencySet("id", new[]
             {
@@ -834,24 +991,18 @@ namespace NuGet.ProjectModel.Test
 
             packageSpec.RuntimeGraph = new RuntimeGraph(runtimes, compatibilityProfiles);
 
-#pragma warning disable CS0612 // Type or member is obsolete
-            packageSpec.Scripts.Add("b", unsortedArray);
-            packageSpec.Scripts.Add("a", unsortedArray);
-            packageSpec.Scripts.Add("c", unsortedArray);
-#pragma warning restore CS0612 // Type or member is obsolete
-
             packageSpec.TargetFrameworks.Add(new TargetFrameworkInformation()
             {
-                Dependencies = new List<LibraryDependency>(),
+                Dependencies = [libraryDependency, libraryDependencyWithNoWarnGlobal],
                 FrameworkName = nugetFramework,
-                Imports = new List<NuGetFramework>() { nugetFramework },
+                Imports = [nugetFramework],
             });
 
             packageSpec.TargetFrameworks.Add(new TargetFrameworkInformation()
             {
-                Dependencies = new List<LibraryDependency>() { libraryDependencyWithNoWarn },
+                Dependencies = [libraryDependencyWithNoWarn, libraryDependency, libraryDependencyWithNoWarnGlobal],
                 FrameworkName = nugetFrameworkWithNoWarn,
-                Imports = new List<NuGetFramework>() { nugetFrameworkWithNoWarn },
+                Imports = [nugetFrameworkWithNoWarn],
                 Warn = true
             });
 

@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -101,6 +103,12 @@ namespace NuGet.CommandLine
         [Option(typeof(NuGetCommand), "PackageCommandConfigFile")]
         public new string ConfigFile { get; set; }
 
+        [Option(typeof(NuGetCommand), "PackageCommandDeterministic")]
+        public bool Deterministic { get; set; }
+
+        [Option(typeof(NuGetCommand), "PackageCommandDeterministicTimestamp")]
+        public string DeterministicTimestamp { get; set; }
+
         public override void ExecuteCommand()
         {
             var packArgs = new PackArgs();
@@ -109,6 +117,8 @@ namespace NuGet.CommandLine
             packArgs.OutputDirectory = OutputDirectory;
             packArgs.BasePath = BasePath;
             packArgs.MsBuildDirectory = new Lazy<string>(() => MsBuildUtility.GetMsBuildDirectoryFromMsBuildPath(MSBuildPath, MSBuildVersion, Console).Value.Path);
+            packArgs.Deterministic = Deterministic;
+            packArgs.DeterministicTimestamp = DeterministicTimestamp;
 
             if (!string.IsNullOrEmpty(PackagesDirectory))
             {

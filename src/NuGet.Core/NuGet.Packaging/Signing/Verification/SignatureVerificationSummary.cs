@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography.X509Certificates;
 
 namespace NuGet.Packaging.Signing
 {
@@ -23,10 +24,39 @@ namespace NuGet.Packaging.Signing
         /// </summary>
         public SignatureVerificationStatusFlags Flags { get; }
 
+        internal X509ChainStatusFlags SignerChainStatusFlags { get; set; }
+
+        internal X509ChainStatusFlags TimestampChainStatusFlags { get; set; }
+
+        // Observations on retained chains include permitted conditions; rejection masks contain only enforced conditions.
+        internal X509ChainStatusFlags SignerDecisionRelevantChainStatusFlags { get; set; }
+
+        internal X509ChainStatusFlags TimestampDecisionRelevantChainStatusFlags { get; set; }
+
+        internal X509ChainStatusFlags SignerChainRejectionFlags { get; set; }
+
+        internal X509ChainStatusFlags TimestampChainRejectionFlags { get; set; }
+
+        internal bool SignerHasNonX509Rejection { get; set; }
+
+        internal bool TimestampHasNonX509Rejection { get; set; }
+
+        internal SignatureChainEvaluationStatus SignerChainEvaluationStatus { get; set; }
+
+        internal SignatureChainEvaluationStatus TimestampChainEvaluationStatus { get; set; }
+
+        internal SignaturePlacement Placement { get; set; }
+
+        internal SignatureVerificationRejectionReasons SignerRejectionReasons { get; set; }
+
+        internal SignatureVerificationRejectionReasons TimestampRejectionReasons { get; set; }
+
+        internal SignatureVerificationRejectionReasons RejectionReasons => SignerRejectionReasons | TimestampRejectionReasons;
+
         /// <summary>
         /// Timestamp used to validate certificate.
         /// </summary>
-        public Timestamp Timestamp { get; }
+        public Timestamp? Timestamp { get; }
 
         /// <summary>
         /// Expiration Date and Time for signature
@@ -40,7 +70,7 @@ namespace NuGet.Packaging.Signing
             SignatureType signatureType,
             SignatureVerificationStatus status,
             SignatureVerificationStatusFlags flags,
-            Timestamp timestamp,
+            Timestamp? timestamp,
             DateTimeOffset? expirationTime,
             IEnumerable<SignatureLog> issues)
         {
@@ -56,7 +86,7 @@ namespace NuGet.Packaging.Signing
             SignatureType signatureType,
             SignatureVerificationStatus status,
             SignatureVerificationStatusFlags flags,
-            Timestamp timestamp,
+            Timestamp? timestamp,
             IEnumerable<SignatureLog> issues)
             : this(signatureType, status, flags, timestamp, expirationTime: null, issues: issues)
         {

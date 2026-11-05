@@ -16,7 +16,7 @@ namespace NuGet.Protocol.Plugins
         /// <summary>
         /// Gets the password.
         /// </summary>
-        public string Password { get; }
+        public string? Password { get; }
 
         /// <summary>
         /// Gets the response code.
@@ -27,9 +27,9 @@ namespace NuGet.Protocol.Plugins
         /// <summary>
         /// Gets the username.
         /// </summary>
-        public string Username { get; }
+        public string? Username { get; }
 
-        public IReadOnlyList<string> AuthenticationTypes { get; }
+        public IReadOnlyList<string>? AuthenticationTypes { get; }
 
 
         /// <summary>
@@ -41,9 +41,9 @@ namespace NuGet.Protocol.Plugins
         [JsonConstructor]
         public GetCredentialsResponse(
             MessageResponseCode responseCode,
-            string username,
-            string password,
-            IReadOnlyList<string> authenticationTypes = null)
+            string? username,
+            string? password,
+            IReadOnlyList<string>? authenticationTypes = null)
         {
             if (!Enum.IsDefined(typeof(MessageResponseCode), responseCode))
             {

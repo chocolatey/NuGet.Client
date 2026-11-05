@@ -22,7 +22,7 @@ namespace NuGet.DependencyResolver.Tests
         public void Constructor_ThrowsForNullDependencyProvider()
         {
             var exception = Assert.Throws<ArgumentNullException>(
-                () => new LocalDependencyProvider(dependencyProvider: null));
+                () => new LocalDependencyProvider(dependencyProvider: null!));
 
             Assert.Equal("dependencyProvider", exception.ParamName);
         }
@@ -52,7 +52,7 @@ namespace NuGet.DependencyResolver.Tests
             {
                 var exception = await Assert.ThrowsAsync<ArgumentNullException>(
                     () => provider.FindLibraryAsync(
-                        libraryRange: null,
+                        libraryRange: null!,
                         targetFramework: NuGetFramework.Parse("net45"),
                         cacheContext: sourceCacheContext,
                         logger: NullLogger.Instance,
@@ -72,7 +72,7 @@ namespace NuGet.DependencyResolver.Tests
                 var exception = await Assert.ThrowsAsync<ArgumentNullException>(
                     () => provider.FindLibraryAsync(
                         new LibraryRange(name: "a", typeConstraint: new LibraryDependencyTarget()),
-                        targetFramework: null,
+                        targetFramework: null!,
                         cacheContext: sourceCacheContext,
                         logger: NullLogger.Instance,
                         cancellationToken: CancellationToken.None));
@@ -88,7 +88,8 @@ namespace NuGet.DependencyResolver.Tests
 
             dependencyProvider.Setup(x => x.GetLibrary(
                     It.IsNotNull<LibraryRange>(),
-                    It.IsNotNull<NuGetFramework>()))
+                    It.IsNotNull<NuGetFramework>(),
+                    It.IsAny<string>()))
                 .Returns<Library>(null);
 
             var provider = new LocalDependencyProvider(dependencyProvider.Object);
@@ -111,13 +112,16 @@ namespace NuGet.DependencyResolver.Tests
         {
             var library = new Library()
             {
-                Identity = new LibraryIdentity()
+                Identity = new LibraryIdentity("a", new NuGetVersion(1, 0, 0), LibraryType.Package),
+                LibraryRange = new LibraryRange(name: "a"),
+                Dependencies = Array.Empty<LibraryDependency>()
             };
             var dependencyProvider = new Mock<IDependencyProvider>();
 
             dependencyProvider.Setup(x => x.GetLibrary(
                     It.IsNotNull<LibraryRange>(),
-                    It.IsNotNull<NuGetFramework>()))
+                    It.IsNotNull<NuGetFramework>(),
+                    It.IsAny<string>()))
                 .Returns(library);
 
             var provider = new LocalDependencyProvider(dependencyProvider.Object);
@@ -144,7 +148,7 @@ namespace NuGet.DependencyResolver.Tests
             {
                 var exception = await Assert.ThrowsAsync<ArgumentNullException>(
                     () => provider.GetDependenciesAsync(
-                        libraryIdentity: null,
+                        libraryIdentity: null!,
                         targetFramework: NuGetFramework.Parse("net45"),
                         cacheContext: sourceCacheContext,
                         logger: NullLogger.Instance,
@@ -164,7 +168,7 @@ namespace NuGet.DependencyResolver.Tests
                 var exception = await Assert.ThrowsAsync<ArgumentNullException>(
                     () => provider.GetDependenciesAsync(
                         new LibraryIdentity(name: "a", version: NuGetVersion.Parse("1.0.0"), type: LibraryType.Package),
-                        targetFramework: null,
+                        targetFramework: null!,
                         cacheContext: sourceCacheContext,
                         logger: NullLogger.Instance,
                         cancellationToken: CancellationToken.None));
@@ -184,14 +188,16 @@ namespace NuGet.DependencyResolver.Tests
                     type: LibraryType.Package),
                 Dependencies = new List<LibraryDependency>()
                     {
-                        new LibraryDependency()
-                    }
+                        new LibraryDependency(new LibraryRange("b"))
+                    },
+                LibraryRange = new LibraryRange("a")
             };
             var dependencyProvider = new Mock<IDependencyProvider>();
 
             dependencyProvider.Setup(x => x.GetLibrary(
                     It.IsNotNull<LibraryRange>(),
-                    It.IsNotNull<NuGetFramework>()))
+                    It.IsNotNull<NuGetFramework>(),
+                    It.IsAny<string>()))
                 .Returns(library);
 
             var provider = new LocalDependencyProvider(dependencyProvider.Object);

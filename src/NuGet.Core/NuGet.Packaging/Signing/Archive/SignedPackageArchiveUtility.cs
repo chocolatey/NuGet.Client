@@ -5,12 +5,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
-#if IS_SIGNING_SUPPORTED
 using System.Security.Cryptography.Pkcs;
-#endif
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,9 +39,8 @@ namespace NuGet.Packaging.Signing
 
                 // Look for signature central directory record
                 reader.BaseStream.Seek(endOfCentralDirectoryRecord.OffsetOfStartOfCentralDirectory, SeekOrigin.Begin);
-                CentralDirectoryHeader centralDirectoryHeader;
 
-                while (CentralDirectoryHeader.TryRead(reader, out centralDirectoryHeader))
+                while (CentralDirectoryHeader.TryRead(reader, out CentralDirectoryHeader? centralDirectoryHeader))
                 {
                     if (IsPackageSignatureFileEntry(
                         centralDirectoryHeader.FileName,
@@ -52,8 +50,7 @@ namespace NuGet.Packaging.Signing
                         reader.BaseStream.Seek(centralDirectoryHeader.RelativeOffsetOfLocalHeader, SeekOrigin.Begin);
 
                         // Make sure local file header exists
-                        LocalFileHeader localFileHeader;
-                        if (!LocalFileHeader.TryRead(reader, out localFileHeader))
+                        if (!LocalFileHeader.TryRead(reader, out LocalFileHeader? localFileHeader))
                         {
                             throw new InvalidDataException(Strings.ErrorInvalidPackageArchive);
                         }
@@ -76,7 +73,7 @@ namespace NuGet.Packaging.Signing
         /// <remarks>Callers should first verify that a package is signed before calling this method.</remarks>
         /// <param name="reader">A binary reader for a signed package.</param>
         /// <returns>A readable stream.</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="reader" /> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="reader" /> is <see langword="null" />.</exception>
         /// <exception cref="SignatureException">Thrown if a package signature file is invalid or missing.</exception>
         public static Stream OpenPackageSignatureFileStream(BinaryReader reader)
         {
@@ -104,7 +101,22 @@ namespace NuGet.Packaging.Signing
             var buffer = new byte[localFileHeader.UncompressedSize];
 
             reader.BaseStream.Seek(offsetToData, SeekOrigin.Begin);
-            reader.BaseStream.Read(buffer, offset: 0, count: buffer.Length);
+#if NET
+            reader.BaseStream.ReadExactly(buffer, offset: 0, count: buffer.Length);
+#else
+            int count = buffer.Length;
+            int offset = 0;
+            while (count > 0)
+            {
+                int read = reader.BaseStream.Read(buffer, offset, count);
+                if (read <= 0)
+                {
+                    throw new EndOfStreamException();
+                }
+                offset += read;
+                count -= read;
+            }
+#endif
 
             return new MemoryStream(buffer, writable: false);
         }
@@ -115,9 +127,7 @@ namespace NuGet.Packaging.Signing
         {
             reader.BaseStream.Seek(signatureCentralDirectoryHeader.OffsetToLocalFileHeader, SeekOrigin.Begin);
 
-            LocalFileHeader header;
-
-            if (!LocalFileHeader.TryRead(reader, out header))
+            if (!LocalFileHeader.TryRead(reader, out LocalFileHeader? header))
             {
                 throw new SignatureException(NuGetLogCode.NU3005, Strings.InvalidPackageSignatureFile);
             }
@@ -170,9 +180,7 @@ namespace NuGet.Packaging.Signing
 
             reader.BaseStream.Seek(endOfCentralDirectoryRecord.OffsetOfStartOfCentralDirectory, SeekOrigin.Begin);
 
-            CentralDirectoryHeader centralDirectoryHeader;
-
-            while (CentralDirectoryHeader.TryRead(reader, out centralDirectoryHeader))
+            while (CentralDirectoryHeader.TryRead(reader, out CentralDirectoryHeader? centralDirectoryHeader))
             {
                 if (HasZip64ExtendedInformationExtraField(centralDirectoryHeader))
                 {
@@ -188,9 +196,7 @@ namespace NuGet.Packaging.Signing
 
                 reader.BaseStream.Position = centralDirectoryHeader.RelativeOffsetOfLocalHeader;
 
-                LocalFileHeader localFileHeader;
-
-                if (LocalFileHeader.TryRead(reader, out localFileHeader) &&
+                if (LocalFileHeader.TryRead(reader, out LocalFileHeader? localFileHeader) &&
                     HasZip64ExtendedInformationExtraField(localFileHeader))
                 {
                     return true;
@@ -204,9 +210,7 @@ namespace NuGet.Packaging.Signing
 
         private static bool HasZip64ExtendedInformationExtraField(CentralDirectoryHeader header)
         {
-            IReadOnlyList<ExtraField> extraFields;
-
-            if (ExtraField.TryRead(header, out extraFields))
+            if (ExtraField.TryRead(header, out IReadOnlyList<ExtraField>? extraFields))
             {
                 return extraFields.Any(extraField => extraField is Zip64ExtendedInformationExtraField);
             }
@@ -216,9 +220,7 @@ namespace NuGet.Packaging.Signing
 
         private static bool HasZip64ExtendedInformationExtraField(LocalFileHeader header)
         {
-            IReadOnlyList<ExtraField> extraFields;
-
-            if (ExtraField.TryRead(header, out extraFields))
+            if (ExtraField.TryRead(header, out IReadOnlyList<ExtraField>? extraFields))
             {
                 return extraFields.Any(extraField => extraField is Zip64ExtendedInformationExtraField);
             }
@@ -226,7 +228,6 @@ namespace NuGet.Packaging.Signing
             return false;
         }
 
-#if IS_SIGNING_SUPPORTED
         /// <summary>
         /// Removes repository primary signature (if it exists) or any repository countersignature (if it exists).
         /// </summary>
@@ -251,7 +252,7 @@ namespace NuGet.Packaging.Signing
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            PrimarySignature primarySignature;
+            PrimarySignature? primarySignature;
 
             using (var packageReader = new PackageArchiveReader(input, leaveStreamOpen: true))
             {
@@ -320,7 +321,7 @@ namespace NuGet.Packaging.Signing
             return false;
         }
 
-        private static bool TryRemoveRepositoryCountersignatures(SignedCms signedCms, out SignedCms updatedSignedCms)
+        private static bool TryRemoveRepositoryCountersignatures(SignedCms signedCms, [NotNullWhen(returnValue: true)] out SignedCms? updatedSignedCms)
         {
             updatedSignedCms = null;
 
@@ -512,39 +513,13 @@ namespace NuGet.Packaging.Signing
 
                 hashAlgorithm.TransformFinalBlock(Array.Empty<byte>(), inputOffset: 0, inputCount: 0);
 
-                return CompareHash(expectedHash, hashAlgorithm.Hash);
+                return CompareHash(expectedHash, hashAlgorithm.Hash!);
             }
             // If exception is throw in means the archive was not a valid package. It has been tampered, return false.
             catch { }
 
             return false;
         }
-#else
-
-        public static Task<bool> RemoveRepositorySignaturesAsync(
-            Stream input,
-            Stream output,
-            CancellationToken cancellationToken)
-        {
-            throw new NotImplementedException();
-        }
-
-        internal static void SignZip(MemoryStream signatureStream, BinaryReader reader, BinaryWriter writer)
-        {
-            throw new NotImplementedException();
-        }
-
-        internal static void UnsignZip(BinaryReader reader, BinaryWriter writer)
-        {
-            throw new NotImplementedException();
-        }
-
-        internal static void VerifySignedZipIntegrity(BinaryReader reader, HashAlgorithm hashAlgorithm, byte[] expectedHash)
-        {
-            throw new NotImplementedException();
-        }
-
-#endif
 
         private static List<CentralDirectoryHeaderMetadata> RemoveSignatureAndOrderByOffset(SignedPackageArchiveMetadata metadata)
         {
@@ -672,5 +647,6 @@ namespace NuGet.Packaging.Signing
             }
             return true;
         }
+
     }
 }

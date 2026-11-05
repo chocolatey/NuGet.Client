@@ -126,17 +126,18 @@ namespace NuGet.Commands.Test
                     ""runtimes"": {
                         ""unix"": {}
                     },
-                    ""dependencies"": {
-                        ""packageA"": ""1.0.0"",
-                        ""packageB"": ""1.0.0""
-                    },
                     ""frameworks"": {
-                        ""_FRAMEWORK_"": {}
+                        ""_FRAMEWORK_"": {
+                            ""dependencies"": {
+                                ""packageA"": ""1.0.0"",
+                                ""packageB"": ""1.0.0""
+                            }
+                        }
                     }
                 }".Replace("_FRAMEWORK_", framework));
 
                 var specPath = Path.Combine(projectDir, "TestProject", "project.json");
-                var spec = JsonPackageSpecReader.GetPackageSpec(configJson.ToString(), "TestProject", specPath).EnsureProjectJsonRestoreMetadata();
+                var spec = JsonPackageSpecReader.GetPackageSpec(configJson.ToString(), "TestProject", specPath).WithTestRestoreMetadata();
 
                 var request = new TestRestoreRequest(spec, sources, packagesDir, logger);
                 request.LockFilePath = Path.Combine(projectDir, "project.lock.json");
@@ -193,17 +194,18 @@ namespace NuGet.Commands.Test
                     ""uwp.10.0.app"": {},
                     ""dnxcore50.app"": {}
                 },
-                ""dependencies"": {
-                    ""packageA"": ""1.0.0"",
-                    ""runtimes"": ""1.0.0""
-                },
                 ""frameworks"": {
-                    ""_FRAMEWORK_"": {}
+                    ""_FRAMEWORK_"": {
+                        ""dependencies"": {
+                            ""packageA"": ""1.0.0"",
+                            ""runtimes"": ""1.0.0""
+                        }
+                    }
                 }
             }".Replace("_FRAMEWORK_", framework));
 
                 var specPath = Path.Combine(projectDir, "TestProject", "project.json");
-                var spec = JsonPackageSpecReader.GetPackageSpec(configJson.ToString(), "TestProject", specPath).EnsureProjectJsonRestoreMetadata();
+                var spec = JsonPackageSpecReader.GetPackageSpec(configJson.ToString(), "TestProject", specPath).WithTestRestoreMetadata();
 
                 var request = new TestRestoreRequest(spec, sources, packagesDir, logger);
                 request.LockFilePath = Path.Combine(projectDir, "project.lock.json");
@@ -216,6 +218,7 @@ namespace NuGet.Commands.Test
 
                 // Assert
                 Assert.True(result.Success, logger.ShowMessages());
+                Assert.Equal(2, result.LockFile.Libraries.Count);
             }
         }
 

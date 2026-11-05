@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using Microsoft.Build.Framework;
 using Task = Microsoft.Build.Utilities.Task;
@@ -10,6 +12,7 @@ namespace NuGet.Build.Tasks
     /// <summary>
     /// A task that logs a message from the localized <see cref="Strings"/> resource.
     /// </summary>
+    [MSBuildMultiThreadableTask]
     public sealed class NuGetMessageTask : Task
     {
         [Required]

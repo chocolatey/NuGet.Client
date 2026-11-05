@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
@@ -17,7 +19,7 @@ namespace NuGet.VisualStudio
         /// <summary>
         /// Selects the framework from <paramref name="frameworks"/> that is nearest
         /// to the <paramref name="targetFramework"/>, according to NuGet's framework
-        /// compatibility rules. <c>null</c> is returned of none of the frameworks
+        /// compatibility rules. <see langword="null" /> is returned of none of the frameworks
         /// are compatible.
         /// </summary>
         /// <param name="targetFramework">The target framework.</param>
@@ -31,7 +33,7 @@ namespace NuGet.VisualStudio
         /// <summary>
         /// Selects the framework from <paramref name="frameworks"/> that is nearest
         /// to the <paramref name="targetFramework"/>, according to NuGet's framework
-        /// compatibility rules. <c>null</c> is returned of none of the frameworks
+        /// compatibility rules. <see langword="null" /> is returned of none of the frameworks
         /// are compatible.
         /// </summary>
         /// <param name="targetFramework">The target framework.</param>

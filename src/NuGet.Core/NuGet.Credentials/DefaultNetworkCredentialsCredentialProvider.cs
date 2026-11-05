@@ -5,7 +5,6 @@ using System;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using NuGet.Common;
 using NuGet.Configuration;
 
 namespace NuGet.Credentials
@@ -39,13 +38,18 @@ namespace NuGet.Credentials
         /// <param name="cancellationToken">Ignored.</param>
         public Task<CredentialResponse> GetAsync(
             Uri uri,
-            IWebProxy proxy,
+            IWebProxy? proxy,
             CredentialRequestType type,
-            string message,
+            string? message,
             bool isRetry,
             bool nonInteractive,
             CancellationToken cancellationToken)
         {
+            if (uri == null)
+            {
+                throw new ArgumentNullException(nameof(uri));
+            }
+
             if (isRetry)
             {
                 return Task.FromResult(new CredentialResponse(CredentialStatus.ProviderNotApplicable));

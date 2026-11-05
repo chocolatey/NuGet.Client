@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -15,12 +17,11 @@ namespace Test.Utility
     public class TestMSBuildNuGetProjectSystem : IMSBuildProjectSystem
     {
         private const string TestProjectName = "TestProjectName";
-        private const string TestProjectFileName = "Test.csproj";
 
         public Dictionary<string, string> References { get; }
         public HashSet<string> FrameworkReferences { get; }
         public HashSet<string> Files { get; }
-        private HashSet<string> FilesInProcessing { get; set; }
+        private HashSet<string> _filesInProcessing;
         public HashSet<string> ProcessedFiles { get; private set; }
         public HashSet<string> Imports { get; }
         public int BindingRedirectsCallCount { get; private set; }
@@ -178,29 +179,29 @@ namespace Test.Utility
 
         public Task BeginProcessingAsync()
         {
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         public void RegisterProcessedFiles(IEnumerable<string> files)
         {
-            if (FilesInProcessing == null)
+            if (_filesInProcessing == null)
             {
-                FilesInProcessing = new HashSet<string>(files);
+                _filesInProcessing = new HashSet<string>(files);
             }
 
             foreach (var file in files)
             {
-                FilesInProcessing.Add(file);
+                _filesInProcessing.Add(file);
             }
         }
 
         public Task EndProcessingAsync()
         {
             ++BatchCount;
-            ProcessedFiles = FilesInProcessing;
-            FilesInProcessing = null;
+            ProcessedFiles = _filesInProcessing;
+            _filesInProcessing = null;
 
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         public void DeleteDirectory(string path, bool recursive)

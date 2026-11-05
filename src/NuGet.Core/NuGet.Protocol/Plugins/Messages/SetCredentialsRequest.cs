@@ -20,22 +20,22 @@ namespace NuGet.Protocol.Plugins
         /// <summary>
         /// Gets the package source repository password.
         /// </summary>
-        public string Password { get; }
+        public string? Password { get; }
 
         /// <summary>
         /// Gets the proxy password.
         /// </summary>
-        public string ProxyPassword { get; }
+        public string? ProxyPassword { get; }
 
         /// <summary>
         /// Gets the proxy username.
         /// </summary>
-        public string ProxyUsername { get; }
+        public string? ProxyUsername { get; }
 
         /// <summary>
         /// Gets the package source repository username.
         /// </summary>
-        public string Username { get; }
+        public string? Username { get; }
 
         /// <summary>
         /// Initializes a new <see cref="SetCredentialsRequest" /> class.
@@ -47,10 +47,10 @@ namespace NuGet.Protocol.Plugins
         /// <param name="password">The package source repository password.</param>
         public SetCredentialsRequest(
             string packageSourceRepository,
-            string proxyUsername,
-            string proxyPassword,
-            string username,
-            string password)
+            string? proxyUsername,
+            string? proxyPassword,
+            string? username,
+            string? password)
         {
             if (string.IsNullOrEmpty(packageSourceRepository))
             {

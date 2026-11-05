@@ -36,7 +36,7 @@ namespace NuGet.Packaging
             {
                 var satelliteFilesInGroup = libItemGroup.Items
                     .Where(item =>
-                        Path.GetDirectoryName(item)
+                        Path.GetDirectoryName(item)!
                             .Split(Path.DirectorySeparatorChar)
                             .Contains(packageLanguage, StringComparer.OrdinalIgnoreCase));
 

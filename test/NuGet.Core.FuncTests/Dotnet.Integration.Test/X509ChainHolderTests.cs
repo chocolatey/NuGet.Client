@@ -4,7 +4,6 @@
 using System;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using NuGet.Common;
 using NuGet.Packaging.Signing;
 using Xunit;
 
@@ -20,7 +19,7 @@ namespace Dotnet.Integration.Test
         {
             using (X509ChainHolder chainHolder = X509ChainHolder.CreateForCodeSigning())
             {
-                X509ChainPolicy policy = chainHolder.Chain.ChainPolicy;
+                X509ChainPolicy policy = chainHolder.Chain2.ChainPolicy;
 
                 // Code signing certificates that chain to this root certificate are widely used on nuget.org.
                 // CN=DigiCert Assured ID Root CA, OU=www.digicert.com, O=DigiCert Inc, C=US
@@ -33,7 +32,7 @@ namespace Dotnet.Integration.Test
         {
             using (X509ChainHolder chainHolder = X509ChainHolder.CreateForTimestamping())
             {
-                X509ChainPolicy policy = chainHolder.Chain.ChainPolicy;
+                X509ChainPolicy policy = chainHolder.Chain2.ChainPolicy;
 
                 // Timestamping certificates that chain to this root certificate are widely used on nuget.org.
                 // CN=VeriSign Universal Root Certification Authority, OU="(c) 2008 VeriSign, Inc. - For authorized use only", OU=VeriSign Trust Network, O="VeriSign, Inc.", C=US
@@ -43,27 +42,16 @@ namespace Dotnet.Integration.Test
 
         private void Verify(X509ChainPolicy policy, string expectedFingerprint)
         {
-            if (RuntimeEnvironmentHelper.IsWindows)
-            {
-                Assert.Equal(X509ChainTrustMode.System, policy.TrustMode);
-            }
-            else if (RuntimeEnvironmentHelper.IsLinux || RuntimeEnvironmentHelper.IsMacOSX)
-            {
-                Assert.Equal(X509ChainTrustMode.CustomRootTrust, policy.TrustMode);
+            Assert.Equal(X509ChainTrustMode.CustomRootTrust, policy.TrustMode);
 
-                using (SHA256 hashAlgorithm = SHA256.Create())
+            using (SHA256 hashAlgorithm = SHA256.Create())
+            {
+                Assert.Contains(policy.CustomTrustStore, certificate =>
                 {
-                    Assert.Contains(policy.CustomTrustStore, certificate =>
-                    {
-                        string actualFingerprint = certificate.GetCertHashString(HashAlgorithmName.SHA256);
+                    string actualFingerprint = certificate.GetCertHashString(HashAlgorithmName.SHA256);
 
-                        return string.Equals(expectedFingerprint, actualFingerprint, StringComparison.OrdinalIgnoreCase);
-                    });
-                }
-            }
-            else
-            {
-                throw new PlatformNotSupportedException();
+                    return string.Equals(expectedFingerprint, actualFingerprint, StringComparison.OrdinalIgnoreCase);
+                });
             }
         }
     }

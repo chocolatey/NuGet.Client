@@ -3,15 +3,21 @@
 
 using System;
 using FluentAssertions;
+using Microsoft.VisualStudio.Sdk.TestFramework;
 using Moq;
 using Xunit;
 
 namespace NuGet.VisualStudio.Common.Test
 {
+
     public partial class OutputConsoleLoggerTests
     {
         public class Constructor : OutputConsoleLoggerTests
         {
+            public Constructor(GlobalServiceProvider sp)
+                : base(sp)
+            { }
+
             [Fact]
             public void When_null_visualStudioShell_is_passed_ArgumentNullException_is_thrown()
             {

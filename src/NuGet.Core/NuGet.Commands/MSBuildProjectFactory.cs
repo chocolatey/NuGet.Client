@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -23,8 +25,8 @@ namespace NuGet.Commands
         // Packaging folders
         private static readonly string SourcesFolder = PackagingConstants.Folders.Source;
 
-        private MSBuildPackTargetArgs PackTargetArgs { get; set; }
-        private PackArgs PackArgs { get; set; }
+        private MSBuildPackTargetArgs _packTargetArgs;
+        private PackArgs _packArgs;
 
         public void SetIncludeSymbols(bool includeSymbols)
         {
@@ -61,12 +63,12 @@ namespace NuGet.Commands
         {
             return new MSBuildProjectFactory()
             {
-                PackArgs = packArgs,
+                _packArgs = packArgs,
                 IsTool = packArgs.Tool,
                 Logger = packArgs.Logger,
                 MachineWideSettings = packArgs.MachineWideSettings,
                 Build = false,
-                PackTargetArgs = packArgs.PackTargetArgs,
+                _packTargetArgs = packArgs.PackTargetArgs,
                 Files = new HashSet<ManifestFile>(),
                 ProjectProperties = new Dictionary<string, string>()
             };
@@ -92,10 +94,10 @@ namespace NuGet.Commands
             var manifest = new Manifest(new ManifestMetadata(builder), Files);
             var manifestPath = PackCommandRunner.GetOutputPath(
                 builder,
-                PackArgs,
+                _packArgs,
                 IncludeSymbols,
                 builder.Version,
-                PackTargetArgs.NuspecOutputPath,
+                _packTargetArgs.NuspecOutputPath,
                 isNupkg: false);
 
             var manifestDirectory = Path.GetDirectoryName(manifestPath);
@@ -116,17 +118,17 @@ namespace NuGet.Commands
 
         private void AddOutputFiles()
         {
-            if (PackTargetArgs.IncludeBuildOutput)
+            if (_packTargetArgs.IncludeBuildOutput)
             {
-                AddOutputLibFiles(PackTargetArgs.TargetPathsToSymbols, IncludeSymbols ? PackTargetArgs.AllowedOutputExtensionsInSymbolsPackageBuildOutputFolder : PackTargetArgs.AllowedOutputExtensionsInPackageBuildOutputFolder);
+                AddOutputLibFiles(_packTargetArgs.TargetPathsToSymbols, IncludeSymbols ? _packTargetArgs.AllowedOutputExtensionsInSymbolsPackageBuildOutputFolder : _packTargetArgs.AllowedOutputExtensionsInPackageBuildOutputFolder);
 
-                AddOutputLibFiles(PackTargetArgs.TargetPathsToAssemblies, IncludeSymbols ? PackTargetArgs.AllowedOutputExtensionsInSymbolsPackageBuildOutputFolder : PackTargetArgs.AllowedOutputExtensionsInPackageBuildOutputFolder);
+                AddOutputLibFiles(_packTargetArgs.TargetPathsToAssemblies, IncludeSymbols ? _packTargetArgs.AllowedOutputExtensionsInSymbolsPackageBuildOutputFolder : _packTargetArgs.AllowedOutputExtensionsInPackageBuildOutputFolder);
             }
         }
 
         private void AddOutputLibFiles(IEnumerable<OutputLibFile> libFiles, HashSet<string> allowedExtensions)
         {
-            var targetFolders = PackTargetArgs.BuildOutputFolder;
+            var targetFolders = _packTargetArgs.BuildOutputFolder;
             foreach (var file in libFiles)
             {
                 var extension = Path.GetExtension(file.FinalOutputPath);
@@ -158,7 +160,7 @@ namespace NuGet.Commands
                 var fileExtension = Path.GetExtension(packageFile.Source);
 
                 if (IncludeSymbols &&
-                    PackArgs.SymbolPackageFormat == SymbolPackageFormat.Snupkg &&
+                    _packArgs.SymbolPackageFormat == SymbolPackageFormat.Snupkg &&
                     !string.Equals(fileExtension, ".pdb", StringComparison.OrdinalIgnoreCase))
                 {
                     return false;
@@ -182,9 +184,8 @@ namespace NuGet.Commands
 
         private void AddContentFiles(PackageBuilder builder)
         {
-            foreach (var sourcePath in PackTargetArgs.ContentFiles.Keys)
+            foreach ((var sourcePath, var listOfContentMetadata) in _packTargetArgs.ContentFiles)
             {
-                var listOfContentMetadata = PackTargetArgs.ContentFiles[sourcePath];
                 foreach (var contentMetadata in listOfContentMetadata)
                 {
                     var target = contentMetadata.Target;
@@ -201,7 +202,7 @@ namespace NuGet.Commands
                     if (added && IsContentFile(contentMetadata.Target))
                     {
                         var includePath = PathUtility.GetRelativePath("contentFiles" + Path.DirectorySeparatorChar, packageFile.Target, '/');
-                        // This is just a check to see if the filename has already been appended to the target path. 
+                        // This is just a check to see if the filename has already been appended to the target path.
                         // We do this by comparing extensions of the file
                         if (!Path.GetExtension(includePath)
                                 .Equals(Path.GetExtension(sourcePath), StringComparison.OrdinalIgnoreCase))
@@ -225,9 +226,8 @@ namespace NuGet.Commands
 
         private void AddSourceFiles()
         {
-            foreach (var sourcePath in PackTargetArgs.SourceFiles.Keys)
+            foreach ((var sourcePath, var projectDirectory) in _packTargetArgs.SourceFiles)
             {
-                var projectDirectory = PackTargetArgs.SourceFiles[sourcePath];
                 var finalTargetPath = GetTargetPathForSourceFile(sourcePath, projectDirectory);
 
                 var packageFile = new ManifestFile()
@@ -293,7 +293,7 @@ namespace NuGet.Commands
 
         public WarningProperties GetWarningPropertiesForProject()
         {
-            return PackArgs.WarningProperties;
+            return _packArgs.WarningProperties;
         }
     }
 }

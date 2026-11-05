@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -394,7 +396,15 @@ namespace NuGetConsole.Host.PowerShell.Implementation
                         {
                             if (builder.Length > 0)
                             {
-                                builder.Remove(builder.Length - 1, 1);
+                                int removeCount = 1;
+                                if (builder.Length >= 2
+                                    && char.IsLowSurrogate(builder[builder.Length - 1])
+                                    && char.IsHighSurrogate(builder[builder.Length - 2]))
+                                {
+                                    removeCount = 2;
+                                }
+
+                                builder.Remove(builder.Length - removeCount, removeCount);
                                 NuGetUIThreadHelper.JoinableTaskFactory.Run(() => Console.WriteBackspaceAsync());
                             }
                         }

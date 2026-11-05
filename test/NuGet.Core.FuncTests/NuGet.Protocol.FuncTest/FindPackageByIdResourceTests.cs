@@ -1,11 +1,13 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using FluentAssertions;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Protocol.Core.Types;
@@ -25,7 +27,8 @@ namespace NuGet.Protocol.FuncTest
         {
             // Arrange
             var repo = Repository.Factory.GetCoreV3(packageSource);
-            var findPackageByIdResource = await repo.GetResourceAsync<FindPackageByIdResource>();
+            FindPackageByIdResource findPackageByIdResource = await repo.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None)
+                ?? throw new InvalidOperationException();
             var logger = new TestLogger();
 
             using (var context = new SourceCacheContext())
@@ -51,7 +54,8 @@ namespace NuGet.Protocol.FuncTest
         {
             // Arrange
             var repo = Repository.Factory.GetCoreV3(packageSource);
-            var findPackageByIdResource = await repo.GetResourceAsync<FindPackageByIdResource>();
+            FindPackageByIdResource findPackageByIdResource = await repo.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None)
+                ?? throw new InvalidOperationException();
             var logger = new TestLogger();
 
             using (var context = new SourceCacheContext())
@@ -77,7 +81,8 @@ namespace NuGet.Protocol.FuncTest
         {
             // Arrange
             var repo = Repository.Factory.GetCoreV3(packageSource);
-            var findPackageByIdResource = await repo.GetResourceAsync<FindPackageByIdResource>();
+            FindPackageByIdResource findPackageByIdResource = await repo.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None)
+                ?? throw new InvalidOperationException();
             var logger = new TestLogger();
 
             using (var context = new SourceCacheContext())
@@ -103,7 +108,8 @@ namespace NuGet.Protocol.FuncTest
         {
             // Arrange
             var repo = Repository.Factory.GetCoreV2(packageSource);
-            var findPackageByIdResource = await repo.GetResourceAsync<FindPackageByIdResource>();
+            FindPackageByIdResource findPackageByIdResource = await repo.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None)
+                ?? throw new InvalidOperationException();
             var logger = new TestLogger();
 
             using (var context = new SourceCacheContext())
@@ -129,7 +135,8 @@ namespace NuGet.Protocol.FuncTest
         {
             // Arrange
             var repo = Repository.Factory.GetCoreV2(packageSource);
-            var findPackageByIdResource = await repo.GetResourceAsync<FindPackageByIdResource>();
+            FindPackageByIdResource findPackageByIdResource = await repo.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None)
+                ?? throw new InvalidOperationException();
             var logger = new TestLogger();
 
             using (var context = new SourceCacheContext())
@@ -155,7 +162,8 @@ namespace NuGet.Protocol.FuncTest
         {
             // Arrange
             var repo = Repository.Factory.GetCoreV2(packageSource);
-            var findPackageByIdResource = await repo.GetResourceAsync<FindPackageByIdResource>();
+            FindPackageByIdResource findPackageByIdResource = await repo.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None)
+                ?? throw new InvalidOperationException();
             var logger = new TestLogger();
 
             using (var context = new SourceCacheContext())
@@ -195,7 +203,8 @@ namespace NuGet.Protocol.FuncTest
             var source = MockSourceRepository.Create(timeoutHandler);
 
             // Now arrange the NuGet Client SDK experience
-            var protocolResource = await source.GetResourceAsync<FindPackageByIdResource>();
+            FindPackageByIdResource protocolResource = await source.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None)
+                ?? throw new InvalidOperationException();
 
             using (var destination = new MemoryStream())
             {
@@ -213,6 +222,33 @@ namespace NuGet.Protocol.FuncTest
                 Assert.True(result);
                 Assert.Equal(1, timeoutHandler.FailedDownloads);
                 Assert.Equal(packageFileInfo.Length, destination.Length);
+            }
+        }
+
+        [PackageSourceTheory]
+        [PackageSourceData(TestSources.ProGet, TestSources.Klondike, TestSources.Artifactory, TestSources.MyGet)]
+        public async Task GetAllVersion_InvalidPackageId_Throws(string packageSource)
+        {
+            // Arrange
+            var repo = Repository.Factory.GetCoreV3(packageSource);
+            FindPackageByIdResource findPackageByIdResource = await repo.GetResourceAsync<FindPackageByIdResource>(CancellationToken.None)
+                ?? throw new InvalidOperationException();
+            var logger = new TestLogger();
+            string invalidPackageId = "../contoso";
+
+            using (var context = new SourceCacheContext())
+            {
+                context.NoCache = true;
+
+                // Act
+                var exception = await Assert.ThrowsAsync<Packaging.InvalidPackageIdException>(() => findPackageByIdResource.GetAllVersionsAsync(
+                    invalidPackageId,
+                    context,
+                    logger,
+                    CancellationToken.None));
+
+                // Assert
+                exception.Message.Should().Contain(string.Format(Protocol.Strings.Error_Invalid_package_id, invalidPackageId));
             }
         }
     }

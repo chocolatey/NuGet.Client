@@ -43,12 +43,14 @@ namespace NuGet.Configuration
 
         StoreCert,
 
-        /** Package Source Mapping **/
-
         PackageSourceMapping,
 
         PackageSource,
 
         Package,
+
+        AuditSources,
+
+        MinPublishAgeExceptions,
     }
 }

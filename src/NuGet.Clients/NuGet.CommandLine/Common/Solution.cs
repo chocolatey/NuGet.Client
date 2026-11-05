@@ -1,3 +1,5 @@
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -11,7 +13,7 @@ namespace NuGet.Common
     /// Represents the solution loaded from a sln file. We use the internal class
     /// Microsoft.Build.Construction.SolutionParser to parse sln files.
     /// </summary>
-    internal class Solution : MSBuildUser
+    internal class Solution
     {
         public List<ProjectInSolution> Projects { get; private set; }
 
@@ -22,36 +24,27 @@ namespace NuGet.Common
                 throw new ArgumentNullException(nameof(msbuildPath));
             }
 
-            _msbuildDirectory = msbuildPath;
+            using var msbuildAssemblyResolver = new MSBuildAssemblyResolver(msbuildPath);
 
-            AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler(AssemblyResolve);
+            Assembly microsoftBuildAssembly = msbuildAssemblyResolver.MicrosoftBuildAssembly;
 
-            try
+            switch (microsoftBuildAssembly.GetName().Version.Major)
             {
-                var msbuildAssembly = Assembly.LoadFrom(
-                    Path.Combine(msbuildPath, "Microsoft.Build.dll"));
-                switch (msbuildAssembly.GetName().Version.Major)
-                {
-                    case 4:
-                    case 12:
-                        LoadSolutionWithMsbuild4or12(msbuildAssembly, solutionFileName);
-                        break;
+                case 4:
+                case 12:
+                    LoadSolutionWithMsbuild4or12(microsoftBuildAssembly, solutionFileName);
+                    break;
 
-                    case 14:
-                    case 15:
-                        LoadSolutionWithMsbuild14(msbuildAssembly, solutionFileName);
-                        break;
+                case 14:
+                case 15:
+                    LoadSolutionWithMsbuild14(microsoftBuildAssembly, solutionFileName);
+                    break;
 
-                    default:
-                        throw new InvalidOperationException(string.Format(
-                            CultureInfo.InvariantCulture,
-                            LocalizedResourceManager.GetString(nameof(NuGet.CommandLine.NuGetResources.Error_UnsupportedMsbuild)),
-                            msbuildAssembly.FullName));
-                }
-            }
-            finally
-            {
-                AppDomain.CurrentDomain.AssemblyResolve -= new ResolveEventHandler(AssemblyResolve);
+                default:
+                    throw new InvalidOperationException(string.Format(
+                        CultureInfo.InvariantCulture,
+                        LocalizedResourceManager.GetString(nameof(NuGet.CommandLine.NuGetResources.Error_UnsupportedMsbuild)),
+                        microsoftBuildAssembly.FullName));
             }
         }
 
@@ -87,6 +80,8 @@ namespace NuGet.Common
                 }
             }
 
+            var solutionDirectory = Path.GetDirectoryName(solutionFileName);
+
             // load projects
             var projectInSolutionType = msbuildAssembly.GetType(
                 "Microsoft.Build.Construction.ProjectInSolution",
@@ -103,7 +98,8 @@ namespace NuGet.Common
                 var projectType = projectTypeProperty.GetValue(proj, index: null).ToString();
                 var isSolutionFolder = projectType.Equals("SolutionFolder", StringComparison.OrdinalIgnoreCase);
                 var relativePath = (string)relativePathProperty.GetValue(proj, index: null);
-                projects.Add(new ProjectInSolution(relativePath, isSolutionFolder));
+                var absolutePath = Path.Combine(solutionDirectory, relativePath);
+                projects.Add(new ProjectInSolution(relativePath, absolutePath, isSolutionFolder));
             }
             Projects = projects;
         }
@@ -132,11 +128,13 @@ namespace NuGet.Common
 
                 try
                 {
-                    var projectShouldBuild = !isSolutionFilter || projectShouldBuildMethod.Invoke(solutionFile, new object[] { project.RelativePath });
+                    var projectShouldBuild = !isSolutionFilter || (bool)projectShouldBuildMethod.Invoke(solutionFile, new object[] { project.RelativePath });
                     if (projectShouldBuild)
                     {
                         var relativePath = project.RelativePath.Replace('\\', Path.DirectorySeparatorChar);
-                        projects.Add(new ProjectInSolution(relativePath, isSolutionFolder));
+                        var absolutePath = project.AbsolutePath;
+
+                        projects.Add(new ProjectInSolution(relativePath, absolutePath, isSolutionFolder));
                     }
                 }
                 catch (TargetInvocationException ex)

@@ -1,0 +1,106 @@
+parameters:
+- name: stageName
+  type: string
+- name: stageDisplayName
+  type: string
+- name: dependsOn
+  type: object
+- name: bootstrapperUrl
+  type: string
+- name: visualStudioInstallationParameters
+  type: string
+- name: DartLabEnvironment
+  type: string
+- name: condition
+  type: string
+- name: variables
+  type: object
+  default: []
+- name: testExecutionJobTimeoutInMinutes
+  type: number
+- name: dartLabInstallationPath
+  type: string
+  default: C:\DartLab
+- name: testMachineHoldStrategy
+  type: string
+  default: None
+  values:
+  - None
+  - Completion
+  - Execution
+  - Failure
+  - Timeout
+
+stages:
+- template: /templates/stages/visual-studio/single-executable.yml@DartLabTemplates
+  parameters:
+    name: ${{parameters.stageName}}
+    displayName: 'E2E Tests ${{parameters.stageDisplayName}}'
+    testRunName: 'Run Functional Tests'
+    condition: ${{parameters.condition}}
+    dependsOn: ${{parameters.dependsOn}}
+    visualStudioBootstrapperURI: ${{parameters.bootstrapperUrl}}
+    visualStudioInstallationParameters: ${{parameters.visualStudioInstallationParameters}}
+    visualStudioSigning: Test
+    testMachineConfigurationJobDisplayName: 'E2E ${{parameters.stageDisplayName}} Machine Configuration'
+    testExecutionJobDisplayName: 'E2E ${{parameters.stageDisplayName}} Test Execution'
+    testExecutionJobTimeoutInMinutes: ${{parameters.testExecutionJobTimeoutInMinutes}}
+    variables:
+    - ${{if gt(length(parameters.variables), 0)}}:
+      - ${{parameters.variables}}
+    owner: nugetclienteng
+    testMachineLab: NuGet
+    dartLabEnvironment: ${{parameters.DartLabEnvironment}}
+    dartLabInstallationPath: ${{parameters.dartLabInstallationPath}}
+    testMachineHoldStrategy: ${{parameters.testMachineHoldStrategy}}
+    testMachineEnvironmentVariables:
+      CI: 'true'
+    testMachineConfigurationJobTimeoutInMinutes: 30
+    testResultType: JUnit
+    testExecutablePath: '[WorkingDirectory]\NuGet\scripts\e2etests\RunFunctionalTests.ps1'
+    testExecutableArguments: >-
+      -PMCCommand '"Run-Test -Verbose *>&1 | Tee-Object [WorkingDirectory]\NuGet\artifacts\EndToEnd\FullLog_$(Build.BuildNumber).txt"'
+      -PMCLaunchWaitTimeInSecs 30
+      -EachTestTimeoutInSecs 600
+      -NuGetDropPath "[WorkingDirectory]\NuGet\artifacts"
+      -FuncTestRoot "[WorkingDirectory]\NuGet\artifacts"
+      -RunCounter "$(Build.BuildNumber)"
+      -ResultsDirectory "[LoggingDirectory]"
+    testRunTimeout: 01:15:00
+
+##############################
+## preDeployAndRunTestsOperations
+##############################
+    preDeployAndRunTestsOperations:
+    - operation: executePowerShellInline
+      displayName: "Print Environment Variables"
+      scriptBlock: |
+        Get-ChildItem Env: | Sort-Object Name | Format-Table -Wrap -AutoSize
+      timeout: 0:0:5:0
+    - operation: executePowerShellScript
+      displayName: "Download Build artifacts"
+      scriptPath: ${{parameters.dartLabInstallationPath}}\Scripts\AzureDevOps\Pipelines\Install-Artifact.ps1
+      scriptParameters: -PipelineID $(System.DefinitionID) -RunID $(Build.BuildId) -ManagedIdentityClientID $(DartLab.1ES.ManagedIdentity.ClientID) -DestinationDirectory '[WorkingDirectory]\NuGet' -ArtifactName 'E2ETests'
+      timeout: 0:0:10:0
+    - operation: executePowerShellInline
+      displayName: "Extract EndToEnd.zip"
+      scriptBlock: |
+        $ErrorActionPreference = 'Stop'
+        $zipPath = "[WorkingDirectory]\NuGet\E2ETests\EndToEnd.zip"
+        $dest = "[WorkingDirectory]\NuGet\artifacts\EndToEnd"
+        Write-Output "Extracting '$zipPath' to '$dest'"
+        Expand-Archive -Path "$zipPath" -DestinationPath "$dest"
+        $nugetExePath = "[WorkingDirectory]\NuGet\E2ETests\NuGet.exe"
+        Write-Output "Copying '$nugetExePath' to '$dest'"
+        Copy-Item -Path "$nugetExePath" -Destination "$dest"
+      timeout: 0:0:5:0
+    - operation: executePowerShellScript
+      displayName: "Download scripts"
+      scriptPath: ${{parameters.dartLabInstallationPath}}\Scripts\AzureDevOps\Pipelines\Install-Artifact.ps1
+      scriptParameters: -PipelineID $(System.DefinitionID) -RunID $(Build.BuildId) -ManagedIdentityClientID $(DartLab.1ES.ManagedIdentity.ClientID) -DestinationDirectory '[WorkingDirectory]\NuGet' -ArtifactName 'scripts'
+      timeout: 0:0:10:0
+    - operation: executePowerShellScript
+      displayName: "SetupFunctionalTests.ps1"
+      scriptPath: '[WorkingDirectory]\NuGet\scripts\e2etests\SetupFunctionalTests.ps1'
+      scriptParameters: -NuGetTestsPSM1 '[WorkingDirectory]\NuGet\artifacts\EndToEnd\NuGet.Tests.psm1'
+      timeout: 0:0:10:0

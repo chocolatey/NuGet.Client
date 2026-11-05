@@ -4,7 +4,6 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 
 namespace NuGet.Protocol
@@ -19,20 +18,22 @@ namespace NuGet.Protocol
         {
         }
 
-        public override async Task<Tuple<bool, INuGetResource>> TryCreate(SourceRepository source, CancellationToken token)
+        public override async Task<Tuple<bool, INuGetResource?>> TryCreate(SourceRepository source, CancellationToken token)
         {
-            AutoCompleteResourceV2Feed resource = null;
+            AutoCompleteResourceV2Feed? resource = null;
 
             if (await source.GetFeedType(token) == FeedType.HttpV2)
             {
-                var serviceDocument = await source.GetResourceAsync<ODataServiceDocumentResourceV2>(token);
+                var serviceDocument = await source.GetResourceAsync<ODataServiceDocumentResourceV2>(token)
+                    ?? throw new InvalidOperationException($"The source '{source.PackageSource.Source}' does not provide {nameof(ODataServiceDocumentResourceV2)}.");
 
-                var httpSource = await source.GetResourceAsync<HttpSourceResource>(token);
+                var httpSource = await source.GetResourceAsync<HttpSourceResource>(token)
+                    ?? throw new InvalidOperationException($"The source '{source.PackageSource.Source}' does not provide {nameof(HttpSourceResource)}.");
 
                 resource = new AutoCompleteResourceV2Feed(httpSource, serviceDocument.BaseAddress, source.PackageSource);
             }
 
-            return new Tuple<bool, INuGetResource>(resource != null, resource);
+            return new Tuple<bool, INuGetResource?>(resource != null, resource);
         }
     }
 }

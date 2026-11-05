@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -135,6 +137,78 @@ namespace NuGet.VisualStudio.Common.Test.Telemetry
             Assert.Equal(sizes.Sum(), result.NupkgSize);
         }
 
+        [Theory]
+        [InlineData("Newtonsoft.Json")]
+        [InlineData("NuGet.Protocol")]
+        [InlineData("My-Package.1")]
+        [InlineData("ALLCAPS")]
+        [InlineData("alllower")]
+        [InlineData("123Numeric")]
+        [InlineData("a")]
+        public void AddNupkgCopiedData_StandardPackageId_IdContainsNonAlphanumericDotDashOrUnderscoreCharacterIsFalse(string packageId)
+        {
+            // Arrange
+            var data = CreateDataDictionary(SampleSource);
+            var nce = new ProtocolDiagnosticNupkgCopiedEvent(SampleSource, fileSize: 1000, packageId);
+
+            // Act
+            PackageSourceTelemetry.AddNupkgCopiedData(nce, data);
+
+            // Assert
+            var result = Assert.Single(data).Value;
+            Assert.False(result.IdContainsNonAlphanumericDotDashOrUnderscoreCharacter);
+        }
+
+        [Theory]
+        [InlineData("Package@1.0")]
+        [InlineData("Ünïcödé")]
+        [InlineData("Package Name")]
+        [InlineData("package+extra")]
+        public void AddNupkgCopiedData_NonstandardPackageId_IdContainsNonAlphanumericDotDashOrUnderscoreCharacterIsTrue(string packageId)
+        {
+            // Arrange
+            var data = CreateDataDictionary(SampleSource);
+            var nce = new ProtocolDiagnosticNupkgCopiedEvent(SampleSource, fileSize: 1000, packageId);
+
+            // Act
+            PackageSourceTelemetry.AddNupkgCopiedData(nce, data);
+
+            // Assert
+            var result = Assert.Single(data).Value;
+            Assert.True(result.IdContainsNonAlphanumericDotDashOrUnderscoreCharacter);
+        }
+
+        [Fact]
+        public void AddNupkgCopiedData_MultiplePackagesOneNonstandard_IdContainsNonAlphanumericDotDashOrUnderscoreCharacterIsTrue()
+        {
+            // Arrange
+            var data = CreateDataDictionary(SampleSource);
+
+            // Act
+            PackageSourceTelemetry.AddNupkgCopiedData(new ProtocolDiagnosticNupkgCopiedEvent(SampleSource, fileSize: 1000, "Standard.Package"), data);
+            PackageSourceTelemetry.AddNupkgCopiedData(new ProtocolDiagnosticNupkgCopiedEvent(SampleSource, fileSize: 1000, "Nonstandard@Package"), data);
+            PackageSourceTelemetry.AddNupkgCopiedData(new ProtocolDiagnosticNupkgCopiedEvent(SampleSource, fileSize: 1000, "Another.Standard"), data);
+
+            // Assert
+            var result = Assert.Single(data).Value;
+            Assert.True(result.IdContainsNonAlphanumericDotDashOrUnderscoreCharacter);
+        }
+
+        [Fact]
+        public void AddNupkgCopiedData_EmptyPackageId_IdContainsNonAlphanumericDotDashOrUnderscoreCharacterIsFalse()
+        {
+            // Arrange
+            var data = CreateDataDictionary(SampleSource);
+            var nce = new ProtocolDiagnosticNupkgCopiedEvent(SampleSource, fileSize: 1000);
+
+            // Act
+            PackageSourceTelemetry.AddNupkgCopiedData(nce, data);
+
+            // Assert
+            var result = Assert.Single(data).Value;
+            Assert.False(result.IdContainsNonAlphanumericDotDashOrUnderscoreCharacter);
+        }
+
         [Fact]
         public async Task AddData_IsThreadSafe()
         {
@@ -247,7 +321,7 @@ namespace NuGet.VisualStudio.Common.Test.Telemetry
             data.NupkgCount = 0;
             data.Resources.Clear();
             data.Http.Requests = 0;
-            var configuration = string.IsNullOrEmpty(packageSourceMapping) ? null : PackageSourceMappingUtility.GetpackageSourceMapping(packageSourceMapping);
+            var configuration = string.IsNullOrEmpty(packageSourceMapping) ? null : PackageSourceMappingUtility.GetPackageSourceMapping(packageSourceMapping);
 
             var sourceRepository = new SourceRepository(new PackageSource("source"), Repository.Provider.GetCoreV3());
 
@@ -285,7 +359,7 @@ namespace NuGet.VisualStudio.Common.Test.Telemetry
             httpData.Failed = 1;
             httpData.StatusCodes.Add(200, 7);
             httpData.StatusCodes.Add(404, 3);
-            var configuration = string.IsNullOrEmpty(packageSourceMapping) ? null : PackageSourceMappingUtility.GetpackageSourceMapping(packageSourceMapping);
+            var configuration = string.IsNullOrEmpty(packageSourceMapping) ? null : PackageSourceMappingUtility.GetPackageSourceMapping(packageSourceMapping);
 
             var source = new SourceRepository(new PackageSource(NuGetConstants.V3FeedUrl), Repository.Provider.GetCoreV3());
 
@@ -306,6 +380,7 @@ namespace NuGet.VisualStudio.Common.Test.Telemetry
 
             Assert.Equal(data.NupkgCount, result[PackageSourceTelemetry.PropertyNames.Nupkgs.Copied]);
             Assert.Equal(data.NupkgSize, result[PackageSourceTelemetry.PropertyNames.Nupkgs.Bytes]);
+            Assert.Equal(data.IdContainsNonAlphanumericDotDashOrUnderscoreCharacter, result[PackageSourceTelemetry.PropertyNames.Nupkgs.IdContainsNonAlphanumericDotDashOrUnderscoreCharacter]);
 
             Assert.Equal(data.Resources.Sum(r => r.Value.count), result[PackageSourceTelemetry.PropertyNames.Resources.Calls]);
             foreach (var resource in data.Resources)
@@ -376,6 +451,24 @@ namespace NuGet.VisualStudio.Common.Test.Telemetry
             Assert.Equal(expectedRequests, totals.Requests);
             Assert.Equal(expectedBytes, totals.Bytes);
             Assert.Equal(expectedDuration, totals.Duration);
+        }
+
+        [Theory]
+        [InlineData("https://api.nuget.org/v3/index.json", "nuget.org")]
+        [InlineData("https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json", "Azure DevOps")]
+        [InlineData("https://nuget.pkg.github.com/contoso/index.json", "GitHub")]
+        [InlineData("https://api.contoso.org/v2/index.json", null)]
+        [InlineData(".\\my\\PublicRepository\\", null)]
+        public void GetMSFeed_CorrectlyIdentifies_SourceType(string source, string expectedSourceType)
+        {
+            // Arrange
+            PackageSource packageSource = new(source);
+
+            // Act
+            string actualSourceType = PackageSourceTelemetry.GetMsFeed(packageSource);
+
+            // Assert
+            Assert.Equal(expectedSourceType, actualSourceType);
         }
 
         private static IReadOnlyDictionary<string, PackageSourceTelemetry.Data> CreateDataDictionary(params string[] sources)

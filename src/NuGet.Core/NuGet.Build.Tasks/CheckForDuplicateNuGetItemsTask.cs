@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -15,6 +17,7 @@ using Task = Microsoft.Build.Utilities.Task;
 
 namespace NuGet.Build.Tasks
 {
+    [MSBuildMultiThreadableTask]
     public class CheckForDuplicateNuGetItemsTask : Task
     {
         [Required]
@@ -65,6 +68,7 @@ namespace NuGet.Build.Tasks
                         duplicateItemsFormatted))
                 {
                     FilePath = MSBuildProjectFullPath,
+                    ProjectPath = MSBuildProjectFullPath,
                 });
 
                 // Set Output

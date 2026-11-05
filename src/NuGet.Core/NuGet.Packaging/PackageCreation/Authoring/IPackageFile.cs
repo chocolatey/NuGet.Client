@@ -28,7 +28,7 @@ namespace NuGet.Packaging
         /// 
         /// If it is 'tools\init.ps1', the EffectivePath will be 'init.ps1'.
         /// </example>
-        string EffectivePath
+        string? EffectivePath
         {
             get;
         }
@@ -37,7 +37,7 @@ namespace NuGet.Packaging
         /// FrameworkName object representing this package file's target framework. Deprecated. Must be null on net5.0 and greater.
         /// </summary>
         [Obsolete("Use NuGetFramework instead. This property will be null for any frameworks net5.0 or above.")]
-        FrameworkName TargetFramework
+        FrameworkName? TargetFramework
         {
             get;
         }
@@ -45,7 +45,7 @@ namespace NuGet.Packaging
         /// <summary>
         /// NuGetFramework object representing this package file's target framework. Use this instead of TargetFramework.
         /// </summary>
-        NuGetFramework NuGetFramework
+        NuGetFramework? NuGetFramework
         {
             get;
         }

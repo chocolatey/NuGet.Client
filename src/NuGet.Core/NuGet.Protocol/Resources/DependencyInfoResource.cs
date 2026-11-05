@@ -27,7 +27,7 @@ namespace NuGet.Protocol.Core.Types
         /// Returns dependency info for the given package if it exists. If the package is not found null is
         /// returned.
         /// </returns>
-        public abstract Task<SourcePackageDependencyInfo> ResolvePackage(PackageIdentity package,
+        public abstract Task<SourcePackageDependencyInfo?> ResolvePackage(PackageIdentity package,
             NuGetFramework projectFramework,
             SourceCacheContext cacheContext,
             ILogger log,

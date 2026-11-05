@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -14,8 +16,8 @@ using Microsoft.VisualStudio.Shell.Interop;
 using NuGet.Commands;
 using NuGet.Frameworks;
 using NuGet.ProjectManagement;
-using NuGet.RuntimeModel;
 using NuGet.VisualStudio;
+using VSLangProj150;
 
 namespace NuGet.PackageManagement.VisualStudio
 {
@@ -32,9 +34,13 @@ namespace NuGet.PackageManagement.VisualStudio
 
         #region Properties
 
-        public async Task<string> GetMSBuildProjectExtensionsPathAsync()
+        public string GetMSBuildProjectExtensionsPath()
         {
-            var msbuildProjectExtensionsPath = await BuildProperties.GetPropertyValueAsync(ProjectBuildProperties.MSBuildProjectExtensionsPath);
+            ThreadHelper.ThrowIfNotOnUIThread();
+#pragma warning disable CS0618 // Type or member is obsolete
+            // Need to validate no project systems get this property via DTE, and if so, switch to GetPropertyValue
+            var msbuildProjectExtensionsPath = BuildProperties.GetPropertyValueWithDteFallback(ProjectBuildProperties.MSBuildProjectExtensionsPath);
+#pragma warning restore CS0618 // Type or member is obsolete
 
             if (string.IsNullOrEmpty(msbuildProjectExtensionsPath))
             {
@@ -44,7 +50,7 @@ namespace NuGet.PackageManagement.VisualStudio
             return Path.Combine(ProjectDirectory, msbuildProjectExtensionsPath);
         }
 
-        public IProjectBuildProperties BuildProperties { get; private set; }
+        public IVsProjectBuildProperties BuildProperties { get; }
 
         public string CustomUniqueName => ProjectNames.CustomUniqueName;
 
@@ -88,11 +94,17 @@ namespace NuGet.PackageManagement.VisualStudio
             {
                 ThreadHelper.ThrowIfNotOnUIThread();
 
-                var packageVersion = BuildProperties.GetPropertyValue(ProjectBuildProperties.PackageVersion);
+#pragma warning disable CS0618 // Type or member is obsolete
+                // Need to validate no project systems get this property via DTE, and if so, switch to GetPropertyValue
+                var packageVersion = BuildProperties.GetPropertyValueWithDteFallback(ProjectBuildProperties.PackageVersion);
+#pragma warning restore CS0618 // Type or member is obsolete
 
                 if (string.IsNullOrEmpty(packageVersion))
                 {
-                    packageVersion = BuildProperties.GetPropertyValue(ProjectBuildProperties.Version);
+#pragma warning disable CS0618 // Type or member is obsolete
+                    // Need to validate no project systems get this property via DTE, and if so, switch to GetPropertyValue
+                    packageVersion = BuildProperties.GetPropertyValueWithDteFallback(ProjectBuildProperties.Version);
+#pragma warning restore CS0618 // Type or member is obsolete
 
                     if (string.IsNullOrEmpty(packageVersion))
                     {
@@ -116,7 +128,7 @@ namespace NuGet.PackageManagement.VisualStudio
             string fullProjectPath,
             string projectDirectory,
             Func<IVsHierarchy, EnvDTE.Project> loadDteProject,
-            IProjectBuildProperties buildProperties,
+            IVsProjectBuildProperties buildProperties,
             IVsProjectThreadingService threadingService)
         {
             Assumes.Present(vsHierarchyItem);
@@ -135,7 +147,7 @@ namespace NuGet.PackageManagement.VisualStudio
             ProjectNames projectNames,
             string fullProjectPath,
             Func<IVsHierarchy, EnvDTE.Project> loadDteProject,
-            IProjectBuildProperties buildProperties,
+            IVsProjectBuildProperties buildProperties,
             IVsProjectThreadingService threadingService)
             : this(
                   vsHierarchyItem,
@@ -152,15 +164,17 @@ namespace NuGet.PackageManagement.VisualStudio
 
         #region Getters
 
-        public async Task<string[]> GetProjectTypeGuidsAsync()
+        public string[] GetProjectTypeGuids()
         {
-            await NuGetUIThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            ThreadHelper.ThrowIfNotOnUIThread();
             return VsHierarchyUtility.GetProjectTypeGuidsFromHierarchy(VsHierarchy);
         }
 
         public async Task<FrameworkName> GetDotNetFrameworkNameAsync()
         {
-            var targetFrameworkMoniker = await GetTargetFrameworkStringAsync();
+            await _threadingService.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+            var targetFrameworkMoniker = GetTargetFrameworkString();
 
             if (!string.IsNullOrEmpty(targetFrameworkMoniker))
             {
@@ -188,9 +202,10 @@ namespace NuGet.PackageManagement.VisualStudio
             return Enumerable.Empty<string>();
         }
 
-        public async Task<NuGetFramework> GetTargetFrameworkAsync()
+        public NuGetFramework GetTargetFramework()
         {
-            var frameworkString = await GetTargetFrameworkStringAsync();
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var frameworkString = GetTargetFrameworkString();
 
             if (!string.IsNullOrEmpty(frameworkString))
             {
@@ -200,18 +215,18 @@ namespace NuGet.PackageManagement.VisualStudio
             return NuGetFramework.UnsupportedFramework;
         }
 
-        public async Task<IEnumerable<(string ItemId, string[] ItemMetadata)>> GetBuildItemInformationAsync(string itemName, params string[] metadataNames)
+        public IEnumerable<(string ItemId, string[] ItemMetadata)> GetBuildItemInformation(string itemName, params string[] metadataNames)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             if (itemName == null)
             {
                 throw new ArgumentNullException(nameof(itemName));
             }
             if (metadataNames == null)
             {
-                throw new ArgumentNullException(nameof(itemName));
+                throw new ArgumentNullException(nameof(metadataNames));
             }
-
-            await _threadingService.JoinableTaskFactory.SwitchToMainThreadAsync();
 
             var itemStorage = VsHierarchy as IVsBuildItemStorage;
             if (itemStorage != null)
@@ -225,19 +240,22 @@ namespace NuGet.PackageManagement.VisualStudio
             return Enumerable.Empty<(string ItemId, string[] ItemMetadata)>();
         }
 
-        private async Task<string> GetTargetFrameworkStringAsync()
+        private string GetTargetFrameworkString()
         {
-            await _threadingService.JoinableTaskFactory.SwitchToMainThreadAsync();
+            ThreadHelper.ThrowIfNotOnUIThread();
 
             var projectPath = FullName;
-            var platformIdentifier = BuildProperties.GetPropertyValue(
+#pragma warning disable CS0618 // Type or member is obsolete
+            // Need to validate no project systems get this property via DTE, and if so, switch to GetPropertyValue
+            var platformIdentifier = BuildProperties.GetPropertyValueWithDteFallback(
                 ProjectBuildProperties.TargetPlatformIdentifier);
-            var platformVersion = BuildProperties.GetPropertyValue(
+            var platformVersion = BuildProperties.GetPropertyValueWithDteFallback(
                 ProjectBuildProperties.TargetPlatformVersion);
-            var platformMinVersion = BuildProperties.GetPropertyValue(
+            var platformMinVersion = BuildProperties.GetPropertyValueWithDteFallback(
                 ProjectBuildProperties.TargetPlatformMinVersion);
-            var targetFrameworkMoniker = BuildProperties.GetPropertyValue(
+            var targetFrameworkMoniker = BuildProperties.GetPropertyValueWithDteFallback(
                 ProjectBuildProperties.TargetFrameworkMoniker);
+#pragma warning restore CS0618 // Type or member is obsolete
 
             // Projects supporting TargetFramework and TargetFrameworks are detected before
             // this check. The values can be passed as null here.
@@ -253,11 +271,16 @@ namespace NuGet.PackageManagement.VisualStudio
             return frameworkStrings.FirstOrDefault();
         }
 
-        public async Task<bool> IsCapabilityMatchAsync(string capabilityExpression)
+        public bool IsCapabilityMatch(string capabilityExpression)
         {
-            await _threadingService.JoinableTaskFactory.SwitchToMainThreadAsync();
-
+            ThreadHelper.ThrowIfNotOnUIThread();
             return VsHierarchy.IsCapabilityMatch(capabilityExpression);
+        }
+
+        public bool IsSupported(Reference6 projectReference)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            return EnvDTEProjectUtility.IsSupported(projectReference.SourceProject.Kind, VsHierarchy);
         }
 
         #endregion Getters

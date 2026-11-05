@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.ComponentModel;
 using NuGet.PackageManagement.VisualStudio;
@@ -23,6 +25,7 @@ namespace NuGet.PackageManagement.UI
             SelectedFilter = ItemFilter.Installed;
             DependencyBehavior = DependencyBehavior.Lowest;
             FileConflictAction = FileConflictAction.PromptUser;
+            SelectedPackageMetadataTab = PackageMetadataTab.Readme;
             OptionsExpanded = false;
         }
 
@@ -39,6 +42,8 @@ namespace NuGet.PackageManagement.UI
         public bool IncludePrerelease { get; set; }
 
         public ItemFilter SelectedFilter { get; set; }
+
+        public PackageMetadataTab SelectedPackageMetadataTab { get; set; }
 
         public DependencyBehavior DependencyBehavior { get; set; }
 

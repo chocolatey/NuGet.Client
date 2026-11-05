@@ -8,23 +8,30 @@ resources:
     source: NuGet.Client-Official
     trigger:
       branches:
+        include:
         - dev
-        - release-*
+        - release-6.14.x
+        - release-6.12.x
+        - release-5.11.x
   - pipeline: DartLab
     source: DartLab
-    branch: main
+    branch: refs/heads/main
+    tags:
+    - Production
   - pipeline: DartLab.OptProf
     source: DartLab.OptProf
     branch: main
+    tags:
+    - production
   repositories:
   - repository: DartLabTemplates
     type: git
-    name: DartLab.Templates
-    ref: refs/heads/main
+    name: DevDiv/DartLab
+    ref: refs/tags/Production
   - repository: DartLabOptProfTemplates
     type: git
     name: DartLab.OptProf
-    ref: refs/heads/main
+    ref: refs/tags/Production
 
 parameters:
 # Whether or not commit should be tagged for manual deployments
@@ -32,16 +39,22 @@ parameters:
   type: boolean
   default: false
 
-# Whether or not to delete the test machines after the run completes.
-- name: testMachineCleanUpStrategy
+- name: testMachineHoldStrategy
   type: string
-  default: delete
+  default: None
   values:
-  - delete
-  - stop
+  - None
+  - Completion
+  - Execution
+  - Failure
+  - Timeout
+
+- name: isExperimental
+  type: boolean
+  default: false
 
 stages:
-- template: \templates\stages\visual-studio\single-runsettings.yml@DartLabOptProfTemplates
+- template: \templates\stages\visual-studio\single-runsettings.cloudtest.yml@DartLabOptProfTemplates
   parameters:
     ##### Required #####
     runSettingsURI: $(RunSettingsURI)
@@ -51,17 +64,22 @@ stages:
     displayName: OptProf Profiling Workflow
     variables:
     - name: optDropName
-      value: OptimizationInputs/$(System.TeamProject)/$(Build.Repository.Name)/$(resources.pipeline.ComponentBuildUnderTest.sourceCommit)/$(Build.BuildId)/$(System.StageId)/$(System.StageAttempt)
+      ${{ if parameters.isExperimental }}:
+        value: OptimizationInputs/Experimental/$(System.TeamProject)/$(Build.Repository.Name)/$(resources.pipeline.ComponentBuildUnderTest.sourceCommit)/$(Build.BuildId)/$(System.StageId)/$(System.StageAttempt)
+      ${{ else }}:
+        value: OptimizationInputs/$(System.TeamProject)/$(Build.Repository.Name)/$(resources.pipeline.ComponentBuildUnderTest.sourceCommit)/$(Build.BuildId)/$(System.StageId)/$(System.StageAttempt)
     - name: RunSettingsURI
       value: $[dependencies.TestMachineConfiguration.outputs['SetRunSettingsURI.RunSettingsURI']]
     optOptimizationInputsDropName: $(optDropName)
+    cloudBuildResourceName: ComponentBuildUnderTest
     # Remove this parameter if you don't want LKG support
     previousOptimizationInputsDropName: $(PreviousOptimizationInputsDropName)
-    testLabPoolName: VS-Platform
-    testMachineCleanUpStrategy: ${{parameters.testMachineCleanUpStrategy}}
+    owner: nugetclienteng
+    testMachineLab: Nuget
+    testMachineHoldStrategy: ${{ parameters.testMachineHoldStrategy }}
     visualStudioSigning: Test
     ##### Step Hooks #####
-    preTestMachineConfigurationStepList:
+    preTestMachineConfigurationSteps:
     - powershell: "Get-ChildItem Env: | Sort-Object Name | Format-Table -Wrap -AutoSize"
       displayName: 'Print Environment Variables'
     - powershell: |
@@ -81,6 +99,16 @@ stages:
     - download: ComponentBuildUnderTest
       artifact: BuildInfo
       displayName: 'Download buildinfo.json'
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download RunSettings drop metadata'
+      inputs:
+        buildType: 'specific'
+        artifactName: 'DropMetadata-RunSettings'
+        targetPath: $(Pipeline.Workspace)\ComponentBuildUnderTest\DropMetadata-RunSettings
+        project: '$(System.TeamProjectId)'
+        definition: $(System.DefinitionId)
+        buildVersionToDownload: 'specific'
+        pipelineId: $(resources.pipeline.ComponentBuildUnderTest.runId)
     - powershell: |
         try {
           Write-Host "Set VSBranch, VsTargetChannel &  VsTargetMajorVersion variables"
@@ -92,11 +120,11 @@ stages:
 
           Write-Host "Target Visual Studio branch (full name): $VSBranch"
 
-          # The value will be something like 'main' or 'rel/d16.4';
+          # The value will be something like 'main' or 'rel/insiders';
           # however, the subsequent task which gets bootstrapper details has a parameter (VSBranch)
           # which (as of writing this) requires the branch "short" name.
           # For the 'main' branch, the short name is still 'main'.
-          # For the 'rel/d16.4' branch, the short name is 'd16.4'.
+          # For the 'rel/insiders' branch, the short name is 'insiders'.
           # Ideally, we would not need to figure out the branch short name ourselves,
           # but short-term we will to unblock ourselves.
           $branchParts = $VSBranch.Split('/')
@@ -123,19 +151,27 @@ stages:
       displayName: 'Set VSBranch variable'
     - powershell : |
         try {
-          $branchName = "$(resources.pipeline.ComponentBuildUnderTest.sourceBranch)"
-          $branchName = $branchName.Replace('refs/heads/', '')
-
-          $RunSettingsURI = "https://vsdrop.corp.microsoft.com/file/v1/RunSettings/$(System.TeamProject)/$(Build.Repository.Name)/$branchName/$(resources.pipeline.ComponentBuildUnderTest.runID);NuGet.OptProfV2.runsettings"
-          Write-Host "RunSettingsURI: $RunSettingsURI"
-          # non-output variable for VS config in the configure machine job
-          # output variable for test execution job
-          Set-AzurePipelinesVariable 'RunSettingsURI' $RunSettingsURI
-          Set-AzurePipelinesVariable -IsOutput 'RunSettingsURI' $RunSettingsURI
+          $dropMetadata = ConvertFrom-Json (Get-Content "$(Pipeline.Workspace)\ComponentBuildUnderTest\DropMetadata-RunSettings\VSTSDrop.json" -Raw)
+          $dropUri = $dropMetadata.VstsDropBuildArtifact.VstsDropUrl
+          if ($dropUri)
+          {
+            $dropUri = $dropUri -replace '^(.*?)/RunSettings/', 'https://vsdrop.microsoft.com/file/v1/RunSettings/'
+            $RunSettingsURI = "$dropUri;NuGet.OptProfV2.runsettings"
+            Write-Host "RunSettingsURI: $RunSettingsURI"
+            # non-output variable for VS config in the configure machine job
+            # output variable for test execution job
+            Set-AzurePipelinesVariable 'RunSettingsURI' $RunSettingsURI
+            Set-AzurePipelinesVariable -IsOutput 'RunSettingsURI' $RunSettingsURI
+          }
+          else
+          {
+            Write-Error "Drop metadata: $dropMetadata"
+            throw "VSTSDropUrl not found in VSTSDrop.json"
+          }
         }
         catch {
           Write-Host $_
-          Write-Error "Failed to set SourceBranchName pipeline variable"
+          Write-Error "Failed to set RunSettingsURI pipeline variable"
           throw
         }
       displayName: 'Set RunSettingsURI variable'
@@ -155,30 +191,33 @@ stages:
       displayName: "Install Signing Plugin"
     - task: MicroBuildSwixPlugin@4
       displayName: "Install Swix Plugin"
-    - task: MicroBuildBuildVSBootstrapper@2
+    - task: MicroBuildBuildVSBootstrapper@3
       displayName: 'Build a Visual Studio bootstrapper'
       inputs:
+        azureSubscription: 'VSEng-VSDrop-MI'
         channelName: "$(VsTargetChannel)"
         vsMajorVersion: "$(VsTargetMajorVersion)"
         manifests: '$(Pipeline.Workspace)\ComponentBuildUnderTest\VS15\Microsoft.VisualStudio.NuGet.Core.vsman'
         outputFolder: '$(Pipeline.Workspace)\ComponentBuildUnderTest\VS15'
+      env:
+        SYSTEM_ACCESSTOKEN: $(System.AccessToken)
     - task: PowerShell@2
       displayName: Set 'VisualStudio.InstallationUnderTest.BootstrapperURL'
       inputs:
         filePath: $(DartLab.Path)\Scripts\VisualStudio\Bootstrapper\Get-BootstrapperURL.ps1
         arguments: -BootstrapperInfoJsonURI '$(Build.StagingDirectory)\MicroBuild\Output\BootstrapperInfo.json' -VSBranch '$(VSBranch)' -OutVariableName 'VisualStudio.InstallationUnderTest.BootstrapperURL'
     - task: artifactDropTask@0
-      displayName: "Upload VSTS Drop"
+      displayName: "Upload VS Bootstrapper"
       inputs:
         dropServiceURI: 'https://devdiv.artifacts.visualstudio.com'
-        buildNumber: 'Products/$(System.TeamProject)/$(Build.Repository.Name)/$(Build.SourceBranchName)/$(Build.BuildNumber)'
+        buildNumber: '$(MicroBuild.ManifestDropName)'
         sourcePath: "$(Pipeline.Workspace)\\ComponentBuildUnderTest\\VS15"
         toLowerCase: false
         usePat: true
         dropMetadataContainerName: "DropMetadata-Product"
     # Remove this step hook and it's task if you don't want LKG support
-    prePublishOptimizationInputsDropStepList:
-    # Set parameter for PreviousOptimizationInputsDropName 
+    prePublishOptimizationInputsDropSteps:
+    # Set parameter for PreviousOptimizationInputsDropName
     - powershell: |
         try {
           $artifactName = 'OptProf'
@@ -191,7 +230,7 @@ stages:
 
           Write-Host "The content of the metadata.json file was $json"
           $dropname = $json.OptimizationData
-          
+
           Write-Host "PreviousOptimizationInputsDropName: $dropname"
           Set-AzurePipelinesVariable 'PreviousOptimizationInputsDropName' $dropname
         }
@@ -201,9 +240,9 @@ stages:
           throw
         }
       displayName: Set PreviousOptimizationInputsDropName
-    postPublishOptimizationInputsDropStepList:
+    postPublishOptimizationInputsDropSteps:
     # Tag commit with OptizationInputsDrop name
-    - template: \steps\powershell\execute-script.yml@DartLabTemplates
+    - template: \templates\steps\powershell\execute-script.yml@DartLabTemplates
       parameters:
         displayName: Create OptimizationInputs Tag in Repository
         condition: and(succeeded(), or(in(variables['Build.Reason'], 'ResourceTrigger'), eq('${{parameters.CreateGitTagOnManualRun}}', 'true')))

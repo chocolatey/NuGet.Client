@@ -1,6 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Configuration;
 using NuGet.Protocol.Core.Types;
@@ -22,7 +23,8 @@ namespace NuGet.Protocol.Tests
             var sourceRepository = new SourceRepository(packageSource, new[] { new HttpSourceResourceProvider() });
 
             // Act
-            HttpSourceResource httpSourceResource = await sourceRepository.GetResourceAsync<HttpSourceResource>();
+            HttpSourceResource httpSourceResource = await sourceRepository.GetResourceAsync<HttpSourceResource>(CancellationToken.None)
+                ?? throw new Xunit.Sdk.XunitException("Expected HttpSourceResource.");
 
             // Assert
             Assert.NotNull(httpSourceResource);
@@ -37,7 +39,8 @@ namespace NuGet.Protocol.Tests
             var sourceRepository = new SourceRepository(packageSource, new[] { new HttpSourceResourceProvider() });
 
             // Act
-            HttpSourceResource httpSourceResource = await sourceRepository.GetResourceAsync<HttpSourceResource>();
+            HttpSourceResource httpSourceResource = await sourceRepository.GetResourceAsync<HttpSourceResource>(CancellationToken.None)
+                ?? throw new Xunit.Sdk.XunitException("Expected HttpSourceResource.");
 
             // Assert
             Assert.NotNull(httpSourceResource);
@@ -55,11 +58,31 @@ namespace NuGet.Protocol.Tests
             var sourceRepository = new SourceRepository(packageSource, new[] { new HttpSourceResourceProvider() });
 
             // Act
-            HttpSourceResource httpSourceResource = await sourceRepository.GetResourceAsync<HttpSourceResource>();
+            HttpSourceResource httpSourceResource = await sourceRepository.GetResourceAsync<HttpSourceResource>(CancellationToken.None)
+                ?? throw new Xunit.Sdk.XunitException("Expected HttpSourceResource.");
 
             // Assert
             Assert.NotNull(httpSourceResource);
             Assert.Equal(maxHttpRequestsPerSource, sourceRepository.PackageSource.MaxHttpRequestsPerSource);
+        }
+
+        [Fact]
+        public void ResetThrottle_ClearsThrottle()
+        {
+            IThrottle? original = HttpSourceResourceProvider.Throttle;
+            try
+            {
+                HttpSourceResourceProvider.Throttle = SemaphoreSlimThrottle.CreateBinarySemaphore();
+
+                HttpSourceResourceProvider.ResetThrottle();
+
+                // A per-restore throttle must not leak into the next restore on a reused process.
+                Assert.Null(HttpSourceResourceProvider.Throttle);
+            }
+            finally
+            {
+                HttpSourceResourceProvider.Throttle = original;
+            }
         }
     }
 }

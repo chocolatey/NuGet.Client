@@ -53,7 +53,7 @@ namespace NuGet.Packaging.Signing
             FingerprintAlgorithm = algorithm;
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             if (obj is CertificateHashAllowListEntry hashEntry)
             {
@@ -75,7 +75,7 @@ namespace NuGet.Packaging.Signing
             combiner.AddObject(Fingerprint);
             combiner.AddStruct(FingerprintAlgorithm);
 
-            return combiner.GetHashCode();
+            return combiner.CombinedHash;
         }
     }
 }

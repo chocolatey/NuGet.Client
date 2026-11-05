@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,8 +27,9 @@ namespace NuGet.PackageManagement.UI
         public PackageDetailControlModel(
             IServiceBroker serviceBroker,
             INuGetSolutionManagerService solutionManager,
-            IEnumerable<IProjectContextInfo> projects)
-            : base(serviceBroker, projects)
+            IEnumerable<IProjectContextInfo> projects,
+            INuGetUI uiController)
+            : base(serviceBroker, projects, uiController)
         {
             _solutionManager = solutionManager;
             _solutionManager.ProjectUpdated += ProjectChanged;
@@ -35,10 +38,12 @@ namespace NuGet.PackageManagement.UI
         public async override Task SetCurrentPackageAsync(
             PackageItemViewModel searchResultPackage,
             ItemFilter filter,
-            Func<PackageItemViewModel> getPackageItemViewModel)
+            Func<PackageItemViewModel> getPackageItemViewModel,
+            CancellationToken cancellationToken)
         {
             // Set InstalledVersion before fetching versions list.
             PackageLevel = searchResultPackage.PackageLevel;
+            VersionOverride = searchResultPackage.VersionOverride;
             InstalledVersion = searchResultPackage.InstalledVersion;
             InstalledVersionRange = searchResultPackage.AllowedVersions;
 
@@ -51,7 +56,7 @@ namespace NuGet.PackageManagement.UI
 
             OnPropertyChanged(nameof(VersionsView));
 
-            await base.SetCurrentPackageAsync(searchResultPackage, filter, getPackageItemViewModel);
+            await base.SetCurrentPackageAsync(searchResultPackage, filter, getPackageItemViewModel, cancellationToken);
 
             // SetCurrentPackage can take long time to return, user might changed selected package.
             // Check selected package.
@@ -109,12 +114,6 @@ namespace NuGet.PackageManagement.UI
             await CreateVersionsAsync(cancellationToken);
         }
 
-        private static bool HasId(string id, IEnumerable<PackageIdentity> packages)
-        {
-            return packages.Any(p =>
-                StringComparer.OrdinalIgnoreCase.Equals(p.Id, id));
-        }
-
         public override void CleanUp()
         {
             _solutionManager.ProjectUpdated -= ProjectChanged;
@@ -138,14 +137,14 @@ namespace NuGet.PackageManagement.UI
             // installVersion is null if the package is not installed
             var installedVersion = installedDependency?.VersionRange;
 
-            List<(NuGetVersion version, bool isDeprecated)> allVersions = _allPackageVersions?.OrderByDescending(v => v.version).ToList();
+            List<(NuGetVersion version, bool isDeprecated, bool isVulnerable)> allVersions = _allPackageVersions?.OrderByDescending(v => v.version).ToList();
 
             // null, if no version constraint defined in package.config
             VersionRange allowedVersions = _projectVersionConstraints.Select(e => e.VersionRange).FirstOrDefault();
             // null, if all versions are allowed to be install or update
             var blockedVersions = new List<NuGetVersion>(allVersions.Count);
 
-            List<(NuGetVersion version, bool isDeprecated)> allVersionsAllowed;
+            List<(NuGetVersion version, bool isDeprecated, bool isVulnerable)> allVersionsAllowed;
             if (allowedVersions == null)
             {
                 allowedVersions = VersionRange.All;
@@ -154,7 +153,7 @@ namespace NuGet.PackageManagement.UI
             else
             {
                 allVersionsAllowed = allVersions.Where(v => allowedVersions.Satisfies(v.version)).ToList();
-                foreach ((NuGetVersion version, bool isDeprecated) in allVersions)
+                foreach ((NuGetVersion version, bool isDeprecated, bool isVulnerable) in allVersions)
                 {
                     if (!allVersionsAllowed.Any(a => a.version.Version.Equals(version.Version)))
                     {
@@ -172,7 +171,8 @@ namespace NuGet.PackageManagement.UI
                 VersionRange installedVersionRange = VersionRange.Parse(installedDependency.VersionRange.OriginalString, true);
                 NuGetVersion bestVersion = installedVersionRange.FindBestMatch(allVersionsAllowed.Select(v => v.version));
                 var deprecationInfo = allVersionsAllowed.FirstOrDefault(v => v.version == bestVersion).isDeprecated;
-                DisplayVersion displayVersion = new DisplayVersion(installedVersionRange, bestVersion, additionalInfo: string.Empty, isDeprecated: deprecationInfo);
+                var vulnerableInfo = allVersionsAllowed.FirstOrDefault(v => v.version == bestVersion).isVulnerable;
+                DisplayVersion displayVersion = new DisplayVersion(installedVersionRange, bestVersion, additionalInfo: string.Empty, isDeprecated: deprecationInfo, isVulnerable: vulnerableInfo);
 
                 _versions.Add(displayVersion);
             }
@@ -185,7 +185,7 @@ namespace NuGet.PackageManagement.UI
                 (isInstalledFloatingOrRange || !latestPrerelease.version.Equals(installedVersion?.MinVersion)))
             {
                 VersionRange latestPrereleaseVersionRange = VersionRange.Parse(latestPrerelease.version.ToString(), allowFloating: false);
-                _versions.Add(new DisplayVersion(latestPrereleaseVersionRange, latestPrerelease.version, Resources.Version_LatestPrerelease, isDeprecated: latestPrerelease.isDeprecated));
+                _versions.Add(new DisplayVersion(latestPrereleaseVersionRange, latestPrerelease.version, Resources.Version_LatestPrerelease, isDeprecated: latestPrerelease.isDeprecated, isVulnerable: latestPrerelease.isVulnerable));
             }
 
             // Add latest stable if needed
@@ -193,7 +193,7 @@ namespace NuGet.PackageManagement.UI
                 (isInstalledFloatingOrRange || !latestStableVersion.version.Equals(InstalledVersion)))
             {
                 VersionRange latestStableVersionRange = VersionRange.Parse(latestStableVersion.version.ToString(), allowFloating: false);
-                _versions.Add(new DisplayVersion(latestStableVersionRange, latestStableVersion.version, Resources.Version_LatestStable, isDeprecated: latestStableVersion.isDeprecated));
+                _versions.Add(new DisplayVersion(latestStableVersionRange, latestStableVersion.version, Resources.Version_LatestStable, isDeprecated: latestStableVersion.isDeprecated, isVulnerable: latestStableVersion.isVulnerable));
             }
 
             // add a separator
@@ -215,7 +215,7 @@ namespace NuGet.PackageManagement.UI
                 }
 
                 VersionRange versionRange = VersionRange.Parse(version.version.ToString(), allowFloating: false);
-                _versions.Add(new DisplayVersion(versionRange, version.version, additionalInfo: null, isCurrentInstalled: installed, autoReferenced: autoReferenced, isDeprecated: version.isDeprecated));
+                _versions.Add(new DisplayVersion(versionRange, version.version, additionalInfo: null, isCurrentInstalled: installed, autoReferenced: autoReferenced, isDeprecated: version.isDeprecated, isVulnerable: version.isVulnerable));
             }
 
             // Disable controls if this is an auto referenced package.
@@ -249,12 +249,9 @@ namespace NuGet.PackageManagement.UI
             if ((UserInput.StartsWith("(", StringComparison.OrdinalIgnoreCase) || UserInput.StartsWith("[", StringComparison.OrdinalIgnoreCase)) &&
                VersionRange.TryParse(UserInput, out VersionRange userRange))
             {
-                if (o != null && NuGetVersion.TryParse(o.ToString(), out NuGetVersion userVersion))
+                if (o != null && userRange.Satisfies(version.Version))
                 {
-                    if (userRange.Satisfies(userVersion))
-                    {
-                        return true;
-                    }
+                    return true;
                 }
 
                 return false;
@@ -303,10 +300,23 @@ namespace NuGet.PackageManagement.UI
             }
         }
 
+        private VersionRange _versionOverride;
+
+        public VersionRange VersionOverride
+        {
+            get => _versionOverride;
+            private set
+            {
+                _versionOverride = value;
+                OnPropertyChanged(nameof(VersionOverride));
+            }
+        }
+
         public override void OnSelectedVersionChanged()
         {
             base.OnSelectedVersionChanged();
             OnPropertyChanged(nameof(IsInstallorUpdateButtonEnabled));
+            OnPropertyChanged(nameof(ShowVersionOverrideTooltip));
             OnPropertyChanged(nameof(IsSelectedVersionInstalled));
             OnPropertyChanged(nameof(IsInstalledVersionTopLevel));
         }
@@ -327,7 +337,19 @@ namespace NuGet.PackageManagement.UI
         {
             get
             {
-                return SelectedVersion != null && !IsSelectedVersionInstalled && !InstalledVersionIsAutoReferenced;
+                return SelectedVersion != null
+                    && !IsSelectedVersionInstalled
+                    && !InstalledVersionIsAutoReferenced
+                    && VersionOverride == null
+                    && CanInstallWithPackageSourceMapping;
+            }
+        }
+
+        public bool ShowVersionOverrideTooltip
+        {
+            get
+            {
+                return !IsInstallorUpdateButtonEnabled && VersionOverride != null;
             }
         }
 
@@ -339,11 +361,24 @@ namespace NuGet.PackageManagement.UI
             }
         }
 
+        public bool IsFloatingVersionSupported
+        {
+            get
+            {
+                return IsProjectPackageReference && !IsCentralPackageManagementEnabled;
+            }
+        }
+
         public bool IsInstalledVersionTopLevel => InstalledVersion != null && PackageLevel == PackageLevel.TopLevel;
 
         public override IEnumerable<IProjectContextInfo> GetSelectedProjects(UserAction action)
         {
             return _nugetProjects;
+        }
+
+        public override void SetInstalledOrUpdateButtonIsEnabled()
+        {
+            OnPropertyChanged(nameof(IsInstallorUpdateButtonEnabled));
         }
     }
 }

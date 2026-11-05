@@ -1,14 +1,17 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using Moq;
 using NuGet.Common;
-using NuGet.Versioning;
 using Xunit;
 
 namespace NuGet.Protocol.Plugins.Tests
 {
+    using SemanticVersion = Versioning.SemanticVersion;
+
     public class ConnectionOptionsTests
     {
         private static readonly TimeSpan _timeout = TimeSpan.FromSeconds(10);

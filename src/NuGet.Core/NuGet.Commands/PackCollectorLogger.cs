@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -18,7 +20,7 @@ namespace NuGet.Commands
         public WarningProperties WarningProperties { get; set; }
 
         // Package specific warning property
-        private PackCommand.PackageSpecificWarningProperties PackageSpecificWarningProperties { get; set; }
+        private readonly PackCommand.PackageSpecificWarningProperties _packageSpecificWarningProperties;
 
         public IEnumerable<ILogMessage> Errors => _errors.ToArray();
 
@@ -29,13 +31,13 @@ namespace NuGet.Commands
         {
             _innerLogger = innerLogger;
             WarningProperties = warningProperties;
-            PackageSpecificWarningProperties = packageSpecificWarningProperties;
+            _packageSpecificWarningProperties = packageSpecificWarningProperties;
             _errors = new ConcurrentQueue<ILogMessage>();
         }
 
         public override void Log(ILogMessage message)
         {
-            // check if the message is a warning and it is suppressed 
+            // check if the message is a warning and it is suppressed
             if (!IsWarningSuppressed(message))
             {
                 // if the message is not suppressed then check if it needs to be upgraded to an error
@@ -55,7 +57,7 @@ namespace NuGet.Commands
 
         public override Task LogAsync(ILogMessage message)
         {
-            // check if the message is a warning and it is suppressed 
+            // check if the message is a warning and it is suppressed
             if (!IsWarningSuppressed(message))
             {
                 // if the message is not suppressed then check if it needs to be upgraded to an error
@@ -72,7 +74,7 @@ namespace NuGet.Commands
                 }
             }
 
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
 
         private bool IsWarningSuppressed(ILogMessage message)
@@ -93,7 +95,7 @@ namespace NuGet.Commands
 
                     if (packLogMessage != null)
                     {
-                        return PackageSpecificWarningProperties?.ApplyNoWarnProperties(packLogMessage) == true;
+                        return _packageSpecificWarningProperties?.ApplyNoWarnProperties(packLogMessage) == true;
                     }
                 }
             }

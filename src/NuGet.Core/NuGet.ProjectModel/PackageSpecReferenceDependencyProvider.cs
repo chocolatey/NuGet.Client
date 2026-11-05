@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -25,35 +27,38 @@ namespace NuGet.ProjectModel
         private readonly Dictionary<string, ExternalProjectReference> _externalProjectsByUniqueName
             = new Dictionary<string, ExternalProjectReference>(StringComparer.OrdinalIgnoreCase);
 
-        private readonly ILogger _logger;
-
         private readonly bool _useLegacyAssetTargetFallbackBehavior;
+
+        private readonly bool _useLegacyDependencyGraphResolution = false;
 
         public PackageSpecReferenceDependencyProvider(
             IEnumerable<ExternalProjectReference> externalProjects,
             ILogger logger) :
             this(externalProjects,
-                logger,
-                environmentVariableReader: EnvironmentVariableWrapper.Instance)
+                environmentVariableReader: EnvironmentVariableWrapper.Instance,
+                useLegacyDependencyGraphResolution: false)
+        {
+        }
+
+        public PackageSpecReferenceDependencyProvider(
+            IEnumerable<ExternalProjectReference> externalProjects,
+            ILogger logger,
+            bool useLegacyDependencyGraphResolution) :
+            this(externalProjects,
+                environmentVariableReader: EnvironmentVariableWrapper.Instance,
+                useLegacyDependencyGraphResolution)
         {
         }
 
         internal PackageSpecReferenceDependencyProvider(
             IEnumerable<ExternalProjectReference> externalProjects,
-            ILogger logger,
-            IEnvironmentVariableReader environmentVariableReader)
+            IEnvironmentVariableReader environmentVariableReader,
+            bool useLegacyDependencyGraphResolution = false)
         {
             if (externalProjects == null)
             {
                 throw new ArgumentNullException(nameof(externalProjects));
             }
-
-            if (logger == null)
-            {
-                throw new ArgumentNullException(nameof(logger));
-            }
-
-            _logger = logger;
 
             foreach (var project in externalProjects)
             {
@@ -81,6 +86,7 @@ namespace NuGet.ProjectModel
                 }
             }
             _useLegacyAssetTargetFallbackBehavior = MSBuildStringUtility.IsTrue(environmentVariableReader.GetEnvironmentVariable("NUGET_USE_LEGACY_ASSET_TARGET_FALLBACK_DEPENDENCY_RESOLUTION"));
+            _useLegacyDependencyGraphResolution = useLegacyDependencyGraphResolution;
         }
 
         public bool SupportsType(LibraryDependencyTarget libraryType)
@@ -88,16 +94,21 @@ namespace NuGet.ProjectModel
             return (libraryType & (LibraryDependencyTarget.Project | LibraryDependencyTarget.ExternalProject)) != LibraryDependencyTarget.None;
         }
 
+        [Obsolete("This method is obsolete and will be removed in future versions. Use GetLibrary(LibraryRange, NuGetFramework, string) instead.")]
         public Library GetLibrary(LibraryRange libraryRange, NuGetFramework targetFramework)
         {
-            Library library = null;
-            var name = libraryRange.Name;
+            return GetLibrary(libraryRange, targetFramework, alias: null);
+        }
 
-            ExternalProjectReference externalReference = null;
+        public Library GetLibrary(LibraryRange libraryRange, NuGetFramework targetFramework, string alias)
+        {
+            if (libraryRange == null) throw new ArgumentNullException(nameof(libraryRange));
+            if (targetFramework == null) throw new ArgumentNullException(nameof(targetFramework));
+
             PackageSpec packageSpec = null;
 
             // This must exist in the external references
-            if (_externalProjectsByUniqueName.TryGetValue(name, out externalReference))
+            if (_externalProjectsByUniqueName.TryGetValue(libraryRange.Name, out ExternalProjectReference externalReference))
             {
                 packageSpec = externalReference.PackageSpec;
             }
@@ -108,37 +119,23 @@ namespace NuGet.ProjectModel
                 return null;
             }
 
-            // create a dictionary of dependencies to make sure that no duplicates exist
-            var dependencies = new List<LibraryDependency>();
+            List<LibraryDependency> dependencies;
 
             var projectStyle = packageSpec?.RestoreMetadata?.ProjectStyle ?? ProjectStyle.Unknown;
 
-            // Read references from external project - we don't care about dotnettool projects, since they don't have project refs
-            if (projectStyle == ProjectStyle.PackageReference)
+            if (projectStyle == ProjectStyle.PackageReference ||
+                projectStyle == ProjectStyle.DotnetCliTool)
             {
-                // NETCore
-                dependencies.AddRange(GetDependenciesFromSpecRestoreMetadata(packageSpec, targetFramework));
+                dependencies = GetDependenciesFromSpecRestoreMetadata(packageSpec, targetFramework, alias);
             }
             else
             {
-                // UWP
-                dependencies.AddRange(GetDependenciesFromExternalReference(externalReference, packageSpec, targetFramework));
+                dependencies = GetDependenciesFromExternalReference(externalReference);
             }
 
-            // Remove duplicate dependencies. A reference can exist both in csproj and project.json
-            // dependencies is already ordered by importance here
-            var uniqueDependencies = new List<LibraryDependency>(dependencies.Count);
-            var projectNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            List<LibraryDependency> uniqueDependencies = DeduplicateDependencies(dependencies);
 
-            foreach (var project in dependencies)
-            {
-                if (projectNames.Add(project.Name))
-                {
-                    uniqueDependencies.Add(project);
-                }
-            }
-
-            library = new Library
+            Library library = new Library
             {
                 LibraryRange = libraryRange,
                 Identity = new LibraryIdentity
@@ -162,13 +159,35 @@ namespace NuGet.ProjectModel
             if (packageSpec != null)
             {
                 // Additional library properties
-                AddLibraryProperties(library, packageSpec, targetFramework);
+                AddLibraryProperties(library, packageSpec, targetFramework, alias);
             }
 
             return library;
+
+            static List<LibraryDependency> DeduplicateDependencies(List<LibraryDependency> dependencies)
+            {
+                if (dependencies.Count == 0)
+                {
+                    return dependencies;
+                }
+                // Remove duplicate dependencies.
+                // dependencies is already ordered by importance here
+                var uniqueDependencies = new List<LibraryDependency>(dependencies.Count);
+                var projectNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var project in dependencies)
+                {
+                    if (projectNames.Add(project.Name))
+                    {
+                        uniqueDependencies.Add(project);
+                    }
+                }
+
+                return uniqueDependencies;
+            }
         }
 
-        private void AddLibraryProperties(Library library, PackageSpec packageSpec, NuGetFramework targetFramework)
+        private static void AddLibraryProperties(Library library, PackageSpec packageSpec, NuGetFramework targetFramework, string alias)
         {
             var projectStyle = packageSpec.RestoreMetadata?.ProjectStyle ?? ProjectStyle.Unknown;
 
@@ -196,18 +215,7 @@ namespace NuGet.ProjectModel
                 // Record all frameworks in the project
                 library[KnownLibraryProperties.ProjectFrameworks] = frameworks;
 
-                var targetFrameworkInfo = packageSpec.GetTargetFramework(targetFramework);
-
-                // FrameworkReducer.GetNearest does not consider ATF since it is used for more than just compat
-                if (targetFrameworkInfo.FrameworkName == null && targetFramework is AssetTargetFallbackFramework atfFramework)
-                {
-                    targetFrameworkInfo = packageSpec.GetTargetFramework(atfFramework.AsFallbackFramework());
-                }
-
-                if (targetFrameworkInfo.FrameworkName == null && targetFramework is DualCompatibilityFramework mcfFramework)
-                {
-                    targetFrameworkInfo = packageSpec.GetTargetFramework(mcfFramework.AsFallbackFramework());
-                }
+                var targetFrameworkInfo = GetNearestTargetFrameworkWithFallbacks(packageSpec, targetFramework, alias);
 
                 library[KnownLibraryProperties.TargetFrameworkInformation] = targetFrameworkInfo;
 
@@ -225,21 +233,22 @@ namespace NuGet.ProjectModel
             }
         }
 
-        private List<LibraryDependency> GetDependenciesFromSpecRestoreMetadata(PackageSpec packageSpec, NuGetFramework targetFramework)
+        private List<LibraryDependency> GetDependenciesFromSpecRestoreMetadata(PackageSpec packageSpec, NuGetFramework targetFramework, string targetAlias)
         {
-            var dependencies = GetSpecDependencies(packageSpec, targetFramework);
-
-            // Get the nearest framework
-            var referencesForFramework = packageSpec.GetRestoreMetadataFramework(targetFramework);
+            var targetFrameworkInfo = packageSpec.GetNearestTargetFramework(targetFramework, targetAlias);
 
             if (!_useLegacyAssetTargetFallbackBehavior)
             {
-                if (referencesForFramework.FrameworkName == null &&
-                      targetFramework is AssetTargetFallbackFramework assetTargetFallbackFramework)
-                {
-                    referencesForFramework = packageSpec.GetRestoreMetadataFramework(assetTargetFallbackFramework.AsFallbackFramework());
-                }
+                targetFrameworkInfo = GetNearestTargetFrameworkWithFallbacks(packageSpec, targetFramework, targetAlias, targetFrameworkInfo);
             }
+
+            if (targetFrameworkInfo.FrameworkName == null)
+            {
+                return [];
+            }
+
+            List<LibraryDependency> dependencies = GetSpecDependencies(packageSpec, targetFrameworkInfo);
+            ProjectRestoreMetadataFrameworkInfo referencesForFramework = packageSpec.GetRestoreMetadataFramework(targetFrameworkInfo.TargetAlias);
 
             // Ensure that this project is compatible
             if (referencesForFramework?.FrameworkName?.IsSpecificFramework == true)
@@ -285,15 +294,50 @@ namespace NuGet.ProjectModel
         }
 
         /// <summary>
-        /// UWP Project.json
+        /// Resolves the nearest target framework with fallback precedence matching the package path:
+        /// 1. Root framework (exact or nearest)
+        /// 2. DualCompatibilityFramework secondary (e.g., native for C++/CLI)
+        /// 3. AssetTargetFallback imports (e.g., net472)
         /// </summary>
-        private List<LibraryDependency> GetDependenciesFromExternalReference(
-            ExternalProjectReference externalReference,
+        private static TargetFrameworkInformation GetNearestTargetFrameworkWithFallbacks(
             PackageSpec packageSpec,
-            NuGetFramework targetFramework)
+            NuGetFramework targetFramework,
+            string targetAlias,
+            TargetFrameworkInformation initialResult = null)
         {
-            var dependencies = GetSpecDependencies(packageSpec, targetFramework);
+            var targetFrameworkInfo = initialResult ?? packageSpec.GetNearestTargetFramework(targetFramework, targetAlias);
 
+            if (targetFrameworkInfo.FrameworkName != null)
+            {
+                return targetFrameworkInfo;
+            }
+
+            // Unwrap the root framework from ATF if present
+            NuGetFramework rootFramework = targetFramework is AssetTargetFallbackFramework atf
+                ? atf.RootFramework
+                : targetFramework;
+
+            // Try DualCompatibilityFramework secondary before ATF imports
+            if (rootFramework is DualCompatibilityFramework dcf)
+            {
+                targetFrameworkInfo = packageSpec.GetNearestTargetFramework(dcf.AsFallbackFramework(), targetAlias);
+                if (targetFrameworkInfo.FrameworkName != null)
+                {
+                    return targetFrameworkInfo;
+                }
+            }
+
+            // Try ATF imports last
+            if (targetFramework is AssetTargetFallbackFramework atfFramework)
+            {
+                targetFrameworkInfo = packageSpec.GetNearestTargetFramework(atfFramework.AsFallbackFramework(), targetAlias);
+            }
+
+            return targetFrameworkInfo;
+        }
+
+        private List<LibraryDependency> GetDependenciesFromExternalReference(ExternalProjectReference externalReference)
+        {
             if (externalReference != null)
             {
                 var childReferences = GetChildReferences(externalReference);
@@ -305,22 +349,9 @@ namespace NuGet.ProjectModel
                     childReferenceNames,
                     StringComparer.OrdinalIgnoreCase);
 
-                // Set all dependencies from project.json to external if an external match was passed in
-                // This is viral and keeps p2ps from looking into directories when we are going down
-                // a path already resolved by msbuild.
-                foreach (var dependency in dependencies.Where(d => IsProject(d)
-                    && filteredExternalDependencies.Contains(d.Name)))
-                {
-                    dependency.LibraryRange.TypeConstraint = LibraryDependencyTarget.ExternalProject;
-                }
-
-                // Add dependencies passed in externally
-                // These are usually msbuild references which have less metadata, they have
-                // the lowest priority.
-                // Note: Only add in dependencies that are in the filtered list to avoid getting the wrong TxM
-                dependencies.AddRange(childReferences
+                return [.. childReferences
                     .Where(reference => filteredExternalDependencies.Contains(reference.ProjectName))
-                    .Select(reference => new LibraryDependency
+                    .Select(reference => new LibraryDependency()
                     {
                         LibraryRange = new LibraryRange
                         {
@@ -328,89 +359,65 @@ namespace NuGet.ProjectModel
                             VersionRange = VersionRange.Parse("1.0.0"),
                             TypeConstraint = LibraryDependencyTarget.ExternalProject
                         }
+                    })];
+            }
+
+            return [];
+        }
+
+        private List<LibraryDependency> GetSpecDependencies(
+            PackageSpec packageSpec,
+            TargetFrameworkInformation targetFrameworkInfo)
+        {
+            List<LibraryDependency> dependencies = [.. targetFrameworkInfo.Dependencies];
+
+            if (_useLegacyDependencyGraphResolution && packageSpec.RestoreMetadata?.CentralPackageVersionsEnabled == true &&
+                packageSpec.RestoreMetadata?.CentralPackageTransitivePinningEnabled == true)
+            {
+                var dependencyNamesSet = new HashSet<string>(targetFrameworkInfo.Dependencies.Select(d => d.Name), StringComparer.OrdinalIgnoreCase);
+                dependencies.AddRange(targetFrameworkInfo.CentralPackageVersions
+                    .Where(item => !dependencyNamesSet.Contains(item.Key))
+                    .Select(item => new LibraryDependency()
+                    {
+                        LibraryRange = new LibraryRange(item.Value.Name, item.Value.VersionRange, LibraryDependencyTarget.Package),
+                        VersionCentrallyManaged = true,
+                        ReferenceType = LibraryDependencyReferenceType.None,
                     }));
             }
 
-            return dependencies;
-        }
+            // Remove all framework assemblies
+            dependencies.RemoveAll(d => d.LibraryRange.TypeConstraint == LibraryDependencyTarget.Reference);
 
-        internal List<LibraryDependency> GetSpecDependencies(
-            PackageSpec packageSpec,
-            NuGetFramework targetFramework)
-        {
-            var dependencies = new List<LibraryDependency>();
-
-            if (packageSpec != null)
+            for (var i = 0; i < dependencies.Count; i++)
             {
-                // Add dependencies section
-                dependencies.AddRange(packageSpec.Dependencies);
+                // Do not push the dependency changes here upwards, as the original package
+                // spec should not be modified.
 
-                // Add framework specific dependencies
-                var targetFrameworkInfo = packageSpec.GetTargetFramework(targetFramework);
-
-                if (!_useLegacyAssetTargetFallbackBehavior)
+                // Remove "project" from the allowed types for this dependency
+                // This will require that projects referenced by an msbuild project
+                // must be external projects.
+                var dependency = dependencies[i];
+                bool isPruned = IsDependencyPruned(dependency, targetFrameworkInfo.PackagesToPrune);
+                var libraryRange = new LibraryRange(dependency.LibraryRange) { TypeConstraint = dependency.LibraryRange.TypeConstraint & ~LibraryDependencyTarget.Project };
+                dependencies[i] = new LibraryDependency(dependency)
                 {
-                    if (targetFrameworkInfo.FrameworkName == null && targetFramework is AssetTargetFallbackFramework atfFramework)
-                    {
-                        targetFrameworkInfo = packageSpec.GetTargetFramework(atfFramework.AsFallbackFramework());
-                    }
-                }
-
-                dependencies.AddRange(targetFrameworkInfo.Dependencies);
-
-                if (packageSpec.RestoreMetadata?.CentralPackageVersionsEnabled == true &&
-                    packageSpec.RestoreMetadata?.CentralPackageTransitivePinningEnabled == true)
-                {
-                    var dependencyNamesSet = new HashSet<string>(targetFrameworkInfo.Dependencies.Select(d => d.Name), StringComparer.OrdinalIgnoreCase);
-                    dependencies.AddRange(targetFrameworkInfo.CentralPackageVersions
-                        .Where(item => !dependencyNamesSet.Contains(item.Key))
-                        .Select(item => new LibraryDependency()
-                        {
-                            LibraryRange = new LibraryRange(item.Value.Name, item.Value.VersionRange, LibraryDependencyTarget.Package),
-                            VersionCentrallyManaged = true,
-                            ReferenceType = LibraryDependencyReferenceType.None,
-                        }));
-                }
-
-                // Remove all framework assemblies
-                dependencies.RemoveAll(d => d.LibraryRange.TypeConstraint == LibraryDependencyTarget.Reference);
-
-                for (var i = 0; i < dependencies.Count; i++)
-                {
-                    // Clone the library dependency so we can safely modify it. The instance cloned here is from the
-                    // original package spec, which should not be modified.
-                    dependencies[i] = dependencies[i].Clone();
-                    // Remove "project" from the allowed types for this dependency
-                    // This will require that projects referenced by an msbuild project
-                    // must be external projects.
-                    dependencies[i].LibraryRange.TypeConstraint &= ~LibraryDependencyTarget.Project;
-                }
+                    LibraryRange = libraryRange,
+                    SuppressParent = isPruned ? LibraryIncludeFlags.All : dependency.SuppressParent,
+                    IncludeType = isPruned ? LibraryIncludeFlags.None : dependency.IncludeType,
+                };
             }
 
             return dependencies;
-        }
 
-        /// <summary>
-        /// Filter dependencies down to only possible project references and return the names.
-        /// </summary>
-        private IEnumerable<string> GetProjectNames(IEnumerable<LibraryDependency> dependencies)
-        {
-            foreach (var dependency in dependencies)
+            static bool IsDependencyPruned(LibraryDependency dependency, IReadOnlyDictionary<string, PrunePackageReference> packagesToPrune)
             {
-                if (IsProject(dependency))
+                if (packagesToPrune?.TryGetValue(dependency.Name, out PrunePackageReference packageToPrune) == true
+                    && dependency.LibraryRange.VersionRange.Satisfies(packageToPrune.VersionRange.MaxVersion))
                 {
-                    yield return dependency.Name;
+                    return true;
                 }
+                return false;
             }
-
-            yield break;
-        }
-
-        private bool IsProject(LibraryDependency dependency)
-        {
-            var type = dependency.LibraryRange.TypeConstraint;
-
-            return SupportsType(type);
         }
 
         private List<ExternalProjectReference> GetChildReferences(ExternalProjectReference parent)

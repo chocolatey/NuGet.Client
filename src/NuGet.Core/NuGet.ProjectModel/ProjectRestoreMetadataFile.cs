@@ -36,7 +36,7 @@ namespace NuGet.ProjectModel
             AbsolutePath = absolutePath;
         }
 
-        public bool Equals(ProjectRestoreMetadataFile other)
+        public bool Equals(ProjectRestoreMetadataFile? other)
         {
             if (ReferenceEquals(this, other))
             {
@@ -52,7 +52,7 @@ namespace NuGet.ProjectModel
                 && StringComparer.Ordinal.Equals(AbsolutePath, other.AbsolutePath);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return Equals(obj as ProjectRestoreMetadataFile);
         }
@@ -72,9 +72,9 @@ namespace NuGet.ProjectModel
             return PackagePath;
         }
 
-        public int CompareTo(ProjectRestoreMetadataFile other)
+        public int CompareTo(ProjectRestoreMetadataFile? other)
         {
-            return StringComparer.Ordinal.Compare(PackagePath, other.PackagePath);
+            return StringComparer.Ordinal.Compare(PackagePath, other?.PackagePath);
         }
 
         public ProjectRestoreMetadataFile Clone()

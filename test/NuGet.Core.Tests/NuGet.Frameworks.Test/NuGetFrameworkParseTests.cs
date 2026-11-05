@@ -2,12 +2,10 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using NuGet.Frameworks;
 using Xunit;
 
-namespace NuGet.Test
+namespace NuGet.Frameworks.Test
 {
     public class NuGetFrameworkParseTests
     {
@@ -420,6 +418,17 @@ namespace NuGet.Test
         [InlineData("netcoreapp31", "netcoreapp31")]
         [InlineData("net5.0", "net5.0")]
         [InlineData("net50", "net5.0")]
+        [InlineData("net5.0", "netcoreapp5.0")]
+        [InlineData("net5.0", "netcoreapp50")]
+        [InlineData("net6.0", "net60")]
+        [InlineData("net6.0", "netcoreapp6.0")]
+        [InlineData("net6.0", "netcoreapp60")]
+        [InlineData("net7.0", "net70")]
+        [InlineData("net7.0", "netcoreapp7.0")]
+        [InlineData("net7.0", "netcoreapp70")]
+        [InlineData("net8.0", "net80")]
+        [InlineData("net8.0", "netcoreapp8.0")]
+        [InlineData("net8.0", "netcoreapp80")]
         public void NuGetFramework_TryParseCommonFramework_ParsesCommonFrameworks(string frameworkString1, string frameworkString2)
         {
             var framework1 = NuGetFramework.Parse(frameworkString1);
@@ -431,10 +440,32 @@ namespace NuGet.Test
 
         public static IEnumerable<object[]> NuGetFramework_Parse_CommonFramework_ReturnsStaticInstance_Data()
         {
-            yield return new object[] { "net472", FrameworkConstants.CommonFrameworks.Net472 };
-            yield return new object[] { "net5.0", FrameworkConstants.CommonFrameworks.Net50 };
-            yield return new object[] { "net6.0", FrameworkConstants.CommonFrameworks.Net60 };
+            var commonFrameworksType = typeof(FrameworkConstants.CommonFrameworks);
 
+            foreach (var field in commonFrameworksType.GetFields())
+            {
+                var frameworkObject = field.GetValue(null) as NuGetFramework;
+                if (frameworkObject is null)
+                {
+                    Assert.Fail($"FrameworkConstants.CommonFrameworks.{field.Name} is not a NuGetFramework");
+                }
+
+                // Check all versions of .NET Standard and .NET (CoreApp)
+                if (frameworkObject.Framework == FrameworkConstants.FrameworkIdentifiers.NetStandard
+                    || frameworkObject.Framework == FrameworkConstants.FrameworkIdentifiers.NetCoreApp)
+                {
+                    var shortFolderName = frameworkObject.GetShortFolderName();
+                    yield return [shortFolderName, frameworkObject];
+                }
+
+                // For .NET Framework, only check versions 4.0 and above, since few packages target older versions
+                if (frameworkObject.Framework == FrameworkConstants.FrameworkIdentifiers.Net
+                    && frameworkObject.Version.Major >= 4)
+                {
+                    var shortFolderName = frameworkObject.GetShortFolderName();
+                    yield return [shortFolderName, frameworkObject];
+                }
+            }
         }
 
         [Theory]

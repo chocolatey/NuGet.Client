@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -18,6 +20,10 @@ namespace NuGet.ProjectModel
     {
         public static bool IsNuGetLockFileEnabled(PackageSpec project)
         {
+            if (project == null)
+            {
+                throw new ArgumentNullException(nameof(project));
+            }
             var restorePackagesWithLockFile = project.RestoreMetadata?.RestoreLockProperties.RestorePackagesWithLockFile;
             return MSBuildStringUtility.IsTrue(restorePackagesWithLockFile) || File.Exists(GetNuGetLockFilePath(project));
         }
@@ -56,12 +62,6 @@ namespace NuGet.ProjectModel
             return Path.Combine(baseDirectory, PackagesLockFileFormat.LockFileName);
         }
 
-        [Obsolete("This method is obsolete. Call IsLockFileValid instead.")]
-        public static bool IsLockFileStillValid(DependencyGraphSpec dgSpec, PackagesLockFile nuGetLockFile)
-        {
-            return IsLockFileValid(dgSpec, nuGetLockFile).IsValid;
-        }
-
         /// <summary>
         /// The lock file will get invalidated if one or more of the below are true
         ///     1. The target frameworks list of the current project was updated.
@@ -97,14 +97,15 @@ namespace NuGet.ProjectModel
                 return new LockFileValidationResult(false, invalidReasons);
             }
 
+            bool useAliasForMessages = nuGetLockFile.Version == 3;
+
             var uniqueName = dgSpec.Restore.First();
             var project = dgSpec.GetProjectSpec(uniqueName);
 
             // Validate all the direct dependencies
             NuGetFramework[] lockFileFrameworks = nuGetLockFile.Targets
-                .Where(t => t.TargetFramework != null)
+                .Where(t => t.TargetFramework != null && string.IsNullOrEmpty(t.RuntimeIdentifier))
                 .Select(t => t.TargetFramework)
-                .Distinct()
                 .ToArray();
 
             if (project.TargetFrameworks.Count != lockFileFrameworks.Length)
@@ -138,8 +139,7 @@ namespace NuGet.ProjectModel
 
                 foreach (var framework in project.TargetFrameworks)
                 {
-                    var target = nuGetLockFile.Targets.FirstOrDefault(
-                        t => EqualityUtility.EqualsWithNullCheck(t.TargetFramework, framework.FrameworkName));
+                    PackagesLockFileTarget target = GetTargetForTargetFrameworkInformation(nuGetLockFile, framework.FrameworkName, framework.TargetAlias);
 
                     if (target == null)
                     {
@@ -147,7 +147,7 @@ namespace NuGet.ProjectModel
                         invalidReasons.Add(string.Format(
                                     CultureInfo.CurrentCulture,
                                     Strings.PackagesLockFile_NewTargetFramework,
-                                    framework.FrameworkName.GetShortFolderName())
+                                    useAliasForMessages ? framework.TargetAlias : framework.FrameworkName.GetShortFolderName())
                                 );
 
                         continue;
@@ -155,7 +155,7 @@ namespace NuGet.ProjectModel
 
                     IEnumerable<LockFileDependency> directDependencies = target.Dependencies.Where(dep => dep.Type == PackageDependencyType.Direct);
 
-                    (var hasProjectDependencyChanged, var pmessage) = HasDirectPackageDependencyChanged(framework.Dependencies, directDependencies, target.TargetFramework);
+                    (var hasProjectDependencyChanged, var pmessage) = HasDirectPackageDependencyChanged(framework.Dependencies, directDependencies, useAliasForMessages ? framework.TargetAlias : target.TargetFramework.GetShortFolderName());
                     if (hasProjectDependencyChanged)
                     {
                         // lock file is out of sync
@@ -176,8 +176,8 @@ namespace NuGet.ProjectModel
                 // Validate all P2P references
                 foreach (var restoreMetadataFramework in project.RestoreMetadata.TargetFrameworks)
                 {
-                    var target = nuGetLockFile.Targets.FirstOrDefault(
-                        t => EqualityUtility.EqualsWithNullCheck(t.TargetFramework, restoreMetadataFramework.FrameworkName));
+                    var target = GetTargetForTargetFrameworkInformation(nuGetLockFile, restoreMetadataFramework.FrameworkName, restoreMetadataFramework.TargetAlias);
+                    var targetFrameworkInformation = project.TargetFrameworks.FirstOrDefault(e => e.TargetAlias == restoreMetadataFramework.TargetAlias);
 
                     if (target == null)
                         continue;
@@ -209,7 +209,7 @@ namespace NuGet.ProjectModel
                                             CultureInfo.CurrentCulture,
                                             Strings.PackagesLockFile_ProjectReferenceAdded,
                                             p2pProjectName,
-                                            target.TargetFramework.GetShortFolderName()
+                                            useAliasForMessages ? target.TargetAlias : target.TargetFramework.GetShortFolderName()
                                             ));
 
                                     continue;
@@ -228,19 +228,24 @@ namespace NuGet.ProjectModel
                                     }
                                     else
                                     {
-                                        // This does not consider ATF.
-                                        p2pSpecTargetFrameworkInformation = NuGetFrameworkUtility.GetNearest(p2pSpec.TargetFrameworks, restoreMetadataFramework.FrameworkName, e => e.FrameworkName);
+                                        p2pSpecTargetFrameworkInformation = p2pSpec.GetNearestTargetFramework(targetFrameworkInformation.FrameworkName, targetFrameworkInformation.TargetAlias);
+                                        if (p2pSpecTargetFrameworkInformation.FrameworkName == null)
+                                        {
+                                            if (targetFrameworkInformation.FrameworkName is AssetTargetFallbackFramework atfFramework)
+                                            {
+                                                p2pSpecTargetFrameworkInformation = p2pSpec.GetNearestTargetFramework(atfFramework.AsFallbackFramework(), targetFrameworkInformation.TargetAlias);
+                                            }
+                                        }
                                     }
                                     // No compatible framework found
-                                    if (p2pSpecTargetFrameworkInformation != null)
+                                    if (p2pSpecTargetFrameworkInformation != null && p2pSpecTargetFrameworkInformation.FrameworkName != null)
                                     {
-                                        // We need to compare the main framework only. Ignoring fallbacks.
-                                        var p2pSpecProjectRestoreMetadataFrameworkInfo = p2pSpec.RestoreMetadata.TargetFrameworks.FirstOrDefault(
-                                            t => NuGetFramework.Comparer.Equals(p2pSpecTargetFrameworkInformation.FrameworkName, t.FrameworkName));
+                                        // Get it based on the matching alias. The appropriate target framework information has already been calculated.
+                                        var p2pSpecProjectRestoreMetadataFrameworkInfo = p2pSpec.RestoreMetadata.TargetFrameworks.FirstOrDefault(e => e.TargetAlias == p2pSpecTargetFrameworkInformation.TargetAlias);
 
                                         if (p2pSpecProjectRestoreMetadataFrameworkInfo != null)
                                         {
-                                            (var hasChanged, var message) = HasP2PDependencyChanged(p2pSpecTargetFrameworkInformation.Dependencies, p2pSpecProjectRestoreMetadataFrameworkInfo.ProjectReferences, projectDependency, dgSpec);
+                                            (var hasChanged, var message) = HasP2PDependencyChanged(p2pSpecTargetFrameworkInformation.Dependencies, p2pSpecProjectRestoreMetadataFrameworkInfo.ProjectReferences, p2pSpecTargetFrameworkInformation.PackagesToPrune, targetFrameworkInformation.PackagesToPrune, projectDependency, dgSpec);
 
                                             if (hasChanged)
                                             {
@@ -269,7 +274,7 @@ namespace NuGet.ProjectModel
                                                CultureInfo.CurrentCulture,
                                                Strings.PackagesLockFile_ProjectReferenceHasNoCompatibleTargetFramework,
                                                p2pProjectName,
-                                               restoreMetadataFramework.FrameworkName.GetShortFolderName()
+                                               useAliasForMessages ? restoreMetadataFramework.TargetAlias : restoreMetadataFramework.FrameworkName.GetShortFolderName()
                                                ));
                                     }
                                 }
@@ -289,6 +294,19 @@ namespace NuGet.ProjectModel
             bool isLockFileValid = invalidReasons.Count == 0;
 
             return new LockFileValidationResult(isLockFileValid, invalidReasons);
+
+            static PackagesLockFileTarget GetTargetForTargetFrameworkInformation(PackagesLockFile nuGetLockFile, NuGetFramework framework, string targetAlias)
+            {
+                foreach (var target in nuGetLockFile.Targets.NoAllocEnumerate())
+                {
+                    if (EqualityUtility.EqualsWithNullCheck(target.TargetFramework, framework) &&
+                        (nuGetLockFile.Version != 3 || StringComparer.OrdinalIgnoreCase.Equals(target.TargetAlias, targetAlias)))
+                    {
+                        return target;
+                    }
+                }
+                return null;
+            }
         }
 
         /// <summary>Compares two lock files to check if the structure is the same (all values are the same, other
@@ -324,7 +342,10 @@ namespace NuGet.ProjectModel
 
                 for (var i = 0; i < actual.Targets.Count; i++)
                 {
-                    if (actual.Targets[i].TargetFramework == expectedTarget.TargetFramework)
+                    // Match by framework and alias (for v3) or just framework (for v1/v2)
+                    if (actual.Targets[i].TargetFramework == expectedTarget.TargetFramework &&
+                        StringComparer.OrdinalIgnoreCase.Equals(actual.Targets[i].TargetAlias, expectedTarget.TargetAlias) &&
+                        StringComparer.Ordinal.Equals(actual.Targets[i].RuntimeIdentifier, expectedTarget.RuntimeIdentifier))
                     {
                         if (actualTarget == null)
                         {
@@ -336,16 +357,16 @@ namespace NuGet.ProjectModel
                             return LockFileValidityWithMatchedResults.Invalid;
                         }
                     }
+                }
 
-                    if (actualTarget == null)
-                    {
-                        return LockFileValidityWithMatchedResults.Invalid;
-                    }
+                if (actualTarget == null)
+                {
+                    return LockFileValidityWithMatchedResults.Invalid;
+                }
 
-                    if (actualTarget.Dependencies.Count != expectedTarget.Dependencies.Count)
-                    {
-                        return LockFileValidityWithMatchedResults.Invalid;
-                    }
+                if (actualTarget.Dependencies.Count != expectedTarget.Dependencies.Count)
+                {
+                    return LockFileValidityWithMatchedResults.Invalid;
                 }
             }
 
@@ -356,7 +377,10 @@ namespace NuGet.ProjectModel
 
             foreach (PackagesLockFileTarget expectedTarget in expected.Targets)
             {
-                PackagesLockFileTarget actualTarget = actual.Targets.Single(t => t.TargetFramework == expectedTarget.TargetFramework);
+                PackagesLockFileTarget actualTarget = actual.Targets.Single(t =>
+                    t.TargetFramework == expectedTarget.TargetFramework &&
+                    StringComparer.OrdinalIgnoreCase.Equals(t.TargetAlias, expectedTarget.TargetAlias) &&
+                    StringComparer.Ordinal.Equals(t.RuntimeIdentifier, expectedTarget.RuntimeIdentifier));
 
                 // Duplicate dependencies list so we can remove matches to validate that all dependencies were matched
                 var actualDependencies = new Dictionary<LockFileDependency, LockFileDependency>(
@@ -389,7 +413,7 @@ namespace NuGet.ProjectModel
             return new LockFileValidityWithMatchedResults(isLockFileStillValid, matchedDependencies);
         }
 
-        private static (bool, string) HasDirectPackageDependencyChanged(IEnumerable<LibraryDependency> newDependencies, IEnumerable<LockFileDependency> lockFileDependencies, NuGetFramework nuGetFramework)
+        private static (bool, string) HasDirectPackageDependencyChanged(IEnumerable<LibraryDependency> newDependencies, IEnumerable<LockFileDependency> lockFileDependencies, string frameworkName)
         {
             // If the count is not the same, something has changed.
             // Otherwise the N^2 walk below determines whether anything has changed.
@@ -404,9 +428,9 @@ namespace NuGet.ProjectModel
                            string.Format(
                                CultureInfo.CurrentCulture,
                                Strings.PackagesLockFile_PackageReferencesHaveChanged,
-                               nuGetFramework.GetShortFolderName(),
+                               frameworkName,
                                lockFileDependenciesCount > 0 ? string.Join(", ", lockFileDependencies.Select(e => e.Id + ":" + e.RequestedVersion.ToNormalizedString()).OrderBy(dep => dep)) : Strings.None,
-                               newPackageDependenciesCount > 0 ? string.Join(", ", newPackageDependencies.Select(e => e.LibraryRange.Name + ":" + e.LibraryRange.VersionRange.ToNormalizedString()).OrderBy(dep => dep)) : Strings.None)
+                               newPackageDependenciesCount > 0 ? string.Join(", ", newPackageDependencies.Select(e => e.LibraryRange.ToLockFileDependencyGroupString()).OrderBy(dep => dep)) : Strings.None)
                            );
             }
 
@@ -422,7 +446,7 @@ namespace NuGet.ProjectModel
                                    CultureInfo.CurrentCulture,
                                    Strings.PackagesLockFile_PackageReferenceAdded,
                                    dependency.Name,
-                                   nuGetFramework.GetShortFolderName())
+                                   frameworkName)
                             );
                 }
                 if (!EqualityUtility.EqualsWithNullCheck(lockFileDependency.RequestedVersion, dependency.LibraryRange.VersionRange))
@@ -443,18 +467,22 @@ namespace NuGet.ProjectModel
             return (false, string.Empty);
         }
 
-        private static (bool, string) HasP2PDependencyChanged(IEnumerable<LibraryDependency> newDependencies, IEnumerable<ProjectRestoreReference> projectRestoreReferences, LockFileDependency projectDependency, DependencyGraphSpec dgSpec)
+        private static (bool, string) HasP2PDependencyChanged(IEnumerable<LibraryDependency> newDependencies, IEnumerable<ProjectRestoreReference> projectRestoreReferences, IReadOnlyDictionary<string, PrunePackageReference> dependentProjectPackagesToPrune, IReadOnlyDictionary<string, PrunePackageReference> packagesToPrune, LockFileDependency projectDependency, DependencyGraphSpec dgSpec)
         {
             // If the count is not the same, something has changed.
             // Otherwise we N^2 walk below determines whether anything has changed.
             var transitivelyFlowingDependencies = newDependencies.Where(
-                dep => dep.LibraryRange.TypeConstraint == LibraryDependencyTarget.Package && dep.SuppressParent != LibraryIncludeFlags.All);
+                dep => dep.LibraryRange.TypeConstraint == LibraryDependencyTarget.Package
+                    && dep.SuppressParent != LibraryIncludeFlags.All
+                    && !IsDependencyPruned(dep, dependentProjectPackagesToPrune));
 
             var transitivelyFlowingProjectReferences = projectRestoreReferences.Where(e => e.PrivateAssets != LibraryIncludeFlags.All);
 
             var transitiveDependencies = transitivelyFlowingDependencies.Count() + transitivelyFlowingProjectReferences.Count();
 
-            if (transitiveDependencies != projectDependency.Dependencies.Count)
+            // If count is not the same, then something has changed.
+            // When pruning, the lock file may have more dependencies than what gets resolved for the project.
+            if (transitiveDependencies != projectDependency.Dependencies.Count && packagesToPrune?.Count == 0)
             {
                 return (true,
                         string.Format(
@@ -470,6 +498,12 @@ namespace NuGet.ProjectModel
             foreach (var dependency in transitivelyFlowingDependencies)
             {
                 var matchedP2PLibrary = projectDependency.Dependencies.FirstOrDefault(dep => StringComparer.OrdinalIgnoreCase.Equals(dep.Id, dependency.Name));
+
+                if (matchedP2PLibrary == null && IsDependencyPruned(dependency, packagesToPrune))
+                {
+                    // This dependency is pruned and a pre-pruning lock file containing the dependency is still valid.
+                    continue;
+                }
 
                 if (matchedP2PLibrary == null || !EqualityUtility.EqualsWithNullCheck(matchedP2PLibrary.VersionRange, dependency.LibraryRange.VersionRange))
                 {
@@ -504,6 +538,16 @@ namespace NuGet.ProjectModel
 
             // no dependency changed. Lock file is still valid.
             return (false, string.Empty);
+
+            static bool IsDependencyPruned(LibraryDependency dependency, IReadOnlyDictionary<string, PrunePackageReference> packagesToPrune)
+            {
+                if (packagesToPrune?.TryGetValue(dependency.Name, out PrunePackageReference packageToPrune) == true
+                    && dependency.LibraryRange.VersionRange.Satisfies(packageToPrune.VersionRange.MaxVersion))
+                {
+                    return true;
+                }
+                return false;
+            }
         }
 
         /// <summary>
@@ -515,7 +559,7 @@ namespace NuGet.ProjectModel
         /// 2. If a central version that is a transitive dependency is removed from CPVM the lock file is invalidated.
         /// </summary>
         private static (bool, string) HasProjectTransitiveDependencyChanged(
-            IDictionary<string, CentralPackageVersion> centralPackageVersions,
+            IReadOnlyDictionary<string, CentralPackageVersion> centralPackageVersions,
             IList<LockFileDependency> lockFileCentralTransitiveDependencies,
             IList<LockFileDependency> lockTransitiveDependencies)
         {

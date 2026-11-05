@@ -11,6 +11,7 @@ namespace NuGet.Protocol.Plugins
     /// <summary>
     /// Represents a message between a NuGet client and a plugin.
     /// </summary>
+    [System.Text.Json.Serialization.JsonConverter(typeof(MessageConverter))]
     public sealed class Message
     {
         /// <summary>
@@ -34,7 +35,13 @@ namespace NuGet.Protocol.Plugins
         /// <summary>
         /// Gets the optional message payload.
         /// </summary>
-        public JObject Payload { get; }
+        [Obsolete("Use MessageUtilities.DeserializePayload<T>() to access the payload.")]
+        [JsonIgnore]
+        public JObject? Payload => null;
+
+        [JsonProperty("Payload")]
+        [JsonConverter(typeof(ObjectPayloadConverter))]
+        internal object? PayloadObject { get; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Message" /> class.
@@ -44,13 +51,19 @@ namespace NuGet.Protocol.Plugins
         /// <param name="method">The message method.</param>
         /// <param name="payload">An optional message payload.</param>
         /// <exception cref="ArgumentException">Thrown if <paramref name="requestId" />
-        /// is either <c>null</c> or an empty string.</exception>
+        /// is either <see langword="null" /> or an empty string.</exception>
         /// <exception cref="ArgumentException">Thrown if <paramref name="type" />
         /// is an undefined <see cref="MessageType" /> value.</exception>
         /// <exception cref="ArgumentException">Thrown if <paramref name="method" />
         /// is an undefined <see cref="MessageMethod" /> value.</exception>
+        [Obsolete("Use MessageUtilities.Create<T>() to create messages.")]
+        public Message(string requestId, MessageType type, MessageMethod method, JObject? payload = null)
+            : this(requestId, type, method, (object?)payload)
+        {
+        }
+
         [JsonConstructor]
-        public Message(string requestId, MessageType type, MessageMethod method, JObject payload = null)
+        internal Message(string requestId, MessageType type, MessageMethod method, object? payload = null)
         {
             if (string.IsNullOrEmpty(requestId))
             {
@@ -80,7 +93,7 @@ namespace NuGet.Protocol.Plugins
             RequestId = requestId;
             Type = type;
             Method = method;
-            Payload = payload;
+            PayloadObject = payload;
         }
     }
 }

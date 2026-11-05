@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
@@ -68,7 +70,7 @@ namespace NuGet.VisualStudio.Implementation.Extensibility
             using var _ = NuGetETW.ExtensibilityEventSource.StartStopEvent(eventName);
             try
             {
-                var packages = new HashSet<IVsPackageMetadata>(new VsPackageMetadataComparer());
+                var packages = new HashSet<IVsPackageMetadata>(VsPackageMetadataComparer.Instance);
 
                 return _threadingService.JoinableTaskFactory.Run(async delegate
                     {
@@ -150,7 +152,12 @@ namespace NuGet.VisualStudio.Implementation.Extensibility
 
             var packagesPath = VSRestoreSettingsUtilities.GetPackagesPath(_settings, packageSpec);
 
-            return new FallbackPackagePathResolver(packagesPath, VSRestoreSettingsUtilities.GetFallbackFolders(_settings, packageSpec));
+            // Resolving installed package paths tolerates a missing fallback folder, unlike restore.
+            // Filter out folders that don't exist on disk; the resolver would otherwise throw.
+            var fallbackFolders = VSRestoreSettingsUtilities.GetFallbackFolders(_settings, packageSpec)
+                .Where(Directory.Exists)
+                .ToList();
+            return new FallbackPackagePathResolver(packagesPath, fallbackFolders);
         }
 
         private async Task<IEnumerable<PackageReference>> GetInstalledPackageReferencesAsync(

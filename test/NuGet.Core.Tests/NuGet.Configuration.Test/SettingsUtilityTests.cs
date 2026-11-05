@@ -4,14 +4,102 @@
 using System;
 using System.IO;
 using FluentAssertions;
-using NuGet.Common;
+using Moq;
 using NuGet.Test.Utility;
+using Test.Utility;
 using Xunit;
+
+#if IS_CORECLR
+using NuGet.Common;
+#endif
 
 namespace NuGet.Configuration.Test
 {
     public class SettingsUtilityTests
     {
+        private readonly string _apikey = Guid.NewGuid().ToString();
+        private const string EndpointUrl = "https://www.nuget.org/api/v2/package";
+
+        [PlatformFact(Platform.Windows)]
+        public void GetApiKey_ReturnsApiKeyForMatchingEndpointUrl_Success()
+        {
+            // Arrange
+            string encryptedApiKey = EncryptionUtility.EncryptString(_apikey);
+
+            var settings = new Mock<ISettings>(MockBehavior.Strict);
+            settings.Setup(s => s.GetSection("apikeys"))
+                                .Returns(new MockSettingSection("apikeys",
+                                    new AddItem(EndpointUrl, encryptedApiKey)
+                                ));
+
+            //Act
+            string? apikey = SettingsUtility.GetApiKey(settings.Object, EndpointUrl, NuGetConstants.V3FeedUrl);
+
+            //Assert
+            Assert.Equal(_apikey, apikey);
+        }
+
+        [PlatformFact(Platform.Windows)]
+        public void GetApiKey_ReturnsApiKeyForMatchingPackageSourceUrl_Success()
+        {
+            // Arrange
+            string encryptedApiKey = EncryptionUtility.EncryptString(_apikey);
+
+            var settings = new Mock<ISettings>(MockBehavior.Strict);
+            settings.Setup(s => s.GetSection("apikeys"))
+                        .Returns(new MockSettingSection("apikeys",
+                            new AddItem("http://endpointUrl", _apikey),//dummy endpoint url passed to ensure apikey is read from source url config entry
+                            new AddItem(NuGetConstants.V3FeedUrl, encryptedApiKey)
+                        ));
+
+            //Act
+            string? apikey = SettingsUtility.GetApiKey(settings.Object, EndpointUrl, NuGetConstants.V3FeedUrl);
+
+            //Assert
+            Assert.Equal(_apikey, apikey);
+        }
+
+        [PlatformFact(Platform.Windows)]
+        public void GetApiKey_ReturnsDefaultGalleryServerUrlApiKeyIfSourceHostNameIsNuGetOrg_Success()
+        {
+            // Arrange
+            string encryptedApiKey = EncryptionUtility.EncryptString(_apikey);
+
+            var settings = new Mock<ISettings>(MockBehavior.Strict);
+            settings.Setup(s => s.GetSection("apikeys"))
+                        .Returns(new MockSettingSection("apikeys",
+                            new AddItem("http://endpointUrl", _apikey),
+                            new AddItem(NuGetConstants.DefaultGalleryServerUrl, encryptedApiKey)
+                        ));
+
+            //Act
+            string? apikey = SettingsUtility.GetApiKey(settings.Object, EndpointUrl, NuGetConstants.V3FeedUrl);
+
+            //Assert
+            Assert.Equal(_apikey, apikey);
+        }
+
+        [PlatformFact(Platform.Windows)]
+        public void GetApiKey_ReturnsNullWhenApiKeyIsNotFound_Success()
+        {
+            // Arrange
+            string encryptedApiKey = EncryptionUtility.EncryptString(_apikey);
+
+            var settings = new Mock<ISettings>(MockBehavior.Strict);
+            settings.Setup(s => s.GetSection("apikeys"))
+                        .Returns(new MockSettingSection("apikeys",
+                            new AddItem("http://endpointUrl", encryptedApiKey),
+                            new AddItem(NuGetConstants.DefaultGalleryServerUrl, encryptedApiKey),
+                            new AddItem("https://sourceUrl", encryptedApiKey)
+                        ));
+
+            //Act
+            string? apikey = SettingsUtility.GetApiKey(settings.Object, EndpointUrl, "https://someothersourceUrl");
+
+            //Assert
+            Assert.True(string.IsNullOrEmpty(apikey));
+        }
+
         [Fact]
         public void GetGlobalPackagesFolder_Default()
         {
@@ -19,14 +107,14 @@ namespace NuGet.Configuration.Test
 #if !IS_CORECLR
             var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 #else
-            string userProfile = null;
+            string userProfile;
             if (RuntimeEnvironmentHelper.IsWindows)
             {
-                userProfile = Environment.GetEnvironmentVariable("UserProfile");
+                userProfile = Environment.GetEnvironmentVariable("UserProfile")!;
             }
             else
             {
-                userProfile = Environment.GetEnvironmentVariable("HOME");
+                userProfile = Environment.GetEnvironmentVariable("HOME")!;
             }
 #endif
             var expectedPath = Path.Combine(userProfile, ".nuget", SettingsUtility.DefaultGlobalPackagesFolderPath);
@@ -192,7 +280,7 @@ namespace NuGet.Configuration.Test
         [Fact]
         public void GetValueForAddItem_WithNullSettings_Throws()
         {
-            var ex = Record.Exception(() => SettingsUtility.GetValueForAddItem(settings: null, section: "randomSection", key: "randomKey"));
+            var ex = Record.Exception(() => SettingsUtility.GetValueForAddItem(settings: null!, section: "randomSection", key: "randomKey"));
 
             ex.Should().NotBeNull();
             ex.Should().BeOfType<ArgumentNullException>();
@@ -201,7 +289,7 @@ namespace NuGet.Configuration.Test
         [Fact]
         public void DeleteValue_WithNullSettings_Throws()
         {
-            var ex = Record.Exception(() => SettingsUtility.DeleteValue(settings: null, section: "randomSection", attributeKey: "randomKey", attributeValue: "randomValue"));
+            var ex = Record.Exception(() => SettingsUtility.DeleteValue(settings: null!, section: "randomSection", attributeKey: "randomKey", attributeValue: "randomValue"));
 
             ex.Should().NotBeNull();
             ex.Should().BeOfType<ArgumentNullException>();
@@ -210,7 +298,7 @@ namespace NuGet.Configuration.Test
         [Fact]
         public void GetRepositoryPath_WithNullSettings_Throws()
         {
-            var ex = Record.Exception(() => SettingsUtility.GetRepositoryPath(settings: null));
+            var ex = Record.Exception(() => SettingsUtility.GetRepositoryPath(settings: null!));
 
             ex.Should().NotBeNull();
             ex.Should().BeOfType<ArgumentNullException>();
@@ -219,7 +307,7 @@ namespace NuGet.Configuration.Test
         [Fact]
         public void GetMaxHttpRequest_WithNullSettings_Throws()
         {
-            var ex = Record.Exception(() => SettingsUtility.GetMaxHttpRequest(settings: null));
+            var ex = Record.Exception(() => SettingsUtility.GetMaxHttpRequest(settings: null!));
 
             ex.Should().NotBeNull();
             ex.Should().BeOfType<ArgumentNullException>();
@@ -228,7 +316,7 @@ namespace NuGet.Configuration.Test
         [Fact]
         public void GetSignatureValidationMode_WithNullSettings_Throws()
         {
-            var ex = Record.Exception(() => SettingsUtility.GetSignatureValidationMode(settings: null));
+            var ex = Record.Exception(() => SettingsUtility.GetSignatureValidationMode(settings: null!));
 
             ex.Should().NotBeNull();
             ex.Should().BeOfType<ArgumentNullException>();
@@ -237,7 +325,7 @@ namespace NuGet.Configuration.Test
         [Fact]
         public void GetDecryptedValueForAddItem_WithNullSettings_Throws()
         {
-            var ex = Record.Exception(() => SettingsUtility.GetDecryptedValueForAddItem(settings: null, section: "randomSection", key: "randomKey"));
+            var ex = Record.Exception(() => SettingsUtility.GetDecryptedValueForAddItem(settings: null!, section: "randomSection", key: "randomKey"));
 
             ex.Should().NotBeNull();
             ex.Should().BeOfType<ArgumentNullException>();
@@ -246,7 +334,7 @@ namespace NuGet.Configuration.Test
         [Fact]
         public void SetEncryptedValueForAddItem_WithNullSettings_Throws()
         {
-            var ex = Record.Exception(() => SettingsUtility.SetEncryptedValueForAddItem(settings: null, section: "randomSection", key: "randomKey", value: "value"));
+            var ex = Record.Exception(() => SettingsUtility.SetEncryptedValueForAddItem(settings: null!, section: "randomSection", key: "randomKey", value: "value"));
 
             ex.Should().NotBeNull();
             ex.Should().BeOfType<ArgumentNullException>();
@@ -255,7 +343,7 @@ namespace NuGet.Configuration.Test
         [Fact]
         public void GetConfigValue_WithNullSettings_Throws()
         {
-            var ex = Record.Exception(() => SettingsUtility.GetConfigValue(settings: null, key: "randomKey"));
+            var ex = Record.Exception(() => SettingsUtility.GetConfigValue(settings: null!, key: "randomKey"));
 
             ex.Should().NotBeNull();
             ex.Should().BeOfType<ArgumentNullException>();
@@ -264,7 +352,7 @@ namespace NuGet.Configuration.Test
         [Fact]
         public void SetConfigValue_WithNullSettings_Throws()
         {
-            var ex = Record.Exception(() => SettingsUtility.SetConfigValue(settings: null, key: "randomKey", value: "value"));
+            var ex = Record.Exception(() => SettingsUtility.SetConfigValue(settings: null!, key: "randomKey", value: "value"));
 
             ex.Should().NotBeNull();
             ex.Should().BeOfType<ArgumentNullException>();
@@ -273,7 +361,7 @@ namespace NuGet.Configuration.Test
         [Fact]
         public void DeleteConfigValue_WithNullSettings_Throws()
         {
-            var ex = Record.Exception(() => SettingsUtility.DeleteConfigValue(settings: null, key: "randomKey"));
+            var ex = Record.Exception(() => SettingsUtility.DeleteConfigValue(settings: null!, key: "randomKey"));
 
             ex.Should().NotBeNull();
             ex.Should().BeOfType<ArgumentNullException>();
@@ -309,7 +397,7 @@ namespace NuGet.Configuration.Test
         [Fact]
         public void GetGlobalPackagesFolder_WithNullSettings_Throws()
         {
-            var ex = Record.Exception(() => SettingsUtility.GetGlobalPackagesFolder(settings: null));
+            var ex = Record.Exception(() => SettingsUtility.GetGlobalPackagesFolder(settings: null!));
 
             ex.Should().NotBeNull();
             ex.Should().BeOfType<ArgumentNullException>();
@@ -318,7 +406,7 @@ namespace NuGet.Configuration.Test
         [Fact]
         public void GetFallbackPackageFolders_WithNullSettings_Throws()
         {
-            var ex = Record.Exception(() => SettingsUtility.GetFallbackPackageFolders(settings: null));
+            var ex = Record.Exception(() => SettingsUtility.GetFallbackPackageFolders(settings: null!));
 
             ex.Should().NotBeNull();
             ex.Should().BeOfType<ArgumentNullException>();
@@ -327,7 +415,7 @@ namespace NuGet.Configuration.Test
         [Fact]
         public void GetEnabledSources_WithNullSettings_Throws()
         {
-            var ex = Record.Exception(() => SettingsUtility.GetEnabledSources(settings: null));
+            var ex = Record.Exception(() => SettingsUtility.GetEnabledSources(settings: null!));
 
             ex.Should().NotBeNull();
             ex.Should().BeOfType<ArgumentNullException>();
@@ -336,7 +424,7 @@ namespace NuGet.Configuration.Test
         [Fact]
         public void GetDefaultPushSource_WithNullSettings_Throws()
         {
-            var ex = Record.Exception(() => SettingsUtility.GetDefaultPushSource(settings: null));
+            var ex = Record.Exception(() => SettingsUtility.GetDefaultPushSource(settings: null!));
 
             ex.Should().NotBeNull();
             ex.Should().BeOfType<ArgumentNullException>();
@@ -345,7 +433,7 @@ namespace NuGet.Configuration.Test
         [Fact]
         public void GetUpdatePackageLastAccessTimeEnabledStatus_WithNullSettings_Throws()
         {
-            var ex = Record.Exception(() => SettingsUtility.GetUpdatePackageLastAccessTimeEnabledStatus(settings: null));
+            var ex = Record.Exception(() => SettingsUtility.GetUpdatePackageLastAccessTimeEnabledStatus(settings: null!));
 
             ex.Should().NotBeNull();
             ex.Should().BeOfType<ArgumentNullException>();

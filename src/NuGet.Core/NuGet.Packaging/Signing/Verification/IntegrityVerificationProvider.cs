@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using NuGet.Common;
 
 namespace NuGet.Packaging.Signing
@@ -18,7 +18,6 @@ namespace NuGet.Packaging.Signing
             return VerifyPackageIntegrityAsync(package, signature, settings);
         }
 
-#if IS_SIGNING_SUPPORTED
         private async Task<PackageVerificationResult> VerifyPackageIntegrityAsync(ISignedPackageReader package, PrimarySignature signature, SignedPackageVerifierSettings settings)
         {
             var status = SignatureVerificationStatus.Unknown;
@@ -48,13 +47,13 @@ namespace NuGet.Packaging.Signing
                 issues.Add(SignatureLog.DebugLog(string.Format(CultureInfo.CurrentCulture, Strings.SignatureDebug_HashOidFound, signatureHashOid)));
             }
 
-            return new SignedPackageVerificationResult(status, signature, issues);
+            return new SignedPackageVerificationResult(status, signature, issues)
+            {
+                RejectionReasons = status != SignatureVerificationStatus.Valid
+                    ? SignatureVerificationRejectionReasons.Other : SignatureVerificationRejectionReasons.None,
+                HasNonX509Rejection = status != SignatureVerificationStatus.Valid
+            };
         }
-#else
-        private Task<PackageVerificationResult> VerifyPackageIntegrityAsync(ISignedPackageReader package, PrimarySignature signature, SignedPackageVerifierSettings settings)
-        {
-            throw new NotSupportedException();
-        }
-#endif
+
     }
 }

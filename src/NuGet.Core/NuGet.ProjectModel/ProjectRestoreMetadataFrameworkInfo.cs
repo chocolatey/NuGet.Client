@@ -17,7 +17,7 @@ namespace NuGet.ProjectModel
         /// <summary>
         /// Target framework
         /// </summary>
-        public NuGetFramework FrameworkName { get; set; }
+        public NuGetFramework? FrameworkName { get; set; }
 
         /// <summary>
         /// Project references
@@ -30,12 +30,13 @@ namespace NuGet.ProjectModel
 
         public ProjectRestoreMetadataFrameworkInfo(NuGetFramework frameworkName)
         {
-            FrameworkName = frameworkName;
+            FrameworkName = frameworkName ?? throw new ArgumentNullException(nameof(frameworkName));
         }
 
         public override string ToString()
         {
-            return FrameworkName.GetShortFolderName();
+            return FrameworkName?.GetShortFolderName()
+                ?? throw new InvalidOperationException("A target framework must include its framework name.");
         }
 
         public override int GetHashCode()
@@ -44,17 +45,17 @@ namespace NuGet.ProjectModel
 
             hashCode.AddObject(FrameworkName);
             hashCode.AddStringIgnoreCase(TargetAlias);
-            hashCode.AddSequence(ProjectReferences);
+            hashCode.AddUnorderedSequence(ProjectReferences);
 
             return hashCode.CombinedHash;
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return Equals(obj as ProjectRestoreMetadataFrameworkInfo);
         }
 
-        public bool Equals(ProjectRestoreMetadataFrameworkInfo other)
+        public bool Equals(ProjectRestoreMetadataFrameworkInfo? other)
         {
             if (other == null)
             {
@@ -76,7 +77,7 @@ namespace NuGet.ProjectModel
             var clonedObject = new ProjectRestoreMetadataFrameworkInfo();
             clonedObject.FrameworkName = FrameworkName;
             clonedObject.TargetAlias = TargetAlias;
-            clonedObject.ProjectReferences = ProjectReferences?.Select(c => c.Clone()).ToList();
+            clonedObject.ProjectReferences = ProjectReferences.Select(c => c.Clone()).ToList();
             return clonedObject;
         }
     }

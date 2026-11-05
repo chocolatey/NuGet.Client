@@ -26,6 +26,11 @@ namespace NuGet.Protocol
 
         public CachingSourceProvider(IPackageSourceProvider packageSourceProvider)
         {
+            if (packageSourceProvider == null)
+            {
+                throw new ArgumentNullException(nameof(packageSourceProvider));
+            }
+
             _packageSourceProvider = packageSourceProvider;
 
             _resourceProviders.AddRange(Repository.Provider.GetCoreV3());
@@ -62,11 +67,26 @@ namespace NuGet.Protocol
 
         public SourceRepository CreateRepository(PackageSource source, FeedType type)
         {
+            if (source == null)
+            {
+                throw new ArgumentNullException(nameof(source));
+            }
+
+            if (_cachedSources.TryGetValue(source.Source, out SourceRepository? cached))
+            {
+                return cached;
+            }
+
             return _cachedSources.GetOrAdd(source.Source, new SourceRepository(source, _resourceProviders, type));
         }
 
         public void AddSourceRepository(SourceRepository source)
         {
+            if (source == null)
+            {
+                throw new ArgumentNullException(nameof(source));
+            }
+
             _cachedSources.TryAdd(source.PackageSource.Source, source);
         }
 

@@ -1,12 +1,11 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Common;
@@ -19,9 +18,7 @@ namespace NuGet.Protocol
 {
     public class FindPackagesByIdNupkgDownloader
     {
-        private readonly object _cacheEntriesLock = new object();
-        private readonly Dictionary<string, Task<CacheEntry>> _cacheEntries =
-            new Dictionary<string, Task<CacheEntry>>();
+        private readonly TaskResultCache<string, CacheEntry> _cacheEntries = new();
 
         private readonly object _nuspecReadersLock = new object();
         private readonly ConcurrentDictionary<string, NuspecReader> _nuspecReaders =
@@ -60,7 +57,7 @@ namespace NuGet.Protocol
             ILogger logger,
             CancellationToken token)
         {
-            NuspecReader reader = null;
+            NuspecReader? reader = null;
 
             lock (_nuspecReadersLock)
             {
@@ -77,7 +74,7 @@ namespace NuGet.Protocol
                 {
                     reader = PackageUtilities.OpenNuspecFromNupkg(identity.Id, stream, logger);
 
-                    return Task.FromResult(true);
+                    return TaskResult.True;
                 },
                 cacheContext,
                 logger,
@@ -139,7 +136,7 @@ namespace NuGet.Protocol
                         try
                         {
                             await stream.CopyToAsync(destination, token);
-                            ProtocolDiagnostics.RaiseEvent(new ProtocolDiagnosticNupkgCopiedEvent(_httpSource.PackageSource, destination.Length));
+                            ProtocolDiagnostics.RaiseEvent(new ProtocolDiagnosticNupkgCopiedEvent(_httpSource.PackageSource, destination.Length, identity.Id));
                         }
                         catch when (!token.IsCancellationRequested)
                         {
@@ -191,54 +188,25 @@ namespace NuGet.Protocol
                 throw new ArgumentNullException(nameof(cacheContext));
             }
 
-            if (cacheContext.DirectDownload)
-            {
-                // Don't read from the in-memory cache if we are doing a direct download.
-                var cacheEntry = await ProcessStreamAndGetCacheEntryAsync(
-                    identity,
-                    url,
-                    processStreamAsync,
-                    cacheContext,
-                    logger,
-                    token);
+            token.ThrowIfCancellationRequested();
 
-                // If we get back a cache file result from the cache, we can save it to the in-memory cache.
-                lock (_cacheEntriesLock)
-                {
-                    if (cacheEntry.CacheFile != null && !_cacheEntries.ContainsKey(url))
-                    {
-                        _cacheEntries[url] = Task.FromResult(cacheEntry);
-                    }
-                }
+            // Try to get the NupkgEntry from the in-memory cache. If we find a match, we can open the cache file
+            // and use that as the source stream, instead of going to the package source.
+            CacheEntry cacheEntry = await _cacheEntries.GetOrAddAsync(
+                url,
+                refresh: cacheContext.DirectDownload, // Don't read from the in-memory cache if we are doing a direct download.
+                static state => state.caller.ProcessStreamAndGetCacheEntryAsync(
+                    state.identity,
+                    state.url,
+                    state.processStreamAsync,
+                    state.cacheContext,
+                    state.logger,
+                    state.token),
+                (caller: this, identity, url, processStreamAsync, cacheContext, logger, token),
+                token);
 
-                // Process the NupkgEntry
-                return await ProcessCacheEntryAsync(cacheEntry, processStreamAsync, token);
-            }
-            else
-            {
-                // Try to get the NupkgEntry from the in-memory cache. If we find a match, we can open the cache file
-                // and use that as the source stream, instead of going to the package source.
-                Task<CacheEntry> nupkgEntryTask;
-                lock (_cacheEntriesLock)
-                {
-                    if (!_cacheEntries.TryGetValue(url, out nupkgEntryTask))
-                    {
-                        nupkgEntryTask = ProcessStreamAndGetCacheEntryAsync(
-                            identity,
-                            url,
-                            processStreamAsync,
-                            cacheContext,
-                            logger,
-                            token);
-
-                        _cacheEntries[url] = nupkgEntryTask;
-                    }
-                }
-
-                var nupkgEntry = await nupkgEntryTask;
-
-                return await ProcessCacheEntryAsync(nupkgEntry, processStreamAsync, token);
-            }
+            // Process the NupkgEntry
+            return await ProcessCacheEntryAsync(cacheEntry, processStreamAsync, token);
         }
 
         private async Task<CacheEntry> ProcessStreamAndGetCacheEntryAsync(
@@ -283,12 +251,14 @@ namespace NuGet.Protocol
         private async Task<T> ProcessHttpSourceResultAsync<T>(
             PackageIdentity identity,
             string url,
-            Func<HttpSourceResult, Task<T>> processAsync,
+            Func<HttpSourceResult?, Task<T>> processAsync,
             SourceCacheContext cacheContext,
             ILogger logger,
             CancellationToken token)
         {
-            int maxRetries = _enhancedHttpRetryHelper.IsEnabled ? _enhancedHttpRetryHelper.RetryCount : 3;
+            PackageIdValidator.Validate(identity.Id);
+
+            int maxRetries = _enhancedHttpRetryHelper.RetryCountOrDefault;
 
             for (var retry = 1; retry <= maxRetries; ++retry)
             {
@@ -302,7 +272,7 @@ namespace NuGet.Protocol
                             "nupkg_" + identity.Id.ToLowerInvariant() + "." + identity.Version.ToNormalizedString(),
                             httpSourceCacheContext)
                         {
-                            EnsureValidContents = stream => HttpStreamValidation.ValidateNupkg(url, stream),
+                            EnsureValidContents = stream => HttpStreamValidation.ValidatePackageIdentity(url, stream, identity),
                             IgnoreNotFounds = true,
                             MaxTries = 1,
                             IsRetry = retry > 1,
@@ -331,8 +301,7 @@ namespace NuGet.Protocol
 
                     logger.LogMinimal(message);
 
-                    if (_enhancedHttpRetryHelper.IsEnabled &&
-                        ex.InnerException != null &&
+                    if (ex.InnerException != null &&
                         ex.InnerException is IOException &&
                         ex.InnerException.InnerException != null &&
                         ex.InnerException.InnerException is System.Net.Sockets.SocketException)
@@ -341,7 +310,7 @@ namespace NuGet.Protocol
                         // Azure DevOps feeds sporadically do this due to mandatory connection cycling.
                         // Delaying gives Azure more of a chance to recover.
                         logger.LogVerbose("Enhanced retry: Encountered SocketException, delaying between tries to allow recovery");
-                        await Task.Delay(TimeSpan.FromMilliseconds(_enhancedHttpRetryHelper.DelayInMilliseconds), token);
+                        await Task.Delay(TimeSpan.FromMilliseconds(_enhancedHttpRetryHelper.DelayInMillisecondsOrDefault), token);
                     }
                 }
                 catch (Exception ex) when (retry == maxRetries)
@@ -399,13 +368,13 @@ namespace NuGet.Protocol
 
         private class CacheEntry
         {
-            public CacheEntry(string cacheFile, bool alreadyProcessed)
+            public CacheEntry(string? cacheFile, bool alreadyProcessed)
             {
                 CacheFile = cacheFile;
                 AlreadyProcessed = alreadyProcessed;
             }
 
-            public string CacheFile { get; }
+            public string? CacheFile { get; }
             public bool AlreadyProcessed { get; }
         }
     }

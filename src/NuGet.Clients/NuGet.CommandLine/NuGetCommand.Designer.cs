@@ -19,7 +19,7 @@ namespace NuGet.CommandLine {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "17.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class NuGetCommand {
@@ -224,7 +224,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The API key for the server..
+        ///   Looks up a localized string similar to The API key for the server. If not set, the NUGET_API_KEY environment variable is read..
         /// </summary>
         internal static string CommandApiKey {
             get {
@@ -260,7 +260,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Invalid value provided for &apos;{0}&apos;. For a list of accepted values, please visit https://docs.nuget.org/docs/reference/command-line-reference.
+        ///   Looks up a localized string similar to Invalid value provided for &apos;{0}&apos;. For a list of accepted values, visit https://docs.nuget.org/docs/reference/command-line-reference.
         /// </summary>
         internal static string CommandInvalidArgumentException {
             get {
@@ -292,6 +292,15 @@ namespace NuGet.CommandLine {
         internal static string CommandNoCache {
             get {
                 return ResourceManager.GetString("CommandNoCache", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Disable the use of the HTTP cache and contact all configured package sources for live information..
+        /// </summary>
+        internal static string CommandNoHttpCache {
+            get {
+                return ResourceManager.GetString("CommandNoHttpCache", resourceCulture);
             }
         }
         
@@ -430,6 +439,15 @@ namespace NuGet.CommandLine {
         internal static string DeleteCommandUsageSummary {
             get {
                 return ResourceManager.GetString("DeleteCommandUsageSummary", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Display NuGet.exe&apos;s End User Liscence Agreement (EULA).
+        /// </summary>
+        internal static string EulaDescription {
+            get {
+                return ResourceManager.GetString("EulaDescription", resourceCulture);
             }
         }
         
@@ -877,6 +895,15 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to NoCache is deprecated and has been renamed to NoHttpCache. Use NoHttpCache instead..
+        /// </summary>
+        internal static string Log_RestoreNoCacheInformation {
+            get {
+                return ResourceManager.GetString("Log_RestoreNoCacheInformation", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The NuGet configuration file. If specified, only the settings from this file will be used. If not specified, the hierarchy of configuration files from the current directory will be used. To learn more about NuGet configuration go to https://docs.microsoft.com/en-us/nuget/consume-packages/configuring-nuget-behavior..
         /// </summary>
         internal static string Option_ConfigFile {
@@ -963,6 +990,15 @@ namespace NuGet.CommandLine {
         internal static string PackageCommandDeterministic {
             get {
                 return ResourceManager.GetString("PackageCommandDeterministic", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Specify the timestamps this command should use when creating a deterministic package. Multiple invocations of the pack command will create the exact same package..
+        /// </summary>
+        internal static string PackageCommandDeterministicTimestamp {
+            get {
+                return ResourceManager.GetString("PackageCommandDeterministicTimestamp", resourceCulture);
             }
         }
         
@@ -1160,6 +1196,15 @@ namespace NuGet.CommandLine {
         internal static string PackCommandUsageExamples {
             get {
                 return ResourceManager.GetString("PackCommandUsageExamples", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Allows pushing to HTTP sources (insecure)..
+        /// </summary>
+        internal static string PushCommandAllowInsecureConnectionsDescription {
+            get {
+                return ResourceManager.GetString("PushCommandAllowInsecureConnectionsDescription", resourceCulture);
             }
         }
         
@@ -1493,7 +1538,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to SHA-1 fingerprint of the certificate used to search a local certificate store for the certificate.
+        ///   Looks up a localized string similar to SHA-256, SHA-384 or SHA-512 fingerprint of the certificate used to search a local certificate store for the certificate.
         ///The certificate store can be specified by -CertificateStoreName and -CertificateStoreLocation options..
         /// </summary>
         internal static string SignCommandCertificateFingerprintDescription {
@@ -1582,7 +1627,16 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to No value provided for &apos;{0}&apos;, which is needed when using the &apos;{1}&apos; option. For a list of accepted values, please visit https://docs.nuget.org/docs/reference/command-line-reference.
+        ///   Looks up a localized string similar to {0}: Invalid value for &apos;CertificateFingerprint&apos; option. The value must be a SHA-256, SHA-384, or SHA-512 certificate fingerprint (in hexadecimal)..
+        /// </summary>
+        internal static string SignCommandInvalidCertificateFingerprint {
+            get {
+                return ResourceManager.GetString("SignCommandInvalidCertificateFingerprint", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No value provided for &apos;{0}&apos;, which is needed when using the &apos;{1}&apos; option. For a list of accepted values, visit https://docs.nuget.org/docs/reference/command-line-reference.
         /// </summary>
         internal static string SignCommandMissingArgumentException {
             get {
@@ -1591,7 +1645,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Multiple options were used to specify a certificate. For a list of accepted ways to provide a certificate, please visit https://docs.nuget.org/docs/reference/command-line-reference.
+        ///   Looks up a localized string similar to Multiple options were used to specify a certificate. For a list of accepted ways to provide a certificate, visit https://docs.nuget.org/docs/reference/command-line-reference.
         /// </summary>
         internal static string SignCommandMultipleCertificateException {
             get {
@@ -1600,7 +1654,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to No value provided for &apos;{0}&apos;. For a list of accepted values, please visit https://docs.nuget.org/docs/reference/command-line-reference.
+        ///   Looks up a localized string similar to No value provided for &apos;{0}&apos;. For a list of accepted values, visit https://docs.nuget.org/docs/reference/command-line-reference.
         /// </summary>
         internal static string SignCommandNoArgumentException {
             get {
@@ -1609,7 +1663,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to No certificate was provided. For a list of accepted ways to provide a certificate, please visit https://docs.nuget.org/docs/reference/command-line-reference.
+        ///   Looks up a localized string similar to No certificate was provided. For a list of accepted ways to provide a certificate, visit https://docs.nuget.org/docs/reference/command-line-reference.
         /// </summary>
         internal static string SignCommandNoCertificateException {
             get {
@@ -1618,7 +1672,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to No package was provided. For a list of accepted ways to provide a package, please visit https://docs.nuget.org/docs/reference/command-line-reference.
+        ///   Looks up a localized string similar to No package was provided. For a list of accepted ways to provide a package, visit https://docs.nuget.org/docs/reference/command-line-reference.
         /// </summary>
         internal static string SignCommandNoPackageException {
             get {
@@ -1627,7 +1681,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The &apos;-Timestamper&apos; option was not provided. The signed package will not be timestamped. To learn more about this option, please visit https://docs.nuget.org/docs/reference/command-line-reference.
+        ///   Looks up a localized string similar to The &apos;-Timestamper&apos; option was not provided. The signed package will not be timestamped. To learn more about this option, visit https://docs.nuget.org/docs/reference/command-line-reference.
         /// </summary>
         internal static string SignCommandNoTimestamperWarning {
             get {
@@ -1650,6 +1704,15 @@ namespace NuGet.CommandLine {
         internal static string SignCommandOverwriteDescription {
             get {
                 return ResourceManager.GetString("SignCommandOverwriteDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Allow signing with certificates whose root certificate is not in a trusted root store...
+        /// </summary>
+        internal static string SignCommandAllowUntrustedRootDescription {
+            get {
+                return ResourceManager.GetString("SignCommandAllowUntrustedRootDescription", resourceCulture);
             }
         }
         
@@ -1711,6 +1774,15 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Allows HTTP connections for adding or updating packages. Note: This method is not secure. For secure options, see https://aka.ms/nuget-https-everywhere for more information..
+        /// </summary>
+        internal static string SourcesCommandAllowInsecureConnectionsDescription {
+            get {
+                return ResourceManager.GetString("SourcesCommandAllowInsecureConnectionsDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Provides the ability to manage list of sources located in NuGet.config files..
         /// </summary>
         internal static string SourcesCommandDescription {
@@ -1743,6 +1815,15 @@ namespace NuGet.CommandLine {
         internal static string SourcesCommandPasswordDescription {
             get {
                 return ResourceManager.GetString("SourcesCommandPasswordDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The NuGet server protocol version to be used. Currently supported versions are 2 and 3. See https://learn.microsoft.com/nuget/api/overview for information about the version 3 protocol. Defaults to 2 if not specified..
+        /// </summary>
+        internal static string SourcesCommandProtocolVersionDescription {
+            get {
+                return ResourceManager.GetString("SourcesCommandProtocolVersionDescription", resourceCulture);
             }
         }
         
@@ -1850,7 +1931,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The API key for the symbol server..
+        ///   Looks up a localized string similar to The API key for the symbol server. If not set, the NUGET_SYMBOL_API_KEY environment variable is read..
         /// </summary>
         internal static string SymbolApiKey {
             get {

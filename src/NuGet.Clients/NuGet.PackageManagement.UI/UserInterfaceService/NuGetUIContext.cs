@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,13 +32,14 @@ namespace NuGet.PackageManagement.UI
         private readonly NuGetSolutionManagerServiceWrapper _solutionManagerService;
         private readonly NuGetSourcesServiceWrapper _sourceService;
         private IProjectContextInfo[] _projects;
+        private readonly ISettings _settings;
 
         public event EventHandler<IReadOnlyCollection<string>> ProjectActionsExecuted;
 
         // Non-private only to facilitate testing.
         internal NuGetUIContext(
             IServiceBroker serviceBroker,
-            IReconnectingNuGetSearchService nuGetSearchService,
+            INuGetSearchService nuGetSearchService,
             IVsSolutionManager solutionManager,
             NuGetSolutionManagerServiceWrapper solutionManagerService,
             NuGetPackageManager packageManager,
@@ -44,10 +47,11 @@ namespace NuGet.PackageManagement.UI
             IPackageRestoreManager packageRestoreManager,
             IOptionsPageActivator optionsPageActivator,
             IUserSettingsManager userSettingsManager,
-            NuGetSourcesServiceWrapper sourceService)
+            NuGetSourcesServiceWrapper sourceService,
+            ISettings settings)
         {
             ServiceBroker = serviceBroker;
-            ReconnectingSearchService = nuGetSearchService;
+            NuGetSearchService = nuGetSearchService;
             SolutionManager = solutionManager;
             _solutionManagerService = solutionManagerService;
             PackageManager = packageManager;
@@ -57,14 +61,22 @@ namespace NuGet.PackageManagement.UI
             OptionsPageActivator = optionsPageActivator;
             UserSettingsManager = userSettingsManager;
             _sourceService = sourceService;
+            _settings = settings;
+            PackageSourceMapping = PackageSourceMapping.GetPackageSourceMapping(_settings);
 
+            _settings.SettingsChanged += Settings_SettingsChanged;
             ServiceBroker.AvailabilityChanged += OnAvailabilityChanged;
             SolutionManager.ActionsExecuted += OnActionsExecuted;
         }
 
+        private void Settings_SettingsChanged(object sender, EventArgs e)
+        {
+            PackageSourceMapping = PackageSourceMapping.GetPackageSourceMapping(_settings);
+        }
+
         public IServiceBroker ServiceBroker { get; }
 
-        public IReconnectingNuGetSearchService ReconnectingSearchService { get; }
+        public INuGetSearchService NuGetSearchService { get; }
 
         public IVsSolutionManager SolutionManager { get; }
 
@@ -96,22 +108,20 @@ namespace NuGet.PackageManagement.UI
 
         public IUserSettingsManager UserSettingsManager { get; }
 
+        public PackageSourceMapping PackageSourceMapping { get; private set; }
+
         public void Dispose()
         {
             ServiceBroker.AvailabilityChanged -= OnAvailabilityChanged;
             SolutionManager.ActionsExecuted -= OnActionsExecuted;
+            _settings.SettingsChanged -= Settings_SettingsChanged;
 
             _solutionManagerService.Dispose();
             _sourceService.Dispose();
 
-            ReconnectingSearchService.Dispose();
+            NuGetSearchService.Dispose();
 
             GC.SuppressFinalize(this);
-        }
-
-        public async Task<bool> IsNuGetProjectUpgradeableAsync(IProjectContextInfo project, CancellationToken cancellationToken)
-        {
-            return await project.IsUpgradeableAsync(ServiceBroker, cancellationToken);
         }
 
         public async Task<IModalProgressDialogSession> StartModalProgressDialogAsync(string caption, ProgressDialogData initialData, INuGetUI uiService)
@@ -141,6 +151,7 @@ namespace NuGet.PackageManagement.UI
             IDeleteOnRestartManager deleteOnRestartManager,
             INuGetLockService lockService,
             IRestoreProgressReporter restoreProgressReporter,
+            INuGetTelemetryProvider telemetryProvider,
             CancellationToken cancellationToken)
         {
             Assumes.NotNull(serviceBroker);
@@ -185,7 +196,8 @@ namespace NuGet.PackageManagement.UI
             var actionEngine = new UIActionEngine(
                 sourceRepositoryProvider,
                 packageManager,
-                lockService);
+                lockService,
+                telemetryProvider);
 
             return new NuGetUIContext(
                 serviceBroker,
@@ -197,7 +209,8 @@ namespace NuGet.PackageManagement.UI
                 packageRestoreManager,
                 optionsPageActivator,
                 userSettingsManager,
-                sourceServiceWrapper);
+                sourceServiceWrapper,
+                settings);
         }
 
         public void RaiseProjectActionsExecuted(IReadOnlyCollection<string> projectIds)

@@ -14,7 +14,7 @@ namespace NuGet.Protocol
 
         public override bool CanWrite => false;
 
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+        public override object ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
         {
             var v = JsonUtility.LoadJson(reader);
 
@@ -22,13 +22,13 @@ namespace NuGet.Protocol
 
             foreach (var fingerprint in v)
             {
-                dict[fingerprint.Key] = fingerprint.Value.ToString();
+                dict[fingerprint.Key] = fingerprint.Value?.ToString() ?? string.Empty;
             }
 
             return new Fingerprints(dict);
         }
 
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
         {
             throw new NotImplementedException();
         }

@@ -130,13 +130,13 @@
     <value>[option] on '{0}' is invalid without a setter.</value>
   </data>
   <data name="PackageCommandSpecifyInputFileError" xml:space="preserve">
-    <value>Please specify a nuspec or project file to use.</value>
+    <value>Specify a nuspec or project file to use.</value>
   </data>
   <data name="PackageCommandSuccess" xml:space="preserve">
     <value>Successfully created package '{0}'.</value>
   </data>
   <data name="PushCommandNoSourceError" xml:space="preserve">
-    <value>There is no default source, please specify a source.</value>
+    <value>There is no default source, specify a source.</value>
   </data>
   <data name="ResourcePropertyIncorrectType" xml:space="preserve">
     <value>The property '{0}' on resource type '{1}' is not a type of ResourceManager.</value>
@@ -241,7 +241,7 @@
     <value>Using '{0}' for metadata.</value>
   </data>
   <data name="InvalidSource" xml:space="preserve">
-    <value>The specified source '{0}' is invalid. Please provide a valid source.</value>
+    <value>The specified source '{0}' is invalid. Provide a valid source.</value>
   </data>
   <data name="SetApiKeyCommandDefaultApiKeysSaved" xml:space="preserve">
     <value>The API Key '{0}' was saved for {1} and {2}.</value>
@@ -298,10 +298,13 @@
     <value>UserName: </value>
   </data>
   <data name="Credentials_RequestCredentials" xml:space="preserve">
-    <value>Please provide credentials for: {0}</value>
+    <value>Provide credentials for: {0}</value>
   </data>
   <data name="InstallCommandPackageAlreadyExists" xml:space="preserve">
     <value>Package "{0}" is already installed.</value>
+  </data>
+  <data name="InstallCommandHigherVersionAlreadyExists" xml:space="preserve">
+    <value>Skipping installation of package "{0}" because higher version "{1}" is already installed.</value>
   </data>
   <data name="PackageCommandNoFilesForLibPackage" xml:space="preserve">
     <value>Failed to build package. Ensure '{0}' includes assembly files. For help on building symbols package, visit {1}.</value>
@@ -337,7 +340,7 @@
     <value>Remove sample nuspec values.</value>
   </data>
   <data name="Credentials_ProxyCredentials" xml:space="preserve">
-    <value>Please provide proxy credentials:</value>
+    <value>Provide proxy credentials:</value>
   </data>
   <data name="Warning_SemanticVersion" xml:space="preserve">
     <value>Version "{0}" does not follow semantic versioning guidelines.</value>
@@ -434,7 +437,7 @@
     <value>Restoring NuGet packages listed in file {0}.</value>
   </data>
   <data name="RestoreCommandCannotDeterminePackagesFolder" xml:space="preserve">
-    <value>Cannot determine the packages folder to restore NuGet packages. Please specify either -PackagesDirectory or -SolutionDirectory.</value>
+    <value>Cannot determine the packages folder to restore NuGet packages. Specify either -PackagesDirectory or -SolutionDirectory.</value>
   </data>
   <data name="RestoreCommandFileNotFound" xml:space="preserve">
     <value>Input file does not exist: {0}.</value>
@@ -493,7 +496,7 @@ To prevent NuGet from downloading packages during build, open the Visual Studio 
     <value>MsBuild.exe does not exist at '{0}'.</value>
   </data>
   <data name="RestoreCommandCannotDetermineGlobalPackagesFolder" xml:space="preserve">
-    <value>'globalPackagesFolder' setting is a relative path. To determine full path, please specify either -SolutionDirectory or a solution file as a parameter. To ignore 'globalPackagesFolder' setting, specify -PackagesDirectory.</value>
+    <value>'globalPackagesFolder' setting is a relative path. To determine full path, specify either -SolutionDirectory or a solution file as a parameter. To ignore 'globalPackagesFolder' setting, specify -PackagesDirectory.</value>
     <comment>Please do not localize 'globalPackagesFolder', -SolutionDirectory or -PackagesDirectory</comment>
   </data>
   <data name="Error_PackagesConfigParseError" xml:space="preserve">
@@ -524,7 +527,7 @@ To prevent NuGet from downloading packages during build, open the Visual Studio 
     <value>MSBuild is not installed.</value>
   </data>
   <data name="FailedToLoadExtension" xml:space="preserve">
-    <value>Failed to load {0}, if this extension was downloaded from the internet please make sure it got unblocked (right click, properties, unblock).</value>
+    <value>Failed to load {0}, if this extension was downloaded from the internet make sure it got unblocked (right click, properties, unblock).</value>
   </data>
   <data name="FailedToLoadExtensionDuringMefComposition" xml:space="preserve">
     <value>Failed to load {0}{1}</value>
@@ -575,7 +578,7 @@ To prevent NuGet from downloading packages during build, open the Visual Studio 
     <value>Clearing local resources failed: one or more errors occured.</value>
   </data>
   <data name="LocalsCommand_InvalidLocalResourceName" xml:space="preserve">
-    <value>An invalid local resource name was provided. Please provide one of the following values: http-cache, packages-cache, global-packages, all.</value>
+    <value>An invalid local resource name was provided. Provide one of the following values: http-cache, packages-cache, global-packages, all.</value>
   </data>
   <data name="LocalsCommand_LocalResourcePathNotSet" xml:space="preserve">
     <value>The location of local resource '{0}' is undefined.</value>
@@ -612,7 +615,7 @@ To prevent NuGet from downloading packages during build, open the Visual Studio 
     <value>Invalid AssemblyInformationalVersion '{0}' on assembly '{1}'; falling back to AssemblyVersion '{2}'.</value>
   </data>
   <data name="Credentials_ForbiddenCredentials" xml:space="preserve">
-    <value>The remote server indicated that the previous request was forbidden. Please provide credentials for: {0}</value>
+    <value>The remote server indicated that the previous request was forbidden. Provide credentials for: {0}</value>
     <comment>{0} will be replaced with the URL that needs credentials.</comment>
   </data>
   <data name="OutputNuGetVersion" xml:space="preserve">
@@ -637,7 +640,7 @@ To prevent NuGet from downloading packages during build, open the Visual Studio 
     <value>Using Msbuild from '{0}'.</value>
   </data>
   <data name="MsbuildPathNotExist" xml:space="preserve">
-    <value>MSBuildPath : {0}  doesn't not exist.</value>
+    <value>MSBuildPath : {0} does not exist.</value>
   </data>
   <data name="PackageRestoreConsentCheckBoxText" xml:space="preserve">
     <value>&amp;Allow NuGet to download missing packages</value>
@@ -664,20 +667,20 @@ To prevent NuGet from downloading packages during build, open the Visual Studio 
     <value>Response file '{0}' cannot be larger than {1}mb</value>
   </data>
   <data name="ConsolePasswordProvider_DisplayFile" xml:space="preserve">
-    <value>Please provide password for: {0}</value>
+    <value>Provide password for: {0}</value>
     <comment>0 - file that requires password</comment>
   </data>
   <data name="ConsolePasswordProvider_PromptForPassword" xml:space="preserve">
     <value>Password: </value>
   </data>
   <data name="Warning_LongPath_DisabledPolicy" xml:space="preserve">
-    <value>Please enbale long file path support in local group policy. Fore more details, please refer to https://aka.ms/nuget-long-path.</value>
+    <value>Enable long file path support in local group policy. Fore more details, refer to https://aka.ms/nuget-long-path.</value>
   </data>
   <data name="Warning_LongPath_UnsupportedNetFramework" xml:space="preserve">
-    <value>Please install .NET Framework 4.6.2 or above that supports long file paths. Fore more details, please refer to https://aka.ms/nuget-long-path.</value>
+    <value>Install .NET Framework 4.6.2 or above that supports long file paths. Fore more details, refer to https://aka.ms/nuget-long-path.</value>
   </data>
   <data name="Warning_LongPath_UnsupportedOS" xml:space="preserve">
-    <value>Long file path is currently only supported on Windows 10. Fore more details, please refer to https://aka.ms/nuget-long-path.</value>
+    <value>Long file path is currently only supported on Windows 10. Fore more details, refer to https://aka.ms/nuget-long-path.</value>
   </data>
   <data name="Error_UnknownAction" xml:space="preserve">
     <value>The action '{0}' is not recognized.</value>
@@ -688,7 +691,7 @@ To prevent NuGet from downloading packages during build, open the Visual Studio 
     <comment>0 - argument name</comment>
   </data>
   <data name="ProjectJsonPack_Deprecated" xml:space="preserve">
-    <value>`project.json` pack is deprecated. Please consider migrating '{0}' to `PackageReference` and using the pack targets.</value>
+    <value>`project.json` pack is deprecated. Consider migrating '{0}' to `PackageReference` and using the pack targets.</value>
     <comment>Do not localize project.json and `PackageReference` 
 0 - project path (project.json file path)</comment>
   </data>
@@ -704,20 +707,12 @@ To prevent NuGet from downloading packages during build, open the Visual Studio 
   </data>
   <data name="Error_ProjectJson_Deprecated_And_Removed" xml:space="preserve">
     <value>`project.json` pack is disabled in the current NuGet version, and will be permanently removed in a future version.
-Please consider migrating '{0}' to `PackageReference` and using the pack targets.
+Consider migrating '{0}' to `PackageReference` and using the pack targets.
 You can set the '{1}' environment variable to 'true' to temporarily reenable this functionality.</value>
     <comment>Please do not localize `project.json` pack and `PackageReference`. 0 - path, 1 - env var name</comment>
   </data>
   <data name="Error_NuGetExeNeedsToBeUnblockedAfterDownloading" xml:space="preserve">
     <value>NuGet.exe file on path {0} needs to be unblocked after downloading.</value>
-  </data>
-  <data name="Warning_HttpServerUsage" xml:space="preserve">
-    <value>You are running the '{0}' operation with an 'HTTP' source, '{1}'. Non-HTTPS access will be removed in a future version. Consider migrating to an 'HTTPS' source.</value>
-    <comment>0 - The command name. Ex. Push/Delete. 1 - server uri.</comment>
-  </data>
-  <data name="Warning_HttpSources_Multiple" xml:space="preserve">
-    <value>You are running the '{0}' operation with 'HTTP' sources: {1}
-Non-HTTPS access will be removed in a future version. Consider migrating to 'HTTPS' sources.</value>
   </data>
   <data name="Error_SourceProviderIsNull" xml:space="preserve">
     <value>Property SourceProvider is null.</value>
@@ -729,10 +724,32 @@ Non-HTTPS access will be removed in a future version. Consider migrating to 'HTT
 Do not localize `SDK`, `dotnet pack`, msbuild -t:pack` and 'true'.</comment>
   </data>
   <data name="Error_UnsupportedMsBuildForSolutionFilter" xml:space="preserve">
-    <value>This version of MSBuild not support Solution filter: '{0}'. Please use a MSBuild version greater or equal to 16.7 to use this feature.</value>
+    <value>This version of MSBuild not support Solution filter: '{0}'. Use a MSBuild version greater than or equal to 16.7 to use this feature.</value>
+  </data>
+  <data name="Error_UnsupportedMsBuildForSlnx" xml:space="preserve">
+    <value>This version of MSBuild not support the slnx format: '{0}'. Use a MSBuild version greater than or equal to 17.13 to use this feature.</value>
   </data>
   <data name="Error_InvalidCultureInfo" xml:space="preserve">
     <value>Invalid culture identifier in {0} environment variable. Value read is '{1}'</value>
     <comment>0 - Environment variable name, 1 - value set in environment variable</comment>
+  </data>
+  <data name="Error_CannotFindNonArchitectureSpecificMsbuild" xml:space="preserve">
+    <value>The resolved MSBuild directory is `{0}` which is an architecture-specific directory. Could not find MSBuild in its parent directory (non-architecture specific).</value>
+  </data>
+  <data name="Error_MsBuildIsNetCoreMsBuild" xml:space="preserve">
+    <value>The MSBuild directory '{0}' appears to be a .NET SDK (dotnet) MSBuild installation. NuGet.exe requires the .NET Framework version of MSBuild, which is included with Visual Studio. Use 'dotnet restore' instead, or provide the path to a Visual Studio MSBuild installation.</value>
+    <comment>{0} is the MSBuild directory path. Do not localize 'NuGet.exe', 'MSBuild', '.NET SDK', '.NET Framework', 'dotnet restore', 'Visual Studio'.</comment>
+  </data>
+  <data name="Warning_CommandDeprecated" xml:space="preserve">
+    <value>'{0} {1}' is deprecated. Use '{0} {2}' instead.</value>
+    <comment>{0} - name of the assembly running the command, e.g., NuGet
+{1} - current command marked as deprecated, e.g., list
+{2} - replacement command. For example, search</comment>
+  </data>
+  <data name="Error_HttpSources_Multiple" xml:space="preserve">
+    <value>You are running the '{0}' operation with 'HTTP' sources: {1}. NuGet requires HTTPS sources. To use HTTP sources, you must explicitly set 'allowInsecureConnections' to true in your NuGet.Config file. Refer to https://aka.ms/nuget-https-everywhere for more information.</value>
+  </data>
+  <data name="Error_HttpSource_Single" xml:space="preserve">
+    <value>You are running the '{0}' operation with an 'HTTP' source: {1}. NuGet requires HTTPS sources. To use an HTTP source, you must explicitly set 'allowInsecureConnections' to true in your NuGet.Config file. Refer to https://aka.ms/nuget-https-everywhere for more information.</value>
   </data>
 </root>

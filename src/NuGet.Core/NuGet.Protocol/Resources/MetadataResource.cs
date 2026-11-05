@@ -49,9 +49,9 @@ namespace NuGet.Protocol.Core.Types
 
         public abstract Task<bool> Exists(string packageId, bool includePrerelease, bool includeUnlisted, SourceCacheContext sourceCacheContext, Common.ILogger log, CancellationToken token);
 
-        public abstract Task<IEnumerable<KeyValuePair<string, NuGetVersion>>> GetLatestVersions(IEnumerable<string> packageIds, bool includePrerelease, bool includeUnlisted, SourceCacheContext sourceCacheContext, Common.ILogger log, CancellationToken token);
+        public abstract Task<IEnumerable<KeyValuePair<string, NuGetVersion?>>> GetLatestVersions(IEnumerable<string> packageIds, bool includePrerelease, bool includeUnlisted, SourceCacheContext sourceCacheContext, Common.ILogger log, CancellationToken token);
 
-        public async Task<NuGetVersion> GetLatestVersion(string packageId, bool includePrerelease, bool includeUnlisted, SourceCacheContext sourceCacheContext, Common.ILogger log, CancellationToken token)
+        public async Task<NuGetVersion?> GetLatestVersion(string packageId, bool includePrerelease, bool includeUnlisted, SourceCacheContext sourceCacheContext, Common.ILogger log, CancellationToken token)
         {
             var results = await GetLatestVersions(new string[] { packageId }, includePrerelease, includeUnlisted, sourceCacheContext, log, token);
             var result = results.SingleOrDefault();

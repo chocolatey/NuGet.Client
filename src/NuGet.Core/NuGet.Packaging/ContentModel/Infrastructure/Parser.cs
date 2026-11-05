@@ -13,16 +13,16 @@ namespace NuGet.ContentModel.Infrastructure
     {
         private readonly List<Segment> _segments = new List<Segment>();
         private readonly Dictionary<string, object> _defaults;
-        private readonly PatternTable _table;
+        private readonly PatternTable? _table;
 
         public PatternExpression(PatternDefinition pattern)
         {
             _table = pattern.Table;
             _defaults = pattern.Defaults.ToDictionary(p => p.Key, p => p.Value);
-            Initialize(pattern.Pattern);
+            Initialize(pattern.Pattern, pattern.PreserveRawValues);
         }
 
-        private void Initialize(string pattern)
+        private void Initialize(string pattern, bool preserveRawValues)
         {
             for (var scanIndex = 0; scanIndex < pattern.Length;)
             {
@@ -58,15 +58,15 @@ namespace NuGet.ContentModel.Infrastructure
                     var endName = endToken - (matchOnly ? 1 : 0);
 
                     var tokenName = pattern.Substring(beginName, endName - beginName);
-                    _segments.Add(new TokenSegment(tokenName, delimiter, matchOnly, _table));
+                    _segments.Add(new TokenSegment(tokenName, delimiter, matchOnly, _table, preserveRawValues));
                 }
                 scanIndex = endToken + 1;
             }
         }
 
-        public ContentItem Match(string path, IReadOnlyDictionary<string, ContentPropertyDefinition> propertyDefinitions)
+        internal ContentItem? Match(string path, IReadOnlyDictionary<string, ContentPropertyDefinition> propertyDefinitions)
         {
-            ContentItem item = null;
+            ContentItem? item = null;
             var startIndex = 0;
             foreach (var segment in _segments)
             {
@@ -97,7 +97,7 @@ namespace NuGet.ContentModel.Infrastructure
                     // item already created, append defaults
                     foreach (var pair in _defaults)
                     {
-                        item.Properties[pair.Key] = pair.Value;
+                        item.Add(pair.Key, pair.Value);
                     }
                 }
                 return item;
@@ -107,7 +107,7 @@ namespace NuGet.ContentModel.Infrastructure
 
         private abstract class Segment
         {
-            internal abstract bool TryMatch(ref ContentItem item, string path, IReadOnlyDictionary<string, ContentPropertyDefinition> propertyDefinitions, int startIndex, out int endIndex);
+            internal abstract bool TryMatch(ref ContentItem? item, string path, IReadOnlyDictionary<string, ContentPropertyDefinition> propertyDefinitions, int startIndex, out int endIndex);
         }
 
         [DebuggerDisplay("{_pattern.Substring(_start, _length)}")]
@@ -125,7 +125,7 @@ namespace NuGet.ContentModel.Infrastructure
             }
 
             internal override bool TryMatch(
-                ref ContentItem item,
+                ref ContentItem? item,
                 string path,
                 IReadOnlyDictionary<string, ContentPropertyDefinition> propertyDefinitions,
                 int startIndex,
@@ -150,24 +150,31 @@ namespace NuGet.ContentModel.Infrastructure
             private readonly string _token;
             private readonly char _delimiter;
             private readonly bool _matchOnly;
-            private readonly PatternTable _table;
+            private readonly PatternTable? _table;
+            private readonly bool _preserveRawValue = false;
+            private readonly string? _rawToken;
 
-            public TokenSegment(string token, char delimiter, bool matchOnly, PatternTable table)
+            public TokenSegment(string token, char delimiter, bool matchOnly, PatternTable? table, bool preserveRawValues)
             {
                 _token = token;
                 _delimiter = delimiter;
                 _matchOnly = matchOnly;
                 _table = table;
+                _preserveRawValue = preserveRawValues;
+                if (_preserveRawValue)
+                {
+                    _rawToken = $"{token}_raw";
+                }
             }
 
             internal override bool TryMatch(
-                ref ContentItem item,
+                ref ContentItem? item,
                 string path,
                 IReadOnlyDictionary<string, ContentPropertyDefinition> propertyDefinitions,
                 int startIndex,
                 out int endIndex)
             {
-                ContentPropertyDefinition propertyDefinition;
+                ContentPropertyDefinition? propertyDefinition;
                 if (!propertyDefinitions.TryGetValue(_token, out propertyDefinition))
                 {
                     throw new Exception(string.Format(CultureInfo.CurrentCulture, "Unable to find property definition for {{{0}}}", _token));
@@ -190,9 +197,9 @@ namespace NuGet.ContentModel.Infrastructure
                     {
                         break;
                     }
-                    var substring = path.Substring(startIndex, delimiterIndex - startIndex);
-                    object value;
-                    if (propertyDefinition.TryLookup(substring, _table, out value))
+                    ReadOnlyMemory<char> substring = path.AsMemory(startIndex, delimiterIndex - startIndex);
+                    object? value;
+                    if (propertyDefinition.TryLookup(substring, _table, _matchOnly, out value))
                     {
                         if (!_matchOnly)
                         {
@@ -204,11 +211,11 @@ namespace NuGet.ContentModel.Infrastructure
                                     Path = path
                                 };
                             }
-                            if (StringComparer.Ordinal.Equals(_token, "tfm"))
+                            if (_preserveRawValue)
                             {
-                                item.Properties.Add("tfm_raw", substring);
+                                item.Add(_rawToken!, substring.ToString());
                             }
-                            item.Properties.Add(_token, value);
+                            item.Add(_token, value!);
                         }
                         endIndex = delimiterIndex;
                         return true;

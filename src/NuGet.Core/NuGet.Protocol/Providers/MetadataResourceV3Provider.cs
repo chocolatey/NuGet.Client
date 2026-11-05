@@ -17,9 +17,9 @@ namespace NuGet.Protocol
         {
         }
 
-        public override async Task<Tuple<bool, INuGetResource>> TryCreate(SourceRepository source, CancellationToken token)
+        public override async Task<Tuple<bool, INuGetResource?>> TryCreate(SourceRepository source, CancellationToken token)
         {
-            MetadataResourceV3 curResource = null;
+            MetadataResourceV3? curResource = null;
             var regResource = await source.GetResourceAsync<RegistrationResourceV3>(token);
 
             if (regResource != null)
@@ -27,7 +27,7 @@ namespace NuGet.Protocol
                 curResource = new MetadataResourceV3(regResource);
             }
 
-            return new Tuple<bool, INuGetResource>(curResource != null, curResource);
+            return new Tuple<bool, INuGetResource?>(curResource != null, curResource);
         }
     }
 }

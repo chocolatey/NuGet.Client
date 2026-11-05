@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -38,30 +40,38 @@ namespace NuGet.Commands
             FlattenDependencyTypesUnified(targetGraph, result);
 
             // Override flags for direct dependencies
-            var directDependencies = spec.Dependencies.ToList();
-
-            // Add dependencies defined under the framework node
             var specFramework = spec.GetTargetFramework(targetGraph.Framework);
-            if (specFramework?.Dependencies != null)
-            {
-                directDependencies.AddRange(specFramework.Dependencies);
-            }
 
             // Override the flags for direct dependencies. This lets the
             // user take control when needed.
-            foreach (var dependency in directDependencies)
+            foreach (var dependency in specFramework?.Dependencies)
             {
+                LibraryIncludeFlags includeType = IsDependencyPruned(dependency, specFramework?.PackagesToPrune) ?
+                    LibraryIncludeFlags.None :
+                    dependency.IncludeType;
+
                 if (result.ContainsKey(dependency.Name))
                 {
-                    result[dependency.Name] = dependency.IncludeType;
+                    result[dependency.Name] = includeType;
                 }
                 else
                 {
-                    result.Add(dependency.Name, dependency.IncludeType);
+                    result.Add(dependency.Name, includeType);
                 }
             }
 
             return result;
+
+            static bool IsDependencyPruned(LibraryDependency dependency, IReadOnlyDictionary<string, PrunePackageReference> packagesToPrune)
+            {
+                if (packagesToPrune?.TryGetValue(dependency.Name, out PrunePackageReference packageToPrune) == true
+                    && dependency.LibraryRange.VersionRange != null
+                    && dependency.LibraryRange.VersionRange.Satisfies(packageToPrune.VersionRange.MaxVersion))
+                {
+                    return true;
+                }
+                return false;
+            }
         }
 
         private static void FlattenDependencyTypesUnified(

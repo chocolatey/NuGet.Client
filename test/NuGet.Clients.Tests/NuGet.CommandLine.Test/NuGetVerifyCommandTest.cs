@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.IO;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using NuGet.Common;
 using NuGet.Test.Utility;
 using Xunit;
@@ -28,8 +30,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     nugetexe,
                     packageDirectory,
-                    string.Join(" ", args),
-                    true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(_failureCode, result.ExitCode);
@@ -49,8 +50,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     nugetexe,
                     packageDirectory,
-                    string.Join(" ", args),
-                    true);
+                    string.Join(" ", args));
 
                 // Assert
                 if (RuntimeEnvironmentHelper.IsMono)
@@ -83,8 +83,7 @@ namespace NuGet.CommandLine.Test
                 var result = CommandRunner.Run(
                     nugetExe,
                     packageFile.Directory.FullName,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 if (RuntimeEnvironmentHelper.IsMono)
                 {

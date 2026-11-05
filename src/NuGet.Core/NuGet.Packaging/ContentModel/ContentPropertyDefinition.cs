@@ -13,81 +13,45 @@ namespace NuGet.ContentModel
     /// </summary>
     public class ContentPropertyDefinition
     {
-        private static readonly Func<object, object, bool> EqualsTest = (left, right) => Equals(left, right);
+        private static readonly Func<object?, object?, bool> EqualsTest = (left, right) => Equals(left, right);
 
-        public ContentPropertyDefinition(string name)
-            : this(name, null, null, null, null, false)
-        {
-        }
-
-        public ContentPropertyDefinition(
+        internal ContentPropertyDefinition(
             string name,
-            Func<string, PatternTable, object> parser)
+            Func<ReadOnlyMemory<char>, PatternTable?, bool, object?> parser)
             : this(name, parser, null, null, null, false)
         {
         }
 
-        public ContentPropertyDefinition(
+        internal ContentPropertyDefinition(
             string name,
-            Func<object, object, bool> compatibilityTest)
-            : this(name, null, compatibilityTest, null, null, false)
-        {
-        }
-
-        public ContentPropertyDefinition(
-            string name,
-            Func<string, PatternTable, object> parser,
-            Func<object, object, bool> compatibilityTest)
+            Func<ReadOnlyMemory<char>, PatternTable?, bool, object?> parser,
+            Func<object?, object?, bool>? compatibilityTest)
             : this(name, parser, compatibilityTest, null, null, false)
         {
         }
 
-        public ContentPropertyDefinition(string name,
-            Func<string, PatternTable, object> parser,
-            Func<object, object, bool> compatibilityTest,
-            Func<object, object, object, int> compareTest)
+        internal ContentPropertyDefinition(string name,
+            Func<ReadOnlyMemory<char>, PatternTable?, bool, object?> parser,
+            Func<object?, object?, bool>? compatibilityTest,
+            Func<object?, object?, object?, int>? compareTest)
             : this(name, parser, compatibilityTest, compareTest, null, false)
         {
         }
 
-        public ContentPropertyDefinition(
+        internal ContentPropertyDefinition(
             string name,
-            IEnumerable<string> fileExtensions)
-            : this(name, null, null, null, fileExtensions, false)
-        {
-        }
-
-        public ContentPropertyDefinition(
-            string name,
-            Func<string, PatternTable, object> parser,
+            Func<ReadOnlyMemory<char>, PatternTable?, bool, object?> parser,
             IEnumerable<string> fileExtensions)
             : this(name, parser, null, null, fileExtensions, false)
         {
         }
 
-        public ContentPropertyDefinition(
+        internal ContentPropertyDefinition(
             string name,
-            IEnumerable<string> fileExtensions,
-            bool allowSubfolders)
-            : this(name, null, null, null, fileExtensions, allowSubfolders)
-        {
-        }
-
-        public ContentPropertyDefinition(
-            string name,
-            Func<string, PatternTable, object> parser,
-            IEnumerable<string> fileExtensions,
-            bool allowSubfolders)
-            : this(name, parser, null, null, fileExtensions, allowSubfolders)
-        {
-        }
-
-        public ContentPropertyDefinition(
-            string name,
-            Func<string, PatternTable, object> parser,
-            Func<object, object, bool> compatibilityTest,
-            Func<object, object, object, int> compareTest,
-            IEnumerable<string> fileExtensions,
+            Func<ReadOnlyMemory<char>, PatternTable?, bool, object?> parser,
+            Func<object?, object?, bool>? compatibilityTest,
+            Func<object?, object?, object?, int>? compareTest,
+            IEnumerable<string>? fileExtensions,
             bool allowSubfolders)
         {
             Name = name;
@@ -100,15 +64,33 @@ namespace NuGet.ContentModel
 
         public string Name { get; }
 
-        public List<string> FileExtensions { get; }
+        public List<string>? FileExtensions { get; }
 
         public bool FileExtensionAllowSubFolders { get; }
 
-        public Func<string, PatternTable, object> Parser { get; }
+        /// <summary>
+        /// Parse a ReadOnlyMemory char if it's off the form of this definition.
+        /// A null return value means the ReadOnlyMemory char does not match this definition.
+        /// If the bool is true, the return object will be non-null, and match what the ReadOnlyMemory char represents.
+        /// If the bool is false, the return object will be non-null if the ReadOnlyMemory char represents a valid value for this definition. This is a performance optimization.
+        /// </summary>
+        internal Func<ReadOnlyMemory<char>, PatternTable?, bool, object?> Parser { get; }
 
-        public virtual bool TryLookup(string name, PatternTable table, out object value)
+        /// <summary>
+        /// Looks up a definition for the given substring.
+        /// Example, say this definition is for an assembly. 
+        /// If the name is "assembly.dll", this method would return true and the value would be the assembly name.
+        /// If the name is "assembly.xml" this method would return flase and the value would be the null.
+        /// If this is a match only lookup the value will be null, but the return bool will be true. This is a performance optimization since the value is unused.
+        /// </summary>
+        /// <param name="name">The name to lookup.</param>
+        /// <param name="table">A replacement table. If name matches a value in the replacement table, it'll be returned instead. </param>
+        /// <param name="matchOnly">Whether this is a grouping match, or we actually want to actualize the value of name as a string.</param>
+        /// <param name="value">The out param. If matchonly, it will always be null. Otherwise, set to actualized value of name if the return is true, set to null if false.</param>
+        /// <returns>True if the name matches the definition. False otherwise.</returns>
+        internal virtual bool TryLookup(ReadOnlyMemory<char> name, PatternTable? table, bool matchOnly, out object? value)
         {
-            if (name == null)
+            if (name.IsEmpty)
             {
                 value = null;
                 return false;
@@ -120,9 +102,16 @@ namespace NuGet.ContentModel
                 {
                     foreach (var fileExtension in FileExtensions)
                     {
-                        if (name.EndsWith(fileExtension, StringComparison.OrdinalIgnoreCase))
+                        if (name.Span.EndsWith(fileExtension.AsSpan(), StringComparison.OrdinalIgnoreCase))
                         {
-                            value = name;
+                            if (!matchOnly)
+                            {
+                                value = name.ToString();
+                            }
+                            else
+                            {
+                                value = null;
+                            }
                             return true;
                         }
                     }
@@ -131,7 +120,7 @@ namespace NuGet.ContentModel
 
             if (Parser != null)
             {
-                value = Parser.Invoke(name, table);
+                value = Parser.Invoke(name, table, matchOnly);
                 if (value != null)
                 {
                     return true;
@@ -142,10 +131,10 @@ namespace NuGet.ContentModel
             return false;
         }
 
-        private static bool ContainsSlash(string name)
+        private static bool ContainsSlash(ReadOnlyMemory<char> name)
         {
             var containsSlash = false;
-            foreach (var ch in name)
+            foreach (var ch in name.Span)
             {
                 if (ch == '/' || ch == '\\')
                 {
@@ -157,19 +146,19 @@ namespace NuGet.ContentModel
             return containsSlash;
         }
 
-        public Func<object, object, bool> CompatibilityTest { get; }
+        public Func<object?, object?, bool> CompatibilityTest { get; }
 
         /// <summary>
         /// Find the nearest compatible candidate.
         /// </summary>
-        public Func<object, object, object, int> CompareTest { get; }
+        public Func<object?, object?, object?, int>? CompareTest { get; }
 
-        public virtual bool IsCriteriaSatisfied(object critieriaValue, object candidateValue)
+        public virtual bool IsCriteriaSatisfied(object? critieriaValue, object? candidateValue)
         {
             return CompatibilityTest.Invoke(critieriaValue, candidateValue);
         }
 
-        public virtual int Compare(object criteriaValue, object candidateValue1, object candidateValue2)
+        public virtual int Compare(object? criteriaValue, object? candidateValue1, object? candidateValue2)
         {
             var betterCoverageFromValue1 = IsCriteriaSatisfied(candidateValue1, candidateValue2);
             var betterCoverageFromValue2 = IsCriteriaSatisfied(candidateValue2, candidateValue1);

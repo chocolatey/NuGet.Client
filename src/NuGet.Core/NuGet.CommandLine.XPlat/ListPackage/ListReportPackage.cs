@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System.Collections.Generic;
 using NuGet.Protocol;
 
@@ -92,6 +94,15 @@ namespace NuGet.CommandLine.XPlat.ListPackage
                   alternativePackage: null,
                   requestedVersion: requestedVersion,
                   autoReference: false)
+        { }
+
+        public ListReportPackage(string packageId, string requestedVersion, string resolvedVersion, List<PackageVulnerabilityMetadata> vulnerabilities)
+            : this(
+                  packageId: packageId,
+                  requestedVersion: requestedVersion,
+                  resolvedVersion: resolvedVersion,
+                  latestVersion: null,
+                  vulnerabilities: vulnerabilities.Count == 0 ? null : vulnerabilities)
         { }
     }
 }

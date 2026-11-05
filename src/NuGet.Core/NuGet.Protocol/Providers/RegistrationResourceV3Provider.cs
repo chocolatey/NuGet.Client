@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Protocol.Core.Types;
@@ -18,22 +17,27 @@ namespace NuGet.Protocol
         {
         }
 
-        public override async Task<Tuple<bool, INuGetResource>> TryCreate(SourceRepository source, CancellationToken token)
+        public override async Task<Tuple<bool, INuGetResource?>> TryCreate(SourceRepository source, CancellationToken token)
         {
-            RegistrationResourceV3 regResource = null;
+            RegistrationResourceV3? regResource = null;
             var serviceIndex = await source.GetResourceAsync<ServiceIndexResourceV3>(token);
 
             if (serviceIndex != null)
             {
+                //This will come back as null if there are no matching RegistrationsBaseUrl types
                 var baseUrl = serviceIndex.GetServiceEntryUri(ServiceTypes.RegistrationsBaseUrl);
 
-                var httpSourceResource = await source.GetResourceAsync<HttpSourceResource>(token);
+                if (baseUrl != null)
+                {
+                    var httpSourceResource = await source.GetResourceAsync<HttpSourceResource>(token)
+                        ?? throw new InvalidOperationException($"The source '{source.PackageSource.Source}' does not provide {nameof(HttpSourceResource)}.");
 
-                // construct a new resource
-                regResource = new RegistrationResourceV3(httpSourceResource.HttpSource, baseUrl);
+                    // construct a new resource
+                    regResource = new RegistrationResourceV3(httpSourceResource.HttpSource, baseUrl);
+                }
             }
 
-            return new Tuple<bool, INuGetResource>(regResource != null, regResource);
+            return new Tuple<bool, INuGetResource?>(regResource != null, regResource);
         }
     }
 }

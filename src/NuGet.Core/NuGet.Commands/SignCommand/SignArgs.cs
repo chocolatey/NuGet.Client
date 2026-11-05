@@ -1,9 +1,9 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
+#nullable disable
+
 using System.Collections.Generic;
-using System.Globalization;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using NuGet.Commands.SignCommand;
@@ -16,31 +16,6 @@ namespace NuGet.Commands
     /// </summary>
     public class SignArgs
     {
-        /// <summary>
-        /// Path to the package that has to be signed.
-        /// </summary>     
-        [Obsolete("Use PackagePaths instead")]
-        public string PackagePath
-        {
-            get
-            {
-                switch (PackagePaths.Count)
-                {
-                    case 0:
-                        return null;
-
-                    case 1:
-                        return PackagePaths[0];
-
-                    default:
-                        throw new NotSupportedException(string.Format(CultureInfo.CurrentCulture,
-                            Strings.Error_MultiplePackagePaths,
-                            nameof(PackagePaths)));
-                }
-            }
-            set => PackagePaths = new[] { value };
-        }
-
         /// <summary>
         /// Paths to the packages that has to be signed.
         /// </summary>
@@ -100,6 +75,12 @@ namespace NuGet.Commands
         /// Switch used to indicate if an existing signature should be overwritten.
         /// </summary>
         public bool Overwrite { get; set; }
+
+        /// <summary>
+        /// Allow signing with certificates whose root is not in a trusted root store.
+        /// When true, UntrustedRoot chain status is treated as a warning instead of an error.
+        /// </summary>
+        public bool AllowUntrustedRoot { get; set; }
 
         /// <summary>
         /// Switch used to indicate that we should not prompt for user input or confirmations.

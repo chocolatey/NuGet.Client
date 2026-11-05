@@ -38,10 +38,6 @@ namespace NuGet.Packaging.Rules
         // NOTE: We generate many different messages here, so we avoid using MessageFormat itself.
         public string MessageFormat => "";
 
-        public InvalidUndottedFrameworkRule()
-        {
-        }
-
         public IEnumerable<PackagingLogMessage> Validate(PackageArchiveReader builder)
         {
             return Validate(LoadXml(builder.GetNuspec()), builder.GetFiles());
@@ -54,7 +50,7 @@ namespace NuGet.Packaging.Rules
             // the frameworks themselves. That does end up with a bit of
             // duplicate code, but the alternative is to expand the scope of
             // NuspecReader by a lot.
-            var metadataNode = xml.Root.Elements().Where(e => StringComparer.Ordinal.Equals(e.Name.LocalName, Metadata)).FirstOrDefault();
+            var metadataNode = xml.Root!.Elements().FirstOrDefault(e => StringComparer.Ordinal.Equals(e.Name.LocalName, Metadata));
             if (metadataNode == null)
             {
                 throw new PackagingException(string.Format(
@@ -94,9 +90,9 @@ namespace NuGet.Packaging.Rules
             foreach (var depGroup in dependencyGroups)
             {
                 var groupFramework = GetAttributeValue(depGroup, TargetFramework);
-                if (!string.IsNullOrEmpty(groupFramework) && !FrameworkVersionHasDesiredDots(groupFramework))
+                if (!string.IsNullOrEmpty(groupFramework) && !FrameworkVersionHasDesiredDots(groupFramework!))
                 {
-                    bads.Add(groupFramework.Trim());
+                    bads.Add(groupFramework!.Trim());
                 }
             }
 
@@ -123,9 +119,9 @@ namespace NuGet.Packaging.Rules
             foreach (var group in metadataNode.Elements(XName.Get(References, ns)).Elements(XName.Get(Group, ns)))
             {
                 var groupFramework = GetAttributeValue(group, TargetFramework);
-                if (!string.IsNullOrEmpty(groupFramework) && !FrameworkVersionHasDesiredDots(groupFramework))
+                if (!string.IsNullOrEmpty(groupFramework) && !FrameworkVersionHasDesiredDots(groupFramework!))
                 {
-                    bads.Add(groupFramework.Trim());
+                    bads.Add(groupFramework!.Trim());
                 }
             }
 
@@ -146,7 +142,7 @@ namespace NuGet.Packaging.Rules
 
         internal static IEnumerable<PackagingLogMessage> ValidateFrameworkAssemblies(XDocument xml, XElement metadataNode)
         {
-            var ns = xml.Root.GetDefaultNamespace().NamespaceName;
+            var ns = xml.Root!.GetDefaultNamespace().NamespaceName;
 
             var frameworks = new HashSet<string>();
 
@@ -156,7 +152,7 @@ namespace NuGet.Packaging.Rules
                 // Framework references may have multiple comma delimited frameworks
                 if (!string.IsNullOrEmpty(group.Key))
                 {
-                    foreach (var fwString in group.Key.Split(CommaArray, StringSplitOptions.RemoveEmptyEntries))
+                    foreach (var fwString in group.Key!.Split(CommaArray, StringSplitOptions.RemoveEmptyEntries))
                     {
                         if (!string.IsNullOrEmpty(fwString))
                         {
@@ -199,7 +195,7 @@ namespace NuGet.Packaging.Rules
                 set.Add(file);
             }
 
-            var managedCodeConventions = new ManagedCodeConventions(new RuntimeGraph());
+            var managedCodeConventions = new ManagedCodeConventions(RuntimeGraph.Empty);
             var collection = new ContentItemCollection();
             collection.Load(set.Select(path => path.Replace('\\', '/')).ToArray());
 
@@ -207,16 +203,16 @@ namespace NuGet.Packaging.Rules
 
             var frameworkPatterns = new List<PatternSet>()
             {
-                patterns.RuntimeAssemblies,
-                patterns.CompileRefAssemblies,
-                patterns.CompileLibAssemblies,
-                patterns.NativeLibraries,
-                patterns.ResourceAssemblies,
-                patterns.MSBuildFiles,
-                patterns.ContentFiles,
-                patterns.ToolsAssemblies,
-                patterns.EmbedAssemblies,
-                patterns.MSBuildTransitiveFiles
+                GetPatternSetThatPreservesRawValues(patterns.RuntimeAssemblies),
+                GetPatternSetThatPreservesRawValues(patterns.CompileRefAssemblies),
+                GetPatternSetThatPreservesRawValues(patterns.CompileLibAssemblies),
+                GetPatternSetThatPreservesRawValues(patterns.NativeLibraries),
+                GetPatternSetThatPreservesRawValues(patterns.ResourceAssemblies),
+                GetPatternSetThatPreservesRawValues(patterns.MSBuildFiles),
+                GetPatternSetThatPreservesRawValues(patterns.ContentFiles),
+                GetPatternSetThatPreservesRawValues(patterns.ToolsAssemblies),
+                GetPatternSetThatPreservesRawValues(patterns.EmbedAssemblies),
+                GetPatternSetThatPreservesRawValues(patterns.MSBuildTransitiveFiles)
             };
             var warnPaths = new HashSet<string>();
 
@@ -227,16 +223,16 @@ namespace NuGet.Packaging.Rules
                 ContentExtractor.GetContentForPattern(collection, pattern, targetedItemGroups);
                 foreach (ContentItemGroup group in targetedItemGroups)
                 {
-                    foreach (ContentItem item in group.Items)
+                    foreach (ContentItem item in group.Items.NoAllocEnumerate())
                     {
                         var exists = item.Properties.TryGetValue("tfm_raw", out var frameworkRaw);
-                        string frameworkString = (string)frameworkRaw;
+                        string? frameworkString = (string?)frameworkRaw;
                         if (!exists || string.IsNullOrEmpty(frameworkString))
                         {
                             continue;
                         }
 
-                        if (!FrameworkVersionHasDesiredDots(frameworkString))
+                        if (!FrameworkVersionHasDesiredDots(frameworkString!))
                         {
                             warnPaths.Add(item.Path);
                         }
@@ -259,6 +255,13 @@ namespace NuGet.Packaging.Rules
             return messages;
         }
 
+        private static PatternSet GetPatternSetThatPreservesRawValues(PatternSet patternSet)
+        {
+            var groupPatterns = patternSet.GroupPatterns.Select(e => new PatternDefinition(e.Pattern, e.Table, e.Defaults) { PreserveRawValues = true });
+            var pathPatterns = patternSet.PathPatterns.Select(e => new PatternDefinition(e.Pattern, e.Table, e.Defaults) { PreserveRawValues = true });
+            return new PatternSet(patternSet.PropertyDefinitions, groupPatterns, pathPatterns);
+        }
+
         private static XDocument LoadXml(Stream stream)
         {
             using (var xmlReader = XmlReader.Create(stream, new XmlReaderSettings
@@ -273,7 +276,7 @@ namespace NuGet.Packaging.Rules
             }
         }
 
-        private static string GetAttributeValue(XElement element, string attributeName)
+        private static string? GetAttributeValue(XElement element, string attributeName)
         {
             var attribute = element.Attribute(XName.Get(attributeName));
             return attribute?.Value;

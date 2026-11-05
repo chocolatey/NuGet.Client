@@ -3,7 +3,7 @@ $NuGetClientRoot= Resolve-Path $(Join-Path $PSScriptRoot "..\")
 $Configuration = "Debug"
 $NETFramework = "net472"
 $NETStandard = "netstandard2.0"
-$NETCoreApp = "netcoreapp5.0"
+$NETCoreApp = "net9.0"
 
 <#
 Auto bootstraps NuGet for debugging the targets. This includes both restore and pack and is the recommended way to test things :)
@@ -15,12 +15,13 @@ Auto bootstraps NuGet for debugging the targets. This includes both restore and 
 Function Invoke-NuGetCustom()
 {
     $packDllPath = Join-Path $NuGetClientRoot "artifacts\NuGet.Build.Tasks.Pack\bin\$Configuration\$NETFramework\NuGet.Build.Tasks.Pack.dll"
-    $packTargetsPath = Join-Path $NuGetClientRoot "src\NuGet.Core\NuGet.Build.Tasks.Pack\NuGet.Build.Tasks.Pack.targets"
+    $packTargetsPath = Join-Path $NuGetClientRoot "src\NuGet.Core\NuGet.Build.Tasks\NuGet.Build.Tasks.Pack.targets"
     $restoreDllPath = Join-Path $NuGetClientRoot "artifacts\NuGet.Build.Tasks\bin\$Configuration\$NETFramework\NuGet.Build.Tasks.dll"
     $nugetRestoreTargetsPath = Join-Path $NuGetClientRoot "src\NuGet.Core\NuGet.Build.Tasks\NuGet.targets"
+    $nugetPropsPath = Join-Path $NuGetClientRoot "src\NuGet.Core\NuGet.Build.Tasks\NuGet.props"
     $consoleExePath = Join-Path $NuGetClientRoot "artifacts\NuGet.Build.Tasks.Console\bin\$Configuration\$NETFramework\NuGet.Build.Tasks.Console.exe"
-    Write-Host "msbuild /p:NuGetRestoreTargets=$nugetRestoreTargetsPath /p:RestoreTaskAssemblyFile=$restoreDllPath /p:NuGetBuildTasksPackTargets=$packTargetsPath /p:NuGetConsoleProcessFileName=$consoleExePath /p:ImportNuGetBuildTasksPackTargetsFromSdk=true /p:NuGetPackTaskAssemblyFile=$packDllPath $($args[0..$args.Count])"
-    & msbuild /p:NuGetRestoreTargets=$nugetRestoreTargetsPath /p:RestoreTaskAssemblyFile=$restoreDllPath /p:NuGetBuildTasksPackTargets=$packTargetsPath /p:NuGetConsoleProcessFileName=$consoleExePath /p:ImportNuGetBuildTasksPackTargetsFromSdk=true /p:NuGetPackTaskAssemblyFile=$packDllPath $args[0..$args.Count]
+    Write-Host "msbuild /p:NuGetRestoreTargets=$nugetRestoreTargetsPath /p:NuGetPropsFile=$nugetPropsPath /p:RestoreTaskAssemblyFile=$restoreDllPath /p:NuGetBuildTasksPackTargets=$packTargetsPath /p:NuGetConsoleProcessFileName=$consoleExePath /p:ImportNuGetBuildTasksPackTargetsFromSdk=true /p:NuGetPackTaskAssemblyFile=$packDllPath $($args[0..$args.Count])"
+    & msbuild /p:NuGetRestoreTargets=$nugetRestoreTargetsPath /p:NuGetPropsFile=$nugetPropsPath /p:RestoreTaskAssemblyFile=$restoreDllPath /p:NuGetBuildTasksPackTargets=$packTargetsPath /p:NuGetConsoleProcessFileName=$consoleExePath /p:ImportNuGetBuildTasksPackTargetsFromSdk=true /p:NuGetPackTaskAssemblyFile=$packDllPath $args[0..$args.Count]
 }
 
 <#
@@ -33,9 +34,10 @@ Function Invoke-NuGetRestoreCustom()
 {
     $restoreDllPath = Join-Path $NuGetClientRoot "artifacts\NuGet.Build.Tasks\bin\$Configuration\$NETFramework\NuGet.Build.Tasks.dll"
     $nugetRestoreTargetsPath = Join-Path $NuGetClientRoot "src\NuGet.Core\NuGet.Build.Tasks\NuGet.targets"
+    $nugetPropsPath = Join-Path $NuGetClientRoot "src\NuGet.Core\NuGet.Build.Tasks\NuGet.props"
     $consoleExePath = Join-Path $NuGetClientRoot "artifacts\NuGet.Build.Tasks.Console\bin\$Configuration\$NETFramework\NuGet.Build.Console.exe"
-    Write-Host "msbuild /p:NuGetRestoreTargets=$nugetRestoreTargetsPath /p:RestoreTaskAssemblyFile=$restoreDllPath /p:NuGetConsoleProcessFileName=$consoleExePath $($args[0..$args.Count])"
-    & msbuild /p:NuGetRestoreTargets=$nugetRestoreTargetsPath /p:RestoreTaskAssemblyFile=$restoreDllPath /p:NuGetConsoleProcessFileName=$consoleExePath $args[0..$args.Count]
+    Write-Host "msbuild /p:NuGetRestoreTargets=$nugetRestoreTargetsPath /p:NuGetPropsFile=$nugetPropsPath /p:RestoreTaskAssemblyFile=$restoreDllPath /p:NuGetConsoleProcessFileName=$consoleExePath $($args[0..$args.Count])"
+    & msbuild /p:NuGetRestoreTargets=$nugetRestoreTargetsPath /p:NuGetPropsFile=$nugetPropsPath /p:RestoreTaskAssemblyFile=$restoreDllPath /p:NuGetConsoleProcessFileName=$consoleExePath $args[0..$args.Count]
 }
 
 <#
@@ -47,7 +49,7 @@ Auto bootstraps NuGet for debugging the pack targets only (this doesn't include 
 Function Invoke-NuGetPackCustom()
 {
     $packDllPath = Join-Path $NuGetClientRoot "artifacts\NuGet.Build.Tasks.Pack\bin\$Configuration\$NETFramework\NuGet.Build.Tasks.Pack.dll"
-    $packTargetsPath = Join-Path $NuGetClientRoot "src\NuGet.Core\NuGet.Build.Tasks.Pack\NuGet.Build.Tasks.Pack.targets"
+    $packTargetsPath = Join-Path $NuGetClientRoot "src\NuGet.Core\NuGet.Build.Tasks\NuGet.Build.Tasks.Pack.targets"
     Write-Host "msbuild /p:NuGetBuildTasksPackTargets=$packTargetsPath /p:ImportNuGetBuildTasksPackTargetsFromSdk=true /p:NuGetPackTaskAssemblyFile=$packDllPath $($args[0..$args.Count])"
     & msbuild /p:NuGetBuildTasksPackTargets=$packTargetsPath /p:ImportNuGetBuildTasksPackTargetsFromSdk=true /p:NuGetPackTaskAssemblyFile=$packDllPath $args[0..$args.Count]
 }
@@ -86,9 +88,9 @@ Function Add-NuGetToCLI {
     $nugetBuildTasksConsole = [System.IO.Path]::Combine($NuGetClientRoot, 'artifacts', 'NuGet.Build.Tasks.Console', 'bin', $Configuration, $NETCoreApp, 'NuGet.Build.Tasks.Console.dll')
     $nugetTargets = [System.IO.Path]::Combine($NuGetClientRoot, 'src', 'NuGet.Core', 'NuGet.Build.Tasks', 'NuGet.targets')
     $nugetExTargets = [System.IO.Path]::Combine($NuGetClientRoot, 'src', 'NuGet.Core', 'NuGet.Build.Tasks', 'NuGet.RestoreEx.targets')
-    $ilmergedCorePackTasks = [System.IO.Path]::Combine($NuGetClientRoot, 'artifacts', 'NuGet.Build.Tasks.Pack', 'bin', $Configuration, $NETStandard, "ilmerge", "NuGet.Build.Tasks.Pack.dll")
-    $ilmergedFrameworkPackTasks = [System.IO.Path]::Combine($NuGetClientRoot, 'artifacts', 'NuGet.Build.Tasks.Pack', 'bin', $Configuration, $NETFramework, "ilmerge",  "NuGet.Build.Tasks.Pack.dll")
-    $nugetPackTargets = [System.IO.Path]::Combine($NuGetClientRoot, 'src', 'NuGet.Core', 'NuGet.Build.Tasks.Pack', 'NuGet.Build.Tasks.Pack.targets')
+    $nugetPackCoreTasks = [System.IO.Path]::Combine($NuGetClientRoot, 'artifacts', 'NuGet.Build.Tasks.Pack', 'bin', $Configuration, $NETCoreApp,"NuGet.Build.Tasks.Pack.dll")
+    $nugetPackFrameworkTasks = [System.IO.Path]::Combine($NuGetClientRoot, 'artifacts', 'NuGet.Build.Tasks.Pack', 'bin', $Configuration, $NETFramework, "NuGet.Build.Tasks.Pack.dll")
+    $nugetPackTargets = [System.IO.Path]::Combine($NuGetClientRoot, 'src', 'NuGet.Core', 'NuGet.Build.Tasks', 'NuGet.Build.Tasks.Pack.targets')
     $msbuildSdkResolverTasks = [System.IO.Path]::Combine($NuGetClientRoot, 'artifacts', 'Microsoft.Build.NuGetSdkResolver', 'bin', $Configuration, $NETCoreApp, 'Microsoft.Build.NuGetSdkResolver.dll')
 
 
@@ -117,13 +119,13 @@ Function Add-NuGetToCLI {
         return;
     }
 
-    if (-Not (Test-Path $ilmergedCorePackTasks)) {
-        Write-Error "$ilmergedCorePackTasks not found!"
+    if (-Not (Test-Path $nugetPackCoreTasks)) {
+        Write-Error "$nugetPackCoreTasks not found!"
         return;
     }
 
-    if (-Not (Test-Path $ilmergedFrameworkPackTasks)) {
-        Write-Error "$ilmergedFrameworkPackTasks not found!"
+    if (-Not (Test-Path $nugetPackFrameworkTasks)) {
+        Write-Error "$nugetPackFrameworkTasks not found!"
         return;
     }
 
@@ -181,25 +183,19 @@ Function Add-NuGetToCLI {
     Write-Host "Moving to - $($nugetRestoreExTargetsDest)"
     Copy-Item $nugetExTargets $nugetRestoreExTargetsDest
 
-    ## Copy the pack SDK.
+    ## Copy the pack artifacts.
 
-    $packSdkPath = "$($sdk_path)\Sdks\NuGet.Build.Tasks.Pack"
-
-    $nugetPackTargetsCrossTargetingDest = "$($packSdkPath)\buildCrossTargeting\NuGet.Build.Tasks.Pack.targets"
-    Write-Host "Moving to - $($nugetPackTargetsCrossTargetingDest)"
-    Copy-Item $nugetPackTargets $nugetPackTargetsCrossTargetingDest
-
-    $nugetPackTargetsDest = "$($packSdkPath)\build\NuGet.Build.Tasks.Pack.targets"
+    $nugetPackTargetsDest = "$($sdk_path)\NuGet.Build.Tasks.Pack.targets"
     Write-Host "Moving to - $($nugetPackTargetsDest)"
     Copy-Item $nugetPackTargets $nugetPackTargetsDest
 
-    $packTasksCoreDest = "$($packSdkPath)\CoreCLR\NuGet.Build.Tasks.Pack.dll"
+    $packTasksCoreDest = "$($sdk_path)\NuGet.Build.Tasks.Pack.dll"
     Write-Host "Moving to - $($packTasksCoreDest)"
-    Copy-Item $ilmergedCorePackTasks $packTasksCoreDest
+    Copy-Item $nugetPackCoreTasks $packTasksCoreDest
 
-    $packTasksFrameworkDest = "$($packSdkPath)\Desktop\NuGet.Build.Tasks.Pack.dll"
+    $packTasksFrameworkDest = "$($sdk_path)\Sdks\Microsoft.NET.Sdk\tools\net472\NuGet.Build.Tasks.Pack.dll"
     Write-Host "Moving to - $($packTasksFrameworkDest)"
-    Copy-Item $ilmergedFrameworkPackTasks $packTasksFrameworkDest
+    Copy-Item $nugetPackFrameworkTasks $packTasksFrameworkDest
 
     ## Copy the resolver
 

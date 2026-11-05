@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -22,9 +24,6 @@ namespace NuGet.Commands
             string inputPath,
             RestoreArgs restoreContext)
         {
-            var paths = new List<string>();
-            var requests = new List<RestoreSummaryRequest>();
-
             var dgSpec = DependencyGraphSpec.Load(inputPath);
             var dgProvider = new DependencyGraphSpecRequestProvider(_providerCache, dgSpec);
 
@@ -41,7 +40,7 @@ namespace NuGet.Commands
             // True if .dg file
             var result = (File.Exists(path) && path.EndsWith(".dg", StringComparison.OrdinalIgnoreCase));
 
-            return Task.FromResult(result);
+            return TaskResult.Boolean(result);
         }
     }
 }

@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections;
 using NuGet.Common;
@@ -18,10 +20,11 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             var target = new VsProjectBuildPropertiesTelemetry();
 
             Guid projectType1 = Guid.NewGuid();
-            target.OnPropertyStorageUsed(new[] { projectType1.ToString() });
+            target.OnPropertyStorageUsed("Property1", [projectType1.ToString()]);
+            target.OnPropertyStorageUsed("Property2", [projectType1.ToString()]);
 
             Guid projectType2 = Guid.NewGuid();
-            target.OnDteUsed(new[] { projectType2.ToString() });
+            target.OnDteUsed("Property1", [projectType2.ToString()]);
 
             var telemetryEvent = new TelemetryEvent("test");
 
@@ -31,7 +34,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             // Assert
             object data = Assert.Contains("ProjectBuildProperties", telemetryEvent.ComplexData);
             IList list = Assert.IsAssignableFrom<IList>(data);
-            Assert.Equal(2, list.Count);
+            Assert.Equal(3, list.Count);
         }
     }
 }

@@ -37,12 +37,12 @@ namespace NuGet.Protocol
 
         public override HttpMessageHandler MessageHandler => _messageHandler;
 
-        public static Lazy<ICredentialService> CredentialService { get; set; }
+        public static Lazy<ICredentialService>? CredentialService { get; set; }
 
         /// <summary>
         /// Gets or sets a delegate that is to be invoked when authenticated feed credentials are successfully
         /// used.
         /// </summary>
-        public static Action<Uri, ICredentials> CredentialsSuccessfullyUsed { get; set; }
+        public static Action<Uri, ICredentials>? CredentialsSuccessfullyUsed { get; set; }
     }
 }

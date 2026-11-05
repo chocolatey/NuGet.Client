@@ -98,7 +98,7 @@ namespace NuGet.Resolver
 
             foreach (var package in availablePackages)
             {
-                IEnumerable<PackageDependency> dependencies = null;
+                IEnumerable<PackageDependency>? dependencies;
 
                 // clear out the dependencies if the behavior is set to ignore
                 if (context.DependencyBehavior == DependencyBehavior.Ignore)
@@ -273,9 +273,9 @@ namespace NuGet.Resolver
             //  (2) Create a look-up of every dependency that refers to a particular package Id
             foreach (var package in packages)
             {
-                foreach (var dependency in package?.Dependencies)
+                foreach (var dependency in package.Dependencies)
                 {
-                    IList<VersionRange> dependencyVersionRanges;
+                    IList<VersionRange>? dependencyVersionRanges;
                     if (dependencyRangesByPackageId.TryGetValue(dependency.Id, out dependencyVersionRanges))
                     {
                         dependencyVersionRanges.Add(dependency.VersionRange);

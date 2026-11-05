@@ -9,12 +9,13 @@ namespace NuGet.PackageManagement.Telemetry
         License,
         ProjectUri,
         ReportAbuse,
-        FeedHome,
         Readme,
         DeprecationMoreInfo,
         DeprecationAlternativeDetails,
         DeprecationAlternativePackageItem,
         VulnerabilityAdvisory,
         OptionsBlocked,
+        OwnerProfile,
+        OwnerProfileDetailsPane
     }
 }

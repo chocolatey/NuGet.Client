@@ -5,19 +5,16 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-#if IS_SIGNING_SUPPORTED
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
-#endif
 using NuGet.Common;
 
 namespace NuGet.Packaging.Signing
 {
     public sealed class RepositoryPrimarySignature : PrimarySignature, IRepositorySignature
     {
-#if IS_SIGNING_SUPPORTED
         public Uri V3ServiceIndexUrl { get; }
-        public IReadOnlyList<string> PackageOwners { get; }
+        public IReadOnlyList<string>? PackageOwners { get; }
 
         public override string FriendlyName => Strings.RepositoryPrimarySignatureFriendlyName;
 
@@ -48,14 +45,8 @@ namespace NuGet.Packaging.Signing
 
             var summary = base.Verify(timestamp, settings, fingerprintAlgorithm, certificateExtraStore);
 
-            return new SignatureVerificationSummary(
-                summary.SignatureType,
-                summary.Status,
-                summary.Flags,
-                summary.Timestamp,
-                summary.ExpirationTime,
-                issues.Concat(summary.Issues));
+            summary.Issues = issues.Concat(summary.Issues);
+            return summary;
         }
-#endif
     }
 }

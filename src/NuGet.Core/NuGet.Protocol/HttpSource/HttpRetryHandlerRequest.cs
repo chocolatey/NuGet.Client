@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
-using NuGet.Common;
 
 namespace NuGet.Protocol
 {
@@ -19,12 +18,22 @@ namespace NuGet.Protocol
 
         public HttpRetryHandlerRequest(HttpClient httpClient, Func<HttpRequestMessage> requestFactory)
         {
+            if (httpClient == null)
+            {
+                throw new ArgumentNullException(nameof(httpClient));
+            }
+
+            if (requestFactory == null)
+            {
+                throw new ArgumentNullException(nameof(requestFactory));
+            }
+
             HttpClient = httpClient;
             RequestFactory = requestFactory;
             CompletionOption = HttpCompletionOption.ResponseHeadersRead;
             MaxTries = DefaultMaxTries;
             RequestTimeout = TimeSpan.FromSeconds(100);
-            RetryDelay = TimeSpan.FromMilliseconds(200);
+            RetryDelay = TimeSpan.FromSeconds(1);
             DownloadTimeout = DefaultDownloadTimeout;
         }
 

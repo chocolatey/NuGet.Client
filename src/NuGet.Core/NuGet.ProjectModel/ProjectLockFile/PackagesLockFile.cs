@@ -3,8 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
-using NuGet.Common;
 using NuGet.Shared;
 
 namespace NuGet.ProjectModel
@@ -13,7 +11,8 @@ namespace NuGet.ProjectModel
     {
         public int Version { get; set; }
 
-        public string Path { get; set; }
+        [Obsolete("This property is unused and will be removed in a future release.")]
+        public string? Path { get; set; }
 
         public IList<PackagesLockFileTarget> Targets { get; set; } = new List<PackagesLockFileTarget>();
 
@@ -27,7 +26,7 @@ namespace NuGet.ProjectModel
             Version = PackagesLockFileFormat.Version;
         }
 
-        public bool Equals(PackagesLockFile other)
+        public bool Equals(PackagesLockFile? other)
         {
             if (other == null)
             {
@@ -43,7 +42,7 @@ namespace NuGet.ProjectModel
                 EqualityUtility.SequenceEqualWithNullCheck(Targets, other.Targets);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return Equals(obj as PackagesLockFile);
         }

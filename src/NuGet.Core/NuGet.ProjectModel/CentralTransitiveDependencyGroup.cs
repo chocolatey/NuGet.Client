@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using NuGet.Frameworks;
 using NuGet.LibraryModel;
 using NuGet.Shared;
@@ -31,7 +30,7 @@ namespace NuGet.ProjectModel
 
         public IEnumerable<LibraryDependency> TransitiveDependencies { get; }
 
-        public bool Equals(CentralTransitiveDependencyGroup other)
+        public bool Equals(CentralTransitiveDependencyGroup? other)
         {
             if (other == null)
             {
@@ -51,7 +50,7 @@ namespace NuGet.ProjectModel
             return false;
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return Equals(obj as CentralTransitiveDependencyGroup);
         }
@@ -60,11 +59,7 @@ namespace NuGet.ProjectModel
         {
             var combiner = new HashCodeCombiner();
             combiner.AddStringIgnoreCase(FrameworkName);
-
-            foreach (var dependency in TransitiveDependencies.OrderBy(dep => dep.Name, StringComparer.OrdinalIgnoreCase))
-            {
-                combiner.AddObject(dependency);
-            }
+            combiner.AddUnorderedSequence(TransitiveDependencies);
             return combiner.CombinedHash;
         }
     }

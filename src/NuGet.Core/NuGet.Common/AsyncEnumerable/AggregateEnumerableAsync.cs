@@ -1,9 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace NuGet.Common
 {
@@ -18,10 +16,10 @@ namespace NuGet.Common
     {
 
         private readonly IList<IEnumerableAsync<T>> _asyncEnumerables;
-        private readonly IComparer<T> _comparer;
-        private readonly IEqualityComparer<T> _equalityComparer;
+        private readonly IComparer<T>? _comparer;
+        private readonly IEqualityComparer<T>? _equalityComparer;
 
-        public AggregateEnumerableAsync(IList<IEnumerableAsync<T>> asyncEnumerables, IComparer<T> comparer, IEqualityComparer<T> equalityComparer)
+        public AggregateEnumerableAsync(IList<IEnumerableAsync<T>> asyncEnumerables, IComparer<T>? comparer, IEqualityComparer<T>? equalityComparer)
         {
             _asyncEnumerables = asyncEnumerables;
             _comparer = comparer;

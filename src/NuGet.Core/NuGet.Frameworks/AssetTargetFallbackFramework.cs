@@ -2,15 +2,10 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using NuGet.Shared;
 
-#if IS_NET40_CLIENT
-using FallbackList = System.Collections.Generic.IList<NuGet.Frameworks.NuGetFramework>;
-#else
 using FallbackList = System.Collections.Generic.IReadOnlyList<NuGet.Frameworks.NuGetFramework>;
-#endif
 
 namespace NuGet.Frameworks
 {
@@ -20,28 +15,17 @@ namespace NuGet.Frameworks
     /// </summary>
     public class AssetTargetFallbackFramework : NuGetFramework, IEquatable<AssetTargetFallbackFramework>
     {
-        private readonly FallbackList _fallback;
         private int? _hashCode;
-        private NuGetFramework _rootFramework;
 
         /// <summary>
         /// List framework to fall back to.
         /// </summary>
-        public FallbackList Fallback
-        {
-            get { return _fallback; }
-        }
+        public FallbackList Fallback { get; }
 
         /// <summary>
         /// Root project framework.
         /// </summary>
-        public NuGetFramework RootFramework
-        {
-            get
-            {
-                return _rootFramework;
-            }
-        }
+        public NuGetFramework RootFramework { get; }
 
         public AssetTargetFallbackFramework(NuGetFramework framework, FallbackList fallbackFrameworks)
             : base(ValidateFrameworkArgument(framework))
@@ -56,14 +40,14 @@ namespace NuGet.Frameworks
                 throw new ArgumentException("Empty fallbackFrameworks is invalid", nameof(fallbackFrameworks));
             }
 
-            _fallback = fallbackFrameworks;
-            _rootFramework = framework;
+            Fallback = fallbackFrameworks;
+            RootFramework = framework;
         }
 
 
         private static NuGetFramework ValidateFrameworkArgument(NuGetFramework framework)
         {
-            if (framework == null)
+            if (framework is null)
             {
                 throw new ArgumentNullException(nameof(framework));
             }
@@ -75,10 +59,10 @@ namespace NuGet.Frameworks
         /// </summary>
         public FallbackFramework AsFallbackFramework()
         {
-            return new FallbackFramework(_rootFramework, _fallback);
+            return new FallbackFramework(RootFramework, Fallback);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return Equals(obj as AssetTargetFallbackFramework);
         }
@@ -94,6 +78,14 @@ namespace NuGet.Frameworks
 
                 combiner.AddObject(Comparer.GetHashCode(this));
 
+                // Include DualCompatibilityFramework's secondary framework in the hash
+                // to distinguish ATF(DCF(net6.0, native)) from ATF(net6.0).
+                if (RootFramework is DualCompatibilityFramework dualCompatibilityFramework)
+                {
+                    combiner.AddStringIgnoreCase(nameof(DualCompatibilityFramework));
+                    combiner.AddObject(Comparer.GetHashCode(dualCompatibilityFramework.SecondaryFramework));
+                }
+
                 foreach (var each in Fallback)
                 {
                     combiner.AddObject(Comparer.GetHashCode(each));
@@ -105,7 +97,7 @@ namespace NuGet.Frameworks
             return _hashCode.Value;
         }
 
-        public bool Equals(AssetTargetFallbackFramework other)
+        public bool Equals(AssetTargetFallbackFramework? other)
         {
             if (other == null)
             {
@@ -117,8 +109,26 @@ namespace NuGet.Frameworks
                 return true;
             }
 
-            return NuGetFramework.Comparer.Equals(this, other)
-                && Fallback.SequenceEqual(other.Fallback);
+            if (!NuGetFramework.Comparer.Equals(this, other))
+            {
+                return false;
+            }
+
+            // Check DualCompatibilityFramework secondary framework equality to distinguish
+            // ATF(DCF(net6.0, native)) from ATF(net6.0).
+            var thisDcf = RootFramework as DualCompatibilityFramework;
+            var otherDcf = other.RootFramework as DualCompatibilityFramework;
+            if ((thisDcf == null) != (otherDcf == null))
+            {
+                return false;
+            }
+
+            if (thisDcf != null && !Comparer.Equals(thisDcf.SecondaryFramework, otherDcf!.SecondaryFramework))
+            {
+                return false;
+            }
+
+            return Fallback.SequenceEqual(other.Fallback);
         }
     }
 }

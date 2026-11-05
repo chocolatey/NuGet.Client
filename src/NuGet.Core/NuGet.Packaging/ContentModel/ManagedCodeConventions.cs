@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
 using NuGet.ContentModel;
 using NuGet.Frameworks;
 using NuGet.Packaging.Core;
@@ -22,7 +21,7 @@ namespace NuGet.Client
 
         private static readonly ContentPropertyDefinition AnyProperty = new ContentPropertyDefinition(
             PropertyNames.AnyValue,
-            parser: (o, t) => o); // Identity parser, all strings are valid for any
+            parser: IdentityParser); // Identity parser, all strings are valid for any
         private static readonly ContentPropertyDefinition AssemblyProperty = new ContentPropertyDefinition(PropertyNames.ManagedAssembly,
             parser: AllowEmptyFolderParser,
             fileExtensions: new[] { ".dll", ".winmd", ".exe" });
@@ -36,6 +35,10 @@ namespace NuGet.Client
         private static readonly ContentPropertyDefinition CodeLanguageProperty = new ContentPropertyDefinition(
             PropertyNames.CodeLanguage,
             parser: CodeLanguage_Parser);
+
+        private static readonly ContentPropertyDefinition AnalyzerAssemblyProperty = new ContentPropertyDefinition(
+            PropertyNames.AnalyzerAssembly,
+            parser: AnalyzerAssembly_Parser);
 
         private static readonly Dictionary<string, object> NetTFMTable = new Dictionary<string, object>
         {
@@ -67,16 +70,15 @@ namespace NuGet.Client
 
         private static readonly FrameworkReducer FrameworkReducer = new();
 
-        private RuntimeGraph _runtimeGraph;
+        private RuntimeGraph? _runtimeGraph;
 
-        private Dictionary<string, NuGetFramework> _frameworkCache
-            = new Dictionary<string, NuGetFramework>(StringComparer.Ordinal);
+        private Dictionary<ReadOnlyMemory<char>, NuGetFramework> _frameworkCache = new(ReadOnlyMemoryCharComparerOrdinal.Instance);
 
         public ManagedCodeCriteria Criteria { get; }
         public IReadOnlyDictionary<string, ContentPropertyDefinition> Properties { get; }
         public ManagedCodePatterns Patterns { get; }
 
-        public ManagedCodeConventions(RuntimeGraph runtimeGraph)
+        public ManagedCodeConventions(RuntimeGraph? runtimeGraph)
         {
             _runtimeGraph = runtimeGraph;
 
@@ -87,10 +89,11 @@ namespace NuGet.Client
             props[MSBuildProperty.Name] = MSBuildProperty;
             props[SatelliteAssemblyProperty.Name] = SatelliteAssemblyProperty;
             props[CodeLanguageProperty.Name] = CodeLanguageProperty;
+            props[AnalyzerAssemblyProperty.Name] = AnalyzerAssemblyProperty;
 
             props[PropertyNames.RuntimeIdentifier] = new ContentPropertyDefinition(
                 PropertyNames.RuntimeIdentifier,
-                parser: (o, t) => o, // Identity parser, all strings are valid runtime ids :)
+                parser: IdentityParser, // Identity parser, all strings are valid runtime ids
                 compatibilityTest: RuntimeIdentifier_CompatibilityTest);
 
             props[PropertyNames.TargetFrameworkMoniker] = new ContentPropertyDefinition(
@@ -105,7 +108,7 @@ namespace NuGet.Client
             Patterns = new ManagedCodePatterns(this);
         }
 
-        private bool RuntimeIdentifier_CompatibilityTest(object criteria, object available)
+        private bool RuntimeIdentifier_CompatibilityTest(object? criteria, object? available)
         {
             if (_runtimeGraph == null)
             {
@@ -125,11 +128,15 @@ namespace NuGet.Client
             }
         }
 
-        private static object CodeLanguage_Parser(string name, PatternTable table)
+        /// <summary>
+        /// If matchOnly is true, then an empty string may be returned as a performance optimization.
+        /// If matchOnly is false, the parsed result will be returned.
+        /// </summary>
+        private static object? CodeLanguage_Parser(ReadOnlyMemory<char> name, PatternTable? table, bool matchOnly)
         {
             if (table != null)
             {
-                object val;
+                object? val;
                 if (table.TryLookup(PropertyNames.CodeLanguage, name, out val))
                 {
                     return val;
@@ -137,55 +144,97 @@ namespace NuGet.Client
             }
 
             // Code language values must be alpha numeric.
-            return name.All(c => char.IsLetterOrDigit(c)) ? name : null;
+            // PERF: use foreach to avoid CharEnumerator allocation
+            foreach (char c in name.Span)
+            {
+                if (!char.IsLetterOrDigit(c))
+                {
+                    return null;
+                }
+            }
+
+            if (matchOnly)
+            {
+                return string.Empty;
+            }
+
+            return name.ToString();
         }
 
-        private static object Locale_Parser(string name, PatternTable table)
+        /// <summary>
+        /// If matchOnly is true, then an empty string may be returned as a performance optimization.
+        /// If matchOnly is false, the parsed result will be returned.
+        /// </summary>
+        internal static object? Locale_Parser(ReadOnlyMemory<char> name, PatternTable? table, bool matchOnly)
         {
             if (table != null)
             {
-                object val;
+                object? val;
                 if (table.TryLookup(PropertyNames.Locale, name, out val))
                 {
                     return val;
                 }
             }
 
-            if (name.Length == 2)
+            // We use a heuristic here for common locale codes. Locale codes are often
+            // * two characters for the language: en, es, fr, de
+            // * three characters for the language: agq
+            if (name.Length == 2 || name.Length == 3)
             {
-                return name;
+                if (matchOnly)
+                {
+                    return string.Empty;
+                }
+                return name.ToString();
             }
-            else if (name.Length >= 4 && name[2] == '-')
+
+            // * a language portion that is two or three characters followed by a '-' and a country code
+            else if (name.Length >= 4 && name.Span[2] == '-') // e.g. en-US
             {
-                return name;
+                if (matchOnly)
+                {
+                    return string.Empty;
+                }
+                return name.ToString();
             }
+            else if (name.Length >= 5 && name.Span[3] == '-') // e.g agq-CM
+            {
+                if (matchOnly)
+                {
+                    return string.Empty;
+                }
+                return name.ToString();
+            }
+
+            // there are other variations, but this heuristic doesn't cover them all. A future-proof implementation would make
+            // use of the .NET CultureInfo APIs to compare the locale against the underlying system ICU database. This would
+            // be correct, but potentially more expensive because the CultureInfo APIs are lazily-loaded and throw if an
+            // invalid/unknown locale is used.
 
             return null;
         }
 
         private object TargetFrameworkName_Parser(
-            string name,
-            PatternTable table)
+            ReadOnlyMemory<char> name,
+            PatternTable? table,
+            bool matchOnly)
         {
-            object obj = null;
-
             // Check for replacements
             if (table != null)
             {
-                if (table.TryLookup(PropertyNames.TargetFrameworkMoniker, name, out obj))
+                if (table.TryLookup(PropertyNames.TargetFrameworkMoniker, name, out var obj))
                 {
                     return obj;
                 }
             }
 
             // Check the cache for an exact match
-            if (!string.IsNullOrEmpty(name))
+            if (!name.IsEmpty)
             {
-                NuGetFramework cachedResult;
-                if (!_frameworkCache.TryGetValue(name, out cachedResult))
+                if (!_frameworkCache.TryGetValue(name, out NuGetFramework? cachedResult))
                 {
                     // Parse and add the framework to the cache
-                    cachedResult = TargetFrameworkName_ParserCore(name);
+                    cachedResult = TargetFrameworkName_ParserCore(name.ToString());
                     _frameworkCache.Add(name, cachedResult);
                 }
 
@@ -193,7 +242,7 @@ namespace NuGet.Client
             }
 
             // Let the framework parser handle null/empty and create the error message.
-            return TargetFrameworkName_ParserCore(name);
+            return TargetFrameworkName_ParserCore(name.ToString());
         }
 
         private static NuGetFramework TargetFrameworkName_ParserCore(string name)
@@ -218,13 +267,58 @@ namespace NuGet.Client
             return new NuGetFramework(name, FrameworkConstants.EmptyVersion);
         }
 
-        private static object AllowEmptyFolderParser(string s, PatternTable table)
+        /// <summary>
+        /// Identity parser, returns the input string as is.
+        /// If matchOnly is true, then an empty string is returned as a performance optimization.
+        /// If matchOnly is false, the string will be actualized.
+        /// </summary>
+        private static object IdentityParser(ReadOnlyMemory<char> s, PatternTable? _, bool matchOnly)
         {
-            // Accept "_._" as a pseudo-assembly
-            return PackagingCoreConstants.EmptyFolder.Equals(s, StringComparison.Ordinal) ? s : null;
+            if (matchOnly)
+            {
+                return string.Empty;
+            }
+            return s.ToString();
         }
 
-        private static bool TargetFrameworkName_CompatibilityTest(object criteria, object available)
+
+        /// <summary>
+        /// If matchOnly is true, then an empty string is returned as a performance optimization.
+        /// If matchOnly is false, the parsed result will be returned.
+        /// </summary>
+        private static object? AllowEmptyFolderParser(ReadOnlyMemory<char> s, PatternTable? _, bool matchOnly)
+        {
+            // Accept "_._" as a pseudo-assembly
+            if (MemoryExtensions.Equals(PackagingCoreConstants.EmptyFolder.AsSpan(), s.Span, StringComparison.Ordinal))
+            {
+                if (matchOnly)
+                {
+                    return string.Empty;
+                }
+                return PackagingCoreConstants.EmptyFolder;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Matches an analyzer assembly: a '.dll' (at any depth, so the token is terminal and may receive a
+        /// multi-segment remainder) excluding satellite '.resources.dll' assemblies. Mirrors the SDK's analyzer
+        /// detection apart from the 'analyzers/' folder casing, which the content model matches case-insensitively.
+        /// </summary>
+        private static object? AnalyzerAssembly_Parser(ReadOnlyMemory<char> s, PatternTable? _, bool matchOnly)
+        {
+            ReadOnlySpan<char> span = s.Span;
+            if (span.EndsWith(".dll".AsSpan(), StringComparison.OrdinalIgnoreCase)
+                && !span.EndsWith(".resources.dll".AsSpan(), StringComparison.OrdinalIgnoreCase))
+            {
+                return matchOnly ? string.Empty : s.ToString();
+            }
+
+            return null;
+        }
+
+        private static bool TargetFrameworkName_CompatibilityTest(object? criteria, object? available)
         {
             var criteriaFrameworkName = criteria as NuGetFramework;
             var availableFrameworkName = available as NuGetFramework;
@@ -257,7 +351,7 @@ namespace NuGet.Client
             return false;
         }
 
-        private static int TargetFrameworkName_NearestCompareTest(object projectFramework, object criteria, object available)
+        private static int TargetFrameworkName_NearestCompareTest(object? projectFramework, object? criteria, object? available)
         {
             var projectFrameworkName = projectFramework as NuGetFramework;
             var criteriaFrameworkName = criteria as NuGetFramework;
@@ -290,14 +384,6 @@ namespace NuGet.Client
             return 0;
         }
 
-        private static Version NormalizeVersion(Version version)
-        {
-            return new Version(version.Major,
-                version.Minor,
-                Math.Max(version.Build, 0),
-                Math.Max(version.Revision, 0));
-        }
-
         public class ManagedCodeCriteria
         {
             private ManagedCodeConventions _conventions;
@@ -307,7 +393,7 @@ namespace NuGet.Client
                 _conventions = conventions;
             }
 
-            public SelectionCriteria ForFrameworkAndRuntime(NuGetFramework framework, string runtimeIdentifier)
+            public SelectionCriteria ForFrameworkAndRuntime(NuGetFramework framework, string? runtimeIdentifier)
             {
                 if (framework is FallbackFramework)
                 {
@@ -407,6 +493,11 @@ namespace NuGet.Client
             /// Pattern used to identify MSBuild transitive targets and props files
             /// </summary>
             public PatternSet MSBuildTransitiveFiles { get; }
+
+            /// <summary>
+            /// Pattern used to identify analyzer assemblies, at any depth under 'analyzers/'.
+            /// </summary>
+            public PatternSet AnalyzerAssemblies { get; }
 
             internal ManagedCodePatterns(ManagedCodeConventions conventions)
             {
@@ -563,6 +654,17 @@ namespace NuGet.Client
                         new PatternDefinition("buildTransitive/{tfm}/{msbuild}", table: DotnetAnyTable),
                         new PatternDefinition("buildTransitive/{msbuild}", table: null, defaults: DefaultTfmAny)
                     });
+
+                AnalyzerAssemblies = new PatternSet(
+                    conventions.Properties,
+                    groupPatterns: new PatternDefinition[]
+                    {
+                        new PatternDefinition("analyzers/{analyzerAssembly}"),
+                    },
+                    pathPatterns: new PatternDefinition[]
+                    {
+                        new PatternDefinition("analyzers/{analyzerAssembly}"),
+                    });
             }
         }
 
@@ -576,6 +678,7 @@ namespace NuGet.Client
             public static readonly string MSBuild = "msbuild";
             public static readonly string SatelliteAssembly = "satelliteAssembly";
             public static readonly string CodeLanguage = "codeLanguage";
+            public static readonly string AnalyzerAssembly = "analyzerAssembly";
         }
     }
 }

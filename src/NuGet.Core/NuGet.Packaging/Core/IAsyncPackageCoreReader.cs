@@ -35,7 +35,7 @@ namespace NuGet.Packaging.Core
         /// The task result (<see cref="Task{TResult}.Result" />) returns a <see cref="NuGetVersion" />.</returns>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="cancellationToken" />
         /// is cancelled.</exception>
-        Task<NuGetVersion> GetMinClientVersionAsync(CancellationToken cancellationToken);
+        Task<NuGetVersion?> GetMinClientVersionAsync(CancellationToken cancellationToken);
 
         /// <summary>
         /// Asynchronously gets zero or more package types from the .nuspec.

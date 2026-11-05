@@ -16,7 +16,7 @@ namespace NuGet.Protocol
     /// </summary>
     internal sealed class DedicatedAsynchronousProcessingThread : IDisposable
     {
-        private Task _processingThread;
+        private Task? _processingThread;
         private bool _isDisposed;
         private bool _isClosed;
         private TimeSpan _pollingDelay;

@@ -22,7 +22,7 @@ namespace NuGet.Packaging.Rules
             foreach (var file in builder.GetFiles())
             {
                 var name = Path.GetFileName(file);
-                var dirName = Path.GetFileName(Path.GetDirectoryName(file));
+                var dirName = Path.GetFileName(Path.GetDirectoryName(file))!;
                 if (name.Equals("init.ps1", StringComparison.OrdinalIgnoreCase) && !dirName.Equals(PackagingConstants.Folders.Tools, StringComparison.OrdinalIgnoreCase))
                 {
                     yield return CreatePackageIssue(file);

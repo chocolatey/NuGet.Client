@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using NuGet.Shared;
 
 namespace NuGet.ProjectModel
@@ -12,15 +11,15 @@ namespace NuGet.ProjectModel
     {
         public ProjectFileDependencyGroup(string frameworkName, IEnumerable<string> dependencies)
         {
-            FrameworkName = frameworkName;
-            Dependencies = dependencies;
+            FrameworkName = frameworkName ?? throw new ArgumentNullException(nameof(frameworkName));
+            Dependencies = dependencies ?? throw new ArgumentNullException(nameof(dependencies));
         }
 
         public string FrameworkName { get; }
 
         public IEnumerable<string> Dependencies { get; }
 
-        public bool Equals(ProjectFileDependencyGroup other)
+        public bool Equals(ProjectFileDependencyGroup? other)
         {
             if (other == null)
             {
@@ -45,7 +44,7 @@ namespace NuGet.ProjectModel
             return false;
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return Equals(obj as ProjectFileDependencyGroup);
         }
@@ -55,14 +54,7 @@ namespace NuGet.ProjectModel
             var combiner = new HashCodeCombiner();
 
             combiner.AddStringIgnoreCase(FrameworkName);
-
-            if (Dependencies != null)
-            {
-                foreach (var dependency in Dependencies.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
-                {
-                    combiner.AddStringIgnoreCase(dependency);
-                }
-            }
+            combiner.AddUnorderedSequence(Dependencies, StringComparer.OrdinalIgnoreCase);
 
             return combiner.CombinedHash;
         }

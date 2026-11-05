@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -114,7 +116,7 @@ namespace Test.Utility
         public override Task OpenFile(string fullPath)
         {
             FilesOpened.Add(fullPath);
-            return Task.FromResult(0);
+            return Task.CompletedTask;
         }
     }
 }

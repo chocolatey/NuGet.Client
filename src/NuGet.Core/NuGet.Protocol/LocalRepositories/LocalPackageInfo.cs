@@ -9,51 +9,8 @@ namespace NuGet.Protocol
 {
     public class LocalPackageInfo
     {
-        private readonly Lazy<NuspecReader> _nuspecHelper;
-        private readonly Func<PackageReaderBase> _getPackageReader;
-
-        /// <summary>
-        /// Local nuget package.
-        /// </summary>
-        /// <param name="identity">Package id and version.</param>
-        /// <param name="path">Path to the nupkg.</param>
-        /// <param name="lastWriteTimeUtc">Last nupkg write time for publish date.</param>
-        /// <param name="nuspec">Nuspec XML.</param>
-        /// <param name="getPackageReader">Method to retrieve the package as a reader.</param>
-        [Obsolete("use other constructor")]
-        public LocalPackageInfo(
-            PackageIdentity identity,
-            string path,
-            DateTime lastWriteTimeUtc,
-            Lazy<NuspecReader> nuspec,
-            Func<PackageReaderBase> getPackageReader)
-        {
-            if (identity == null)
-            {
-                throw new ArgumentNullException(nameof(identity));
-            }
-
-            if (path == null)
-            {
-                throw new ArgumentNullException(nameof(path));
-            }
-
-            if (nuspec == null)
-            {
-                throw new ArgumentNullException(nameof(nuspec));
-            }
-
-            if (getPackageReader == null)
-            {
-                throw new ArgumentNullException(nameof(getPackageReader));
-            }
-
-            Identity = identity;
-            Path = path;
-            LastWriteTimeUtc = lastWriteTimeUtc;
-            _nuspecHelper = nuspec;
-            _getPackageReader = getPackageReader;
-        }
+        private readonly Lazy<NuspecReader> _nuspecHelper = null!;
+        private readonly Func<PackageReaderBase> _getPackageReader = null!;
 
         /// <summary>
         /// Local nuget package.
@@ -93,7 +50,7 @@ namespace NuGet.Protocol
             {
                 if (useFolder)
                 {
-                    var directoryName = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Path), System.IO.Path.GetFileNameWithoutExtension(Path));
+                    var directoryName = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Path)!, System.IO.Path.GetFileNameWithoutExtension(Path));
                     return new PackageFolderReader(directoryName);
                 }
                 else
@@ -103,20 +60,20 @@ namespace NuGet.Protocol
             });
         }
 
+        // Protected ctor for subclass override patterns; virtual members must be overridden.
         protected LocalPackageInfo()
         {
-
         }
 
         /// <summary>
         /// Package id and version.
         /// </summary>
-        public virtual PackageIdentity Identity { get; }
+        public virtual PackageIdentity Identity { get; } = null!;
 
         /// <summary>
         /// Nupkg or folder path.
         /// </summary>
-        public virtual string Path { get; }
+        public virtual string Path { get; } = null!;
 
         /// <summary>
         /// Last file write time. This is used for the publish date.

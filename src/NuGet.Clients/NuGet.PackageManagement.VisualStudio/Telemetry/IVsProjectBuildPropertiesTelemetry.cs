@@ -5,7 +5,7 @@ namespace NuGet.PackageManagement.VisualStudio.Telemetry
 {
     internal interface IVsProjectBuildPropertiesTelemetry
     {
-        void OnPropertyStorageUsed(string[] projectTypeGuids);
-        void OnDteUsed(string[] projectTypeGuids);
+        void OnPropertyStorageUsed(string propertyName, string[] projectTypeGuids);
+        void OnDteUsed(string propertyName, string[] projectTypeGuids);
     }
 }

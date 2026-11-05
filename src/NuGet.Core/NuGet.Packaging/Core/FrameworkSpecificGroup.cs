@@ -64,7 +64,7 @@ namespace NuGet.Packaging
 
         public bool HasEmptyFolder { get; }
 
-        public bool Equals(FrameworkSpecificGroup other)
+        public bool Equals(FrameworkSpecificGroup? other)
         {
             if (ReferenceEquals(this, other))
             {
@@ -79,7 +79,7 @@ namespace NuGet.Packaging
             return GetHashCode() == other.GetHashCode();
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             var other = obj as FrameworkSpecificGroup;
 
@@ -101,19 +101,7 @@ namespace NuGet.Packaging
             var combiner = new HashCodeCombiner();
 
             combiner.AddObject(TargetFramework);
-
-            if (Items != null)
-            {
-#if NETFRAMEWORK || NETSTANDARD
-
-                foreach (var hash in Items.Select(e => e.GetHashCode()).OrderBy(e => e))
-#else
-                foreach (var hash in Items.Select(e => e.GetHashCode(StringComparison.Ordinal)).OrderBy(e => e))
-#endif
-                {
-                    combiner.AddObject(hash);
-                }
-            }
+            combiner.AddUnorderedSequence(Items, StringComparer.Ordinal);
 
             return combiner.CombinedHash;
         }

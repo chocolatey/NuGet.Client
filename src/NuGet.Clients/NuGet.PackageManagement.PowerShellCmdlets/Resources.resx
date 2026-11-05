@@ -117,10 +117,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <assembly alias="System.Windows.Forms" name="System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" />
-  <data name="Add_WrapperMembers" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>Scripts\Add-WrapperMembers.ps1;System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089;Windows-1252</value>
-  </data>
   <data name="AggregateSourceName" xml:space="preserve">
     <value>All</value>
   </data>
@@ -137,7 +133,7 @@
     <value>Nested prompt not supported.</value>
   </data>
   <data name="Host_PSNotInstalled" xml:space="preserve">
-    <value>Error: The Package Manager Console requires PowerShell 2.0 runtime, which is not detected on this machine. Please install the PowerShell 2.0 from http://support.microsoft.com/kb/968929 and restart Visual Studio.</value>
+    <value>Error: The Package Manager Console requires PowerShell 2.0 runtime, which is not detected on this machine. Install PowerShell 2.0 from http://support.microsoft.com/kb/968929 and restart Visual Studio.</value>
   </data>
   <data name="PowerShellHostTitle" xml:space="preserve">
     <value>Package Manager Console Host Version {0}</value>
@@ -150,7 +146,7 @@
     <value>Zero length collection.</value>
   </data>
   <data name="Cmdlet_CommandObsolete" xml:space="preserve">
-    <value>This Command/Parameter combination has been deprecated and will be removed in the next release. Please consider using the new command that replaces it: '{0}'.</value>
+    <value>This Command/Parameter combination has been deprecated and will be removed in the next release. Consider using the new command that replaces it: '{0}'.</value>
   </data>
   <data name="Cmdlet_DisplayMorePackagesNoHelp" xml:space="preserve">
     <value>Stop to display more packages</value>
@@ -272,11 +268,11 @@
 {1} - source string specified by the user</comment>
   </data>
   <data name="UnknownSource" xml:space="preserve">
-    <value>Source '{0}' not found. Please provide an HTTP or local source.</value>
+    <value>Source '{0}' not found. Provide an HTTP or local source.</value>
     <comment>{0} is the source</comment>
   </data>
   <data name="UnknownSourceType" xml:space="preserve">
-    <value>Unsupported type of source '{0}'. Please provide an HTTP or local source.</value>
+    <value>Unsupported type of source '{0}'. Provide an HTTP or local source.</value>
     <comment>{0} is the input source.</comment>
   </data>
   <data name="UnknownSourceWithId" xml:space="preserve">

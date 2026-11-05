@@ -1,11 +1,14 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+
 using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Common;
@@ -55,7 +58,7 @@ namespace NuGet.VisualStudio.Telemetry
             }
 
             var data = new Dictionary<string, Data>(_sources.Count);
-            foreach (var source in _sources.Keys)
+            foreach ((var source, _) in _sources)
             {
                 data[source] = new Data();
             }
@@ -65,8 +68,23 @@ namespace NuGet.VisualStudio.Telemetry
             ProtocolDiagnostics.HttpEvent += ProtocolDiagnostics_HttpEvent;
             ProtocolDiagnostics.ResourceEvent += ProtocolDiagnostics_ResourceEvent;
             ProtocolDiagnostics.NupkgCopiedEvent += ProtocolDiagnostics_NupkgCopiedEvent;
+            ProtocolDiagnostics.ServiceIndexEntryEvent += ProtocolDiagnostics_ServiceIndexEntryEvent;
             _parentId = parentId;
             _actionName = GetActionName(action);
+        }
+
+        private void ProtocolDiagnostics_ServiceIndexEntryEvent(ProtocolDiagnosticServiceIndexEntryEvent pdEvent)
+        {
+            if (pdEvent.HttpsSourceHasHttpResource)
+            {
+                if (_data.TryGetValue(pdEvent.Source, out Data data))
+                {
+                    lock (data._lock)
+                    {
+                        data.HttpsSourceHasHttpResource = pdEvent.HttpsSourceHasHttpResource;
+                    }
+                }
+            }
         }
 
         private static string GetActionName(TelemetryAction action)
@@ -186,6 +204,25 @@ namespace NuGet.VisualStudio.Telemetry
             {
                 data.NupkgCount++;
                 data.NupkgSize += ncEvent.FileSize;
+                data.IdContainsNonAlphanumericDotDashOrUnderscoreCharacter = data.IdContainsNonAlphanumericDotDashOrUnderscoreCharacter || (ncEvent.PackageId.Length > 0 && HasNonAlphanumericDotDashOrUnderscoreCharacters(ncEvent.PackageId));
+            }
+
+            bool HasNonAlphanumericDotDashOrUnderscoreCharacters(string packageId)
+            {
+                foreach (char c in packageId.AsSpan())
+                {
+                    if (!IsCharacterAlphanumericDotDashOrUnderscore(c))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+
+                bool IsCharacterAlphanumericDotDashOrUnderscore(char c)
+                {
+                    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_';
+                }
             }
         }
 
@@ -244,6 +281,7 @@ namespace NuGet.VisualStudio.Telemetry
                 telemetry[PropertyNames.Duration.Total] = data.Resources.Values.Sum(r => r.duration.TotalMilliseconds);
                 telemetry[PropertyNames.Nupkgs.Copied] = data.NupkgCount;
                 telemetry[PropertyNames.Nupkgs.Bytes] = data.NupkgSize;
+                telemetry[PropertyNames.Nupkgs.IdContainsNonAlphanumericDotDashOrUnderscoreCharacter] = data.IdContainsNonAlphanumericDotDashOrUnderscoreCharacter;
                 AddResourceProperties(telemetry, data.Resources);
 
                 if (data.Http.Requests > 0)
@@ -297,11 +335,11 @@ namespace NuGet.VisualStudio.Telemetry
 
         private static TelemetryEvent ToResourceDetailsTelemetry(Dictionary<string, (int count, TimeSpan duration)> resources)
         {
-            var subevent = new TelemetryEvent(eventName: null);
+            var subevent = new TelemetryEvent(eventName: string.Empty);
 
             foreach (var resource in resources)
             {
-                var details = new TelemetryEvent(eventName: null);
+                var details = new TelemetryEvent(eventName: string.Empty);
                 details["count"] = resource.Value.count;
                 details["duration"] = resource.Value.duration.TotalMilliseconds;
 
@@ -313,7 +351,7 @@ namespace NuGet.VisualStudio.Telemetry
 
         private static TelemetryEvent ToStatusCodeTelemetry(Dictionary<int, int> statusCodes)
         {
-            var subevent = new TelemetryEvent(eventName: null);
+            var subevent = new TelemetryEvent(eventName: string.Empty);
 
             foreach (var pair in statusCodes)
             {
@@ -323,7 +361,7 @@ namespace NuGet.VisualStudio.Telemetry
             return subevent;
         }
 
-        private static string GetMsFeed(PackageSource source)
+        internal static string GetMsFeed(PackageSource source)
         {
             if (source.IsHttp)
             {
@@ -360,6 +398,7 @@ namespace NuGet.VisualStudio.Telemetry
         {
             int requests = 0;
             long bytes = 0;
+            int numberOfSourcesWithAnHttpResource = 0;
             TimeSpan duration = TimeSpan.Zero;
 
             foreach (var source in data)
@@ -374,38 +413,48 @@ namespace NuGet.VisualStudio.Telemetry
 
                     bytes += source.Value.NupkgSize;
                 }
+
+                if (source.Value.HttpsSourceHasHttpResource)
+                {
+                    numberOfSourcesWithAnHttpResource++;
+                }
             }
 
-            return new Totals(requests, bytes, duration);
+            return new Totals(requests, bytes, duration, numberOfSourcesWithAnHttpResource);
         }
 
         public class Totals
         {
-            public Totals(int requests, long bytes, TimeSpan duration)
+            public Totals(int requests, long bytes, TimeSpan duration, int numberOfSourcesWithAnHttpResource)
             {
                 Requests = requests;
                 Bytes = bytes;
                 Duration = duration;
+                NumberOfSourcesWithAnHttpResource = numberOfSourcesWithAnHttpResource;
             }
 
             public int Requests { get; }
             public long Bytes { get; }
             public TimeSpan Duration { get; }
+            public int NumberOfSourcesWithAnHttpResource { get; }
         }
 
         internal class Data
         {
+            internal bool HttpsSourceHasHttpResource { get; set; }
             internal object _lock;
             internal Dictionary<string, (int count, TimeSpan duration)> Resources { get; }
             internal HttpData Http { get; }
             internal int NupkgCount { get; set; }
             internal long NupkgSize { get; set; }
+            internal bool IdContainsNonAlphanumericDotDashOrUnderscoreCharacter { get; set; }
 
             internal Data()
             {
                 _lock = new object();
                 Resources = new Dictionary<string, (int count, TimeSpan duration)>();
                 Http = new HttpData();
+                HttpsSourceHasHttpResource = false;
             }
         }
 
@@ -448,6 +497,7 @@ namespace NuGet.VisualStudio.Telemetry
             {
                 internal const string Copied = "nupkgs.copied";
                 internal const string Bytes = "nupkgs.bytes";
+                internal const string IdContainsNonAlphanumericDotDashOrUnderscoreCharacter = "nupkgs.idcontainsNonAlphanumericDotDashOrUnderscorecharacter";
             }
 
             internal static class Resources

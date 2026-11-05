@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -13,6 +15,8 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
+using Microsoft.Internal.NuGet.Testing.SignedPackages.ChildProcess;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Configuration.Test;
@@ -20,6 +24,7 @@ using NuGet.Frameworks;
 using NuGet.Packaging;
 using NuGet.Packaging.Core;
 using NuGet.ProjectModel;
+using NuGet.Protocol;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
 using Test.Utility;
@@ -32,14 +37,15 @@ namespace NuGet.CommandLine.Test
         private const int _failureCode = 1;
         private const int _successCode = 0;
 
-        [Fact]
-        public void RestoreCommand_BadInputPath()
+        [Theory]
+        [InlineData("bad/pat.h/myfile.blah")]
+        [InlineData("**/*.sln")]
+        public void RestoreCommand_BadInputPath(string solutionPath)
         {
             using (var randomTestFolder = TestDirectory.Create())
             {
                 // Arrange
                 var nugetexe = Util.GetNuGetExePath();
-                var solutionPath = "bad/pat.h/myfile.blah";
 
                 var args = new string[]
                 {
@@ -53,13 +59,12 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.NotEqual(_successCode, r.ExitCode);
                 var error = r.Errors;
-                Assert.Contains("Input file does not exist: bad/pat.h/myfile.blah", r.Errors, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("Input file does not exist: " + solutionPath, r.Errors, StringComparison.OrdinalIgnoreCase);
             }
         }
 
@@ -84,8 +89,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.NotEqual(_successCode, r.ExitCode);
@@ -117,8 +121,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.NotEqual(_successCode, r.ExitCode);
@@ -148,8 +151,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.NotEqual(_successCode, r.ExitCode);
@@ -183,8 +185,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -219,8 +220,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 var packageFileA = Path.Combine(workingPath, @"outputDir", "a.1.1.0", "a.1.1.0.nupkg");
@@ -284,8 +284,7 @@ namespace NuGet.CommandLine.Test
                     var result = CommandRunner.Run(
                         nugetexe,
                         workingPath,
-                        string.Join(" ", args),
-                        waitForExit: true);
+                        string.Join(" ", args));
 
                     // Assert
                     Assert.True(result.Errors == string.Empty, $"There should not be any STDERR:{Environment.NewLine}{result.Errors}");
@@ -316,8 +315,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    "restore -Source " + repositoryPath,
-                    waitForExit: true);
+                    "restore -Source " + repositoryPath);
 
                 // Assert
                 Assert.True(_successCode == r.ExitCode, r.Output + " " + r.Errors);
@@ -343,8 +341,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    "restore " + Path.Combine(workingPath, "a.proj1.slnf") + " -Source " + repositoryPath,
-                    waitForExit: true);
+                    "restore " + Path.Combine(workingPath, "a.proj1.slnf") + " -Source " + repositoryPath);
 
                 // Assert
                 Assert.True(_successCode == r.ExitCode, r.Output + " " + r.Errors);
@@ -363,14 +360,30 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    "restore " + Path.Combine(workingPath, "a.proj2.slnf") + " -Source " + repositoryPath,
-                    waitForExit: true);
+                    "restore " + Path.Combine(workingPath, "a.proj2.slnf") + " -Source " + repositoryPath);
 
                 // Assert
                 Assert.True(_successCode == r.ExitCode, r.Output + " " + r.Errors);
                 var packageFileA = Path.Combine(pathContext.PackagesV2, "packageA.1.1.0", "packageA.1.1.0.nupkg");
                 var packageFileB = Path.Combine(pathContext.PackagesV2, "packageB.2.2.0", "packageB.2.2.0.nupkg");
                 Assert.False(File.Exists(packageFileA));
+                Assert.True(File.Exists(packageFileB));
+            }
+
+            using (var pathContext = new SimpleTestPathContext())
+            {
+                var workingPath = pathContext.WorkingDirectory;
+                var repositoryPath = Util.CreateBasicTwoProjectSolutionWithSolutionFilters(workingPath, "packages.config", "packages.config");
+
+                // Act
+                var r = CommandRunner.Run(nugetexe,
+                    workingPath, "restore " + Path.Combine(workingPath, "filter", "filterinsubfolder.slnf") + " -Source " + repositoryPath);
+
+                // Assert
+                Assert.True(_successCode == r.ExitCode, r.Output + " " + r.Errors);
+                var packageFileA = Path.Combine(pathContext.PackagesV2, "packageA.1.1.0", "packageA.1.1.0.nupkg");
+                var packageFileB = Path.Combine(pathContext.PackagesV2, "packageB.2.2.0", "packageB.2.2.0.nupkg");
+                Assert.True(File.Exists(packageFileA));
                 Assert.True(File.Exists(packageFileB));
             }
         }
@@ -429,8 +442,7 @@ namespace NuGet.CommandLine.Test
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -463,8 +475,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    "restore",
-                    waitForExit: true);
+                    "restore");
 
                 // Assert
                 Assert.True(string.IsNullOrEmpty(r.Errors)); // No error
@@ -475,7 +486,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
         [Theory]
         [InlineData("", "")]
         [InlineData("", "packages.config")]
-        [InlineData("project.json", "")]
+        [InlineData("PackageReference", "")]
         public void RestoreCommand_FromSolutionFile_ReportsNothingToDoWithoutError(string proj1ConfigFileName, string proj2ConfigFileName)
         {
             // Verify we display a simple informational message if we don't encounter any projects with project.json
@@ -492,12 +503,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    "restore -Source " + repositoryPath,
-                    waitForExit: true);
+                    "restore -Source " + repositoryPath);
 
                 // Assert
                 Assert.True(_successCode == r.ExitCode, r.Output + "" + r.Errors);
-                Assert.True(string.IsNullOrEmpty(r.Errors)); // No error
+                Assert.Empty(r.Errors); // No error
 
                 if (string.IsNullOrEmpty(proj1ConfigFileName) && string.IsNullOrEmpty(proj2ConfigFileName))
                 {
@@ -527,8 +537,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    "restore -Source " + repositoryPath + @" -msbuildversion 12",
-                    waitForExit: true);
+                    "restore -Source " + repositoryPath + @" -msbuildversion 12");
 
                 // Assert
                 Assert.True(_successCode == r.ExitCode, $"Expected: {_successCode} - Actual: {r.ExitCode}{Environment.NewLine} {r.AllOutput}");
@@ -561,8 +570,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    "restore -Source " + repositoryPath + $@" -MSBuildPath ""{msbuildPath}"" ",
-                    waitForExit: true);
+                    "restore -Source " + repositoryPath + $@" -MSBuildPath ""{msbuildPath}"" ");
 
                 // Assert
                 Assert.True(_successCode == r.ExitCode, r.Output);
@@ -589,12 +597,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    "restore -Source " + repositoryPath + $@" -MSBuildPath ""{msbuildPath}"" ",
-                    waitForExit: true);
+                    "restore -Source " + repositoryPath + $@" -MSBuildPath ""{msbuildPath}"" ");
 
                 // Assert
                 Assert.True(_failureCode == r.ExitCode, r.Output + " " + r.Errors);
-                Assert.True(r.Errors.Contains($"MSBuildPath : {msbuildPath}  doesn't not exist."));
+                Assert.True(r.Errors.Contains($"MSBuildPath : {msbuildPath} does not exist."));
             }
         }
 
@@ -619,8 +626,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    "restore -Source " + repositoryPath + $@" -MSBuildPath ""{msbuildPath}"" -MSBuildVersion 12",
-                    waitForExit: true);
+                    "restore -Source " + repositoryPath + $@" -MSBuildPath ""{msbuildPath}"" -MSBuildVersion 12");
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -683,8 +689,7 @@ EndProject");
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    "restore -Source " + repositoryPath,
-                    waitForExit: true);
+                    "restore -Source " + repositoryPath);
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -722,8 +727,7 @@ EndProject");
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(_successCode == r.ExitCode, r.Output + " " + r.Errors);
@@ -760,8 +764,7 @@ EndProject");
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    "restore -Source " + repositoryPath + " -ConfigFile my.config -RequireConsent",
-                    waitForExit: true);
+                    "restore -Source " + repositoryPath + " -ConfigFile my.config -RequireConsent");
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -800,8 +803,7 @@ EndProject");
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    "restore -Source " + repositoryPath + " -ConfigFile my.config",
-                    waitForExit: true);
+                    "restore -Source " + repositoryPath + " -ConfigFile my.config");
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -838,8 +840,7 @@ EndProject");
                 var r = CommandRunner.Run(
                     nugetexe,
                     randomTestFolder,
-                    "restore " + workingPath + " -Source " + repositoryPath,
-                    waitForExit: true);
+                    "restore " + workingPath + " -Source " + repositoryPath);
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -927,8 +928,7 @@ EndProject");
                 var r = CommandRunner.Run(
                     nugetexe,
                     randomTestFolder,
-                    "restore " + workingPath + " -Source " + repositoryPath,
-                    waitForExit: true);
+                    "restore " + workingPath + " -Source " + repositoryPath);
 
                 // Assert
                 Assert.Equal(_failureCode, r.ExitCode);
@@ -1000,8 +1000,7 @@ EndProject");
                 var r = CommandRunner.Run(
                     nugetexe,
                     randomTestFolder,
-                    "restore " + workingPath + " -Source " + repositoryPath,
-                    waitForExit: true);
+                    "restore " + workingPath + " -Source " + repositoryPath);
 
                 // Assert
                 Assert.Equal(_failureCode, r.ExitCode);
@@ -1068,8 +1067,7 @@ EndProject");
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    "restore -ConfigFile my.config",
-                    waitForExit: true);
+                    "restore -ConfigFile my.config");
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -1158,8 +1156,7 @@ EndProject");
                 var r1 = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    "restore -Source " + repositoryPath + packageSaveMode1,
-                    waitForExit: true);
+                    "restore -Source " + repositoryPath + packageSaveMode1);
 
                 Assert.Equal(_successCode, r1.ExitCode);
                 Assert.Equal(expectedPackageFileAExists, File.Exists(packageFileA));
@@ -1192,8 +1189,7 @@ EndProject");
                 var r2 = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    "restore -Source " + repositoryPath + packageSaveMode2,
-                    waitForExit: true);
+                    "restore -Source " + repositoryPath + packageSaveMode2);
 
                 Assert.Equal(_successCode, r2.ExitCode);
                 Assert.Equal(expectedPackageFileAExists, File.Exists(packageFileA));
@@ -1254,7 +1250,7 @@ EndProject");
                                 MockServer.SetResponseContent(response, content);
                             }
                         }));
-
+                    pathContext.Settings.AddSource("http-source", $"{server.Uri}nuget", allowInsecureConnectionsValue: "True");
                     server.Get.Add("/nuget", r => "OK");
 
                     server.Start();
@@ -1264,8 +1260,7 @@ EndProject");
                     var r1 = CommandRunner.Run(
                         nugetexe,
                         workingDirectory,
-                        args,
-                        waitForExit: true);
+                        args);
                     server.Stop();
 
                     // Assert
@@ -1277,7 +1272,7 @@ EndProject");
         }
 
         [Fact]
-        public void RestoreCommand_FromProjectJson_RelativeGlobalPackagesFolder()
+        public async Task RestoreCommand_WithPackageReference_RelativeGlobalPackagesFolder()
         {
             // Arrange
             var nugetexe = Util.GetNuGetExePath();
@@ -1293,21 +1288,16 @@ EndProject");
                 Directory.CreateDirectory(repositoryPath);
                 Directory.CreateDirectory(Path.Combine(workingPath, ".nuget"));
 
-                Util.CreateTestPackage("packageA", "1.1.0", repositoryPath);
-                Util.CreateTestPackage("packageB", "2.2.0", repositoryPath);
+                var packageA = new SimpleTestPackageContext("packageA", "1.1.0");
+                var packageB = new SimpleTestPackageContext("packageB", "2.2.0");
 
+                await SimpleTestPackageUtility.CreatePackagesAsync(repositoryPath, packageA, packageB);
+                var project = SimpleTestProjectContext.CreateLegacyPackageReference("projectName", workingPath, FrameworkConstants.CommonFrameworks.Net472);
+                project.AddPackageToAllFrameworks(packageA);
+                project.AddPackageToAllFrameworks(packageB);
+                project.Save();
 
-                var projectJson = @"{
-                    'dependencies': {
-                    'packageA': '1.1.0',
-                    'packageB': '2.2.0'
-                    },
-                    'frameworks': {
-                                'netcore50': { }
-                            }
-                }";
-
-                var projectFile = Util.CreateUAPProject(workingPath, projectJson);
+                var projectFile = project.ProjectPath;
 
                 var nugetConfigDir = Path.Combine(workingPath, ".nuget");
 
@@ -1335,8 +1325,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(_successCode == r.ExitCode, r.Output + " " + r.Errors);
@@ -1379,8 +1368,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 var r = CommandRunner.Run(
                     nugetexe,
                     Directory.GetCurrentDirectory(),
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.NotEqual(_successCode, r.ExitCode);
@@ -1419,8 +1407,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     randomTestFolder,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.NotEqual(_successCode, r.ExitCode);
@@ -1460,7 +1447,6 @@ EndProject";
                     nugetexe,
                     workingPath,
                     string.Join(" ", args),
-                    waitForExit: true,
                     environmentVariables: envVars);
 
                 var output = r.Output + " " + r.Errors;
@@ -1524,7 +1510,6 @@ EndProject";
                     nugetexe,
                     randomTestFolder,
                     string.Join(" ", args),
-                    waitForExit: true,
                     environmentVariables: envVars);
 
                 // Assert
@@ -1598,8 +1583,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     randomSolutionFolder,
-                    "restore " + randomSolutionFolder + " -Source " + randomRepositoryPath,
-                    waitForExit: true);
+                    "restore " + randomSolutionFolder + " -Source " + randomRepositoryPath);
 
                 // Assert
                 Assert.True(_successCode == r.ExitCode, r.Output + " " + r.Errors);
@@ -1671,8 +1655,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     randomSolutionFolder,
-                    "restore " + solutionFile + " -Source " + randomRepositoryPath,
-                    waitForExit: true);
+                    "restore " + solutionFile + " -Source " + randomRepositoryPath);
 
                 // Assert
                 Assert.True(_successCode == r.ExitCode, r.Output + " " + r.Errors);
@@ -1744,8 +1727,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     randomSolutionFolder,
-                    "restore  -Source " + randomRepositoryPath,
-                    waitForExit: true);
+                    "restore  -Source " + randomRepositoryPath);
 
                 // Assert
                 Assert.True(_successCode == r.ExitCode, r.Output + " " + r.Errors);
@@ -1827,8 +1809,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     randomSolutionFolder,
-                    "restore  -Source " + randomRepositoryPath,
-                    waitForExit: true);
+                    "restore  -Source " + randomRepositoryPath);
 
                 // Assert
                 Assert.True(_successCode == r.ExitCode, r.Output + " " + r.Errors);
@@ -1921,8 +1902,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     randomSolutionFolder,
-                    "restore  -Source " + randomRepositoryPath,
-                    waitForExit: true);
+                    "restore  -Source " + randomRepositoryPath);
 
                 // Assert
                 Assert.False(_successCode == r.ExitCode, r.Output + " " + r.Errors);
@@ -1961,8 +1941,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -1975,10 +1954,10 @@ EndProject";
 
         /// <summary>
         /// Test proper handling of project in parent directories. The solution A\A.sln contains A\A.Util\A.Util.csproj
-        /// and B\B.csproj. B.csproj depends on ..\A\A.Util\A.Util.csproj.
+        /// and projectB\projectB.csproj. projectB.csproj depends on ..\A\A.Util\A.Util.csproj.
         /// </summary>
         [Fact]
-        public void RestoreCommand_FromSolutionFile_ProjectsInParentDir()
+        public async Task RestoreCommand_FromSolutionFile_ProjectsInParentDir()
         {
             // Arrange
             var nugetexe = Util.GetNuGetExePath();
@@ -1988,80 +1967,30 @@ EndProject";
                 var basePath = pathContext.WorkingDirectory;
                 Directory.CreateDirectory(Path.Combine(basePath, "A"));
                 Directory.CreateDirectory(Path.Combine(basePath, "A", "A.Util"));
-                Directory.CreateDirectory(Path.Combine(basePath, "B"));
+                Directory.CreateDirectory(Path.Combine(basePath, "projectB"));
 
                 var repositoryPath = Path.Combine(basePath, "Repository");
 
                 Directory.CreateDirectory(repositoryPath);
 
-                Util.CreateTestPackage("packageA", "1.1.0", repositoryPath);
-                Util.CreateTestPackage("packageB", "2.2.0", repositoryPath);
+                var packageA = new SimpleTestPackageContext("packageA", "1.1.0");
+                var packageB = new SimpleTestPackageContext("packageB", "2.2.0");
 
-                Util.CreateFile(Path.Combine(basePath, "A", "A.Util"), "A.Util.csproj",
-@"<Project ToolsVersion='14.0' DefaultTargets='Build' xmlns='http://schemas.microsoft.com/developer/msbuild/2003'>
-  <Import Project=""$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props"" Condition=""Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')"" />
-  <PropertyGroup>
-    <OutputType>Library</OutputType>
-    <OutputPath>out</OutputPath>
-    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
-  </PropertyGroup>
-  <ItemGroup>
-    <None Include='project.json' />
-  </ItemGroup>
-  <Import Project=""$(MSBuildToolsPath)\Microsoft.CSharp.targets"" />
-</Project>");
+                await SimpleTestPackageUtility.CreateFolderFeedV3Async(repositoryPath, packageA, packageB);
 
-                Util.CreateFile(Path.Combine(basePath, "A", "A.Util"), "project.json",
-@"{
-  'dependencies': {
-    'packageA': '1.1.0',
-    'packageB': '2.2.0'
-  },
-  'frameworks': {
-                'netcore50': { }
-            }
-}");
-                Util.CreateFile(Path.Combine(basePath, "B"), "B.csproj",
-@"<Project ToolsVersion='14.0' DefaultTargets='Build' xmlns='http://schemas.microsoft.com/developer/msbuild/2003'>
-  <Import Project=""$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props"" Condition=""Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')"" />
-  <PropertyGroup>
-    <OutputType>Library</OutputType>
-    <OutputPath>out</OutputPath>
-    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include=""..\A\A.Util\A.Util.csproj"">
-      <Project>{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</Project>
-      <Name>A.Util</Name>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include='project.json' />
-  </ItemGroup>
-  <Import Project=""$(MSBuildToolsPath)\Microsoft.CSharp.targets"" />
-</Project>");
+                var projectAUtil = SimpleTestProjectContext.CreateLegacyPackageReference("A.Util", Path.Combine(basePath, "A"), FrameworkConstants.CommonFrameworks.Net472);
+                projectAUtil.AddPackageToAllFrameworks(packageA);
+                projectAUtil.AddPackageToAllFrameworks(packageB);
 
-                Util.CreateFile(Path.Combine(basePath, "B"), "project.json",
-@"{
-  'dependencies': {
-  },
-  'frameworks': {
-                'netcore50': { }
-            }
-}");
+                var projectB = SimpleTestProjectContext.CreateLegacyPackageReference("projectB", basePath, FrameworkConstants.CommonFrameworks.Net472);
+                projectB.AddProjectToAllFrameworks(projectAUtil);
 
-                Util.CreateFile(Path.Combine(basePath, "A"), "A.sln",
-                    @"
-Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2012
-Project(""{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""A.Util"", ""A.Util\A.Util.csproj"", ""{A04C59CC-7622-4223-B16B-CDF2ECAD438D}""
-EndProject
-Project(""{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""B"", ""..\B\B.csproj"", ""{42641DAE-D6C4-49D4-92EA-749D2573554A}""
-EndProject");
+                var solution = new SimpleTestSolutionContext(Path.Combine(basePath, "A"), projectAUtil, projectB);
+                solution.Create();
 
                 var args = new[] {
                     "restore",
-                    Path.Combine(basePath, "A", "A.sln"),
+                    solution.SolutionPath,
                     "-verbosity detailed",
                     "-Source", repositoryPath
                 };
@@ -2070,12 +1999,11 @@ EndProject");
                 var r = CommandRunner.Run(
                     nugetexe,
                     basePath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.True(_successCode == r.ExitCode, r.Output + " " + r.Errors);
-                var bProjectLockJsonFile = Path.Combine(basePath, "B", "project.lock.json");
+                var bProjectLockJsonFile = Path.Combine(basePath, "projectB", "obj", LockFileFormat.AssetsFileName);
                 Assert.True(File.Exists(bProjectLockJsonFile));
                 var bProjectLockJson = new LockFileFormat().Read(bProjectLockJsonFile);
                 var bLibraries = bProjectLockJson.Libraries;
@@ -2109,8 +2037,7 @@ EndProject");
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -2143,8 +2070,7 @@ EndProject");
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -2181,8 +2107,7 @@ EndProject");
                 CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args1),
-                    waitForExit: true);
+                    string.Join(" ", args1));
                 //Verify primed
                 Assert.True(File.Exists(Path.Combine(globalPackagesFolder, @"newtonsoft.json", "7.0.1", "newtonsoft.json.7.0.1.nupkg")));
 
@@ -2191,8 +2116,7 @@ EndProject");
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args2),
-                    waitForExit: true);
+                    string.Join(" ", args2));
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -2266,8 +2190,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     randomSolutionFolder,
-                    "restore  -Source " + randomRepositoryPath,
-                    waitForExit: true);
+                    "restore  -Source " + randomRepositoryPath);
 
                 // Assert
                 Assert.True(_successCode == r.ExitCode, r.Output + " " + r.Errors);
@@ -2336,8 +2259,7 @@ EndProject";
                 var result = CommandRunner.Run(
                     nugetExe,
                     pathContext.SolutionRoot,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 Assert.True(_successCode == result.ExitCode, result.AllOutput);
                 Assert.True(result.Success);
@@ -2373,8 +2295,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     pathContext.WorkingDirectory,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -2415,8 +2336,7 @@ EndProject";
                 CommandRunnerResult result = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.False(result.Success);
@@ -2575,8 +2495,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 r.Success.Should().BeTrue(r.AllOutput);
@@ -2675,8 +2594,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(_failureCode, r.ExitCode);
@@ -2762,8 +2680,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -2836,8 +2753,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(_failureCode, r.ExitCode);
@@ -2918,8 +2834,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -2996,8 +2911,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -3067,8 +2981,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -3151,8 +3064,7 @@ EndProject";
             var r = CommandRunner.Run(
                 nugetexe,
                 workingPath,
-                string.Join(" ", args),
-                waitForExit: true);
+                string.Join(" ", args));
 
             // Assert
             Assert.Equal(_successCode, r.ExitCode);
@@ -3237,8 +3149,7 @@ EndProject";
             var r = CommandRunner.Run(
                 nugetexe,
                 workingPath,
-                string.Join(" ", args),
-                waitForExit: true);
+                string.Join(" ", args));
 
             // Assert
             Assert.Contains($"Package source mapping matches found for package ID 'Contoso.MVC.ASP' are: 'SharedRepository'", r.Output);
@@ -3319,8 +3230,7 @@ EndProject";
                 var r = CommandRunner.Run(
                     nugetexe,
                     workingPath,
-                    string.Join(" ", args),
-                    waitForExit: true);
+                    string.Join(" ", args));
 
                 // Assert
                 Assert.Equal(_successCode, r.ExitCode);
@@ -3328,6 +3238,511 @@ EndProject";
                 Assert.True(File.Exists(contosoRestorePath));
                 Assert.Contains($"Added package 'Contoso.MVC.ASP.1.0.0' to folder '{packagePath}' from source '{sharedRepositoryPath2}'", r.Output);
             }
+        }
+
+        [SkipMono()]
+        public void RestoreCommand_WithPackagesConfig_PackageWithVulnerabilities_RaisesWarnings()
+        {
+            // Arrange
+            var nugetexe = Util.GetNuGetExePath();
+            using var pathContext = new SimpleTestPathContext();
+            using var mockServer = new FileSystemBackedV3MockServer(pathContext.PackageSource, sourceReportsVulnerabilities: true);
+
+            mockServer.Vulnerabilities.Add(
+                "packageA",
+                new List<(Uri, PackageVulnerabilitySeverity, VersionRange)> {
+                    (new Uri("https://contoso.com/advisories/12345"), PackageVulnerabilitySeverity.High, VersionRange.Parse("[1.0.0, 2.0.0)"))
+                });
+            pathContext.Settings.RemoveSource("source");
+            pathContext.Settings.AddSource("source", mockServer.ServiceIndexUri, allowInsecureConnectionsValue: "True");
+
+            var workingPath = pathContext.WorkingDirectory;
+            Util.CreateTestPackage("packageA", "1.1.0", pathContext.PackageSource);
+            Util.CreateTestPackage("packageB", "2.2.0", pathContext.PackageSource);
+            Util.CreateFile(workingPath, "packages.config",
+@"<packages>
+  <package id=""packageA"" version=""1.1.0"" targetFramework=""net45"" />
+  <package id=""packageB"" version=""2.2.0"" targetFramework=""net45"" />
+</packages>");
+
+            string[] args = ["restore", "-PackagesDirectory", "outputDir"];
+            mockServer.Start();
+
+            // Act
+            var r = CommandRunner.Run(
+                nugetexe,
+                workingPath,
+                string.Join(" ", args));
+
+            mockServer.Stop();
+
+            // Assert
+            r.Success.Should().BeTrue(because: r.AllOutput);
+            var packageFileA = Path.Combine(workingPath, @"outputDir", "packageA.1.1.0", "packageA.1.1.0.nupkg");
+            var packageFileB = Path.Combine(workingPath, @"outputDir", "packageB.2.2.0", "packageB.2.2.0.nupkg");
+            File.Exists(packageFileA).Should().BeTrue();
+            File.Exists(packageFileB).Should().BeTrue();
+            r.AllOutput.Should().Contain($"Package 'packageA' 1.1.0 has a known high severity vulnerability");
+        }
+
+        [SkipMono()]
+        public void RestoreCommand_WithProjectWithPackagesConfig_DefaultSettings_PackageWithVulnerabilities_RaisesWarnings()
+        {
+            // Arrange
+            var nugetexe = Util.GetNuGetExePath();
+            using var pathContext = new SimpleTestPathContext();
+            using var mockServer = new FileSystemBackedV3MockServer(pathContext.PackageSource, sourceReportsVulnerabilities: true);
+
+            mockServer.Vulnerabilities.Add(
+                "packageA",
+                new List<(Uri, PackageVulnerabilitySeverity, VersionRange)> {
+                    (new Uri("https://contoso.com/advisories/12345"), PackageVulnerabilitySeverity.High, VersionRange.Parse("[1.0.0, 2.0.0)"))
+                });
+
+            pathContext.Settings.RemoveSource("source");
+            pathContext.Settings.AddSource("source", mockServer.ServiceIndexUri, allowInsecureConnectionsValue: "True");
+
+            Util.CreateTestPackage("packageA", "1.1.0", pathContext.PackageSource);
+            Util.CreateTestPackage("packageB", "2.2.0", pathContext.PackageSource);
+
+            var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+            var projectA = new SimpleTestProjectContext(
+                "a",
+                ProjectStyle.PackagesConfig,
+                pathContext.SolutionRoot);
+
+            solution.Projects.Add(projectA);
+            solution.Create();
+
+            Util.CreateFile(Path.GetDirectoryName(projectA.ProjectPath), "packages.config",
+@"<packages>
+  <package id=""packageA"" version=""1.1.0"" />
+  <package id=""packageB"" version=""2.2.0"" />
+</packages>");
+
+            mockServer.Start();
+
+            // Act
+            var r = CommandRunner.Run(
+                nugetexe,
+                pathContext.WorkingDirectory,
+                $"restore {projectA.ProjectPath}");
+
+            mockServer.Stop();
+
+            // Assert
+            r.Success.Should().BeTrue(because: r.AllOutput);
+            var packageFileA = Path.Combine(pathContext.SolutionRoot, "packages", "packageA.1.1.0", "packageA.1.1.0.nupkg");
+            var packageFileB = Path.Combine(pathContext.SolutionRoot, "packages", "packageB.2.2.0", "packageB.2.2.0.nupkg");
+            File.Exists(packageFileA).Should().BeTrue();
+            File.Exists(packageFileB).Should().BeTrue();
+            r.AllOutput.Should().Contain($"Package 'packageA' 1.1.0 has a known high severity vulnerability");
+        }
+
+        [SkipMono()]
+        public void RestoreCommand_WithProjectWithPackagesConfig_WithNuGetAuditFalse_PackageWithVulnerabilities_DoesNotRaiseWarnings()
+        {
+            // Arrange
+            var nugetexe = Util.GetNuGetExePath();
+            using var pathContext = new SimpleTestPathContext();
+            using var mockServer = new FileSystemBackedV3MockServer(pathContext.PackageSource, sourceReportsVulnerabilities: true);
+
+            mockServer.Vulnerabilities.Add(
+                "packageA",
+                new List<(Uri, PackageVulnerabilitySeverity, VersionRange)> {
+                    (new Uri("https://contoso.com/advisories/12345"), PackageVulnerabilitySeverity.High, VersionRange.Parse("[1.0.0, 2.0.0)"))
+                });
+            pathContext.Settings.RemoveSource("source");
+            pathContext.Settings.AddSource("source", mockServer.ServiceIndexUri, allowInsecureConnectionsValue: "True");
+
+            Util.CreateTestPackage("packageA", "1.1.0", pathContext.PackageSource);
+            Util.CreateTestPackage("packageB", "2.2.0", pathContext.PackageSource);
+
+            var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+            var projectA = new SimpleTestProjectContext(
+                "a",
+                ProjectStyle.PackagesConfig,
+                pathContext.SolutionRoot);
+            projectA.Properties.Add("NuGetAudit", "false");
+
+            solution.Projects.Add(projectA);
+            solution.Create();
+
+            Util.CreateFile(Path.GetDirectoryName(projectA.ProjectPath), "packages.config",
+@"<packages>
+  <package id=""packageA"" version=""1.1.0"" />
+  <package id=""packageB"" version=""2.2.0"" />
+</packages>");
+
+            mockServer.Start();
+
+            // Act
+            var r = CommandRunner.Run(
+                nugetexe,
+                pathContext.WorkingDirectory,
+                $"restore {projectA.ProjectPath}");
+
+            mockServer.Stop();
+
+            // Assert
+            r.Success.Should().BeTrue(because: r.AllOutput);
+            var packageFileA = Path.Combine(pathContext.SolutionRoot, "packages", "packageA.1.1.0", "packageA.1.1.0.nupkg");
+            var packageFileB = Path.Combine(pathContext.SolutionRoot, "packages", "packageB.2.2.0", "packageB.2.2.0.nupkg");
+            File.Exists(packageFileA).Should().BeTrue();
+            File.Exists(packageFileB).Should().BeTrue();
+            r.AllOutput.Should().NotContain($"Package 'packageA' 1.1.0 has a known high severity vulnerability");
+        }
+
+        [SkipMono()]
+        public void RestoreCommand_WithProjectWithPackagesConfig_WithNuGetAuditLevel_PackageWithVulnerabilities_DoesNotRaiseWarnings()
+        {
+            // Arrange
+            var nugetexe = Util.GetNuGetExePath();
+            using var pathContext = new SimpleTestPathContext();
+            using var mockServer = new FileSystemBackedV3MockServer(pathContext.PackageSource, sourceReportsVulnerabilities: true);
+
+            mockServer.Vulnerabilities.Add(
+                "packageA",
+                new List<(Uri, PackageVulnerabilitySeverity, VersionRange)> {
+                    (new Uri("https://contoso.com/advisories/12345"), PackageVulnerabilitySeverity.High, VersionRange.Parse("[1.0.0, 2.0.0)")),
+                    (new Uri("https://contoso.com/advisories/12346"), PackageVulnerabilitySeverity.Critical, VersionRange.Parse("[1.0.0, 2.0.0)"))
+                });
+            pathContext.Settings.RemoveSource("source");
+            pathContext.Settings.AddSource("source", mockServer.ServiceIndexUri, allowInsecureConnectionsValue: "True");
+
+            Util.CreateTestPackage("packageA", "1.1.0", pathContext.PackageSource);
+            Util.CreateTestPackage("packageB", "2.2.0", pathContext.PackageSource);
+
+            var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+            var projectA = new SimpleTestProjectContext(
+                "a",
+                ProjectStyle.PackagesConfig,
+                pathContext.SolutionRoot);
+            projectA.Properties.Add("NuGetAuditLevel", "critical");
+
+            solution.Projects.Add(projectA);
+            solution.Create();
+
+            Util.CreateFile(Path.GetDirectoryName(projectA.ProjectPath), "packages.config",
+@"<packages>
+  <package id=""packageA"" version=""1.1.0"" />
+  <package id=""packageB"" version=""2.2.0"" />
+</packages>");
+
+            mockServer.Start();
+
+            // Act
+            var r = CommandRunner.Run(
+                nugetexe,
+                pathContext.WorkingDirectory,
+                $"restore {projectA.ProjectPath}");
+
+            mockServer.Stop();
+
+            // Assert
+            r.Success.Should().BeTrue(because: r.AllOutput);
+            var packageFileA = Path.Combine(pathContext.SolutionRoot, "packages", "packageA.1.1.0", "packageA.1.1.0.nupkg");
+            var packageFileB = Path.Combine(pathContext.SolutionRoot, "packages", "packageB.2.2.0", "packageB.2.2.0.nupkg");
+            File.Exists(packageFileA).Should().BeTrue();
+            File.Exists(packageFileB).Should().BeTrue();
+            r.AllOutput.Should().Contain($"Package 'packageA' 1.1.0 has a known critical severity vulnerability");
+            r.AllOutput.Should().NotContain($"Package 'packageA' 1.1.0 has a known high severity vulnerability");
+        }
+
+        [SkipMono()]
+        public void RestoreCommand_WithSolutionFile_PackageWithVulnerabilities_RaisesAppropriateWarnings()
+        {
+            // Arrange
+            var nugetexe = Util.GetNuGetExePath();
+            using var pathContext = new SimpleTestPathContext();
+            using var mockServer = new FileSystemBackedV3MockServer(pathContext.PackageSource, sourceReportsVulnerabilities: true);
+
+            mockServer.Vulnerabilities.Add(
+                "packageA",
+                new List<(Uri, PackageVulnerabilitySeverity, VersionRange)> {
+                    (new Uri("https://contoso.com/advisories/12345"), PackageVulnerabilitySeverity.High, VersionRange.Parse("[1.0.0, 2.0.0)")),
+                    (new Uri("https://contoso.com/advisories/12346"), PackageVulnerabilitySeverity.Critical, VersionRange.Parse("[1.2.0, 2.0.0)"))
+                });
+            pathContext.Settings.RemoveSource("source");
+            pathContext.Settings.AddSource("source", mockServer.ServiceIndexUri, allowInsecureConnectionsValue: "True");
+
+            Util.CreateTestPackage("packageA", "1.1.0", pathContext.PackageSource);
+            Util.CreateTestPackage("packageA", "1.2.0", pathContext.PackageSource);
+            Util.CreateTestPackage("packageB", "2.2.0", pathContext.PackageSource);
+
+            var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+            var projectA = new SimpleTestProjectContext(
+                "a",
+                ProjectStyle.PackagesConfig,
+                pathContext.SolutionRoot);
+            projectA.Properties.Add("NuGetAuditLevel", "critical");
+
+            var projectB = new SimpleTestProjectContext(
+                "projectB",
+                ProjectStyle.PackagesConfig,
+                pathContext.SolutionRoot);
+            projectB.Properties.Add("NuGetAuditLevel", "high");
+
+            solution.Projects.Add(projectA);
+            solution.Projects.Add(projectB);
+            solution.Create();
+
+            Util.CreateFile(Path.GetDirectoryName(projectA.ProjectPath), "packages.config",
+@"<packages>
+  <package id=""packageA"" version=""1.1.0"" />
+  <package id=""packageB"" version=""2.2.0"" />
+</packages>");
+
+            Util.CreateFile(Path.GetDirectoryName(projectB.ProjectPath), "packages.config",
+@"<packages>
+  <package id=""packageA"" version=""1.2.0"" />
+  <package id=""packageB"" version=""2.2.0"" />
+</packages>");
+
+            mockServer.Start();
+
+            // Act
+            var r = CommandRunner.Run(
+                nugetexe,
+                pathContext.WorkingDirectory,
+                $"restore {solution.SolutionPath}");
+
+            mockServer.Stop();
+
+            // Assert
+            r.Success.Should().BeTrue(because: r.AllOutput);
+            var packageFileA = Path.Combine(pathContext.SolutionRoot, "packages", "packageA.1.1.0", "packageA.1.1.0.nupkg");
+            var packageFileA120 = Path.Combine(pathContext.SolutionRoot, "packages", "packageA.1.2.0", "packageA.1.2.0.nupkg");
+            var packageFileB = Path.Combine(pathContext.SolutionRoot, "packages", "packageB.2.2.0", "packageB.2.2.0.nupkg");
+            File.Exists(packageFileA).Should().BeTrue();
+            File.Exists(packageFileA120).Should().BeTrue();
+            File.Exists(packageFileB).Should().BeTrue();
+            r.AllOutput.Should().Contain($"Package 'packageA' 1.2.0 has a known critical severity vulnerability");
+            r.AllOutput.Should().Contain($"Package 'packageA' 1.2.0 has a known high severity vulnerability");
+            r.AllOutput.Should().NotContain($"Package 'packageA' 1.1.0 has a known high severity vulnerability");
+        }
+
+        [SkipMono()]
+        public void RestoreCommand_WithMultipleProjectsInSameDirectory_RaisesAppropriateWarnings()
+        {
+            // Arrange
+            var nugetexe = Util.GetNuGetExePath();
+            using var pathContext = new SimpleTestPathContext();
+            using var mockServer = new FileSystemBackedV3MockServer(pathContext.PackageSource, sourceReportsVulnerabilities: true);
+
+            mockServer.Vulnerabilities.Add(
+                "packageA",
+                new List<(Uri, PackageVulnerabilitySeverity, VersionRange)> {
+                    (new Uri("https://contoso.com/advisories/12345"), PackageVulnerabilitySeverity.High, VersionRange.Parse("[1.0.0, 2.0.0)")),
+                    (new Uri("https://contoso.com/advisories/12346"), PackageVulnerabilitySeverity.Critical, VersionRange.Parse("[1.2.0, 2.0.0)"))
+                });
+            pathContext.Settings.RemoveSource("source");
+            pathContext.Settings.AddSource("source", mockServer.ServiceIndexUri, allowInsecureConnectionsValue: "true");
+
+            Util.CreateTestPackage("packageA", "1.1.0", pathContext.PackageSource);
+            Util.CreateTestPackage("packageA", "1.2.0", pathContext.PackageSource);
+            Util.CreateTestPackage("packageB", "2.2.0", pathContext.PackageSource);
+
+            var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+            var projectA = new SimpleTestProjectContext(
+                "a",
+                ProjectStyle.PackagesConfig,
+                pathContext.SolutionRoot);
+            projectA.Properties.Add("NuGetAuditLevel", "critical");
+
+            var projectB = new SimpleTestProjectContext(
+                "b",
+                ProjectStyle.PackagesConfig,
+                pathContext.SolutionRoot);
+            projectB.Properties.Add("NuGetAuditLevel", "high");
+            projectB.ProjectPath = Path.Combine(pathContext.SolutionRoot, "a", $"b.csproj");
+
+            solution.Projects.Add(projectA);
+            solution.Projects.Add(projectB);
+            solution.Create();
+
+            Util.CreateFile(Path.GetDirectoryName(projectA.ProjectPath), "packages.config",
+@"<packages>
+  <package id=""packageA"" version=""1.1.0"" />
+  <package id=""packageA"" version=""1.2.0"" />
+  <package id=""packageB"" version=""2.2.0"" />
+</packages>");
+            mockServer.Start();
+
+            // Act
+            var r = CommandRunner.Run(
+                nugetexe,
+                pathContext.WorkingDirectory,
+                $"restore {solution.SolutionPath}");
+
+            mockServer.Stop();
+
+            // Assert
+            r.Success.Should().BeTrue(because: r.AllOutput);
+            var packageFileA = Path.Combine(pathContext.SolutionRoot, "packages", "packageA.1.1.0", "packageA.1.1.0.nupkg");
+            var packageFileA120 = Path.Combine(pathContext.SolutionRoot, "packages", "packageA.1.2.0", "packageA.1.2.0.nupkg");
+            var packageFileB = Path.Combine(pathContext.SolutionRoot, "packages", "packageB.2.2.0", "packageB.2.2.0.nupkg");
+            File.Exists(packageFileA).Should().BeTrue();
+            File.Exists(packageFileA120).Should().BeTrue();
+            File.Exists(packageFileB).Should().BeTrue();
+            r.AllOutput.Should().Contain($"Package 'packageA' 1.2.0 has a known critical severity vulnerability", Exactly.Twice());
+            r.AllOutput.Should().Contain($"Package 'packageA' 1.2.0 has a known high severity vulnerability", Exactly.Once());
+            r.AllOutput.Should().Contain($"Package 'packageA' 1.1.0 has a known high severity vulnerability", Exactly.Once());
+            // Make sure that we're not missing out asserting any reported vulnerabilities.
+            r.AllOutput.Should().NotContain($"a known low severity vulnerability");
+            r.AllOutput.Should().NotContain($"a known moderate severity vulnerability");
+            r.AllOutput.Should().Contain($"a known high severity vulnerability", Exactly.Twice());
+            r.AllOutput.Should().Contain($"a known critical severity vulnerability", Exactly.Twice());
+        }
+
+        [SkipMono()]
+        public async void RestoreCommand_WithPackagesConfigProject_PackageWithVulnerabilities_WithSuppressedAdvisories_SuppressesExpectedVulnerabilities()
+        {
+            // Arrange
+            var nugetexe = Util.GetNuGetExePath();
+            using var pathContext = new SimpleTestPathContext();
+
+            string advisoryUrl1 = "https://contoso.com/advisories/1";
+            string advisoryUrl2 = "https://contoso.com/advisories/2";
+
+            using var mockServer = new FileSystemBackedV3MockServer(pathContext.PackageSource, sourceReportsVulnerabilities: true);
+
+            mockServer.Vulnerabilities.Add(
+                "packageA",
+                new List<(Uri, PackageVulnerabilitySeverity, VersionRange)> {
+                    (new Uri(advisoryUrl1), PackageVulnerabilitySeverity.High, VersionRange.Parse("[1.0.0, 3.0.0)"))
+                });
+            mockServer.Vulnerabilities.Add(
+                "packageB",
+                new List<(Uri, PackageVulnerabilitySeverity, VersionRange)> {
+                    (new Uri(advisoryUrl2), PackageVulnerabilitySeverity.Critical, VersionRange.Parse("[1.0.0, 3.0.0)"))
+                });
+            pathContext.Settings.RemoveSource("source");
+            pathContext.Settings.AddSource("source", mockServer.ServiceIndexUri, allowInsecureConnectionsValue: "true");
+
+            var packageA1 = new SimpleTestPackageContext() { Id = "packageA", Version = "1.1.0" };
+            var packageA2 = new SimpleTestPackageContext() { Id = "packageA", Version = "1.2.0" };
+            var packageB1 = new SimpleTestPackageContext() { Id = "packageB", Version = "2.1.0" };
+            var packageB2 = new SimpleTestPackageContext() { Id = "packageB", Version = "2.2.0" };
+
+            await SimpleTestPackageUtility.CreatePackagesAsync(pathContext.PackageSource, packageA1, packageA2, packageB1, packageB2);
+
+            var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+            var projectA = new SimpleTestProjectContext("projectA", ProjectStyle.PackagesConfig, pathContext.SolutionRoot);
+            var projectB = new SimpleTestProjectContext("projectB", ProjectStyle.PackagesConfig, pathContext.SolutionRoot);
+
+            solution.Projects.Add(projectA);
+            solution.Projects.Add(projectB);
+            solution.Create();
+
+            Util.CreateFile(Path.GetDirectoryName(projectA.ProjectPath), "packages.config",
+@"<packages>
+  <package id=""packageA"" version=""1.1.0"" />
+  <package id=""packageB"" version=""2.1.0"" />
+</packages>");
+
+            Util.CreateFile(Path.GetDirectoryName(projectB.ProjectPath), "packages.config",
+@"<packages>
+  <package id=""packageA"" version=""1.2.0"" />
+  <package id=""packageB"" version=""2.2.0"" />
+</packages>");
+
+            // suppress the vulnerability on package A for project A
+            var xmlA = projectA.GetXML();
+            ProjectFileUtils.AddItem(
+                                xmlA,
+                                name: "NuGetAuditSuppress",
+                                identity: advisoryUrl1,
+                                framework: NuGetFramework.AnyFramework,
+                                attributes: new Dictionary<string, string>());
+            xmlA.Save(projectA.ProjectPath);
+
+            // suppress the vulnerability on package projectB for project projectB
+            var xmlB = projectB.GetXML();
+            ProjectFileUtils.AddItem(
+                                xmlB,
+                                name: "NuGetAuditSuppress",
+                                identity: advisoryUrl2,
+                                framework: NuGetFramework.AnyFramework,
+                                attributes: new Dictionary<string, string>());
+            xmlB.Save(projectB.ProjectPath);
+
+            mockServer.Start();
+
+            // Act
+            var r = CommandRunner.Run(
+                nugetexe,
+                pathContext.WorkingDirectory,
+                $"restore {solution.SolutionPath}");
+
+            mockServer.Stop();
+
+            // Assert
+            r.Success.Should().BeTrue(because: r.AllOutput);
+            r.AllOutput.Should().NotContain($"Package 'packageA' 1.1.0 has a known high severity vulnerability"); // suppressed
+            r.AllOutput.Should().Contain($"Package 'packageB' 2.1.0 has a known critical severity vulnerability");
+            r.AllOutput.Should().Contain($"Package 'packageA' 1.2.0 has a known high severity vulnerability");
+            r.AllOutput.Should().NotContain($"Package 'packageB' 2.2.0 has a known critical severity vulnerability"); // suppressed
+        }
+
+        [SkipMono()]
+        public void RestoreCommand_WithAuditSource_AndPackageWithVulnerabilities_RaisesWarnings()
+        {
+            Command_WithAuditSource_AndPackageWithVulnerabilities_RaisesWarnings("restore");
+        }
+
+        internal static void Command_WithAuditSource_AndPackageWithVulnerabilities_RaisesWarnings(string command)
+        {
+            // Arrange
+            var nugetexe = Util.GetNuGetExePath();
+            using var pathContext = new SimpleTestPathContext();
+            // Very important that the mock server is using a different folder than the package source
+            using var mockServer = new FileSystemBackedV3MockServer(pathContext.PackagesV2, sourceReportsVulnerabilities: true);
+
+            mockServer.Vulnerabilities.Add(
+                "packageA",
+                new List<(Uri, PackageVulnerabilitySeverity, VersionRange)> {
+            (new Uri("https://contoso.com/advisories/12345"), PackageVulnerabilitySeverity.High, VersionRange.Parse("[1.0.0, 2.0.0)"))
+                });
+
+            pathContext.Settings.AddAuditSource("source", mockServer.ServiceIndexUri, allowInsecureConnectionsValue: "True");
+
+            Util.CreateTestPackage("packageA", "1.1.0", pathContext.PackageSource);
+            Util.CreateTestPackage("packageB", "2.2.0", pathContext.PackageSource);
+
+            var solution = new SimpleTestSolutionContext(pathContext.SolutionRoot);
+            var projectA = new SimpleTestProjectContext(
+                "a",
+                ProjectStyle.PackagesConfig,
+                pathContext.SolutionRoot);
+
+            solution.Projects.Add(projectA);
+            solution.Create();
+
+            Util.CreateFile(Path.GetDirectoryName(projectA.ProjectPath), "packages.config",
+@"<packages>
+  <package id=""packageA"" version=""1.1.0"" />
+  <package id=""packageB"" version=""2.2.0"" />
+</packages>");
+
+            mockServer.Start();
+
+            var installDirectory = Path.Combine(pathContext.WorkingDirectory, "install_output");
+
+            // Act
+            var r = CommandRunner.Run(
+                nugetexe,
+                pathContext.WorkingDirectory,
+                $"{command} {Path.Combine(Path.GetDirectoryName(projectA.ProjectPath), "packages.config")} -OutputDirectory {installDirectory}");
+
+            mockServer.Stop();
+
+            // Assert
+            r.Success.Should().BeTrue(because: r.AllOutput);
+            var installedPackage = Path.Combine(installDirectory, "packageA.1.1.0", "packageA.1.1.0.nupkg");
+            File.Exists(installedPackage).Should().BeTrue();
+            r.AllOutput.Should().Contain("Package 'packageA' 1.1.0 has a known high severity vulnerability");
+            r.AllOutput.Should().NotContain("Package 'packageB' 2.2.0 has a known high severity vulnerability");
         }
 
         private static byte[] GetResource(string name)

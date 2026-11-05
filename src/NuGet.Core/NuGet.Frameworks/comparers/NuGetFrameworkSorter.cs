@@ -13,11 +13,13 @@ namespace NuGet.Frameworks
     /// </summary>
     public class NuGetFrameworkSorter : IComparer<NuGetFramework>
     {
-        public NuGetFrameworkSorter()
+        public static NuGetFrameworkSorter Instance { get; } = new();
+
+        private NuGetFrameworkSorter()
         {
         }
 
-        public int Compare(NuGetFramework x, NuGetFramework y)
+        public int Compare(NuGetFramework? x, NuGetFramework? y)
         {
             if (ReferenceEquals(x, y))
             {

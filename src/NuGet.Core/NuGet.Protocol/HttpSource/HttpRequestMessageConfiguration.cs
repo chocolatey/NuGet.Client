@@ -11,7 +11,7 @@ namespace NuGet.Protocol
             new HttpRequestMessageConfiguration();
 
         public HttpRequestMessageConfiguration(
-            ILogger logger = null,
+            ILogger? logger = null,
             bool promptOn403 = true)
         {
             Logger = logger ?? NullLogger.Instance;

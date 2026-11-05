@@ -1,8 +1,11 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using FluentAssertions;
@@ -868,60 +871,6 @@ namespace NuGet.Commands.Test
         }
 
         [Fact]
-        public void MSBuildRestoreUtility_GetPackageSpecVersion_UAP()
-        {
-            using (var workingDir = TestDirectory.Create())
-            {
-                // Arrange
-                var project1Root = Path.Combine(workingDir, "a");
-                var project2Root = Path.Combine(workingDir, "b");
-
-                var project1JsonPath = Path.Combine(project1Root, "project.json");
-                var project2JsonPath = Path.Combine(project2Root, "project.json");
-                var project1Path = Path.Combine(project1Root, "a.csproj");
-                var project2Path = Path.Combine(project2Root, "b.csproj");
-
-                var items = new List<IDictionary<string, string>>();
-
-                items.Add(new Dictionary<string, string>()
-                {
-                    { "Type", "ProjectSpec" },
-                    { "ProjectJsonPath", project1JsonPath },
-                    { "ProjectName", "a" },
-                    { "ProjectStyle", "ProjectJson" },
-                    { "ProjectUniqueName", "482C20DE-DFF9-4BD0-B90A-BD3201AA351A" },
-                    { "ProjectPath", project1Path },
-                });
-
-                var project1Json = @"
-                {
-                    ""version"": ""2.0.0-beta.1+build"",
-                    ""description"": """",
-                    ""authors"": [ ""author"" ],
-                    ""tags"": [ """" ],
-                    ""projectUrl"": """",
-                    ""licenseUrl"": """",
-                    ""frameworks"": {
-                        ""net45"": {
-                        }
-                    }
-                }";
-
-                Directory.CreateDirectory(project1Root);
-                File.WriteAllText(project1JsonPath, project1Json);
-
-                var wrappedItems = items.Select(CreateItems).ToList();
-
-                // Act
-                var dgSpec = MSBuildRestoreUtility.GetDependencySpec(wrappedItems);
-                var project1Spec = dgSpec.Projects.Single(e => e.Name == "a");
-
-                // Assert
-                Assert.Equal("2.0.0-beta.1+build", project1Spec.Version.ToFullString());
-            }
-        }
-
-        [Fact]
         public void MSBuildRestoreUtility_GetPackageSpec_Tool()
         {
             using (var workingDir = TestDirectory.Create())
@@ -962,7 +911,7 @@ namespace NuGet.Commands.Test
 
                 // Assert
                 // Dependency counts
-                Assert.Equal(1, project1Spec.GetTargetFramework(NuGetFramework.Parse("netcoreapp1.0")).Dependencies.Count);
+                Assert.Equal(1, project1Spec.GetTargetFramework(NuGetFramework.Parse("netcoreapp1.0")).Dependencies.Length);
             }
         }
 
@@ -1039,6 +988,40 @@ namespace NuGet.Commands.Test
                     { "PrivateAssets", "all" },
                 });
 
+                // A net46 -> AnalyzerInclude
+                items.Add(new Dictionary<string, string>()
+                {
+                    { "Type", "Dependency" },
+                    { "ProjectUniqueName", "482C20DE-DFF9-4BD0-B90A-BD3201AA351A" },
+                    { "Id", "analyzerInclude" },
+                    { "VersionRange", "1.0.0" },
+                    { "TargetFrameworks", "net46" },
+                    { "IncludeAssets", "compile;analyzers" },
+                    { "ExcludeAssets", "compile" },
+                });
+
+                // A net46 -> AnalyzerExclude
+                items.Add(new Dictionary<string, string>()
+                {
+                    { "Type", "Dependency" },
+                    { "ProjectUniqueName", "482C20DE-DFF9-4BD0-B90A-BD3201AA351A" },
+                    { "Id", "analyzerExclude" },
+                    { "VersionRange", "1.0.0" },
+                    { "TargetFrameworks", "net46" },
+                    { "ExcludeAssets", "analyzers" },
+                });
+
+                // A net46 -> AnalyzerPrivate
+                items.Add(new Dictionary<string, string>()
+                {
+                    { "Type", "Dependency" },
+                    { "ProjectUniqueName", "482C20DE-DFF9-4BD0-B90A-BD3201AA351A" },
+                    { "Id", "analyzerPrivate" },
+                    { "VersionRange", "1.0.0" },
+                    { "TargetFrameworks", "net46" },
+                    { "PrivateAssets", "analyzers" },
+                });
+
                 var wrappedItems = items.Select(CreateItems).ToList();
 
                 // Act
@@ -1047,6 +1030,9 @@ namespace NuGet.Commands.Test
                 var x = project1Spec.GetTargetFramework(NuGetFramework.Parse("net46")).Dependencies.Single(e => e.Name == "x");
                 var y = project1Spec.GetTargetFramework(NuGetFramework.Parse("net46")).Dependencies.Single(e => e.Name == "y");
                 var z = project1Spec.GetTargetFramework(NuGetFramework.Parse("net46")).Dependencies.Single(e => e.Name == "z");
+                var analyzerInclude = project1Spec.GetTargetFramework(NuGetFramework.Parse("net46")).Dependencies.Single(e => e.Name == "analyzerInclude");
+                var analyzerExclude = project1Spec.GetTargetFramework(NuGetFramework.Parse("net46")).Dependencies.Single(e => e.Name == "analyzerExclude");
+                var analyzerPrivate = project1Spec.GetTargetFramework(NuGetFramework.Parse("net46")).Dependencies.Single(e => e.Name == "analyzerPrivate");
 
                 // Assert
                 // X
@@ -1060,6 +1046,18 @@ namespace NuGet.Commands.Test
                 // Z
                 Assert.Equal(LibraryIncludeFlags.All, z.IncludeType);
                 Assert.Equal(LibraryIncludeFlags.All, z.SuppressParent);
+
+                // AnalyzerInclude
+                Assert.Equal(LibraryIncludeFlags.Analyzers, analyzerInclude.IncludeType);
+                Assert.Equal(LibraryIncludeFlagUtils.DefaultSuppressParent, analyzerInclude.SuppressParent);
+
+                // AnalyzerExclude
+                Assert.Equal(LibraryIncludeFlags.All & ~LibraryIncludeFlags.Analyzers, analyzerExclude.IncludeType);
+                Assert.Equal(LibraryIncludeFlagUtils.DefaultSuppressParent, analyzerExclude.SuppressParent);
+
+                // AnalyzerPrivate
+                Assert.Equal(LibraryIncludeFlags.All, analyzerPrivate.IncludeType);
+                Assert.Equal(LibraryIncludeFlags.Analyzers, analyzerPrivate.SuppressParent);
             }
         }
 
@@ -1263,8 +1261,7 @@ namespace NuGet.Commands.Test
                 var wrappedItems = items.Select(CreateItems).ToList();
 
                 // Act && Assert
-                Assert.Throws(typeof(ArgumentException),
-                    () => MSBuildRestoreUtility.GetDependencySpec(wrappedItems));
+                Assert.Throws<ArgumentException>(() => MSBuildRestoreUtility.GetDependencySpec(wrappedItems));
             }
         }
 
@@ -1458,8 +1455,8 @@ namespace NuGet.Commands.Test
                 var netTFM = project1Spec.GetTargetFramework(NuGetFramework.Parse("net46"));
 
                 // Assert
-                Assert.Equal(2, nsTFM.Imports.Count);
-                Assert.Equal(0, netTFM.Imports.Count);
+                Assert.Equal(2, nsTFM.Imports.Length);
+                Assert.Equal(0, netTFM.Imports.Length);
 
                 Assert.Equal(NuGetFramework.Parse("portable-net45+win8"), nsTFM.Imports[0]);
                 Assert.Equal(NuGetFramework.Parse("dnxcore50"), nsTFM.Imports[1]);
@@ -1550,8 +1547,8 @@ namespace NuGet.Commands.Test
                 var netTFM = project1Spec.GetTargetFramework(NuGetFramework.Parse("net46"));
 
                 // Assert
-                Assert.Equal(0, nsTFM.Imports.Count);
-                Assert.Equal(0, netTFM.Imports.Count);
+                Assert.Equal(0, nsTFM.Imports.Length);
+                Assert.Equal(0, netTFM.Imports.Length);
 
                 // Verify no fallback frameworks
                 var fallbackFrameworks = project1Spec.TargetFrameworks.Select(e => e.FrameworkName as FallbackFramework);
@@ -1628,8 +1625,8 @@ namespace NuGet.Commands.Test
 
                 // Assert
                 Assert.Equal("a", project1Spec.RestoreMetadata.ProjectName);
-                Assert.Equal(2, nsTFM.Imports.Count);
-                Assert.Equal(0, netTFM.Imports.Count);
+                Assert.Equal(2, nsTFM.Imports.Length);
+                Assert.Equal(0, netTFM.Imports.Length);
 
                 Assert.Equal(NuGetFramework.Parse("portable-net45+win8"), nsTFM.Imports[0]);
                 Assert.Equal(NuGetFramework.Parse("dnxcore50"), nsTFM.Imports[1]);
@@ -1972,14 +1969,11 @@ namespace NuGet.Commands.Test
                     .OrderBy(s => s, StringComparer.Ordinal)));
 
                 // Dependency counts
-                Assert.Equal(0, project1Spec.Dependencies.Count);
-                Assert.Equal(0, project2Spec.Dependencies.Count);
+                Assert.Equal(1, project1Spec.GetTargetFramework(NuGetFramework.Parse("net46")).Dependencies.Length);
+                Assert.Equal(1, project1Spec.GetTargetFramework(NuGetFramework.Parse("netstandard1.6")).Dependencies.Length);
 
-                Assert.Equal(1, project1Spec.GetTargetFramework(NuGetFramework.Parse("net46")).Dependencies.Count);
-                Assert.Equal(1, project1Spec.GetTargetFramework(NuGetFramework.Parse("netstandard1.6")).Dependencies.Count);
-
-                Assert.Equal(1, project2Spec.GetTargetFramework(NuGetFramework.Parse("net45")).Dependencies.Count);
-                Assert.Equal(1, project2Spec.GetTargetFramework(NuGetFramework.Parse("netstandard1.0")).Dependencies.Count);
+                Assert.Equal(1, project2Spec.GetTargetFramework(NuGetFramework.Parse("net45")).Dependencies.Length);
+                Assert.Equal(1, project2Spec.GetTargetFramework(NuGetFramework.Parse("netstandard1.0")).Dependencies.Length);
 
                 // Verify dependencies
                 var xDep = project1Spec.GetTargetFramework(NuGetFramework.Parse("net46")).Dependencies.Single(e => e.Name == "x");
@@ -2123,7 +2117,6 @@ namespace NuGet.Commands.Test
                 var projectSpec = dgSpec.Projects.Single(e => e.Name == "a");
 
                 // Assert
-                Assert.Equal(0, projectSpec.Dependencies.Count);
                 Assert.Equal(1, dgSpec.Projects.Count);
                 Assert.Equal("y", string.Join("|", projectSpec.GetTargetFramework(NuGetFramework.Parse("net46")).Dependencies.Select(e => e.Name)));
                 Assert.Equal("z|y", string.Join("|", projectSpec.GetTargetFramework(NuGetFramework.Parse("netstandard1.6")).Dependencies.Select(e => e.Name)));
@@ -2212,208 +2205,6 @@ namespace NuGet.Commands.Test
         }
 
         [Fact]
-        public void MSBuildRestoreUtility_GetPackageSpec_UAP_P2P()
-        {
-            using (var workingDir = TestDirectory.Create())
-            {
-                // Arrange
-                var project1Root = Path.Combine(workingDir, "a");
-                var project2Root = Path.Combine(workingDir, "b");
-
-                var project1JsonPath = Path.Combine(project1Root, "project.json");
-                var project2JsonPath = Path.Combine(project2Root, "project.json");
-                var project1Path = Path.Combine(project1Root, "a.csproj");
-                var project2Path = Path.Combine(project2Root, "b.csproj");
-
-                var items = new List<IDictionary<string, string>>();
-
-                items.Add(new Dictionary<string, string>()
-                {
-                    { "Type", "ProjectSpec" },
-                    { "ProjectJsonPath", project1JsonPath },
-                    { "ProjectName", "a" },
-                    { "ProjectStyle", "ProjectJson" },
-                    { "ProjectUniqueName", "482C20DE-DFF9-4BD0-B90A-BD3201AA351A" },
-                    { "ProjectPath", project1Path },
-                });
-
-                items.Add(new Dictionary<string, string>()
-                {
-                    { "Type", "ProjectSpec" },
-                    { "ProjectJsonPath", project2JsonPath },
-                    { "ProjectName", "b" },
-                    { "ProjectStyle", "ProjectJson" },
-                    { "ProjectUniqueName", "AA2C20DE-DFF9-4BD0-B90A-BD3201AA351A" },
-                    { "ProjectPath", project2Path },
-                });
-
-                // A -> B
-                items.Add(new Dictionary<string, string>()
-                {
-                    { "Type", "ProjectReference" },
-                    { "ProjectUniqueName", "482C20DE-DFF9-4BD0-B90A-BD3201AA351A" },
-                    { "ProjectReferenceUniqueName", "AA2C20DE-DFF9-4BD0-B90A-BD3201AA351A" },
-                    { "ProjectPath", project2Path },
-                });
-
-                var project1Json = @"
-                {
-                    ""version"": ""1.0.0"",
-                    ""description"": """",
-                    ""authors"": [ ""author"" ],
-                    ""tags"": [ """" ],
-                    ""projectUrl"": """",
-                    ""licenseUrl"": """",
-                    ""frameworks"": {
-                        ""net45"": {
-                        }
-                    }
-                }";
-
-                var project2Json = @"
-                {
-                    ""version"": ""1.0.0"",
-                    ""description"": """",
-                    ""authors"": [ ""author"" ],
-                    ""tags"": [ """" ],
-                    ""projectUrl"": """",
-                    ""licenseUrl"": """",
-                    ""frameworks"": {
-                        ""net45"": {
-                        }
-                    }
-                }";
-
-                Directory.CreateDirectory(project1Root);
-                Directory.CreateDirectory(project2Root);
-
-                File.WriteAllText(project1JsonPath, project1Json);
-                File.WriteAllText(project2JsonPath, project2Json);
-
-                var wrappedItems = items.Select(CreateItems).ToList();
-
-                // Act
-                var dgSpec = MSBuildRestoreUtility.GetDependencySpec(wrappedItems);
-                var project1Spec = dgSpec.Projects.Single(e => e.Name == "a");
-                var project2Spec = dgSpec.Projects.Single(e => e.Name == "b");
-
-                var allDependencies1 = project1Spec.Dependencies.Concat(project1Spec.TargetFrameworks.Single().Dependencies).ToList();
-                var allDependencies2 = project2Spec.Dependencies.Concat(project2Spec.TargetFrameworks.Single().Dependencies).ToList();
-                var msbuildDependency = project1Spec.RestoreMetadata.TargetFrameworks.Single().ProjectReferences.Single();
-
-                // Assert
-                Assert.Equal("AA2C20DE-DFF9-4BD0-B90A-BD3201AA351A", msbuildDependency.ProjectUniqueName);
-                Assert.Equal(project2Path, msbuildDependency.ProjectPath);
-                Assert.Equal(LibraryIncludeFlags.All, msbuildDependency.IncludeAssets);
-                Assert.Equal(LibraryIncludeFlags.None, msbuildDependency.ExcludeAssets);
-                Assert.Equal(LibraryIncludeFlagUtils.DefaultSuppressParent, msbuildDependency.PrivateAssets);
-                Assert.Equal("net45", string.Join("|", project1Spec.RestoreMetadata.TargetFrameworks
-                    .Select(e => e.FrameworkName.GetShortFolderName())
-                    .OrderBy(s => s, StringComparer.Ordinal)));
-
-                Assert.Equal(0, allDependencies2.Count);
-            }
-        }
-
-        [Fact]
-        public void MSBuildRestoreUtility_GetPackageSpec_UAP_VerifyMetadata()
-        {
-            using (var workingDir = TestDirectory.Create())
-            {
-                // Arrange
-                var projectJsonPath = Path.Combine(workingDir, "project.json");
-                var projectPath = Path.Combine(workingDir, "a.csproj");
-
-                var items = new List<IDictionary<string, string>>();
-                items.Add(new Dictionary<string, string>()
-                {
-                    { "Type", "ProjectSpec" },
-                    { "ProjectJsonPath", projectJsonPath },
-                    { "ProjectName", "a" },
-                    { "ProjectStyle", "ProjectJson" },
-                    { "ProjectUniqueName", "482C20DE-DFF9-4BD0-B90A-BD3201AA351A" },
-                    { "ProjectPath", projectPath },
-                });
-
-                var projectJson = @"
-                {
-                    ""version"": ""1.0.0"",
-                    ""description"": """",
-                    ""authors"": [ ""author"" ],
-                    ""tags"": [ """" ],
-                    ""projectUrl"": """",
-                    ""licenseUrl"": """",
-                    ""frameworks"": {
-                        ""net45"": {
-                        }
-                    }
-                }";
-
-                File.WriteAllText(projectJsonPath, projectJson);
-
-                // Act
-                var spec = MSBuildRestoreUtility.GetPackageSpec(items.Select(CreateItems));
-
-                // Assert
-                Assert.Equal(projectJsonPath, spec.FilePath);
-                Assert.Equal("a", spec.Name);
-                Assert.Equal(ProjectStyle.ProjectJson, spec.RestoreMetadata.ProjectStyle);
-                Assert.Equal("482C20DE-DFF9-4BD0-B90A-BD3201AA351A", spec.RestoreMetadata.ProjectUniqueName);
-                Assert.Equal(projectPath, spec.RestoreMetadata.ProjectPath);
-                Assert.Equal(0, spec.RestoreMetadata.TargetFrameworks.SelectMany(e => e.ProjectReferences).Count());
-                Assert.Equal(projectJsonPath, spec.RestoreMetadata.ProjectJsonPath);
-                Assert.Equal(NuGetFramework.Parse("net45"), spec.TargetFrameworks.Single().FrameworkName);
-            }
-        }
-
-        [Fact]
-        public void MSBuildRestoreUtility_GetPackageSpec_UAP_IgnoresUnexpectedProperties()
-        {
-            using (var workingDir = TestDirectory.Create())
-            {
-                // Arrange
-                var projectJsonPath = Path.Combine(workingDir, "project.json");
-                var projectPath = Path.Combine(workingDir, "a.csproj");
-
-                var items = new List<IDictionary<string, string>>();
-                items.Add(new Dictionary<string, string>()
-                {
-                    { "Type", "ProjectSpec" },
-                    { "ProjectJsonPath", projectJsonPath },
-                    { "ProjectName", "a" },
-                    { "ProjectStyle", "ProjectJson" },
-                    { "ProjectUniqueName", "482C20DE-DFF9-4BD0-B90A-BD3201AA351A" },
-                    { "ProjectPath", projectPath },
-                    { "CrossTargeting", "true" },
-                    { "RestoreLegacyPackagesDirectory", "true" },
-                });
-
-                var projectJson = @"
-                {
-                    ""version"": ""1.0.0"",
-                    ""description"": """",
-                    ""authors"": [ ""author"" ],
-                    ""tags"": [ """" ],
-                    ""projectUrl"": """",
-                    ""licenseUrl"": """",
-                    ""frameworks"": {
-                        ""net45"": {
-                        }
-                    }
-                }";
-
-                File.WriteAllText(projectJsonPath, projectJson);
-
-                // Act
-                var spec = MSBuildRestoreUtility.GetPackageSpec(items.Select(CreateItems));
-
-                // Assert
-                Assert.False(spec.RestoreMetadata.CrossTargeting);
-                Assert.False(spec.RestoreMetadata.LegacyPackagesDirectory);
-            }
-        }
-
-        [Fact]
         public void MSBuildRestoreUtility_GetPackageSpec_PackagesConfigProject()
         {
             using (var workingDir = TestDirectory.Create())
@@ -2443,7 +2234,7 @@ namespace NuGet.Commands.Test
                 // Assert
                 Assert.Equal(projectPath, spec.FilePath);
                 Assert.Equal("a", spec.Name);
-                Assert.IsType(typeof(PackagesConfigProjectRestoreMetadata), spec.RestoreMetadata);
+                Assert.IsType<PackagesConfigProjectRestoreMetadata>(spec.RestoreMetadata);
                 var restoreMetadata = (PackagesConfigProjectRestoreMetadata)spec.RestoreMetadata;
                 Assert.Equal(ProjectStyle.PackagesConfig, restoreMetadata.ProjectStyle);
                 Assert.Equal("482C20DE-DFF9-4BD0-B90A-BD3201AA351A", restoreMetadata.ProjectUniqueName);
@@ -2555,7 +2346,6 @@ namespace NuGet.Commands.Test
                 Assert.Equal("net46", string.Join("|", project1Spec.RestoreMetadata.OriginalTargetFrameworks));
                 Assert.Equal("net46", string.Join("|", project1Spec.TargetFrameworks.Select(e => e.TargetAlias)));
                 Assert.Equal("x", project1Spec.GetTargetFramework(NuGetFramework.Parse("net46")).Dependencies.SingleOrDefault().Name);
-                Assert.Empty(project1Spec.Dependencies);
             }
         }
 
@@ -3282,7 +3072,7 @@ namespace NuGet.Commands.Test
 
             // Assert
             var framework = spec.GetTargetFramework(targetFramework);
-            Assert.Equal(1, framework.DownloadDependencies.Count);
+            Assert.Equal(1, framework.DownloadDependencies.Length);
             Assert.Equal("x", framework.DownloadDependencies[0].Name);
             Assert.Equal("[1.0.0]", framework.DownloadDependencies[0].VersionRange.ToShortString());
         }
@@ -3338,7 +3128,7 @@ namespace NuGet.Commands.Test
 
             // Assert
             var framework = spec.GetTargetFramework(targetFramework);
-            Assert.Equal(2, framework.DownloadDependencies.Count);
+            Assert.Equal(2, framework.DownloadDependencies.Length);
             Assert.Equal(1, framework.DownloadDependencies.Count(d => d.Name == "x" && d.VersionRange.ToShortString() == "[1.0.0]"));
             Assert.Equal(1, framework.DownloadDependencies.Count(d => d.Name == "x" && d.VersionRange.ToShortString() == "[2.0.0]"));
         }
@@ -3397,6 +3187,27 @@ namespace NuGet.Commands.Test
 
             // Act & Assert
             var exception = Assert.Throws<ArgumentException>(() => MSBuildRestoreUtility.AddPackageDownloads(spec, msbuildItems));
+        }
+
+        [Fact]
+        public void MSBuildRestoreUtility_AddPackageDownloads_NoVersion_ThrowsException()
+        {
+            // Arrange
+            PackageSpec spec = MSBuildRestoreUtility.GetPackageSpec(new[] { CreateItems(new Dictionary<string, string>()) });
+            Mock<IMSBuildItem> packageX = new Mock<IMSBuildItem>();
+            const string packageId = "x";
+            packageX.Setup(p => p.GetProperty("Type")).Returns("DownloadDependency");
+            packageX.Setup(p => p.GetProperty("Id")).Returns(packageId);
+
+            IMSBuildItem[] msbuildItems = new[]
+            {
+                packageX.Object
+            };
+
+            // Act & Assert
+            ArgumentException exception = Assert.Throws<ArgumentException>(() => MSBuildRestoreUtility.AddPackageDownloads(spec, msbuildItems));
+            string expectedMessage = string.Format(CultureInfo.CurrentCulture, Strings.Error_PackageDownload_NoVersion, packageId);
+            Assert.Equal(expectedMessage, exception.Message);
         }
 
         [Fact]
@@ -3493,8 +3304,8 @@ namespace NuGet.Commands.Test
                 var project1Spec = dgSpec.Projects.Single(e => e.Name == projectName);
 
                 // Assert
-                Assert.Equal(1, project1Spec.TargetFrameworks.Count());
-                Assert.Equal(2, project1Spec.TargetFrameworks.First().Dependencies.Count);
+                Assert.Equal(1, project1Spec.TargetFrameworks.Count);
+                Assert.Equal(2, project1Spec.TargetFrameworks.First().Dependencies.Length);
                 Assert.Equal(3, project1Spec.TargetFrameworks.First().CentralPackageVersions.Count);
 
                 var dependencyX = project1Spec.TargetFrameworks.First().Dependencies.Where(d => d.Name == "x").First();
@@ -3593,8 +3404,8 @@ namespace NuGet.Commands.Test
             var project1Spec = dgSpec.Projects.Single(e => e.Name == projectName);
 
             // Assert
-            Assert.Equal(1, project1Spec.TargetFrameworks.Count());
-            Assert.Equal(1, project1Spec.TargetFrameworks.First().Dependencies.Count);
+            Assert.Equal(1, project1Spec.TargetFrameworks.Count);
+            Assert.Equal(1, project1Spec.TargetFrameworks.First().Dependencies.Length);
             Assert.Equal(1, project1Spec.TargetFrameworks.First().CentralPackageVersions.Count);
 
             var dependencyX = project1Spec.TargetFrameworks.First().Dependencies.Where(d => d.Name == "x").First();
@@ -3683,8 +3494,8 @@ namespace NuGet.Commands.Test
                 var project1Spec = dgSpec.Projects.Single(e => e.Name == projectName);
 
                 // Assert
-                Assert.Equal(1, project1Spec.TargetFrameworks.Count());
-                Assert.Equal(1, project1Spec.TargetFrameworks.First().Dependencies.Count);
+                Assert.Equal(1, project1Spec.TargetFrameworks.Count);
+                Assert.Equal(1, project1Spec.TargetFrameworks.First().Dependencies.Length);
                 Assert.Equal(2, project1Spec.TargetFrameworks.First().CentralPackageVersions.Count);
 
                 Assert.Equal("[1.0.0, )", project1Spec.TargetFrameworks.First().Dependencies[0].LibraryRange.VersionRange.ToNormalizedString());
@@ -3703,11 +3514,9 @@ namespace NuGet.Commands.Test
         [Theory]
         [InlineData(null, false)]
         [InlineData("", false)]
-        [InlineData("                     ", false)]
         [InlineData("true", false)]
         [InlineData("invalid", false)]
         [InlineData("false", true)]
-        [InlineData("           false    ", true)]
         public void MSBuildRestoreUtility_GetPackageSpec_CPVM_VersionOverrideCanBeDisabled(string isCentralPackageVersionOverrideEnabled, bool disabled)
         {
             var projectName = "alegacycpvm";
@@ -3781,8 +3590,8 @@ namespace NuGet.Commands.Test
                 var project1Spec = dgSpec.Projects.Single(e => e.Name == projectName);
 
                 // Assert
-                Assert.Equal(1, project1Spec.TargetFrameworks.Count());
-                Assert.Equal(1, project1Spec.TargetFrameworks.First().Dependencies.Count);
+                Assert.Equal(1, project1Spec.TargetFrameworks.Count);
+                Assert.Equal(1, project1Spec.TargetFrameworks.First().Dependencies.Length);
                 Assert.Equal(2, project1Spec.TargetFrameworks.First().CentralPackageVersions.Count);
 
                 Assert.Equal("[1.0.0, )", project1Spec.TargetFrameworks.First().Dependencies[0].LibraryRange.VersionRange.ToNormalizedString());
@@ -3808,11 +3617,114 @@ namespace NuGet.Commands.Test
         }
 
         [Theory]
+        [InlineData(null, false)]
+        [InlineData("                     ", false)]
+        [InlineData("false", false)]
+        [InlineData("invalid", false)]
+        [InlineData("true", true)]
+        public void MSBuildRestoreUtility_GetPackageSpec_CPVM_FloatingVersionsCanBeEnabled(string isCentralPackageFloatingVersionsEnabled, bool enabled)
+        {
+            var projectName = "alegacycpvm";
+            using (var workingDir = TestDirectory.Create())
+            {
+                // Arrange
+                var projectUniqueName = "482C20DE-DFF9-4BD0-B90A-BD3201AA351A";
+                var project1Root = Path.Combine(workingDir, projectName);
+                var project1Path = Path.Combine(project1Root, $"{projectName}.csproj");
+
+                var items = new List<IDictionary<string, string>>();
+
+                items.Add(new Dictionary<string, string>()
+                {
+                    { "Type", "ProjectSpec" },
+                    { "ProjectName", projectName },
+                    { "ProjectStyle", "PackageReference" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "ProjectPath", project1Path },
+                    { "_CentralPackageVersionsEnabled", "true"},
+                    { "CentralPackageFloatingVersionsEnabled", isCentralPackageFloatingVersionsEnabled }
+                });
+
+                items.Add(new Dictionary<string, string>()
+                {
+                    { "Type", "TargetFrameworkInformation" },
+                    { "AssetTargetFallback", "" },
+                    { "PackageTargetFallback", "" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "TargetFramework", "net472" },
+                    { "TargetFrameworkIdentifier", ".NETFramework" },
+                    { "TargetFrameworkVersion", "v4.7.2" },
+                    { "TargetFrameworkMoniker", ".NETFramework,Version=v4.7.2" },
+                    { "TargetPlatformIdentifier", "" },
+                    { "TargetPlatformMoniker", "" },
+                    { "TargetPlatformVersion", "" },
+                });
+
+                // Package reference
+                // No TargetFrameworks metadata
+                items.Add(new Dictionary<string, string>()
+                {
+                    { "Type", "Dependency" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "Id", "x" },
+                    { "IncludeAssets", "build;compile" },
+                    { "CrossTargeting", "true" },
+                });
+
+
+                // Central Version for the package above and another one for a package y
+                items.Add(new Dictionary<string, string>()
+                {
+                    { "Type", "CentralPackageVersion" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "Id", "x" },
+                    { "VersionRange", "1.0.0" },
+                });
+                items.Add(new Dictionary<string, string>()
+                {
+                    { "Type", "CentralPackageVersion" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "Id", "y" },
+                    { "VersionRange", "2.0.0" },
+                });
+
+                var wrappedItems = items.Select(CreateItems).ToList();
+
+                // Act
+                var dgSpec = MSBuildRestoreUtility.GetDependencySpec(wrappedItems);
+                var project1Spec = dgSpec.Projects.Single(e => e.Name == projectName);
+
+                // Assert
+                Assert.Equal(1, project1Spec.TargetFrameworks.Count);
+                Assert.Equal(1, project1Spec.TargetFrameworks.First().Dependencies.Length);
+                Assert.Equal(2, project1Spec.TargetFrameworks.First().CentralPackageVersions.Count);
+
+                Assert.Equal("[1.0.0, )", project1Spec.TargetFrameworks.First().Dependencies[0].LibraryRange.VersionRange.ToNormalizedString());
+                Assert.Equal(LibraryIncludeFlags.Compile | LibraryIncludeFlags.Build, project1Spec.TargetFrameworks.First().Dependencies[0].IncludeType);
+
+                Assert.Equal("x", project1Spec.TargetFrameworks.First().CentralPackageVersions["x"].Name);
+                Assert.Equal("[1.0.0, )", project1Spec.TargetFrameworks.First().CentralPackageVersions["x"].VersionRange.ToNormalizedString());
+
+                Assert.Equal("y", project1Spec.TargetFrameworks.First().CentralPackageVersions["y"].Name);
+                Assert.Equal("[2.0.0, )", project1Spec.TargetFrameworks.First().CentralPackageVersions["y"].VersionRange.ToNormalizedString());
+
+                Assert.True(project1Spec.RestoreMetadata.CentralPackageVersionsEnabled);
+
+                if (enabled)
+                {
+                    Assert.True(project1Spec.RestoreMetadata.CentralPackageFloatingVersionsEnabled);
+                }
+                else
+                {
+                    Assert.False(project1Spec.RestoreMetadata.CentralPackageFloatingVersionsEnabled);
+                }
+            }
+        }
+
+        [Theory]
         [InlineData(ProjectStyle.DotnetCliTool)]
-        [InlineData(ProjectStyle.DotnetToolReference)]
         [InlineData(ProjectStyle.PackagesConfig)]
         [InlineData(ProjectStyle.ProjectJson)]
-        [InlineData(ProjectStyle.Standalone)]
         public void MSBuildRestoreUtility_GetPackageSpec_CPVM_OnlyPackageReferenceProjectsWillHaveCPVMEnabled(ProjectStyle projectStyle)
         {
             var projectName = "bcpvm";
@@ -3916,8 +3828,8 @@ namespace NuGet.Commands.Test
 
                 // Assert
                 // Dependency counts
-                Assert.Equal(1, project1Spec.TargetFrameworks.Count());
-                Assert.Equal(1, project1Spec.TargetFrameworks.First().Dependencies.Count);
+                Assert.Equal(1, project1Spec.TargetFrameworks.Count);
+                Assert.Equal(1, project1Spec.TargetFrameworks.First().Dependencies.Length);
                 Assert.Equal(0, project1Spec.TargetFrameworks.First().CentralPackageVersions.Count);
                 Assert.Equal("(, )", project1Spec.TargetFrameworks.First().Dependencies.First().LibraryRange.VersionRange.ToNormalizedString());
             }
@@ -4008,7 +3920,7 @@ namespace NuGet.Commands.Test
                 var packSpec = MSBuildRestoreUtility.GetPackageSpec(wrappedItems);
 
                 // Assert
-                Assert.Equal(1, packSpec.TargetFrameworks.Count());
+                Assert.Equal(1, packSpec.TargetFrameworks.Count);
 
                 var dependencyX = packSpec.TargetFrameworks.First().Dependencies.Where(d => d.Name == "x").First();
                 var dependencyY = packSpec.TargetFrameworks.First().Dependencies.Where(d => d.Name == "y").First();
@@ -4060,7 +3972,7 @@ namespace NuGet.Commands.Test
         /// <summary>
         /// Verifies that <see cref="MSBuildRestoreUtility.GetDependencySpec(IEnumerable{IMSBuildItem})" /> applies version overrides correctly depending on whether or not central package management is enabled.
         /// </summary>
-        /// <param name="isCentralPackageManagementEnabled"><c>true</c> if central package management is enabled, otherwise <c>false</c>.</param>
+        /// <param name="isCentralPackageManagementEnabled"><see langword="true" /> if central package management is enabled, otherwise <see langword="false" />.</param>
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
@@ -4171,8 +4083,8 @@ namespace NuGet.Commands.Test
                 TargetFrameworkInformation targetFrameworkInformation = project1Spec.TargetFrameworks.First();
 
                 // Assert
-                Assert.Equal(1, project1Spec.TargetFrameworks.Count());
-                Assert.Equal(3, targetFrameworkInformation.Dependencies.Count);
+                Assert.Equal(1, project1Spec.TargetFrameworks.Count);
+                Assert.Equal(3, targetFrameworkInformation.Dependencies.Length);
                 Assert.Equal(isCentralPackageManagementEnabled ? 3 : 0, targetFrameworkInformation.CentralPackageVersions.Count);
 
                 var dependencyX = targetFrameworkInformation.Dependencies.First(d => d.Name == "x");
@@ -4287,62 +4199,6 @@ namespace NuGet.Commands.Test
                 ArgumentException exception = Assert.Throws<ArgumentException>(() => MSBuildRestoreUtility.GetDependencySpec(wrappedItems));
 
                 Assert.Equal("'invalid' is not a valid version string.", exception.Message);
-            }
-        }
-
-        [Fact]
-        public void GetPackageSpec_DootnetToolReference_WithTargetFrameworkInformation_Succeeds()
-        {
-            using (var workingDir = TestDirectory.Create())
-            {
-                // Arrange
-                var project1Root = Path.Combine(workingDir, "a");
-                var uniqueName = "482C20DE-DFF9-4BD0-B90A-BD3201AA351A";
-                var outputPath = Path.Combine(workingDir, "a", "obj");
-                var atf = FrameworkConstants.CommonFrameworks.Net462;
-                var items = new List<IDictionary<string, string>>();
-                var runtimeIdentifierGraphPath = Path.Combine(workingDir, "sdk", "runtime.json");
-
-                items.Add(new Dictionary<string, string>()
-                {
-                    { "Type", "ProjectSpec" },
-                    { "ProjectName", "a1" },
-                    { "ProjectStyle", "DotnetToolReference" },
-                    { "OutputPath", outputPath },
-                    { "ProjectUniqueName", uniqueName },
-                    { "ProjectPath", project1Root },
-                    { "CrossTargeting", "true" },
-                });
-
-                items.Add(new Dictionary<string, string>()
-                {
-                    { "Type", "TargetFrameworkInformation" },
-                    { "AssetTargetFallback", atf.GetShortFolderName() },
-                    { "PackageTargetFallback", "" },
-                    { "ProjectUniqueName", uniqueName },
-                    { "TargetFramework", "net46" },
-                    { "TargetFrameworkIdentifier", FrameworkConstants.FrameworkIdentifiers.NetCoreApp },
-                    { "TargetFrameworkVersion", "v3.0" },
-                    { "TargetFrameworkMoniker", $"{FrameworkConstants.FrameworkIdentifiers.NetCoreApp},Version=3.0" },
-                    { "TargetPlatformIdentifier", "" },
-                    { "TargetPlatformMoniker", "" },
-                    { "TargetPlatformVersion", "" },
-                    { "RuntimeIdentifierGraphPath", runtimeIdentifierGraphPath }
-                });
-
-                var wrappedItems = items.Select(CreateItems).ToList();
-
-                // Act
-                var dgSpec = MSBuildRestoreUtility.GetDependencySpec(wrappedItems);
-                var targetFrameworkInformation = dgSpec.Projects.Single().TargetFrameworks.Single();
-
-                // Assert
-                targetFrameworkInformation.FrameworkName.Framework.Should().Be(FrameworkConstants.FrameworkIdentifiers.NetCoreApp);
-                targetFrameworkInformation.AssetTargetFallback.Should().BeTrue();
-                var assetTargetFallbackFramework = targetFrameworkInformation.FrameworkName as AssetTargetFallbackFramework;
-                assetTargetFallbackFramework.Fallback.Should().HaveCount(1);
-                assetTargetFallbackFramework.Fallback.Single().Should().Be(atf);
-                targetFrameworkInformation.RuntimeIdentifierGraphPath.Should().Be(runtimeIdentifierGraphPath);
             }
         }
 
@@ -4572,6 +4428,470 @@ namespace NuGet.Commands.Test
             }
         }
 
+        [Theory]
+        [InlineData(null, false)]
+        [InlineData("", false)]
+        [InlineData("                     ", false)]
+        [InlineData("false", false)]
+        [InlineData("invalid", false)]
+        [InlineData("true", true)]
+        [InlineData("           true    ", true)]
+        public void IsPropertyTrue_ReturnsExpectedValue(string value, bool expected)
+        {
+            const string propertyName = "Property1";
+
+            MSBuildItem item = new("Item1", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [propertyName] = value
+            });
+
+            MSBuildRestoreUtility.IsPropertyTrue(item, propertyName).Should().Be(expected);
+        }
+
+        [Theory]
+        [InlineData(null, false)]
+        [InlineData("", false)]
+        [InlineData("                     ", false)]
+        [InlineData("false", true)]
+        [InlineData("   false     ", true)]
+        [InlineData("invalid", false)]
+        [InlineData("true", false)]
+        [InlineData("           true    ", false)]
+        public void IsPropertyFalse_ReturnsExpectedValue(string value, bool expected)
+        {
+            const string propertyName = "Property1";
+
+            MSBuildItem item = new("Item1", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                [propertyName] = value
+            });
+
+            MSBuildRestoreUtility.IsPropertyFalse(item, propertyName).Should().Be(expected);
+        }
+
+        [Theory]
+        [InlineData("9.0.100")]
+        [InlineData("7.0.100")]
+        [InlineData("9.1.100")]
+        [InlineData("9.2.101")]
+        public void GetSdkAnalysisLevel_WithValidVersions_ReturnsNuGetVersion(string sdkAnalysisLevel)
+        {
+            // Arrange
+            NuGetVersion expected = new NuGetVersion(sdkAnalysisLevel);
+
+            //Act
+            NuGetVersion actual = MSBuildRestoreUtility.GetSdkAnalysisLevel(sdkAnalysisLevel);
+
+            //Assert
+            Assert.Equal(expected, actual);
+        }
+
+        [Theory]
+        [InlineData("invalid")]
+        [InlineData("1.3e")]
+        public void GetSdkAnalysisLevel_WithInvalidVersions_ThrowsException(string sdkAnalysisLevel)
+        {
+            // Act & Assert
+            Assert.Throws<ArgumentException>(() => MSBuildRestoreUtility.GetSdkAnalysisLevel(sdkAnalysisLevel));
+        }
+
+        [Theory]
+        [InlineData("true")]
+        [InlineData("True")]
+        [InlineData("trUe")]
+        [InlineData("TrUe")]
+        public void GetUsingMicrosoftNETSdk_WithTrueValue_ReturnsTrue(string usingMicrosoftNETSdk)
+        {
+            // Act
+            bool actual = MSBuildRestoreUtility.GetUsingMicrosoftNETSdk(usingMicrosoftNETSdk);
+
+            // Assert
+            Assert.True(actual);
+        }
+
+        [Theory]
+        [InlineData("false")]
+        [InlineData("False")]
+        [InlineData("falSe")]
+        [InlineData("FalsE")]
+        public void GetUsingMicrosoftNETSdk_WithFalseValue_ReturnsFalse(string usingMicrosoftNETSdk)
+        {
+            // Act
+            bool actual = MSBuildRestoreUtility.GetUsingMicrosoftNETSdk(usingMicrosoftNETSdk);
+
+            // Assert
+            Assert.False(actual);
+        }
+
+        [Theory]
+        [InlineData("t")]
+        [InlineData("1.3e")]
+        [InlineData("1")]
+        public void GetUsingMicrosoftNETSdk_WithInvalidValue_ThrowsException(string usingMicrosoftNETSdk)
+        {
+            Assert.Throws<ArgumentException>(() => MSBuildRestoreUtility.GetUsingMicrosoftNETSdk(usingMicrosoftNETSdk));
+        }
+
+        [Fact]
+        public void MSBuildRestoreUtility_GetPackageSpec_WithPrunePackageReferences()
+        {
+            var projectName = "project";
+            using (var workingDir = TestDirectory.Create())
+            {
+                // Arrange
+                var projectUniqueName = "482C20DE-DFF9-4BD0-B90A-BD3201AA351A";
+                var project1Root = Path.Combine(workingDir, projectName);
+                var project1Path = Path.Combine(project1Root, $"{projectName}.csproj");
+
+                var items = new List<IDictionary<string, string>>
+                {
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "ProjectSpec" },
+                    { "ProjectName", projectName },
+                    { "ProjectStyle", "PackageReference" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "ProjectPath", project1Path },
+                },
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "TargetFrameworkInformation" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "TargetFramework", "net472" },
+                    { "TargetFrameworkIdentifier", ".NETFramework" },
+                    { "TargetFrameworkVersion", "v4.7.2" },
+                    { "TargetFrameworkMoniker", ".NETFramework,Version=v4.7.2" },
+                    { "RestoreEnablePackagePruning", "true" },
+                },
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "TargetFrameworkInformation" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "TargetFramework", "net471" },
+                    { "TargetFrameworkIdentifier", ".NETFramework" },
+                    { "TargetFrameworkVersion", "v4.7.1" },
+                    { "TargetFrameworkMoniker", ".NETFramework,Version=v4.7.1" },
+                    { "RestoreEnablePackagePruning", "true" },
+                },
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "TargetFrameworkInformation" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "TargetFramework", "net47" },
+                    { "TargetFrameworkIdentifier", ".NETFramework" },
+                    { "TargetFrameworkVersion", "v4.7.0" },
+                    { "TargetFrameworkMoniker", ".NETFramework,Version=v4.7.0" },
+                    { "RestoreEnablePackagePruning", "false" },
+                },
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "PrunePackageReference" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "Id", "x" },
+                    { "VersionRange", "1.0.0" },
+                },
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "PrunePackageReference" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "Id", "y" },
+                    { "VersionRange", "5.0.0" },
+                    { "TargetFrameworks", "net472"},
+                },
+                };
+
+                var wrappedItems = items.Select(CreateItems).ToList();
+
+                // Act
+                var dgSpec = MSBuildRestoreUtility.GetDependencySpec(wrappedItems);
+                var project = dgSpec.Projects.Single(e => e.Name == projectName);
+
+                // Assert
+                project.TargetFrameworks.Should().HaveCount(3);
+                var net472tfi = project.TargetFrameworks.Single(e => e.TargetAlias == "net472");
+                var net471tfi = project.TargetFrameworks.Single(e => e.TargetAlias == "net471");
+                var net47tfi = project.TargetFrameworks.Single(e => e.TargetAlias == "net47");
+
+                net472tfi.PackagesToPrune.Should().HaveCount(2);
+                var net472PackagesToPrune = net472tfi.PackagesToPrune.ToList();
+                net472PackagesToPrune[0].Key.Should().Be("x");
+                net472PackagesToPrune[0].Value.Name.Should().Be("x");
+                net472PackagesToPrune[0].Value.VersionRange.Should().Be(VersionRange.Parse("(, 1.0.0]"));
+                net472PackagesToPrune[1].Key.Should().Be("y");
+                net472PackagesToPrune[1].Value.Name.Should().Be("y");
+                net472PackagesToPrune[1].Value.VersionRange.Should().Be(VersionRange.Parse("(, 5.0.0]"));
+
+                net471tfi.PackagesToPrune.Should().HaveCount(1);
+                var net471PackagesToPrune = net471tfi.PackagesToPrune.ToList();
+                net471PackagesToPrune[0].Key.Should().Be("x");
+                net471PackagesToPrune[0].Value.Name.Should().Be("x");
+                net471PackagesToPrune[0].Value.VersionRange.Should().Be(VersionRange.Parse("(, 1.0.0]"));
+
+                net47tfi.PackagesToPrune.Should().HaveCount(0);
+            }
+        }
+
+        [Fact]
+        public void MSBuildRestoreUtility_GetPackageSpec_WithPrunePackageReferenceWithVariousCasing()
+        {
+            var projectName = "project";
+            using (var workingDir = TestDirectory.Create())
+            {
+                // Arrange
+                var projectUniqueName = "482C20DE-DFF9-4BD0-B90A-BD3201AA351A";
+                var project1Root = Path.Combine(workingDir, projectName);
+                var project1Path = Path.Combine(project1Root, $"{projectName}.csproj");
+
+                var items = new List<IDictionary<string, string>>
+                {
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "ProjectSpec" },
+                    { "ProjectName", projectName },
+                    { "ProjectStyle", "PackageReference" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "ProjectPath", project1Path },
+                },
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "TargetFrameworkInformation" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "TargetFramework", "net472" },
+                    { "TargetFrameworkIdentifier", ".NETFramework" },
+                    { "TargetFrameworkVersion", "v4.7.2" },
+                    { "TargetFrameworkMoniker", ".NETFramework,Version=v4.7.2" },
+                    { "RestoreEnablePackagePruning", "true" },
+                },
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "TargetFrameworkInformation" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "TargetFramework", "net471" },
+                    { "TargetFrameworkIdentifier", ".NETFramework" },
+                    { "TargetFrameworkVersion", "v4.7.1" },
+                    { "TargetFrameworkMoniker", ".NETFramework,Version=v4.7.1" },
+                    { "RestoreEnablePackagePruning", "true" },
+                },
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "PrunePackageReference" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "Id", "x" },
+                    { "VersionRange", "1.0.0" },
+                },
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "PrunePackageReference" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "Id", "X" },
+                    { "VersionRange", "2.0.0" },
+                },
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "PrunePackageReference" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "Id", "y" },
+                    { "VersionRange", "5.0.0" },
+                    { "TargetFrameworks", "net472"},
+                },
+                };
+
+                var wrappedItems = items.Select(CreateItems).ToList();
+
+                // Act
+                var dgSpec = MSBuildRestoreUtility.GetDependencySpec(wrappedItems);
+                var project = dgSpec.Projects.Single(e => e.Name == projectName);
+
+                // Assert
+                project.TargetFrameworks.Should().HaveCount(2);
+                var net472tfi = project.TargetFrameworks.Single(e => e.TargetAlias == "net472");
+                var net471tfi = project.TargetFrameworks.Single(e => e.TargetAlias == "net471");
+
+                net472tfi.PackagesToPrune.Should().HaveCount(2);
+                var net472PackagesToPrune = net472tfi.PackagesToPrune.ToList();
+                net472PackagesToPrune[0].Key.Should().Be("x");
+                net472PackagesToPrune[0].Value.Name.Should().Be("x");
+                net472PackagesToPrune[0].Value.VersionRange.Should().Be(VersionRange.Parse("(, 1.0.0]"));
+                net472PackagesToPrune[1].Key.Should().Be("y");
+                net472PackagesToPrune[1].Value.Name.Should().Be("y");
+                net472PackagesToPrune[1].Value.VersionRange.Should().Be(VersionRange.Parse("(, 5.0.0]"));
+
+                net471tfi.PackagesToPrune.Should().HaveCount(1);
+                var net471PackagesToPrune = net471tfi.PackagesToPrune.ToList();
+                net471PackagesToPrune[0].Key.Should().Be("x");
+                net471PackagesToPrune[0].Value.Name.Should().Be("x");
+                net471PackagesToPrune[0].Value.VersionRange.Should().Be(VersionRange.Parse("(, 1.0.0]"));
+            }
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void MSBuildRestoreUtility_GetPackageSpecWithLegacyProject_WithPrunePackageReferences(bool enabledPruning)
+        {
+            var projectName = "project";
+            using (var workingDir = TestDirectory.Create())
+            {
+                // Arrange
+                var projectUniqueName = "482C20DE-DFF9-4BD0-B90A-BD3201AA351A";
+                var project1Root = Path.Combine(workingDir, projectName);
+                var project1Path = Path.Combine(project1Root, $"{projectName}.csproj");
+
+                var items = new List<IDictionary<string, string>>
+                {
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "ProjectSpec" },
+                    { "ProjectName", projectName },
+                    { "ProjectStyle", "PackageReference" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "ProjectPath", project1Path },
+                },
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "TargetFrameworkInformation" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "TargetFrameworkIdentifier", ".NETFramework" },
+                    { "TargetFrameworkVersion", "v4.7.0" },
+                    { "TargetFrameworkMoniker", ".NETFramework,Version=v4.7.0" },
+                    { "RestoreEnablePackagePruning", enabledPruning.ToString() },
+                },
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "PrunePackageReference" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "Id", "x" },
+                    { "VersionRange", "1.0.0" },
+                }
+                };
+
+                var wrappedItems = items.Select(CreateItems).ToList();
+
+                // Act
+                var dgSpec = MSBuildRestoreUtility.GetDependencySpec(wrappedItems);
+                var project = dgSpec.Projects.Single(e => e.Name == projectName);
+
+                // Assert
+                project.TargetFrameworks.Should().HaveCount(1);
+                if (enabledPruning)
+                {
+                    project.TargetFrameworks[0].PackagesToPrune.Should().HaveCount(1);
+                    var packageToPruneList = project.TargetFrameworks[0].PackagesToPrune.ToList();
+                    packageToPruneList[0].Key.Should().Be("x");
+                    packageToPruneList[0].Value.Name.Should().Be("x");
+                    packageToPruneList[0].Value.VersionRange.Should().Be(VersionRange.Parse("(, 1.0.0]"));
+                }
+                else
+                {
+                    project.TargetFrameworks[0].PackagesToPrune.Should().BeEmpty();
+                }
+            }
+        }
+
+        [Fact]
+        public void MSBuildRestoreUtility_GetPackageSpec_WithPrunePackageReferenceAndMissingVersion_Throws()
+        {
+            var projectName = "project";
+            using (var workingDir = TestDirectory.Create())
+            {
+                // Arrange
+                var projectUniqueName = "482C20DE-DFF9-4BD0-B90A-BD3201AA351A";
+                var project1Root = Path.Combine(workingDir, projectName);
+                var project1Path = Path.Combine(project1Root, $"{projectName}.csproj");
+
+                var items = new List<IDictionary<string, string>>
+                {
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "ProjectSpec" },
+                    { "ProjectName", projectName },
+                    { "ProjectStyle", "PackageReference" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "ProjectPath", project1Path },
+                },
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "TargetFrameworkInformation" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "TargetFrameworkIdentifier", ".NETFramework" },
+                    { "TargetFrameworkVersion", "v4.7.0" },
+                    { "TargetFrameworkMoniker", ".NETFramework,Version=v4.7.0" },
+                    { "RestoreEnablePackagePruning", "true" },
+                },
+                    new Dictionary<string, string>()
+                {
+                    { "Type", "PrunePackageReference" },
+                    { "ProjectUniqueName", projectUniqueName },
+                    { "Id", "x" },
+                }
+                };
+
+                var wrappedItems = items.Select(CreateItems).ToList();
+
+                // Act
+                var exception = Assert.Throws<ArgumentException>(() => MSBuildRestoreUtility.GetDependencySpec(wrappedItems));
+                exception.Message.Should().Contain("PrunePackageReference");
+            }
+        }
+
+        [Fact]
+        public void GetRestoreAuditProperties_MultiTargetingProjectWithOneNuGetAuditModeAll_ReturnsNuGetAuditModeAll()
+        {
+            // Arrange
+            var project = CreateItems(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "NuGetAuditMode", "direct" }
+            });
+
+            var tfms = new IMSBuildItem[]
+            {
+                CreateItems(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "NuGetAuditMode", "direct" }
+                }),
+                CreateItems(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "NuGetAuditMode", "all" }
+                })
+            };
+
+            // Act
+            var actual = MSBuildRestoreUtility.GetRestoreAuditProperties(project, tfms, null);
+
+            // Assert
+            actual.Should().NotBeNull();
+            actual.AuditMode.Should().Be("all");
+        }
+
+        [Fact]
+        public void GetRestoreAuditProperties_MultiTargetingProjectWithoutNuGetAuditModeAll_ReturnsProjectAuditMode()
+        {
+            // Arrange
+            var project = CreateItems(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "NuGetAuditMode", "direct" }
+            });
+
+            var tfms = new IMSBuildItem[]
+            {
+                CreateItems(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "NuGetAuditMode", "one" }
+                }),
+                CreateItems(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "NuGetAuditMode", "two" }
+                })
+            };
+
+            // Act
+            var actual = MSBuildRestoreUtility.GetRestoreAuditProperties(project, tfms, null);
+
+            // Assert
+            actual.Should().NotBeNull();
+            actual.AuditMode.Should().Be("direct");
+        }
+
         private static IDictionary<string, string> CreateProject(string root, string uniqueName)
         {
             var project1Path = Path.Combine(root, "a.csproj");
@@ -4600,6 +4920,216 @@ namespace NuGet.Commands.Test
         private IMSBuildItem CreateItems(IDictionary<string, string> properties)
         {
             return new MSBuildItem(Guid.NewGuid().ToString(), properties);
+        }
+
+        [Theory]
+        [InlineData("true", true)]
+        [InlineData("false", false)]
+        [InlineData(null, false)]
+        [InlineData("", false)]
+        public void MSBuildRestoreUtility_GetPackageSpec_RestoreDoNotWriteDependencyGraphSpec(
+            string propertyValue,
+            bool expectedValue)
+        {
+            using (var workingDir = TestDirectory.Create())
+            {
+                // Arrange
+                var project1Root = Path.Combine(workingDir, "a");
+                var project1Path = Path.Combine(project1Root, "a.csproj");
+
+                var items = new List<IDictionary<string, string>>();
+
+                var properties = new Dictionary<string, string>()
+                {
+                    { "Type", "ProjectSpec" },
+                    { "Version", "2.0.0" },
+                    { "ProjectName", "a" },
+                    { "ProjectStyle", "PackageReference" },
+                    { "ProjectUniqueName", "482C20DE-DFF9-4BD0-B90A-BD3201AA351A" },
+                    { "ProjectPath", project1Path },
+                    { "TargetFrameworks", "net46" },
+                };
+
+                if (propertyValue != null)
+                {
+                    properties["RestoreDoNotWriteDependencyGraphSpec"] = propertyValue;
+                }
+
+                items.Add(properties);
+
+                var wrappedItems = items.Select(CreateItems).ToList();
+
+                // Act
+                var dgSpec = MSBuildRestoreUtility.GetDependencySpec(wrappedItems);
+                var project1Spec = dgSpec.Projects.Single();
+
+                // Assert
+                project1Spec.RestoreMetadata.RestoreDoNotWriteDependencyGraphSpec.Should().Be(expectedValue);
+            }
+        }
+
+        [Fact]
+        public void GetPackageSpec_WithAnalyzerAssetMetadata_PopulatesRestoreMetadata()
+        {
+            using (var workingDir = TestDirectory.Create())
+            {
+                // Arrange
+                var projectRoot = Path.Combine(workingDir, "a");
+                var projectPath = Path.Combine(projectRoot, "a.csproj");
+
+                var items = new List<IDictionary<string, string>>
+                {
+                    CreateAnalyzerProjectSpecItem(projectPath, targetFrameworks: "net8.0", restoreEnableAnalyzerAssets: true),
+                    CreateAnalyzerTargetFrameworkInformationItem("net8.0", "8.0"),
+                };
+
+                // Act
+                var projectSpec = GetSingleProjectSpec(items);
+
+                // Assert
+                projectSpec.RestoreMetadata.RestoreEnableAnalyzerAssets.Should().BeTrue();
+            }
+        }
+
+        [Fact]
+        public void GetPackageSpec_WithProjectSpecAnalyzerAssetsEnabled_EnablesAnalyzerAssets()
+        {
+            using (var workingDir = TestDirectory.Create())
+            {
+                // Arrange
+                var projectRoot = Path.Combine(workingDir, "a");
+                var projectPath = Path.Combine(projectRoot, "a.csproj");
+
+                var items = new List<IDictionary<string, string>>
+                {
+                    CreateAnalyzerProjectSpecItem(
+                        projectPath,
+                        targetFrameworks: "net8.0;net9.0",
+                        crossTargeting: true,
+                        restoreEnableAnalyzerAssets: true),
+                    CreateAnalyzerTargetFrameworkInformationItem("net8.0", "8.0", restoreEnableAnalyzerAssets: false),
+                    CreateAnalyzerTargetFrameworkInformationItem("net9.0", "9.0", restoreEnableAnalyzerAssets: false),
+                };
+
+                // Act
+                var projectSpec = GetSingleProjectSpec(items);
+
+                // Assert
+                projectSpec.RestoreMetadata.RestoreEnableAnalyzerAssets.Should().BeTrue();
+            }
+        }
+
+        [Fact]
+        public void GetPackageSpec_WithProjectSpecAnalyzerAssetsDisabled_DoesNotEnableAnalyzerAssets()
+        {
+            using (var workingDir = TestDirectory.Create())
+            {
+                // Arrange
+                var projectRoot = Path.Combine(workingDir, "a");
+                var projectPath = Path.Combine(projectRoot, "a.csproj");
+
+                var items = new List<IDictionary<string, string>>
+                {
+                    CreateAnalyzerProjectSpecItem(
+                        projectPath,
+                        targetFrameworks: "net8.0;net9.0",
+                        crossTargeting: true,
+                        restoreEnableAnalyzerAssets: false),
+                    CreateAnalyzerTargetFrameworkInformationItem("net8.0", "8.0"),
+                    CreateAnalyzerTargetFrameworkInformationItem("net9.0", "9.0"),
+                };
+
+                // Act
+                var projectSpec = GetSingleProjectSpec(items);
+
+                // Assert
+                projectSpec.RestoreMetadata.RestoreEnableAnalyzerAssets.Should().BeFalse();
+            }
+        }
+
+        [Fact]
+        public void GetPackageSpec_WithAnalyzerAssetsEnabledInAnyTargetFramework_EnablesAnalyzerAssets()
+        {
+            using (var workingDir = TestDirectory.Create())
+            {
+                // Arrange
+                var projectRoot = Path.Combine(workingDir, "a");
+                var projectPath = Path.Combine(projectRoot, "a.csproj");
+
+                var items = new List<IDictionary<string, string>>
+                {
+                    CreateAnalyzerProjectSpecItem(
+                        projectPath,
+                        targetFrameworks: "net8.0;net9.0",
+                        crossTargeting: true,
+                        restoreEnableAnalyzerAssets: false),
+                    CreateAnalyzerTargetFrameworkInformationItem("net8.0", "8.0", restoreEnableAnalyzerAssets: false),
+                    CreateAnalyzerTargetFrameworkInformationItem("net9.0", "9.0", restoreEnableAnalyzerAssets: true),
+                };
+
+                // Act
+                var projectSpec = GetSingleProjectSpec(items);
+
+                // Assert
+                projectSpec.RestoreMetadata.RestoreEnableAnalyzerAssets.Should().BeTrue();
+            }
+        }
+
+        private PackageSpec GetSingleProjectSpec(IEnumerable<IDictionary<string, string>> items)
+        {
+            var wrappedItems = items.Select(CreateItems).ToList();
+            var dgSpec = MSBuildRestoreUtility.GetDependencySpec(wrappedItems);
+
+            return dgSpec.Projects.Single();
+        }
+
+        private static Dictionary<string, string> CreateAnalyzerProjectSpecItem(
+            string projectPath,
+            string targetFrameworks = "net46",
+            bool crossTargeting = false,
+            bool restoreEnableAnalyzerAssets = false)
+        {
+            var item = new Dictionary<string, string>()
+            {
+                { "Type", "ProjectSpec" },
+                { "Version", "2.0.0" },
+                { "ProjectName", "a" },
+                { "ProjectStyle", "PackageReference" },
+                { "ProjectUniqueName", "482C20DE-DFF9-4BD0-B90A-BD3201AA351A" },
+                { "ProjectPath", projectPath },
+                { "TargetFrameworks", targetFrameworks },
+                { "RestoreEnableAnalyzerAssets", restoreEnableAnalyzerAssets ? "true" : "false" },
+            };
+
+            if (crossTargeting)
+            {
+                item["CrossTargeting"] = "true";
+            }
+
+            return item;
+        }
+
+        private static Dictionary<string, string> CreateAnalyzerTargetFrameworkInformationItem(
+            string targetFramework,
+            string targetFrameworkVersion,
+            bool? restoreEnableAnalyzerAssets = null)
+        {
+            var item = new Dictionary<string, string>()
+            {
+                { "Type", "TargetFrameworkInformation" },
+                { "ProjectUniqueName", "482C20DE-DFF9-4BD0-B90A-BD3201AA351A" },
+                { "TargetFramework", targetFramework },
+                { "TargetFrameworkIdentifier", ".NETCoreApp" },
+                { "TargetFrameworkVersion", $"v{targetFrameworkVersion}" },
+                { "TargetFrameworkMoniker", $".NETCoreApp,Version=v{targetFrameworkVersion}" },
+            };
+
+            if (restoreEnableAnalyzerAssets.HasValue)
+            {
+                item["RestoreEnableAnalyzerAssets"] = restoreEnableAnalyzerAssets.Value ? "true" : "false";
+            }
+
+            return item;
         }
 
         private Dictionary<string, string> WithUniqueName(Dictionary<string, string> item, string uniqueName)

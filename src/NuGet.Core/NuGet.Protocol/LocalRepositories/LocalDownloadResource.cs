@@ -1,6 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -17,12 +18,6 @@ namespace NuGet.Protocol
     {
         private readonly FindLocalPackagesResource _localResource;
         private readonly string _source;
-
-        [Obsolete("Use constructor with source parameter")]
-        public LocalDownloadResource(FindLocalPackagesResource localResource)
-            : this(source: null, localResource)
-        {
-        }
 
         public LocalDownloadResource(string source, FindLocalPackagesResource localResource)
         {
@@ -56,7 +51,7 @@ namespace NuGet.Protocol
             try
             {
                 // Find the package from the local folder
-                LocalPackageInfo packageInfo = null;
+                LocalPackageInfo? packageInfo = null;
 
                 var sourcePackage = identity as SourcePackageDependencyInfo;
 
@@ -74,6 +69,18 @@ namespace NuGet.Protocol
                 if (packageInfo != null)
                 {
                     var stream = File.OpenRead(packageInfo.Path);
+                    try
+                    {
+                        HttpStreamValidation.ValidatePackageIdentity(packageInfo.Path, stream, identity);
+                    }
+                    catch (InvalidDataException ex)
+                    {
+                        stream.Dispose();
+                        // To make this API consistent with HTTP DownloadReosurce implementations, we need to throw FatalProtocolException.
+                        // Also try to avoid duplicate messages when ExceptionUtilities.DisplayMessage appends inner exception messages.
+                        throw new FatalProtocolException(ex.Message, ex.InnerException ?? ex);
+                    }
+                    stream.Position = 0;
                     return Task.FromResult(new DownloadResourceResult(stream, packageInfo.GetReader(), _localResource.Root));
                 }
                 else

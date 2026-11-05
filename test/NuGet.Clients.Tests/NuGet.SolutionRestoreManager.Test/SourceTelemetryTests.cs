@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -32,9 +34,11 @@ namespace NuGet.SolutionRestoreManager.Test
         private const string ProtocolDuration = "protocol.duration";
         private const string NumHTTPSv2Feeds = "NumHTTPSv2Feeds";
         private const string NumHTTPSv3Feeds = "NumHTTPSv3Feeds";
+        private const string AllowInsecureConnections = "NumHTTPNotSecureFeedsThatAllowInsecureConnections";
+        private const string DisableTLSCertificateValidation = "NumHTTPSFeedsThatDisableTLSCertificateValidation";
 
         private static readonly Guid Parent = Guid.Parse("33411664-388A-4C48-A607-A2C554171FCE");
-        private static readonly PackageSourceTelemetry.Totals ProtocolDiagnosticTotals = new PackageSourceTelemetry.Totals(1, 2, TimeSpan.FromMilliseconds(3));
+        private static readonly PackageSourceTelemetry.Totals ProtocolDiagnosticTotals = new PackageSourceTelemetry.Totals(1, 2, TimeSpan.FromMilliseconds(3), numberOfSourcesWithAnHttpResource: 0);
 
         [Fact]
         public void GivenEmptySourcesVerifyEventNameForRestore()
@@ -471,6 +475,38 @@ namespace NuGet.SolutionRestoreManager.Test
 
             int? totalFeeds = numLocalFeeds + numHTTPv2Feeds + numHTTPv3Feeds;
             totalFeeds.Should().Be(sources.Count);
+        }
+
+        [Fact]
+        public void HttpSources_WithAllowInsecureConnectionsAndDisableTlsCertificateValidation_FeedCountsAreCorrect()
+        {
+            PackageSource source1 = new PackageSource("http://test");
+            source1.AllowInsecureConnections = true;
+            PackageSource source2 = new PackageSource("http://test2/v3/index.json");
+            source2.AllowInsecureConnections = true;
+            PackageSource source3 = new PackageSource("http://test3");
+            source3.AllowInsecureConnections = false;
+            PackageSource source4 = new PackageSource("https://test3");
+            source4.AllowInsecureConnections = false;
+            source4.DisableTLSCertificateValidation = true;
+
+
+            var sources = new List<PackageSource>()
+            {
+                source1,
+                source2,
+                source3,
+                source4
+            };
+
+            var summary = SourceTelemetry.GetRestoreSourceSummaryEvent(Parent, sources, ProtocolDiagnosticTotals);
+            var summaryInts = GetValuesAsInts(summary);
+
+            int? numHTTPSFeedsThatDisableTLSCertificateValidation = summaryInts[DisableTLSCertificateValidation];
+            int? numHTTPNotSecureFeedsThatAllowInsecureConnections = summaryInts[AllowInsecureConnections];
+
+            numHTTPSFeedsThatDisableTLSCertificateValidation.Should().Be(1);
+            numHTTPNotSecureFeedsThatAllowInsecureConnections.Should().Be(2);
         }
 
         [Fact]

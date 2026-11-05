@@ -22,6 +22,7 @@ namespace NuGet.Packaging
     public class PackageFolderReader : PackageReaderBase
     {
         private readonly DirectoryInfo _root;
+        private readonly string _rootPath;
 
         /// <summary>
         /// Package folder reader
@@ -61,6 +62,7 @@ namespace NuGet.Packaging
             : base(frameworkProvider, compatibilityProvider)
         {
             _root = folder;
+            _rootPath = PathUtility.EnsureTrailingSlash(folder.FullName);
         }
 
         public override string GetNuspecFile()
@@ -84,7 +86,7 @@ namespace NuGet.Packaging
         }
 
         /// <summary>
-        /// Opens a local file in read only mode.
+        /// Opens a local file within the package root in read only mode.
         /// </summary>
         public override Stream GetStream(string path)
         {
@@ -93,21 +95,21 @@ namespace NuGet.Packaging
 
         private FileInfo GetFile(string path)
         {
-            var file = new FileInfo(Path.Combine(_root.FullName, path));
+            var fullPath = Path.GetFullPath(Path.Combine(_rootPath, path));
 
-            if (!file.FullName.StartsWith(_root.FullName, StringComparison.OrdinalIgnoreCase))
+            if (!fullPath.StartsWith(_rootPath, PathUtility.GetStringComparisonBasedOnOS()))
             {
                 // the given path does not appear under the folder root
                 throw new FileNotFoundException(path);
             }
 
-            return file;
+            return new FileInfo(fullPath);
         }
 
         public override IEnumerable<string> GetFiles()
         {
             // Read all files starting at the root.
-            return GetFiles(folder: null);
+            return GetFiles(folder: string.Empty);
         }
 
         public override IEnumerable<string> GetFiles(string folder)
@@ -208,7 +210,7 @@ namespace NuGet.Packaging
                 var sourceFile = GetFile(packageFile);
 
                 var targetPath = Path.Combine(destination, packageFile);
-                Directory.CreateDirectory(Path.GetDirectoryName(targetPath));
+                Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
 
                 using (var fileStream = sourceFile.OpenRead())
                 {
@@ -229,14 +231,14 @@ namespace NuGet.Packaging
             // do nothing here
         }
 
-        public override Task<PrimarySignature> GetPrimarySignatureAsync(CancellationToken token)
+        public override Task<PrimarySignature?> GetPrimarySignatureAsync(CancellationToken token)
         {
-            return Task.FromResult<PrimarySignature>(null);
+            return TaskResult.Null<PrimarySignature>();
         }
 
         public override Task<bool> IsSignedAsync(CancellationToken token)
         {
-            return Task.FromResult(false);
+            return TaskResult.False;
         }
 
         public override Task ValidateIntegrityAsync(SignatureContent signatureContent, CancellationToken token)
@@ -254,7 +256,7 @@ namespace NuGet.Packaging
             return false;
         }
 
-        public override string GetContentHash(CancellationToken token, Func<string> GetUnsignedPackageHash = null)
+        public override string GetContentHash(CancellationToken token, Func<string>? GetUnsignedPackageHash = null)
         {
             throw new NotImplementedException();
         }

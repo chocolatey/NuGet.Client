@@ -169,7 +169,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Please provide password for: {0}.
+        ///   Looks up a localized string similar to Provide password for: {0}.
         /// </summary>
         public static string ConsolePasswordProvider_DisplayFile {
             get {
@@ -187,7 +187,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The remote server indicated that the previous request was forbidden. Please provide credentials for: {0}.
+        ///   Looks up a localized string similar to The remote server indicated that the previous request was forbidden. Provide credentials for: {0}.
         /// </summary>
         public static string Credentials_ForbiddenCredentials {
             get {
@@ -205,7 +205,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Please provide proxy credentials:.
+        ///   Looks up a localized string similar to Provide proxy credentials:.
         /// </summary>
         public static string Credentials_ProxyCredentials {
             get {
@@ -214,7 +214,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Please provide credentials for: {0}.
+        ///   Looks up a localized string similar to Provide credentials for: {0}.
         /// </summary>
         public static string Credentials_RequestCredentials {
             get {
@@ -282,6 +282,15 @@ namespace NuGet.CommandLine {
         public static string Error_CannotFindMsbuild {
             get {
                 return ResourceManager.GetString("Error_CannotFindMsbuild", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The resolved MSBuild directory is `{0}` which is an architecture-specific directory. Could not find MSBuild in its parent directory (non-architecture specific)..
+        /// </summary>
+        public static string Error_CannotFindNonArchitectureSpecificMsbuild {
+            get {
+                return ResourceManager.GetString("Error_CannotFindNonArchitectureSpecificMsbuild", resourceCulture);
             }
         }
         
@@ -358,6 +367,24 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to You are running the &apos;{0}&apos; operation with an &apos;HTTP&apos; source: {1}. NuGet requires HTTPS sources. To use an HTTP source, you must explicitly set &apos;allowInsecureConnections&apos; to true in your NuGet.Config file. Refer to https://aka.ms/nuget-https-everywhere for more information..
+        /// </summary>
+        public static string Error_HttpSource_Single {
+            get {
+                return ResourceManager.GetString("Error_HttpSource_Single", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to You are running the &apos;{0}&apos; operation with &apos;HTTP&apos; sources: {1}. NuGet requires HTTPS sources. To use HTTP sources, you must explicitly set &apos;allowInsecureConnections&apos; to true in your NuGet.Config file. Refer to https://aka.ms/nuget-https-everywhere for more information..
+        /// </summary>
+        public static string Error_HttpSources_Multiple {
+            get {
+                return ResourceManager.GetString("Error_HttpSources_Multiple", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Invalid characters in one of the following path segments: &apos;{0}&apos;.
         /// </summary>
         public static string Error_InvalidCharactersInPathSegment {
@@ -399,6 +426,15 @@ namespace NuGet.CommandLine {
         public static string Error_MissingSourceParameter {
             get {
                 return ResourceManager.GetString("Error_MissingSourceParameter", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The MSBuild directory &apos;{0}&apos; appears to be a .NET SDK (dotnet) MSBuild installation. NuGet.exe requires the .NET Framework version of MSBuild....
+        /// </summary>
+        public static string Error_MsBuildIsNetCoreMsBuild {
+            get {
+                return ResourceManager.GetString("Error_MsBuildIsNetCoreMsBuild", resourceCulture);
             }
         }
         
@@ -467,7 +503,7 @@ namespace NuGet.CommandLine {
         
         /// <summary>
         ///   Looks up a localized string similar to `project.json` pack is disabled in the current NuGet version, and will be permanently removed in a future version.
-        ///Please consider migrating &apos;{0}&apos; to `PackageReference` and using the pack targets.
+        ///Consider migrating &apos;{0}&apos; to `PackageReference` and using the pack targets.
         ///You can set the &apos;{1}&apos; environment variable to &apos;true&apos; to temporarily reenable this functionality..
         /// </summary>
         public static string Error_ProjectJson_Deprecated_And_Removed {
@@ -601,18 +637,25 @@ namespace NuGet.CommandLine {
                 return ResourceManager.GetString("Error_UnsupportedMsbuild", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to This version of MSBuild not support Solution filter: &apos;{0}&apos;. Please use a MSBuild version greater or equal to 16.7 to use this feature..
+        ///   Looks up a localized string similar to This version of MSBuild not support the slnx format: &apos;{0}&apos;. Use a MSBuild version greater than or equal to 17.13 to use this feature..
         /// </summary>
-        public static string Error_UnsupportedMsBuildForSolutionFilter
-        {
-            get
-            {
+        public static string Error_UnsupportedMsBuildForSlnx {
+            get {
+                return ResourceManager.GetString("Error_UnsupportedMsBuildForSlnx", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to This version of MSBuild not support Solution filter: &apos;{0}&apos;. Use a MSBuild version greater than or equal to 16.7 to use this feature..
+        /// </summary>
+        public static string Error_UnsupportedMsBuildForSolutionFilter {
+            get {
                 return ResourceManager.GetString("Error_UnsupportedMsBuildForSolutionFilter", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The `update -self` command only accepts one source as an argument. If the source option is not specified, the default NuGet source will be used..
         /// </summary>
@@ -632,7 +675,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Failed to load {0}, if this extension was downloaded from the internet please make sure it got unblocked (right click, properties, unblock)..
+        ///   Looks up a localized string similar to Failed to load {0}, if this extension was downloaded from the internet make sure it got unblocked (right click, properties, unblock)..
         /// </summary>
         public static string FailedToLoadExtension {
             get {
@@ -709,6 +752,15 @@ namespace NuGet.CommandLine {
         public static string InitCommand_FeedIsNotFound {
             get {
                 return ResourceManager.GetString("InitCommand_FeedIsNotFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Skipping installation of package &quot;{0}&quot; because higher version &quot;{1}&quot; is already installed..
+        /// </summary>
+        public static string InstallCommandHigherVersionAlreadyExists {
+            get {
+                return ResourceManager.GetString("InstallCommandHigherVersionAlreadyExists", resourceCulture);
             }
         }
         
@@ -812,7 +864,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The specified source &apos;{0}&apos; is invalid. Please provide a valid source..
+        ///   Looks up a localized string similar to The specified source &apos;{0}&apos; is invalid. Provide a valid source..
         /// </summary>
         public static string InvalidSource {
             get {
@@ -911,7 +963,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to An invalid local resource name was provided. Please provide one of the following values: http-cache, packages-cache, global-packages, all..
+        ///   Looks up a localized string similar to An invalid local resource name was provided. Provide one of the following values: http-cache, packages-cache, global-packages, all..
         /// </summary>
         public static string LocalsCommand_InvalidLocalResourceName {
             get {
@@ -1001,7 +1053,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to MSBuildPath : {0}  doesn&apos;t not exist..
+        ///   Looks up a localized string similar to MSBuildPath : {0} does not exist..
         /// </summary>
         public static string MsbuildPathNotExist {
             get {
@@ -1199,7 +1251,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Please specify a nuspec or project file to use..
+        ///   Looks up a localized string similar to Specify a nuspec or project file to use..
         /// </summary>
         public static string PackageCommandSpecifyInputFileError {
             get {
@@ -1262,7 +1314,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to `project.json` pack is deprecated. Please consider migrating &apos;{0}&apos; to `PackageReference` and using the pack targets..
+        ///   Looks up a localized string similar to `project.json` pack is deprecated. Consider migrating &apos;{0}&apos; to `PackageReference` and using the pack targets..
         /// </summary>
         public static string ProjectJsonPack_Deprecated {
             get {
@@ -1280,7 +1332,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to There is no default source, please specify a source..
+        ///   Looks up a localized string similar to There is no default source, specify a source..
         /// </summary>
         public static string PushCommandNoSourceError {
             get {
@@ -1316,7 +1368,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to &apos;globalPackagesFolder&apos; setting is a relative path. To determine full path, please specify either -SolutionDirectory or a solution file as a parameter. To ignore &apos;globalPackagesFolder&apos; setting, specify -PackagesDirectory..
+        ///   Looks up a localized string similar to &apos;globalPackagesFolder&apos; setting is a relative path. To determine full path, specify either -SolutionDirectory or a solution file as a parameter. To ignore &apos;globalPackagesFolder&apos; setting, specify -PackagesDirectory..
         /// </summary>
         public static string RestoreCommandCannotDetermineGlobalPackagesFolder {
             get {
@@ -1325,7 +1377,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Cannot determine the packages folder to restore NuGet packages. Please specify either -PackagesDirectory or -SolutionDirectory..
+        ///   Looks up a localized string similar to Cannot determine the packages folder to restore NuGet packages. Specify either -PackagesDirectory or -SolutionDirectory..
         /// </summary>
         public static string RestoreCommandCannotDeterminePackagesFolder {
             get {
@@ -1659,6 +1711,15 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to &apos;{0} {1}&apos; is deprecated. Use &apos;{0} {2}&apos; instead..
+        /// </summary>
+        public static string Warning_CommandDeprecated {
+            get {
+                return ResourceManager.GetString("Warning_CommandDeprecated", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The value &quot;{0}&quot; for {1} is a sample value and should be removed..
         /// </summary>
         public static string Warning_DefaultSpecValue {
@@ -1704,25 +1765,6 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to You are running the &apos;{0}&apos; operation with an &apos;HTTP&apos; source, &apos;{1}&apos;. Non-HTTPS access will be removed in a future version. Consider migrating to an &apos;HTTPS&apos; source..
-        /// </summary>
-        public static string Warning_HttpServerUsage {
-            get {
-                return ResourceManager.GetString("Warning_HttpServerUsage", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to You are running the &apos;{0}&apos; operation with &apos;HTTP&apos; sources: {1}
-        ///Non-HTTPS access will be removed in a future version. Consider migrating to &apos;HTTPS&apos; sources..
-        /// </summary>
-        public static string Warning_HttpSources_Multiple {
-            get {
-                return ResourceManager.GetString("Warning_HttpSources_Multiple", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Invalid PackageSaveMode value &apos;{0}&apos;..
         /// </summary>
         public static string Warning_InvalidPackageSaveMode {
@@ -1732,7 +1774,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Please enbale long file path support in local group policy. Fore more details, please refer to https://aka.ms/nuget-long-path..
+        ///   Looks up a localized string similar to Enable long file path support in local group policy. Fore more details, refer to https://aka.ms/nuget-long-path..
         /// </summary>
         public static string Warning_LongPath_DisabledPolicy {
             get {
@@ -1741,7 +1783,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Please install .NET Framework 4.6.2 or above that supports long file paths. Fore more details, please refer to https://aka.ms/nuget-long-path..
+        ///   Looks up a localized string similar to Install .NET Framework 4.6.2 or above that supports long file paths. Fore more details, refer to https://aka.ms/nuget-long-path..
         /// </summary>
         public static string Warning_LongPath_UnsupportedNetFramework {
             get {
@@ -1750,7 +1792,7 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Long file path is currently only supported on Windows 10. Fore more details, please refer to https://aka.ms/nuget-long-path..
+        ///   Looks up a localized string similar to Long file path is currently only supported on Windows 10. Fore more details, refer to https://aka.ms/nuget-long-path..
         /// </summary>
         public static string Warning_LongPath_UnsupportedOS {
             get {

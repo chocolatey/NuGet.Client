@@ -13,34 +13,59 @@ namespace NuGet.Common.Migrations
 
         public static void Run()
         {
-            string migrationsDirectory = GetMigrationsDirectory();
+            Run(EnvironmentVariableWrapper.Instance);
+        }
+
+        internal static void Run(IEnvironmentVariableReader environmentVariableReader)
+        {
+            string migrationsDirectory = GetMigrationsDirectory(environmentVariableReader);
+
+            Run(migrationsDirectory, environmentVariableReader);
+        }
+
+        internal static void Run(string migrationsDirectory, IEnvironmentVariableReader environmentVariableReader)
+        {
+            if (CommonEventSource.Instance.IsEnabled()) CommonEventSource.Instance.MigrationRunner_RunStart();
+
+            var migrationPerformed = false;
             var expectedMigrationFilename = Path.Combine(migrationsDirectory, MaxMigrationFilename);
 
-            if (!File.Exists(expectedMigrationFilename))
+            try
             {
-                // Multiple processes or threads might be trying to call this concurrently (especially via NuGetSdkResolver)
-                // so use a global mutex and then check if someone else already did the work.
-                using (var mutex = new Mutex(false, "NuGet-Migrations"))
+                if (!File.Exists(expectedMigrationFilename))
                 {
-                    if (WaitForMutex(mutex))
+                    // Multiple processes or threads might be trying to call this concurrently (especially via NuGetSdkResolver)
+                    // so use a global mutex and then check if someone else already did the work.
+                    using (var mutex = new Mutex(false, "NuGet-Migrations"))
                     {
-                        try
+                        if (WaitForMutex(mutex))
                         {
-                            // Only run migrations that have not already been run
-                            if (!File.Exists(expectedMigrationFilename))
+                            try
                             {
-                                Migration1.Run();
-                                // Create file for the migration run, so that if an older version of NuGet is run, it doesn't try to run migrations again.
-                                File.WriteAllText(expectedMigrationFilename, string.Empty);
+                                Directory.CreateDirectory(migrationsDirectory);
+
+                                // Only run migrations that have not already been run
+                                if (!File.Exists(expectedMigrationFilename))
+                                {
+                                    migrationPerformed = true;
+
+                                    Migration1.Run(environmentVariableReader);
+                                    // Create file for the migration run, so that if an older version of NuGet is run, it doesn't try to run migrations again.
+                                    File.WriteAllText(expectedMigrationFilename, string.Empty);
+                                }
                             }
-                        }
-                        catch { }
-                        finally
-                        {
-                            mutex.ReleaseMutex();
+                            catch { }
+                            finally
+                            {
+                                mutex.ReleaseMutex();
+                            }
                         }
                     }
                 }
+            }
+            finally
+            {
+                if (CommonEventSource.Instance.IsEnabled()) CommonEventSource.Instance.MigrationRunner_RunStop(expectedMigrationFilename, migrationPerformed ? 1 : 0);
             }
 
             static bool WaitForMutex(Mutex mutex)
@@ -60,22 +85,18 @@ namespace NuGet.Common.Migrations
             }
         }
 
-        internal static string GetMigrationsDirectory()
+        internal static string GetMigrationsDirectory(IEnvironmentVariableReader environmentVariableReader)
         {
-            string migrationsDirectory;
             if (RuntimeEnvironmentHelper.IsWindows)
             {
-                migrationsDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NuGet", "Migrations");
+                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NuGet", "Migrations");
             }
-            else
-            {
-                var XdgDataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
-                migrationsDirectory = string.IsNullOrEmpty(XdgDataHome)
-                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share", "NuGet", "Migrations")
-                    : Path.Combine(XdgDataHome, "NuGet", "Migrations");
-            }
-            Directory.CreateDirectory(migrationsDirectory);
-            return migrationsDirectory;
+
+            var XdgDataHome = environmentVariableReader.GetEnvironmentVariable("XDG_DATA_HOME");
+
+            return string.IsNullOrEmpty(XdgDataHome)
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share", "NuGet", "Migrations")
+                : Path.Combine(XdgDataHome, "NuGet", "Migrations");
         }
     }
 }

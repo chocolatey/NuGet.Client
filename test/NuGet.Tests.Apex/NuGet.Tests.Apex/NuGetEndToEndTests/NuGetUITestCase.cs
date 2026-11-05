@@ -1,17 +1,17 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Test.Apex.VisualStudio.Solution;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using NuGet.Test.Utility;
-using Xunit;
-using Xunit.Abstractions;
 
 namespace NuGet.Tests.Apex
 {
-    public class NuGetUITestCase : SharedVisualStudioHostTestClass, IClassFixture<VisualStudioHostFixtureFactory>
+    [TestClass]
+    public class NuGetUITestCase : SharedVisualStudioHostTestClass
     {
         private const string TestPackageName = "Contoso.A";
         private const string TestPackageVersionV1 = "1.0.0";
@@ -19,17 +19,10 @@ namespace NuGet.Tests.Apex
         private const string PrimarySourceName = "source";
         private const string SecondarySourceName = "SecondarySource";
 
-        private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
-        private static readonly TimeSpan Interval = TimeSpan.FromSeconds(2);
-
         private readonly SimpleTestPathContext _pathContext = new SimpleTestPathContext();
 
-        public NuGetUITestCase(VisualStudioHostFixtureFactory visualStudioHostFixtureFactory, ITestOutputHelper output)
-            : base(visualStudioHostFixtureFactory, output)
-        {
-        }
-
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public async Task SearchPackageFromUI()
         {
             // Arrange
@@ -39,12 +32,12 @@ namespace NuGet.Tests.Apex
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
-            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
+            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
             VisualStudio.ClearOutputWindow();
             solutionService.SaveAll();
 
             // Act
-            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, XunitLogger);
+            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, Logger);
 
             NuGetUIProjectTestExtension uiwindow = nugetTestService.GetUIWindowfromProject(project);
             uiwindow.SwitchTabToBrowse();
@@ -54,7 +47,8 @@ namespace NuGet.Tests.Apex
             VisualStudio.AssertNoErrors();
         }
 
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public async Task InstallPackageFromUI()
         {
             // Arrange
@@ -64,21 +58,22 @@ namespace NuGet.Tests.Apex
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
-            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
+            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
             VisualStudio.ClearOutputWindow();
             solutionService.SaveAll();
 
             // Act
-            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, XunitLogger);
+            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, Logger);
 
             NuGetUIProjectTestExtension uiwindow = nugetTestService.GetUIWindowfromProject(project);
             uiwindow.InstallPackageFromUI(TestPackageName, TestPackageVersionV1);
 
             // Assert
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, TestPackageName, TestPackageVersionV1, XunitLogger);
+            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, TestPackageName, TestPackageVersionV1, Logger);
         }
 
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public async Task InstallPackageToProjectsFromUI()
         {
             // Arrange
@@ -88,29 +83,30 @@ namespace NuGet.Tests.Apex
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
-            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
-            ProjectTestExtension nuProject = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "NuProject");
+            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
+            ProjectTestExtension nuProject = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "NuProject");
             solutionService.SaveAll();
 
             // Act
-            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, XunitLogger);
+            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, Logger);
 
             NuGetUIProjectTestExtension uiwindow = nugetTestService.GetUIWindowfromProject(nuProject);
             uiwindow.InstallPackageFromUI(TestPackageName, TestPackageVersionV1);
 
             VisualStudio.SelectProjectInSolutionExplorer(project.Name);
-            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, XunitLogger);
+            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, Logger);
 
             VisualStudio.ClearOutputWindow();
             NuGetUIProjectTestExtension uiwindow2 = nugetTestService.GetUIWindowfromProject(project);
             uiwindow2.InstallPackageFromUI(TestPackageName, TestPackageVersionV1);
 
             // Assert
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, TestPackageName, TestPackageVersionV1, XunitLogger);
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, nuProject, TestPackageName, TestPackageVersionV1, XunitLogger);
+            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, TestPackageName, TestPackageVersionV1, Logger);
+            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, nuProject, TestPackageName, TestPackageVersionV1, Logger);
         }
 
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public async Task UninstallPackageFromUI()
         {
             // Arrange
@@ -120,29 +116,30 @@ namespace NuGet.Tests.Apex
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
-            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
+            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
             solutionService.SaveAll();
 
             FileInfo packagesConfigFile = GetPackagesConfigFile(project);
-            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, XunitLogger);
+            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, Logger);
 
             NuGetUIProjectTestExtension uiwindow = nugetTestService.GetUIWindowfromProject(project);
             uiwindow.InstallPackageFromUI(TestPackageName, TestPackageVersionV1);
 
-            WaitForFileExists(packagesConfigFile);
+            CommonUtility.WaitForFileExists(packagesConfigFile);
 
             VisualStudio.ClearWindows();
 
             // Act
             uiwindow.UninstallPackageFromUI(TestPackageName);
 
-            WaitForFileNotExists(packagesConfigFile);
+            CommonUtility.WaitForFileNotExists(packagesConfigFile);
 
             // Assert
-            CommonUtility.AssertPackageNotInPackagesConfig(VisualStudio, project, TestPackageName, XunitLogger);
+            CommonUtility.AssertPackageNotInPackagesConfig(VisualStudio, project, TestPackageName, Logger);
         }
 
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public async Task UpdatePackageFromUI()
         {
             // Arrange
@@ -153,12 +150,12 @@ namespace NuGet.Tests.Apex
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
-            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
+            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
             VisualStudio.ClearWindows();
             solutionService.SaveAll();
 
             // Act
-            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, XunitLogger);
+            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, Logger);
 
             NuGetUIProjectTestExtension uiwindow = nugetTestService.GetUIWindowfromProject(project);
             uiwindow.InstallPackageFromUI(TestPackageName, TestPackageVersionV1);
@@ -168,10 +165,11 @@ namespace NuGet.Tests.Apex
             uiwindow.UpdatePackageFromUI(TestPackageName, TestPackageVersionV2);
 
             // Assert
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, TestPackageName, TestPackageVersionV2, XunitLogger);
+            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, TestPackageName, TestPackageVersionV2, Logger);
         }
 
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public async Task InstallPackageFromUI_PC_PackageSourceMapping_WithSingleFeed_Match_Succeeds()
         {
             // Arrange
@@ -184,21 +182,22 @@ namespace NuGet.Tests.Apex
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
-            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
+            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
             VisualStudio.ClearOutputWindow();
             solutionService.SaveAll();
 
             // Act
-            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, XunitLogger);
+            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, Logger);
 
             NuGetUIProjectTestExtension uiwindow = nugetTestService.GetUIWindowfromProject(project);
             uiwindow.InstallPackageFromUI(TestPackageName, TestPackageVersionV1);
 
             // Assert
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, TestPackageName, TestPackageVersionV1, XunitLogger);
+            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, TestPackageName, TestPackageVersionV1, Logger);
         }
 
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public async Task InstallPackageToProjectsFromUI_PC_PackageSourceMapping_WithSingleFeed_Match_Succeeds()
         {
             // Arrange
@@ -211,27 +210,28 @@ namespace NuGet.Tests.Apex
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
-            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
-            ProjectTestExtension nuProject = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "NuProject");
+            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
+            ProjectTestExtension nuProject = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "NuProject");
             solutionService.SaveAll();
 
             // Act
-            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, XunitLogger);
+            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, Logger);
             NuGetUIProjectTestExtension uiwindow = nugetTestService.GetUIWindowfromProject(nuProject);
             uiwindow.InstallPackageFromUI(TestPackageName, TestPackageVersionV1);
             VisualStudio.SelectProjectInSolutionExplorer(project.Name);
-            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, XunitLogger);
+            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, Logger);
 
             VisualStudio.ClearOutputWindow();
             NuGetUIProjectTestExtension uiwindow2 = nugetTestService.GetUIWindowfromProject(project);
             uiwindow2.InstallPackageFromUI(TestPackageName, TestPackageVersionV1);
 
             // Assert
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, TestPackageName, TestPackageVersionV1, XunitLogger);
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, nuProject, TestPackageName, TestPackageVersionV1, XunitLogger);
+            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, TestPackageName, TestPackageVersionV1, Logger);
+            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, nuProject, TestPackageName, TestPackageVersionV1, Logger);
         }
 
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public async Task InstallPackageFromUI_PC_PackageSourceMapping_WithMultiFeed_Succeed()
         {
             // Arrange
@@ -249,12 +249,12 @@ namespace NuGet.Tests.Apex
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
-            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
+            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
             VisualStudio.ClearOutputWindow();
             solutionService.SaveAll();
 
             // Act
-            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, XunitLogger);
+            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, Logger);
 
             NuGetUIProjectTestExtension uiwindow = nugetTestService.GetUIWindowfromProject(project);
 
@@ -263,10 +263,11 @@ namespace NuGet.Tests.Apex
             uiwindow.InstallPackageFromUI(TestPackageName, TestPackageVersionV1);
 
             // Assert
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, "contoso.a", XunitLogger);
+            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, "contoso.a", Logger);
         }
 
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public async Task InstallPackageFromUI_PC_PackageSourceMapping_WithMultiFeed_Fails()
         {
             // Arrange
@@ -283,22 +284,23 @@ namespace NuGet.Tests.Apex
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
-            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
+            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
             VisualStudio.ClearOutputWindow();
             solutionService.SaveAll();
 
             // Act
-            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, XunitLogger);
+            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, Logger);
 
             NuGetUIProjectTestExtension uiwindow = nugetTestService.GetUIWindowfromProject(project);
             uiwindow.InstallPackageFromUI(TestPackageName, TestPackageVersionV1);
 
             // Assert
-            // Even though Contoso.a exist in ExternalRepository, but packageSourceMapping filter doesn't let restore from it.
-            CommonUtility.AssertPackageNotInPackagesConfig(VisualStudio, project, "contoso.a", XunitLogger);
+            // Even though Contoso.a exist in ExternalRepository, but PackageNamespaces filter doesn't let restore from it.
+            CommonUtility.AssertPackageNotInPackagesConfig(VisualStudio, project, "contoso.a", Logger);
         }
 
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public async Task UpdatePackageFromUI_PC_PackageSourceMapping_WithSingleFeed_Succeeds()
         {
             // Arrange
@@ -312,12 +314,12 @@ namespace NuGet.Tests.Apex
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
-            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
+            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
             VisualStudio.ClearOutputWindow();
             solutionService.SaveAll();
 
             // Act
-            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, XunitLogger);
+            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, Logger);
             NuGetUIProjectTestExtension uiwindow = nugetTestService.GetUIWindowfromProject(project);
             uiwindow.InstallPackageFromUI(TestPackageName, TestPackageVersionV1);
 
@@ -326,11 +328,12 @@ namespace NuGet.Tests.Apex
             uiwindow.UpdatePackageFromUI(TestPackageName, TestPackageVersionV2);
 
             // Assert
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, TestPackageName, TestPackageVersionV2, XunitLogger);
+            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, TestPackageName, TestPackageVersionV2, Logger);
         }
 
 
-        [StaFact]
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
         public async Task UpdatePackageFromUI_PC_PackageSourceMapping_WithMultiFeed_Succeed()
         {
             // Arrange
@@ -349,12 +352,12 @@ namespace NuGet.Tests.Apex
 
             SolutionService solutionService = VisualStudio.Get<SolutionService>();
             solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
-            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, ProjectTargetFramework.V46, "TestProject");
+            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.ClassLibrary, CommonUtility.DefaultTargetFramework, "TestProject");
             VisualStudio.ClearOutputWindow();
             solutionService.SaveAll();
 
             // Act
-            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, XunitLogger);
+            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, Logger);
             NuGetUIProjectTestExtension uiwindow = nugetTestService.GetUIWindowfromProject(project);
 
             // Set option to package source option to All
@@ -365,7 +368,40 @@ namespace NuGet.Tests.Apex
             uiwindow.InstallPackageFromUI(TestPackageName, TestPackageVersionV2);
 
             // Assert
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, TestPackageName, TestPackageVersionV2, XunitLogger);
+            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, TestPackageName, TestPackageVersionV2, Logger);
+        }
+
+        [TestMethod]
+        [Timeout(DefaultTimeout)]
+        [TestCategory("StagingGate")]
+        [TestCategory("CanaryGate")]
+        public async Task VerifyDeletedAssetsFileIsBackByReloadingProject()
+        {
+            // Arrange
+            using var suppressNuGetUI = NuGetUISuppression.Suppress();
+            await CommonUtility.CreatePackageInSourceAsync(_pathContext.PackageSource, TestPackageName, TestPackageVersionV1);
+
+            NuGetApexTestService nugetTestService = GetNuGetTestService();
+
+            SolutionService solutionService = VisualStudio.Get<SolutionService>();
+            solutionService.CreateEmptySolution("TestSolution", _pathContext.SolutionRoot);
+            ProjectTestExtension project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.NetCoreConsoleApp, "TestProject");
+            VisualStudio.ClearOutputWindow();
+            solutionService.SaveAll();
+
+            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, Logger);
+            NuGetUIProjectTestExtension uiwindow = nugetTestService.GetUIWindowfromProject(project);
+            uiwindow.InstallPackageFromUI(TestPackageName, TestPackageVersionV1);
+
+            var assetsFilePath = CommonUtility.GetAssetsFilePath(project.FullPath);
+            CommonUtility.WaitForFileExists(new FileInfo(assetsFilePath));
+            File.Delete(assetsFilePath);
+
+            // Act
+            CommonUtility.AutoRestorePackageByReloadingProject(VisualStudio, project);
+
+            // Assert
+            CommonUtility.WaitForFileExists(new FileInfo(assetsFilePath));
         }
 
         public override void Dispose()
@@ -380,94 +416,6 @@ namespace NuGet.Tests.Apex
             var projectFile = new FileInfo(project.FullPath);
 
             return new FileInfo(Path.Combine(projectFile.DirectoryName, "packages.config"));
-        }
-
-        private static void WaitForFileExists(FileInfo file)
-        {
-            Omni.Common.WaitFor.IsTrue(
-                () => File.Exists(file.FullName),
-                Timeout,
-                Interval,
-                $"{file.FullName} did not exist within {Timeout}.");
-        }
-
-        private static void WaitForFileNotExists(FileInfo file)
-        {
-            Omni.Common.WaitFor.IsTrue(
-                () => !File.Exists(file.FullName),
-                Timeout,
-                Interval,
-                $"{file.FullName} still existed after {Timeout}.");
-        }
-
-        [StaFact]
-        public void InstallPackageToWebSiteProjectFromUI()
-        {
-            // Arrange
-            EnsureVisualStudioHost();
-            var dte = VisualStudio.Dte;
-            var solutionService = VisualStudio.Get<SolutionService>();
-            solutionService.CreateEmptySolution();
-            var project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.WebSiteEmpty, ProjectTargetFramework.V48, "WebSiteEmpty");
-            VisualStudio.ClearOutputWindow();
-            solutionService.SaveAll();
-
-            // Act
-            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, XunitLogger);
-            var nugetTestService = GetNuGetTestService();
-            var uiwindow = nugetTestService.GetUIWindowfromProject(project);
-            uiwindow.InstallPackageFromUI("log4net", "2.0.12");
-
-            // Assert
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, "log4net", "2.0.12", XunitLogger);
-        }
-
-        [StaFact]
-        public void UpdateWebSitePackageFromUI()
-        {
-            // Arrange
-            EnsureVisualStudioHost();
-            var dte = VisualStudio.Dte;
-            var solutionService = VisualStudio.Get<SolutionService>();
-            solutionService.CreateEmptySolution();
-            var project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.WebSiteEmpty, ProjectTargetFramework.V48, "WebSiteEmpty");
-            VisualStudio.ClearOutputWindow();
-            solutionService.SaveAll();
-
-            // Act
-            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, XunitLogger);
-            var nugetTestService = GetNuGetTestService();
-            var uiwindow = nugetTestService.GetUIWindowfromProject(project);
-            uiwindow.InstallPackageFromUI("log4net", "2.0.13");
-            VisualStudio.ClearWindows();
-            uiwindow.UpdatePackageFromUI("log4net", "2.0.15");
-
-            // Assert
-            CommonUtility.AssertPackageInPackagesConfig(VisualStudio, project, "log4net", "2.0.15", XunitLogger);
-        }
-
-        [StaFact]
-        public void UninstallWebSitePackageFromUI()
-        {
-            // Arrange
-            EnsureVisualStudioHost();
-            var dte = VisualStudio.Dte;
-            var solutionService = VisualStudio.Get<SolutionService>();
-            solutionService.CreateEmptySolution();
-            var project = solutionService.AddProject(ProjectLanguage.CSharp, ProjectTemplate.WebSiteEmpty, ProjectTargetFramework.V48, "WebSiteEmpty");
-            VisualStudio.ClearOutputWindow();
-            solutionService.SaveAll();
-
-            // Act
-            CommonUtility.OpenNuGetPackageManagerWithDte(VisualStudio, XunitLogger);
-            var nugetTestService = GetNuGetTestService();
-            var uiwindow = nugetTestService.GetUIWindowfromProject(project);
-            uiwindow.InstallPackageFromUI("log4net", "2.0.15");
-            VisualStudio.ClearWindows();
-            uiwindow.UninstallPackageFromUI("log4net");
-
-            // Assert
-            CommonUtility.AssertPackageNotInPackagesConfig(VisualStudio, project, "log4net", XunitLogger);
         }
     }
 }

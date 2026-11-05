@@ -1,10 +1,13 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -13,12 +16,15 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
 using Moq;
+using NuGet.Commands;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Packaging.Core;
 using NuGet.Packaging.PackageExtraction;
 using NuGet.Packaging.Signing;
+using NuGet.ProjectModel;
 using NuGet.Protocol.Plugins;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
@@ -27,22 +33,295 @@ using Xunit;
 
 namespace NuGet.Packaging.Test
 {
-    using LocalPackageArchiveDownloader = NuGet.Protocol.LocalPackageArchiveDownloader;
+    using LocalPackageArchiveDownloader = Protocol.LocalPackageArchiveDownloader;
 
     [Collection(SigningTestsCollection.Name)]
     public class PackageExtractorTests
     {
-        private static ClientPolicyContext _defaultContext = ClientPolicyContext.GetClientPolicy(NullSettings.Instance, NullLogger.Instance);
-
-        private const string _emptyTrustedSignersList = "signatureValidationMode is set to require, so packages are allowed only if signed by trusted signers; however, no trusted signers were specified.";
-        private const string _emptyRepoAllowList = "This repository indicated that all its packages are repository signed; however, it listed no signing certificates.";
-        private const string _noMatchInTrustedSignersList = "This package is signed but not by a trusted signer.";
-        private const string _noMatchInRepoAllowList = "This package was not repository signed with a certificate listed by this repository.";
-        private const string _notSignedPackageRepo = "This repository indicated that all its packages are repository signed; however, this package is unsigned.";
-        private const string _notSignedPackageRequire = "signatureValidationMode is set to require, so packages are allowed only if signed by trusted signers; however, this package is unsigned.";
+        private static readonly ClientPolicyContext DefaultContext = ClientPolicyContext.GetClientPolicy(NullSettings.Instance, NullLogger.Instance);
+        private const string NoMatchInTrustedSignersList = "This package is signed but not by a trusted signer.";
+        private const string NotSignedPackageRepo = "This repository indicated that all its packages are repository signed; however, this package is unsigned.";
+        private const string NotSignedPackageRequire = "signatureValidationMode is set to require, so packages are allowed only if signed by trusted signers; however, this package is unsigned.";
         private const string SignatureVerificationEnvironmentVariable = "DOTNET_NUGET_SIGNATURE_VERIFICATION";
         private const string SignatureVerificationEnvironmentVariableTypo = "DOTNET_NUGET_SIGNATURE_VERIFICATIOn";
         private const string UntrustedChainCertError = "The author primary signature's signing certificate is not trusted by the trust provider.";
+
+        [Theory]
+        [InlineData(NuGetLogCode.NU3018, false, false, true, true)]
+        [InlineData(NuGetLogCode.NU3018, true, false, true, true)]
+        [InlineData(NuGetLogCode.NU3018, true, true, true, true)]
+        [InlineData(NuGetLogCode.NU3028, true, false, true, true)]
+        [InlineData(NuGetLogCode.NU3018, false, false, false, true)]
+        [InlineData(NuGetLogCode.NU3018, true, false, true, false)]
+        public async Task ExtractPackageAsync_RevocationTelemetry_ReflectsWarningPolicy(
+            NuGetLogCode warningCode, bool warningsAsErrors, bool noWarn, bool verificationValid, bool isSigned)
+        {
+            Dictionary<string, object> telemetryEvent = await ExtractWithRevocationTelemetryAsync(
+                warningCode, warningsAsErrors, noWarn, verificationValid, isSigned);
+            bool blocked = !verificationValid || (isSigned && warningsAsErrors && !noWarn);
+            SignatureVerificationRejectionReasons reasons = blocked
+                ? SignatureVerificationRejectionReasons.RevocationUnavailable : SignatureVerificationRejectionReasons.None;
+
+            Assert.Equal((int)reasons, telemetryEvent["AcceptanceRejectionReasons"]);
+            Assert.Equal(verificationValid ? 0 : (int)reasons, telemetryEvent["VerificationRejectionReasons"]);
+            Assert.Equal(verificationValid ? (int)reasons : 0, telemetryEvent["WarningPromotionReasons"]);
+            int expectedRevocationFlags = blocked
+                ? verificationValid ? (int)X509ChainStatusFlags.RevocationStatusUnknown
+                    : (int)(X509ChainStatusFlags.RevocationStatusUnknown | X509ChainStatusFlags.OfflineRevocation)
+                : 0;
+            Assert.Equal(expectedRevocationFlags, telemetryEvent["AcceptanceRevocationRejectionFlags"]);
+        }
+
+        [Theory]
+        [InlineData(false, true, false, false, (int)SignatureVerificationRejectionReasons.Other)]
+        [InlineData(true, true, false, false, (int)(SignatureVerificationRejectionReasons.RevocationUnavailable | SignatureVerificationRejectionReasons.Other))]
+        [InlineData(true, false, true, false, (int)(SignatureVerificationRejectionReasons.RevocationUnavailable | SignatureVerificationRejectionReasons.UnattributedCollectorError))]
+        [InlineData(false, false, true, false, (int)SignatureVerificationRejectionReasons.UnattributedCollectorError)]
+        [InlineData(true, false, false, true, (int)SignatureVerificationRejectionReasons.None)]
+        public async Task ExtractPackageAsync_RevocationTelemetry_AttributesOnlyEffectiveErrors(
+            bool revocationWarning, bool otherWarning, bool preexistingError, bool warningsNotAsErrors,
+            int expectedReasons)
+        {
+            Dictionary<string, object> telemetryEvent = await ExtractWithRevocationTelemetryAsync(
+                NuGetLogCode.NU3018, warningsAsErrors: true, noWarn: false, verificationValid: true, isSigned: true,
+                revocationWarning, otherWarning, preexistingError, warningsNotAsErrors);
+
+            Assert.Equal(expectedReasons, telemetryEvent["AcceptanceRejectionReasons"]);
+            Assert.Equal(0, telemetryEvent["VerificationRejectionReasons"]);
+            SignatureVerificationRejectionReasons expectedPromotionReasons = warningsNotAsErrors
+                ? SignatureVerificationRejectionReasons.None
+                : (revocationWarning ? SignatureVerificationRejectionReasons.RevocationUnavailable : SignatureVerificationRejectionReasons.None)
+                    | (otherWarning ? SignatureVerificationRejectionReasons.Other : SignatureVerificationRejectionReasons.None);
+            Assert.Equal((int)expectedPromotionReasons, telemetryEvent["WarningPromotionReasons"]);
+            bool expectedNonX509Promotion = otherWarning && !warningsNotAsErrors;
+            Assert.Equal(expectedNonX509Promotion, telemetryEvent["WarningPromotionHasNonX509Rejection"]);
+            Assert.Equal(expectedNonX509Promotion, telemetryEvent["AcceptanceHasNonX509Rejection"]);
+            Assert.Equal((expectedReasons & (int)SignatureVerificationRejectionReasons.RevocationUnavailable) != 0
+                ? (int)X509ChainStatusFlags.RevocationStatusUnknown : 0, telemetryEvent["AcceptanceRevocationRejectionFlags"]);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task ExtractPackageAsync_RevocationTelemetry_PreservesFullFlagsWithoutPromotingUnrelatedObservations(
+            bool warningsAsErrors)
+        {
+            Dictionary<string, object> telemetryEvent = await ExtractWithRevocationTelemetryAsync(
+                NuGetLogCode.NU3018, warningsAsErrors, noWarn: false, verificationValid: true, isSigned: true,
+                additionalSignerFlags: X509ChainStatusFlags.UntrustedRoot);
+
+            X509ChainStatusFlags unavailableFlags =
+                X509ChainStatusFlags.RevocationStatusUnknown | X509ChainStatusFlags.OfflineRevocation;
+            Assert.Equal((int)(X509ChainStatusFlags.UntrustedRoot | unavailableFlags),
+                telemetryEvent["SignerChainStatusFlags"]);
+            Assert.Equal((int)unavailableFlags, telemetryEvent["SignerRevocationStatusFlags"]);
+            Assert.Equal(0, telemetryEvent["VerificationRejectionReasons"]);
+            Assert.Equal(warningsAsErrors ? (int)SignatureVerificationRejectionReasons.RevocationUnavailable : 0,
+                telemetryEvent["AcceptanceRejectionReasons"]);
+            Assert.Equal(warningsAsErrors ? (int)X509ChainStatusFlags.RevocationStatusUnknown : 0,
+                telemetryEvent["AcceptanceRevocationRejectionFlags"]);
+            Assert.Equal(warningsAsErrors ? (int)X509ChainStatusFlags.RevocationStatusUnknown : 0,
+                telemetryEvent["WarningPromotionRevocationFlags"]);
+        }
+
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public async Task ExtractPackageAsync_RevocationTelemetry_PreservesParsingObservationsWithoutAttributingTheirRejection(
+            bool allowIllegal, bool warningsAsErrors)
+        {
+            Dictionary<string, object> telemetryEvent = await ExtractWithRevocationTelemetryAsync(
+                NuGetLogCode.NU3032, warningsAsErrors, noWarn: false, verificationValid: allowIllegal, isSigned: true,
+                revocationWarning: false, additionalSignerFlags: X509ChainStatusFlags.UntrustedRoot,
+                parsingFailure: true);
+
+            Assert.Equal(!allowIllegal || warningsAsErrors ? (int)SignatureVerificationRejectionReasons.Other : 0,
+                telemetryEvent["AcceptanceRejectionReasons"]);
+            Assert.Equal(allowIllegal ? 0 : (int)SignatureVerificationRejectionReasons.Other,
+                telemetryEvent["VerificationRejectionReasons"]);
+            Assert.Equal(allowIllegal && warningsAsErrors ? (int)SignatureVerificationRejectionReasons.Other : 0,
+                telemetryEvent["WarningPromotionReasons"]);
+            Assert.Equal(0, telemetryEvent["VerificationRevocationRejectionFlags"]);
+            Assert.Equal(0, telemetryEvent["AcceptanceRevocationRejectionFlags"]);
+            Assert.Equal(0, telemetryEvent["WarningPromotionRevocationFlags"]);
+            Assert.Equal(!allowIllegal, telemetryEvent["VerificationHasNonX509Rejection"]);
+            Assert.Equal(allowIllegal && warningsAsErrors, telemetryEvent["WarningPromotionHasNonX509Rejection"]);
+            Assert.Equal(!allowIllegal || warningsAsErrors, telemetryEvent["AcceptanceHasNonX509Rejection"]);
+        }
+
+        [Theory]
+        [InlineData(false, false, false)]
+        [InlineData(true, false, false)]
+        [InlineData(true, true, false)]
+        [InlineData(true, false, true)]
+        public async Task ExtractPackageAsync_ChainTelemetry_AttributesOnlyPromotedFullFlags(
+            bool warningsAsErrors, bool noWarn, bool warningsNotAsErrors)
+        {
+            Dictionary<string, object> telemetryEvent = await ExtractWithRevocationTelemetryAsync(
+                NuGetLogCode.NU3018, warningsAsErrors, noWarn, verificationValid: true, isSigned: true,
+                otherWarning: true, warningsNotAsErrors: warningsNotAsErrors,
+                additionalSignerFlags: X509ChainStatusFlags.UntrustedRoot,
+                otherWarningFlags: X509ChainStatusFlags.UntrustedRoot);
+            X509ChainStatusFlags observedFlags = X509ChainStatusFlags.UntrustedRoot |
+                X509ChainStatusFlags.RevocationStatusUnknown | X509ChainStatusFlags.OfflineRevocation;
+            X509ChainStatusFlags promotedFlags = warningsAsErrors && !noWarn && !warningsNotAsErrors
+                ? X509ChainStatusFlags.UntrustedRoot | X509ChainStatusFlags.RevocationStatusUnknown
+                : X509ChainStatusFlags.NoError;
+
+            Assert.Equal((int)observedFlags, telemetryEvent["VerificationDecisionRelevantChainStatusFlags"]);
+            Assert.Equal((int)observedFlags, telemetryEvent["AcceptanceDecisionRelevantChainStatusFlags"]);
+            Assert.Equal(0, telemetryEvent["VerificationChainRejectionFlags"]);
+            Assert.Equal((int)promotedFlags, telemetryEvent["WarningPromotionChainStatusFlags"]);
+            Assert.Equal((int)promotedFlags, telemetryEvent["AcceptanceChainRejectionFlags"]);
+            Assert.Equal(false, telemetryEvent["WarningPromotionHasNonX509Rejection"]);
+            Assert.Equal(false, telemetryEvent["AcceptanceHasNonX509Rejection"]);
+            Assert.Equal((int)(promotedFlags & CertificateChainUtility.RevocationUnavailableFlags),
+                telemetryEvent["WarningPromotionRevocationFlags"]);
+        }
+
+        private static async Task<Dictionary<string, object>> ExtractWithRevocationTelemetryAsync(
+            NuGetLogCode warningCode, bool warningsAsErrors, bool noWarn, bool verificationValid, bool isSigned,
+            bool revocationWarning = true, bool otherWarning = false, bool preexistingError = false,
+            bool warningsNotAsErrors = false, X509ChainStatusFlags additionalSignerFlags = X509ChainStatusFlags.NoError,
+            bool parsingFailure = false, X509ChainStatusFlags otherWarningFlags = X509ChainStatusFlags.NoError)
+        {
+            INuGetTelemetryService originalTelemetryService = TelemetryActivity.NuGetTelemetryService;
+            List<Dictionary<string, object>> events = new();
+            Mock<INuGetTelemetryService> telemetryService = new();
+            telemetryService.Setup(service => service.EmitTelemetryEvent(It.IsAny<TelemetryEvent>()))
+                .Callback<TelemetryEvent>(telemetryEvent =>
+                {
+                    if (telemetryEvent.Name == PackageExtractionTelemetryEvent.EventName)
+                    {
+                        Dictionary<string, object> properties = new();
+                        foreach (KeyValuePair<string, object> property in telemetryEvent)
+                        {
+                            properties.Add(property.Key, property.Value);
+                        }
+                        events.Add(properties);
+                    }
+                });
+            RestoreCollectorLogger logger = new(NullLogger.Instance);
+            WarningProperties warningProperties = new() { AllWarningsAsErrors = warningsAsErrors };
+            if (noWarn)
+            {
+                warningProperties.NoWarn.Add(warningCode);
+            }
+            if (warningsNotAsErrors)
+            {
+                warningProperties.WarningsNotAsErrors.Add(warningCode);
+            }
+            logger.ApplyRestoreInputs(new PackageSpec
+            {
+                RestoreMetadata = new ProjectRestoreMetadata { ProjectWideWarningProperties = warningProperties }
+            });
+            PrimarySignature signature = PrimarySignature.Load(SigningTestUtility.GetResourceBytes(".signature.p7s"));
+            if (preexistingError)
+            {
+                await logger.LogAsync(new RestoreLogMessage(LogLevel.Error, NuGetLogCode.NU3018, "An unrelated package failed."));
+            }
+            List<SignatureLog> issues = new();
+            if (parsingFailure)
+            {
+                issues.Add(SignatureLog.Issue(!verificationValid, warningCode, "The signature has multiple repository countersignatures."));
+            }
+            if (revocationWarning)
+            {
+                issues.Add(SignatureLog.Issue(false, warningCode, "Revocation information unavailable.", X509ChainStatusFlags.RevocationStatusUnknown));
+            }
+            if (otherWarning)
+            {
+                issues.Add(SignatureLog.Issue(false, warningCode, otherWarningFlags == X509ChainStatusFlags.NoError
+                    ? "The signature hash algorithm is not supported." : "The signing certificate has an untrusted root.", otherWarningFlags));
+            }
+            SignatureVerificationStatus trust = verificationValid
+                ? SignatureVerificationStatus.Valid : SignatureVerificationStatus.Disallowed;
+            SignatureVerificationSummary[] summaries = new[]
+            {
+                new SignatureVerificationSummary(SignatureType.Author,
+                    parsingFailure ? SignatureVerificationStatus.Disallowed : SignatureVerificationStatus.Valid,
+                    SignatureVerificationStatusFlags.NoErrors, Array.Empty<SignatureLog>())
+                {
+                    SignerChainStatusFlags = X509ChainStatusFlags.OfflineRevocation |
+                        X509ChainStatusFlags.RevocationStatusUnknown | additionalSignerFlags,
+                    SignerDecisionRelevantChainStatusFlags = X509ChainStatusFlags.OfflineRevocation |
+                        X509ChainStatusFlags.RevocationStatusUnknown | additionalSignerFlags,
+                    SignerChainRejectionFlags = verificationValid && !parsingFailure ? X509ChainStatusFlags.NoError
+                        : X509ChainStatusFlags.OfflineRevocation | X509ChainStatusFlags.RevocationStatusUnknown,
+                    SignerChainEvaluationStatus = SignatureChainEvaluationStatus.Evaluated,
+                    TimestampChainEvaluationStatus = SignatureChainEvaluationStatus.NotApplicable,
+                    SignerRejectionReasons = verificationValid && !parsingFailure
+                        ? SignatureVerificationRejectionReasons.None : SignatureVerificationRejectionReasons.RevocationUnavailable,
+                    Placement = SignaturePlacement.PrimarySignature
+                }
+            };
+            PackageVerificationResult trustResult = parsingFailure
+                ? new InvalidSignaturePackageVerificationResult(trust, issues)
+                {
+                    SignatureSummaries = summaries,
+                    HasNonX509Rejection = !verificationValid
+                }
+                : new SignedPackageVerificationResult(trust, signature, issues)
+                {
+                    SignatureSummaries = summaries,
+                    RejectionReasons = verificationValid
+                        ? SignatureVerificationRejectionReasons.None : SignatureVerificationRejectionReasons.RevocationUnavailable
+                };
+            Mock<IPackageSignatureVerifier> verifier = new();
+            verifier.Setup(value => value.VerifySignaturesAsync(It.IsAny<ISignedPackageReader>(),
+                It.IsAny<SignedPackageVerifierSettings>(), It.IsAny<CancellationToken>(), It.IsAny<Guid>()))
+                .ReturnsAsync(new VerifySignaturesResult(verificationValid, isSigned,
+                    isSigned ? new[] { trustResult } : Array.Empty<PackageVerificationResult>()));
+            Mock<IEnvironmentVariableReader> environment = new(MockBehavior.Strict);
+            environment.Setup(value => value.GetEnvironmentVariable(SignatureVerificationEnvironmentVariable)).Returns("TRUE");
+
+            using (TestDirectory root = TestDirectory.Create())
+            {
+                SimpleTestPackageContext package = new("A", "1.0.0");
+                FileInfo packageFile = await SimpleTestPackageUtility.CreateFullPackageAsync(root, package);
+                using FileStream stream = File.OpenRead(packageFile.FullName);
+                using PackageArchiveReader packageReader = new(stream, environmentVariableReader: environment.Object);
+                PackageExtractionContext context = new(PackageSaveMode.Nuspec | PackageSaveMode.Files,
+                    PackageExtractionBehavior.XmlDocFileSaveMode, DefaultContext, logger)
+                {
+                    SignedPackageVerifier = verifier.Object
+                };
+                try
+                {
+                    TelemetryActivity.NuGetTelemetryService = telemetryService.Object;
+                    Task extraction = PackageExtractor.ExtractPackageAsync(root, packageReader, new PackagePathResolver(root), context, CancellationToken.None);
+                    bool blocked = !verificationValid || (isSigned && (preexistingError
+                        || (warningsAsErrors && !noWarn && !warningsNotAsErrors && (revocationWarning || otherWarning || parsingFailure))));
+                    if (blocked)
+                    {
+                        await Assert.ThrowsAsync<SignatureException>(() => extraction);
+                    }
+                    else
+                    {
+                        await extraction;
+                    }
+
+                    Dictionary<string, object> telemetryEvent = Assert.Single(events);
+                    Assert.Equal(verificationValid ? NuGetOperationStatus.Succeeded : NuGetOperationStatus.Failed, telemetryEvent["SignatureVerificationStatus"]);
+                    Assert.Equal(blocked ? NuGetOperationStatus.Failed : NuGetOperationStatus.Succeeded, telemetryEvent["SignatureAcceptanceStatus"]);
+                    Assert.Equal(blocked ? NuGetOperationStatus.Failed : NuGetOperationStatus.Succeeded, telemetryEvent["Status"]);
+                    Assert.Equal(isSigned ? PackageSignType.Signed : PackageSignType.Unsigned, telemetryEvent["PackageSignType"]);
+                    Assert.Equal(DefaultContext.VerifierSettings.RevocationMode.ToString(), telemetryEvent["RevocationMode"]);
+                    Assert.Equal(isSigned, telemetryEvent["RevocationInformationUnavailable"]);
+                    X509ChainStatusFlags signerFlags = isSigned
+                        ? trustResult.SignatureSummaries[0].SignerChainStatusFlags : X509ChainStatusFlags.NoError;
+                    Assert.Equal((int)signerFlags, telemetryEvent["SignerChainStatusFlags"]);
+                    Assert.Equal((int)(signerFlags & CertificateChainUtility.RevocationUnavailableFlags),
+                        telemetryEvent["SignerRevocationStatusFlags"]);
+                    return telemetryEvent;
+                }
+                finally
+                {
+                    TelemetryActivity.NuGetTelemetryService = originalTelemetryService;
+                }
+            }
+        }
 
         [Fact]
         public async Task InstallFromSourceAsync_StressTestAsync()
@@ -136,7 +415,7 @@ namespace NuGet.Packaging.Test
                    sourcePath,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net45/A.dll");
 
                 var packagesPath = Path.Combine(root, "packages");
@@ -181,7 +460,7 @@ namespace NuGet.Packaging.Test
                     sourcePath,
                     identity.Id,
                     identity.Version.ToString(),
-                    DateTimeOffset.UtcNow.LocalDateTime,
+                    entryModifiedTime: DateTimeOffset.Now,
                     "lib/net45/A.dll");
 
                 var packagesPath = Path.Combine(root, "packages");
@@ -227,7 +506,7 @@ namespace NuGet.Packaging.Test
                    sourcePath,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net45/A.dll");
 
                 var packagesPath = Path.Combine(root, "packages");
@@ -279,7 +558,7 @@ namespace NuGet.Packaging.Test
                 using (var stream = File.Open(packageFile, FileMode.Open))
                 using (var zipFile = new ZipArchive(stream, ZipArchiveMode.Update))
                 {
-                    var nuspecEntry = zipFile.Entries.Where(e => e.FullName.EndsWith(".nuspec")).Single();
+                    var nuspecEntry = zipFile.Entries.Single(e => e.FullName.EndsWith(".nuspec"));
 
                     using (var nuspecStream = nuspecEntry.Open())
                     using (var reader = new StreamReader(nuspecStream))
@@ -426,7 +705,7 @@ namespace NuGet.Packaging.Test
                             CancellationToken.None);
 
                         // Assert
-                        Assert.Equal(1, files.Where(p => p.EndsWith(".nupkg")).Count());
+                        Assert.Equal(1, files.Count(p => p.EndsWith(".nupkg")));
                     }
                 }
             }
@@ -444,7 +723,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "content/A.nupkg");
 
                 using (var packageStream = File.OpenRead(packageFileInfo.FullName))
@@ -499,8 +778,8 @@ namespace NuGet.Packaging.Test
                                                                            CancellationToken.None);
 
                     // Assert
-                    Assert.True(files.Any(p => p.EndsWith(".nupkg")));
-                    Assert.False(files.Any(p => p.EndsWith(".nuspec")));
+                    Assert.Contains(files, p => p.EndsWith(".nupkg"));
+                    Assert.DoesNotContain(files, p => p.EndsWith(".nuspec"));
                 }
             }
         }
@@ -534,8 +813,8 @@ namespace NuGet.Packaging.Test
                                                                          CancellationToken.None);
 
                     // Assert
-                    Assert.False(files.Any(p => p.EndsWith(".nupkg")));
-                    Assert.True(files.Any(p => p.EndsWith(".nuspec")));
+                    Assert.DoesNotContain(files, p => p.EndsWith(".nupkg"));
+                    Assert.Contains(files, p => p.EndsWith(".nuspec"));
                 }
             }
         }
@@ -569,8 +848,8 @@ namespace NuGet.Packaging.Test
                                                                          CancellationToken.None);
 
                     // Assert
-                    Assert.True(files.Any(p => p.EndsWith(".nupkg")));
-                    Assert.True(files.Any(p => p.EndsWith(".nuspec")));
+                    Assert.Contains(files, p => p.EndsWith(".nupkg"));
+                    Assert.Contains(files, p => p.EndsWith(".nuspec"));
                 }
             }
         }
@@ -632,7 +911,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net45/A.dll",
                    "lib/net45/A.xml",
                    "lib/net45/appconfig.xml");
@@ -674,7 +953,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net45/A.dll",
                    "lib/net45/A.xml",
                    "lib/net45/appconfig.xml");
@@ -726,7 +1005,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "ref/dotnet5.4/A.xml",
                    "ref/dotnet5.4/fr/B.xml",
                    "ref/dotnet5.4/fr/B.resources.dll",
@@ -772,7 +1051,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net45/A.dll",
                    "lib/net45/A.xml",
                    "lib/net45/appconfig.xml");
@@ -815,7 +1094,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "ref/portable-net40+win8+netcore/A.dll",
                    "ref/portable-net40+win8+netcore/A.xml",
                    "ref/portable-net40+win8+netcore/fr/B.xml",
@@ -865,7 +1144,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net45/A.dll",
                    "lib/net45/A.xml");
                 var satelliteIdentity = new PackageIdentity(identity.Id + ".fr", identity.Version);
@@ -874,7 +1153,7 @@ namespace NuGet.Packaging.Test
                    satelliteIdentity.Id,
                    satelliteIdentity.Version.ToString(),
                    language: "fr",
-                   entryModifiedTime: DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    zipEntries: new[] { "lib/net45/fr/A.resources.dll", "lib/net45/fr/A.xml" });
 
                 using (var packageStream = File.OpenRead(packageFileInfo.FullName))
@@ -926,7 +1205,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net45/A.dll",
                    "lib/net45/A.xml",
                    "lib/net45/A.xml.zip");
@@ -969,7 +1248,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net45/A.dll",
                    "lib/net45/A.xml",
                    "lib/net45/A.xml.zip");
@@ -1010,7 +1289,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net45/A.dll",
                    "content/net40/B.txt");
 
@@ -1052,7 +1331,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net45/A.dll",
                    "content/net40/B.txt");
 
@@ -1094,7 +1373,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net45/A.dll",
                    "content/net40/B.nuspec");
 
@@ -1136,7 +1415,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net45/A.dll",
                    "content/net40/B.nuspec");
 
@@ -1178,7 +1457,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net45/A.dll",
                    "content/net40/B.txt");
 
@@ -1208,25 +1487,28 @@ namespace NuGet.Packaging.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task ExtractPackageAsync_PreservesZipEntryTimeAsync()
         {
             // Arrange
-            using (var root = TestDirectory.Create())
+            using (TestDirectory root = TestDirectory.Create())
             {
-                var time = DateTime.Parse("2014-09-26T01:23:00Z",
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    System.Globalization.DateTimeStyles.AdjustToUniversal);
+                DateTimeOffset time = DateTimeOffset.Parse("2014-09-26T01:23:00Z",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.AdjustToUniversal)
+                    .ToLocalTime();
+                DateTime expectedLastWriteTimeUtc = time.DateTime;
 
                 var resolver = new PackagePathResolver(root);
                 var identity = new PackageIdentity("A", new NuGetVersion("2.0.3"));
-                var packageFileInfo = await TestPackagesCore.GeneratePackageAsync(
+                FileInfo packageFileInfo = await TestPackagesCore.GeneratePackageAsync(
                         root,
                         identity.Id,
                         identity.Version.ToString(),
-                        time.ToLocalTime(), "lib/net45/A.dll");
+                        entryModifiedTime: time,
+                        "lib/net45/A.dll");
 
-                using (var packageStream = File.OpenRead(packageFileInfo.FullName))
+                using (FileStream packageStream = File.OpenRead(packageFileInfo.FullName))
                 {
                     var packageExtractionContext = new PackageExtractionContext(
                                PackageSaveMode.Nuspec | PackageSaveMode.Files,
@@ -1242,13 +1524,13 @@ namespace NuGet.Packaging.Test
                         packageExtractionContext,
                         CancellationToken.None);
 
-                    var installPath = resolver.GetInstallPath(identity);
-                    var outputDll = Path.Combine(installPath, "lib", "net45", "A.dll");
-                    var outputTime = File.GetLastWriteTimeUtc(outputDll);
+                    string installPath = resolver.GetInstallPath(identity);
+                    string outputDll = Path.Combine(installPath, "lib", "net45", "A.dll");
+                    DateTime outputTimeUtc = File.GetLastWriteTimeUtc(outputDll);
 
                     // Assert
                     Assert.True(File.Exists(outputDll));
-                    Assert.Equal(time, outputTime);
+                    Assert.Equal(expectedLastWriteTimeUtc, outputTimeUtc);
                 }
             }
         }
@@ -1257,22 +1539,23 @@ namespace NuGet.Packaging.Test
         public async Task ExtractPackageAsync_IgnoresFutureZipEntryTimeAsync()
         {
             // Arrange
-            using (var root = TestDirectory.Create())
+            using (TestDirectory root = TestDirectory.Create())
             {
-                var testStartTime = DateTime.UtcNow;
-                var time = DateTime.Parse("2084-09-26T01:23:00Z",
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    System.Globalization.DateTimeStyles.AdjustToUniversal);
+                DateTimeOffset testStartTime = DateTimeOffset.Now;
+                DateTimeOffset time = DateTimeOffset.Parse("2084-09-26T01:23:00Z",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AdjustToUniversal);
 
                 var resolver = new PackagePathResolver(root);
                 var identity = new PackageIdentity("A", new NuGetVersion("2.0.3"));
-                var packageFileInfo = await TestPackagesCore.GeneratePackageAsync(
+                FileInfo packageFileInfo = await TestPackagesCore.GeneratePackageAsync(
                         root,
                         identity.Id,
                         identity.Version.ToString(),
-                        time.ToLocalTime(), "lib/net45/A.dll");
+                        entryModifiedTime: time.ToLocalTime(),
+                        "lib/net45/A.dll");
 
-                using (var packageStream = File.OpenRead(packageFileInfo.FullName))
+                using (FileStream packageStream = File.OpenRead(packageFileInfo.FullName))
                 {
                     var packageExtractionContext = new PackageExtractionContext(
                                PackageSaveMode.Nuspec | PackageSaveMode.Files,
@@ -1288,10 +1571,10 @@ namespace NuGet.Packaging.Test
                         packageExtractionContext,
                         CancellationToken.None);
 
-                    var installPath = resolver.GetInstallPath(identity);
-                    var outputDll = Path.Combine(installPath, "lib", "net45", "A.dll");
-                    var outputTime = File.GetLastWriteTimeUtc(outputDll);
-                    var testEndTime = DateTime.UtcNow;
+                    string installPath = resolver.GetInstallPath(identity);
+                    string outputDll = Path.Combine(installPath, "lib", "net45", "A.dll");
+                    DateTime outputTime = File.GetLastWriteTimeUtc(outputDll);
+                    DateTimeOffset testEndTime = DateTimeOffset.Now;
 
                     // Assert
                     Assert.True(File.Exists(outputDll));
@@ -1301,7 +1584,7 @@ namespace NuGet.Packaging.Test
             }
         }
 
-        [Fact]
+        [Fact(Skip = "https://github.com/NuGet/Home/issues/13339")]
         public async Task ExtractPackageAsync_SetsFilePermissionsAsync()
         {
             if (RuntimeEnvironmentHelper.IsWindows)
@@ -1317,7 +1600,7 @@ namespace NuGet.Packaging.Test
                         root,
                         identity.Id,
                         identity.Version.ToString(),
-                        DateTimeOffset.UtcNow.LocalDateTime, "lib/net45/A.dll");
+                        entryModifiedTime: DateTimeOffset.Now, "lib/net45/A.dll");
 
                 using (var packageStream = File.OpenRead(packageFileInfo.FullName))
                 {
@@ -1740,7 +2023,6 @@ namespace NuGet.Packaging.Test
             }
         }
 
-#if IS_SIGNING_SUPPORTED
         [PlatformFact(Platform.Windows)]
         public async Task ExtractPackageAsync_UnsignedPackage_WhenRepositorySaysAllPackagesSigned_ErrorAsync()
         {
@@ -1783,7 +2065,7 @@ namespace NuGet.Packaging.Test
                 exception.Results.First().Issues.Count().Should().Be(1);
                 exception.Results.First().Issues.First().Code.Should().Be(NuGetLogCode.NU3004);
                 exception.Results.First().Issues.First().Message.Should()
-                    .Be(SigningTestUtility.AddSignatureLogPrefix(_notSignedPackageRepo, test.Reader.GetIdentity(), test.Source));
+                    .Be(SigningTestUtility.AddSignatureLogPrefix(NotSignedPackageRepo, test.Reader.GetIdentity(), test.Source));
             }
         }
 
@@ -1821,7 +2103,7 @@ namespace NuGet.Packaging.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task ExtractPackageAsync_UnsignedPackage_WhenRepositorySaysAllPackagesSigned_WithEnvVar_Error()
         {
             // Arrange
@@ -1868,7 +2150,7 @@ namespace NuGet.Packaging.Test
                 exception.Results.First().Issues.Count().Should().Be(1);
                 exception.Results.First().Issues.First().Code.Should().Be(NuGetLogCode.NU3004);
                 exception.Results.First().Issues.First().Message.Should()
-                    .Be(SigningTestUtility.AddSignatureLogPrefix(_notSignedPackageRepo, test.Reader.GetIdentity(), test.Source));
+                    .Be(SigningTestUtility.AddSignatureLogPrefix(NotSignedPackageRepo, test.Reader.GetIdentity(), test.Source));
             }
         }
 
@@ -1957,7 +2239,7 @@ namespace NuGet.Packaging.Test
                 exception.Results.First().Issues.Count().Should().Be(1);
                 exception.Results.First().Issues.First().Code.Should().Be(NuGetLogCode.NU3004);
                 exception.Results.First().Issues.First().Message.Should()
-                    .Be(SigningTestUtility.AddSignatureLogPrefix(_notSignedPackageRequire, test.Reader.GetIdentity(), test.Source));
+                    .Be(SigningTestUtility.AddSignatureLogPrefix(NotSignedPackageRequire, test.Reader.GetIdentity(), test.Source));
             }
         }
 
@@ -1996,7 +2278,7 @@ namespace NuGet.Packaging.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task ExtractPackageAsync_UnsignedPackage_RequireMode_WithEnvVar_Error()
         {
             // Arrange
@@ -2045,7 +2327,7 @@ namespace NuGet.Packaging.Test
                 exception.Results.First().Issues.Count().Should().Be(1);
                 exception.Results.First().Issues.First().Code.Should().Be(NuGetLogCode.NU3004);
                 exception.Results.First().Issues.First().Message.Should()
-                    .Be(SigningTestUtility.AddSignatureLogPrefix(_notSignedPackageRequire, test.Reader.GetIdentity(), test.Source));
+                    .Be(SigningTestUtility.AddSignatureLogPrefix(NotSignedPackageRequire, test.Reader.GetIdentity(), test.Source));
             }
         }
 
@@ -2148,7 +2430,7 @@ namespace NuGet.Packaging.Test
 
                     issues.Count().Should().Be(1);
                     issues.First().Code.Should().Be(NuGetLogCode.NU3034);
-                    issues.First().Message.Should().Be(SigningTestUtility.AddSignatureLogPrefix(_noMatchInTrustedSignersList, packageReader.GetIdentity(), dir));
+                    issues.First().Message.Should().Be(SigningTestUtility.AddSignatureLogPrefix(NoMatchInTrustedSignersList, packageReader.GetIdentity(), dir));
                 }
             }
         }
@@ -2195,7 +2477,7 @@ namespace NuGet.Packaging.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task ExtractPackageAsync_RequireMode_NoMatchInClientAllowList_WithEnvVar_Error()
         {
             // Arrange
@@ -2253,12 +2535,12 @@ namespace NuGet.Packaging.Test
 
                     issues.Count().Should().Be(1);
                     issues.First().Code.Should().Be(NuGetLogCode.NU3034);
-                    issues.First().Message.Should().Be(SigningTestUtility.AddSignatureLogPrefix(_noMatchInTrustedSignersList, packageReader.GetIdentity(), dir));
+                    issues.First().Message.Should().Be(SigningTestUtility.AddSignatureLogPrefix(NoMatchInTrustedSignersList, packageReader.GetIdentity(), dir));
                 }
             }
         }
 
-        [CIOnlyTheory(Skip = "https://github.com/NuGet/Home/issues/11700")]
+        [Theory(Skip = "https://github.com/NuGet/Home/issues/11700")]
         [MemberData(nameof(KnownClientPolicyModesList))]
         public async Task ExtractPackageAsync_RepositoryPrimarySignedPackage_PackageSignedWithCertFromRepositoryAllowList_SuccessAsync(SignatureValidationMode clientPolicyMode)
         {
@@ -2401,7 +2683,7 @@ namespace NuGet.Packaging.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task ExtractPackageAsync_WithAllowUntrusted_SucceedsWithoutSigningWarningsOrErrors_WithEnvVar()
         {
             // Arrange
@@ -2615,7 +2897,7 @@ namespace NuGet.Packaging.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task ExtractPackageAsync_RequireMode_UnsignedPackage_PackageArchiveReader_WhenUnsignedPackagesDisallowed_WithEnvVar_Errors()
         {
             // Arrange
@@ -2860,77 +3142,6 @@ namespace NuGet.Packaging.Test
                 }
             }
         }
-#endif
-
-#if IS_CORECLR && !IS_SIGNING_SUPPORTED
-        [Fact]
-        public async Task ExtractPackageAsync_RequireMode_UnsignedPackage_InCoreCLR_SkipsSigningVerificationAsync()
-        {
-            // Arrange
-            var signedPackageVerifier = new Mock<IPackageSignatureVerifier>(MockBehavior.Strict);
-
-            signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
-                It.IsAny<ISignedPackageReader>(),
-                It.IsAny<SignedPackageVerifierSettings>(),
-                It.IsAny<CancellationToken>(),
-                It.IsAny<Guid>())).
-                ReturnsAsync(new VerifySignaturesResult(isValid: false, isSigned: false));
-
-            var extractionContext = new PackageExtractionContext(
-                packageSaveMode: PackageSaveMode.Nuspec | PackageSaveMode.Files,
-                xmlDocFileSaveMode: XmlDocFileSaveMode.None,
-                clientPolicyContext: new ClientPolicyContext(SignatureValidationMode.Require, allowList: null),
-                logger: NullLogger.Instance)
-            {
-                SignedPackageVerifier = signedPackageVerifier.Object
-            };
-
-            using (var test = new ExtractPackageAsyncTest(extractionContext))
-            {
-
-                var packageContext = new SimpleTestPackageContext();
-                await SimpleTestPackageUtility.CreatePackagesAsync(test.Source, packageContext);
-
-                var packageFile = new FileInfo(Path.Combine(test.Source,
-                    $"{packageContext.Identity.Id}.{packageContext.Identity.Version.ToNormalizedString()}.nupkg"));
-
-                using (var packageReader = new PackageArchiveReader(File.OpenRead(packageFile.FullName)))
-                {
-                    // Act
-                    IEnumerable<string> files = await PackageExtractor.ExtractPackageAsync(
-                            test.Source,
-                            packageReader,
-                            test.Resolver,
-                            test.Context,
-                            CancellationToken.None);
-
-                    // Assert
-                    files.Should().NotBeNull();
-                    files.Count().Should().Be(8);
-                    var packagePath = Path.Combine(test.DestinationDirectory.FullName,
-                        $"{packageContext.Identity.Id}.{packageContext.Identity.Version.ToNormalizedString()}");
-
-                    Directory.Exists(packagePath).Should().BeTrue();
-                    File.Exists(Path.Combine(packagePath,
-                        $"{packageContext.Id}.nuspec")).Should().BeTrue();
-                    File.Exists(Path.Combine(packagePath,
-                        "contentFiles/any/any/config.xml")).Should().BeTrue();
-                    File.Exists(Path.Combine(packagePath,
-                        "contentFiles/cs/net45/code.cs")).Should().BeTrue();
-                    File.Exists(Path.Combine(packagePath,
-                        "lib/net45/a.dll")).Should().BeTrue();
-                    File.Exists(Path.Combine(packagePath,
-                        "lib/netstandard1.0/a.dll")).Should().BeTrue();
-                    File.Exists(Path.Combine(packagePath,
-                        $"build/net45/{packageContext.Id}.targets")).Should().BeTrue();
-                    File.Exists(Path.Combine(packagePath,
-                        "runtimes/any/native/a.dll")).Should().BeTrue();
-                    File.Exists(Path.Combine(packagePath,
-                        "tools/a.exe")).Should().BeTrue();
-                }
-            }
-        }
-#endif
 
         [Fact]
         public async Task InstallFromSourceAsync_WithoutPackageSaveModeNuspec_DoesNotExtractNuspecAsync()
@@ -2944,7 +3155,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net45/A.dll");
 
                 var pathResolver = new VersionFolderPathResolver(root);
@@ -2987,7 +3198,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net45/A.dll");
                 var pathResolver = new VersionFolderPathResolver(root);
 
@@ -3030,7 +3241,7 @@ namespace NuGet.Packaging.Test
                    root,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "lib/net45/A.dll");
                 var pathResolver = new VersionFolderPathResolver(root);
 
@@ -3210,7 +3421,6 @@ namespace NuGet.Packaging.Test
             packageDownloader.Verify();
         }
 
-#if IS_SIGNING_SUPPORTED
         [Fact]
         public async Task InstallFromSourceAsyncByPackageDownloader_TrustedSignPackageAsync()
         {
@@ -3225,7 +3435,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: true, isSigned: true));
@@ -3243,7 +3453,7 @@ namespace NuGet.Packaging.Test
                     var extractionContext = new PackageExtractionContext(
                             packageSaveMode: PackageSaveMode.Nuspec | PackageSaveMode.Files,
                             xmlDocFileSaveMode: XmlDocFileSaveMode.None,
-                            clientPolicyContext: _defaultContext,
+                            clientPolicyContext: DefaultContext,
                             logger: NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -3280,7 +3490,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: false, isSigned: true));
@@ -3299,7 +3509,7 @@ namespace NuGet.Packaging.Test
                     var extractionContext = new PackageExtractionContext(
                      packageSaveMode: PackageSaveMode.Nuspec | PackageSaveMode.Files,
                      xmlDocFileSaveMode: XmlDocFileSaveMode.None,
-                     clientPolicyContext: _defaultContext,
+                     clientPolicyContext: DefaultContext,
                      logger: NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -3337,7 +3547,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: false, isSigned: true));
@@ -3356,7 +3566,7 @@ namespace NuGet.Packaging.Test
                     var extractionContext = new PackageExtractionContext(
                      packageSaveMode: PackageSaveMode.Nuspec | PackageSaveMode.Files,
                      xmlDocFileSaveMode: XmlDocFileSaveMode.None,
-                     clientPolicyContext: _defaultContext,
+                     clientPolicyContext: DefaultContext,
                      logger: NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -3392,7 +3602,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: false, isSigned: true));
@@ -3410,7 +3620,7 @@ namespace NuGet.Packaging.Test
                     var extractionContext = new PackageExtractionContext(
                          packageSaveMode: PackageSaveMode.Nupkg,
                          xmlDocFileSaveMode: XmlDocFileSaveMode.None,
-                         clientPolicyContext: _defaultContext,
+                         clientPolicyContext: DefaultContext,
                          logger: NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -3446,7 +3656,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: true, isSigned: true));
@@ -3460,7 +3670,7 @@ namespace NuGet.Packaging.Test
                     var extractionContext = new PackageExtractionContext(
                          packageSaveMode: PackageSaveMode.Nuspec | PackageSaveMode.Files,
                          xmlDocFileSaveMode: XmlDocFileSaveMode.None,
-                         clientPolicyContext: _defaultContext,
+                         clientPolicyContext: DefaultContext,
                          logger: NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -3498,7 +3708,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: false, isSigned: true));
@@ -3512,7 +3722,7 @@ namespace NuGet.Packaging.Test
                     var extractionContext = new PackageExtractionContext(
                          packageSaveMode: PackageSaveMode.Nupkg,
                          xmlDocFileSaveMode: XmlDocFileSaveMode.None,
-                         clientPolicyContext: _defaultContext,
+                         clientPolicyContext: DefaultContext,
                          logger: NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -3549,7 +3759,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: false, isSigned: true));
@@ -3566,7 +3776,7 @@ namespace NuGet.Packaging.Test
                     var extractionContext = new PackageExtractionContext(
                          packageSaveMode: PackageSaveMode.Nuspec | PackageSaveMode.Files,
                          xmlDocFileSaveMode: XmlDocFileSaveMode.None,
-                         clientPolicyContext: _defaultContext,
+                         clientPolicyContext: DefaultContext,
                          logger: NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -3607,7 +3817,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: false, isSigned: true));
@@ -3624,7 +3834,7 @@ namespace NuGet.Packaging.Test
                     var extractionContext = new PackageExtractionContext(
                          packageSaveMode: PackageSaveMode.Nuspec | PackageSaveMode.Files,
                          xmlDocFileSaveMode: XmlDocFileSaveMode.None,
-                         clientPolicyContext: _defaultContext,
+                         clientPolicyContext: DefaultContext,
                          logger: NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -3661,7 +3871,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: true, isSigned: true));
@@ -3676,7 +3886,7 @@ namespace NuGet.Packaging.Test
                     var extractionContext = new PackageExtractionContext(
                      packageSaveMode: PackageSaveMode.Nuspec | PackageSaveMode.Files,
                      xmlDocFileSaveMode: PackageExtractionBehavior.XmlDocFileSaveMode,
-                     clientPolicyContext: _defaultContext,
+                     clientPolicyContext: DefaultContext,
                      logger: NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -3710,7 +3920,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: false, isSigned: true));
@@ -3725,7 +3935,7 @@ namespace NuGet.Packaging.Test
                     var packageExtractionContext = new PackageExtractionContext(
                         PackageSaveMode.Nupkg,
                         PackageExtractionBehavior.XmlDocFileSaveMode,
-                        _defaultContext,
+                        DefaultContext,
                         NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -3755,7 +3965,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: false, isSigned: true));
@@ -3773,7 +3983,7 @@ namespace NuGet.Packaging.Test
                     var packageExtractionContext = new PackageExtractionContext(
                         PackageSaveMode.Files,
                         PackageExtractionBehavior.XmlDocFileSaveMode,
-                        _defaultContext,
+                        DefaultContext,
                         NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -3795,7 +4005,7 @@ namespace NuGet.Packaging.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task ExtractPackageAsyncByStream_InvalidSignPackageWithUnzip_WithOptInEnvVar_Throws()
         {
             // Arrange
@@ -3810,7 +4020,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: false, isSigned: true));
@@ -3826,7 +4036,7 @@ namespace NuGet.Packaging.Test
                     var packageExtractionContext = new PackageExtractionContext(
                         PackageSaveMode.Nupkg,
                         PackageExtractionBehavior.XmlDocFileSaveMode,
-                        _defaultContext,
+                        DefaultContext,
                         NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -3857,7 +4067,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: true, isSigned: true));
@@ -3873,7 +4083,7 @@ namespace NuGet.Packaging.Test
                     var packageExtractionContext = new PackageExtractionContext(
                         PackageSaveMode.Nuspec | PackageSaveMode.Files,
                         PackageExtractionBehavior.XmlDocFileSaveMode,
-                        _defaultContext,
+                        DefaultContext,
                         NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -3907,7 +4117,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: true, isSigned: true));
@@ -3923,7 +4133,7 @@ namespace NuGet.Packaging.Test
                     var packageExtractionContext = new PackageExtractionContext(
                         PackageSaveMode.Nupkg | PackageSaveMode.Nuspec | PackageSaveMode.Files,
                         PackageExtractionBehavior.XmlDocFileSaveMode,
-                        _defaultContext,
+                        DefaultContext,
                         NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -3956,7 +4166,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: false, isSigned: true));
@@ -3972,7 +4182,7 @@ namespace NuGet.Packaging.Test
                     var packageExtractionContext = new PackageExtractionContext(
                         PackageSaveMode.Nupkg,
                         PackageExtractionBehavior.XmlDocFileSaveMode,
-                        _defaultContext,
+                        DefaultContext,
                         NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -4001,7 +4211,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: false, isSigned: true));
@@ -4016,7 +4226,7 @@ namespace NuGet.Packaging.Test
                     var packageExtractionContext = new PackageExtractionContext(
                         PackageSaveMode.Nupkg,
                         PackageExtractionBehavior.XmlDocFileSaveMode,
-                        _defaultContext,
+                        DefaultContext,
                         NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -4038,7 +4248,7 @@ namespace NuGet.Packaging.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task ExtractPackageAsyncByPackageReader_InvalidSignPackageWithUnzip_WithEnvVar_Throws()
         {
             // Arrange
@@ -4052,7 +4262,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: false, isSigned: true));
@@ -4068,7 +4278,7 @@ namespace NuGet.Packaging.Test
                     var packageExtractionContext = new PackageExtractionContext(
                         PackageSaveMode.Nupkg,
                         PackageExtractionBehavior.XmlDocFileSaveMode,
-                        _defaultContext,
+                        DefaultContext,
                         NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -4097,7 +4307,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: true, isSigned: true));
@@ -4113,7 +4323,7 @@ namespace NuGet.Packaging.Test
                     var packageExtractionContext = new PackageExtractionContext(
                         PackageSaveMode.Nuspec | PackageSaveMode.Files,
                         PackageExtractionBehavior.XmlDocFileSaveMode,
-                        _defaultContext,
+                        DefaultContext,
                         NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -4147,7 +4357,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: false, isSigned: true));
@@ -4163,7 +4373,7 @@ namespace NuGet.Packaging.Test
                     var packageExtractionContext = new PackageExtractionContext(
                         PackageSaveMode.Nupkg,
                         PackageExtractionBehavior.XmlDocFileSaveMode,
-                        _defaultContext,
+                        DefaultContext,
                         NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -4193,7 +4403,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: false, isSigned: true));
@@ -4209,7 +4419,7 @@ namespace NuGet.Packaging.Test
                     var packageExtractionContext = new PackageExtractionContext(
                         PackageSaveMode.Nupkg,
                         PackageExtractionBehavior.XmlDocFileSaveMode,
-                        _defaultContext,
+                        DefaultContext,
                         NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -4234,7 +4444,7 @@ namespace NuGet.Packaging.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task ExtractPackageAsyncByPackageReaderAndStream_InvalidSignPackageWithUnzip_WithEnvVar_Throws()
         {
             // Arrange
@@ -4248,7 +4458,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: false, isSigned: true));
@@ -4264,7 +4474,7 @@ namespace NuGet.Packaging.Test
                     var packageExtractionContext = new PackageExtractionContext(
                         PackageSaveMode.Nupkg,
                         PackageExtractionBehavior.XmlDocFileSaveMode,
-                        _defaultContext,
+                        DefaultContext,
                         NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -4297,7 +4507,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: true, isSigned: true));
@@ -4308,7 +4518,7 @@ namespace NuGet.Packaging.Test
                     var packageExtractionContext = new PackageExtractionContext(
                         PackageSaveMode.Nuspec | PackageSaveMode.Files,
                         PackageExtractionBehavior.XmlDocFileSaveMode,
-                        _defaultContext,
+                        DefaultContext,
                         NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -4326,7 +4536,7 @@ namespace NuGet.Packaging.Test
                     // Assert
                     signedPackageVerifier.Verify(mock => mock.VerifySignaturesAsync(
                         It.Is<ISignedPackageReader>(p => p.Equals(packageReader)),
-                        It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                        It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                         It.Is<CancellationToken>(t => t.Equals(CancellationToken.None)),
                         It.IsAny<Guid>()));
                 }
@@ -4347,7 +4557,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: true, isSigned: true));
@@ -4358,7 +4568,7 @@ namespace NuGet.Packaging.Test
                     var packageExtractionContext = new PackageExtractionContext(
                         PackageSaveMode.Nuspec | PackageSaveMode.Files,
                         PackageExtractionBehavior.XmlDocFileSaveMode,
-                        _defaultContext,
+                        DefaultContext,
                         NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -4376,14 +4586,14 @@ namespace NuGet.Packaging.Test
                     // Assert
                     signedPackageVerifier.Verify(mock => mock.VerifySignaturesAsync(
                         It.Is<ISignedPackageReader>(p => p.Equals(packageReader)),
-                        It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                        It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                         It.Is<CancellationToken>(t => t.Equals(CancellationToken.None)),
                         It.IsAny<Guid>()), Times.Never);
                 }
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task VerifyPackageSignatureAsync_PassesCommonSettingsWhenNoRepoSignatureInfo_WithEnvVar_DoVerify()
         {
             // Arrange
@@ -4400,7 +4610,7 @@ namespace NuGet.Packaging.Test
 
                 signedPackageVerifier.Setup(x => x.VerifySignaturesAsync(
                     It.IsAny<ISignedPackageReader>(),
-                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                    It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                     It.IsAny<CancellationToken>(),
                     It.IsAny<Guid>())).
                     ReturnsAsync(new VerifySignaturesResult(isValid: true, isSigned: true));
@@ -4411,7 +4621,7 @@ namespace NuGet.Packaging.Test
                     var packageExtractionContext = new PackageExtractionContext(
                         PackageSaveMode.Nuspec | PackageSaveMode.Files,
                         PackageExtractionBehavior.XmlDocFileSaveMode,
-                        _defaultContext,
+                        DefaultContext,
                         NullLogger.Instance)
                     {
                         SignedPackageVerifier = signedPackageVerifier.Object
@@ -4429,7 +4639,7 @@ namespace NuGet.Packaging.Test
                     // Assert
                     signedPackageVerifier.Verify(mock => mock.VerifySignaturesAsync(
                         It.Is<ISignedPackageReader>(p => p.Equals(packageReader)),
-                        It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, _defaultContext.VerifierSettings)),
+                        It.Is<SignedPackageVerifierSettings>(s => SigningTestUtility.AreVerifierSettingsEqual(s, DefaultContext.VerifierSettings)),
                         It.Is<CancellationToken>(t => t.Equals(CancellationToken.None)),
                         It.IsAny<Guid>()));
                 }
@@ -4725,7 +4935,6 @@ namespace NuGet.Packaging.Test
                 }
             }
         }
-#endif
 
         private string PermissionWithUMaskApplied(string permission)
         {
@@ -4981,7 +5190,7 @@ namespace NuGet.Packaging.Test
                    source,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "content/A.nupkg");
 
                 using (var packageStream = File.OpenRead(packageFileInfo.FullName))
@@ -5004,7 +5213,7 @@ namespace NuGet.Packaging.Test
                     // Assert
                     File.Exists(resolver.GetPackageFilePath(identity.Id, identity.Version)).Should().BeTrue();
                     var nupkgMetadata = NupkgMetadataFileFormat.Read(resolver.GetNupkgMetadataPath(identity.Id, identity.Version));
-                    testLogger.InformationMessages.Should().Contain($"Installed {identity.Id} {identity.Version} from {source} with content hash {nupkgMetadata.ContentHash}.");
+                    testLogger.InformationMessages.Should().Contain($"Installed {identity.Id} {identity.Version} from {source} to {Path.Combine(resolver.RootPath, resolver.GetPackageDirectory(identity.Id, identity.Version))} with content hash {nupkgMetadata.ContentHash}.");
                 }
             }
         }
@@ -5024,7 +5233,7 @@ namespace NuGet.Packaging.Test
                    source,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "content/A.nupkg");
 
                 using (var packageStream = File.OpenRead(packageFileInfo.FullName))
@@ -5070,7 +5279,7 @@ namespace NuGet.Packaging.Test
                    source,
                    identity.Id,
                    identity.Version.ToString(),
-                   DateTimeOffset.UtcNow.LocalDateTime,
+                   entryModifiedTime: DateTimeOffset.Now,
                    "content/A.nupkg");
 
                 using (var packageStream = File.OpenRead(packageFileInfo.FullName))
@@ -5099,15 +5308,9 @@ namespace NuGet.Packaging.Test
                     // Assert
                     File.Exists(resolver.GetPackageFilePath(identity.Id, identity.Version)).Should().BeTrue();
                     var nupkgMetadata = NupkgMetadataFileFormat.Read(resolver.GetNupkgMetadataPath(identity.Id, identity.Version));
-                    testLogger.InformationMessages.Should().Contain($"Installed {identity.Id} {identity.Version} from {source} with content hash {nupkgMetadata.ContentHash}.");
+                    testLogger.InformationMessages.Should().Contain($"Installed {identity.Id} {identity.Version} from {source} to {Path.Combine(resolver.RootPath, resolver.GetPackageDirectory(identity.Id, identity.Version))} with content hash {nupkgMetadata.ContentHash}.");
                 }
             }
-        }
-
-        private static bool FileExistsRecursively(string directoryPath, string fileNamePattern)
-        {
-            return Directory.GetFiles(directoryPath, fileNamePattern, SearchOption.AllDirectories)
-                .Any();
         }
 
         private static bool FileExistsCaseSensitively(string expectedFilePath)
@@ -5306,7 +5509,6 @@ namespace NuGet.Packaging.Test
             yield return new object[] { SignatureValidationMode.Require };
         }
 
-#if IS_SIGNING_SUPPORTED
         private static RepositorySignatureInfo CreateTestRepositorySignatureInfo(List<X509Certificate2> certificates, bool allSigned)
         {
             var repoCertificateInfo = new List<IRepositoryCertificateInfo>();
@@ -5331,6 +5533,5 @@ namespace NuGet.Packaging.Test
 
             return new RepositorySignatureInfo(allSigned, repoCertificateInfo);
         }
-#endif
     }
 }

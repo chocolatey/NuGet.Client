@@ -1,6 +1,9 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
+using System;
 using System.Collections.Generic;
 using NuGet.Frameworks;
 using NuGet.LibraryModel;
@@ -12,9 +15,10 @@ namespace NuGet.ProjectModel.Test
 {
     public class PackageSpecOperationsTests
     {
-
-        [Fact]
-        public void AddOrUpdateDependency_AddsNewPackageDependencyToAllFrameworks()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void AddOrUpdateDependency_WithPackageReferenceProjectStyle_AddsNewPackageDependencyToAllFrameworksIndividually(bool usePackageDependency)
         {
             // Arrange
             var spec = new PackageSpec(new[]
@@ -23,146 +27,144 @@ namespace NuGet.ProjectModel.Test
                 {
                     FrameworkName = FrameworkConstants.CommonFrameworks.Net45
                 }
-            });
+            })
+            {
+                RestoreMetadata = new ProjectRestoreMetadata()
+                {
+                    ProjectStyle = ProjectStyle.PackageReference
+                }
+            };
+
             var identity = new PackageIdentity("NuGet.Versioning", new NuGetVersion("1.0.0"));
             var packageDependency = new PackageDependency(identity.Id, new VersionRange(identity.Version));
 
             // Act
-            PackageSpecOperations.AddOrUpdateDependency(spec, packageDependency);
+            if (usePackageDependency)
+            {
+                PackageSpecOperations.AddOrUpdateDependency(spec, packageDependency);
+            }
+            else
+            {
+                PackageSpecOperations.AddOrUpdateDependency(spec, identity);
+            }
 
             // Assert
-            Assert.Equal(1, spec.Dependencies.Count);
-            Assert.Empty(spec.TargetFrameworks[0].Dependencies);
-            Assert.Equal(identity.Id, spec.Dependencies[0].LibraryRange.Name);
-            Assert.Equal(identity.Version, spec.Dependencies[0].LibraryRange.VersionRange.MinVersion);
+            Assert.Equal(1, spec.TargetFrameworks[0].Dependencies.Length);
+            Assert.Equal(identity.Id, spec.TargetFrameworks[0].Dependencies[0].LibraryRange.Name);
+            Assert.Equal(identity.Version, spec.TargetFrameworks[0].Dependencies[0].LibraryRange.VersionRange.MinVersion);
         }
 
-        [Fact]
-        public void AddOrUpdateDependency_UpdatesPackageDependency()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void AddOrUpdateDependency_WithExistingPackageDependencies_UpdatesOnlyFrameworksWherePackageDependencyExists(bool usePackageDependency)
         {
-            // Arrange
-            var frameworkA = new TargetFrameworkInformation
+            var dependency = new LibraryDependency
             {
-                FrameworkName = FrameworkConstants.CommonFrameworks.Net45
+                LibraryRange = new LibraryRange("NuGet.Versioning", new VersionRange(new NuGetVersion("1.0.0")), LibraryDependencyTarget.Package),
             };
-            frameworkA.Dependencies.Add(new LibraryDependency
-            {
-                LibraryRange = new LibraryRange
-                {
-                    Name = "nuget.versioning",
-                    VersionRange = new VersionRange(new NuGetVersion("0.9.0"))
-                }
-            });
-            var frameworkB = new TargetFrameworkInformation
-            {
-                FrameworkName = FrameworkConstants.CommonFrameworks.NetStandard16
-            };
-            frameworkB.Dependencies.Add(new LibraryDependency
-            {
-                LibraryRange = new LibraryRange
-                {
-                    Name = "NUGET.VERSIONING",
-                    VersionRange = new VersionRange(new NuGetVersion("0.8.0"))
-                }
-            });
-            var spec = new PackageSpec(new[] { frameworkA, frameworkB });
-            var identity = new PackageIdentity("NuGet.Versioning", new NuGetVersion("1.0.0"));
-            var packageDependency = new PackageDependency(identity.Id, new VersionRange(identity.Version));
 
-            // Act
-            PackageSpecOperations.AddOrUpdateDependency(spec, packageDependency);
-
-            // Assert
-            Assert.Empty(spec.Dependencies);
-
-            Assert.Equal(1, spec.TargetFrameworks[0].Dependencies.Count);
-            Assert.Equal("nuget.versioning", spec.TargetFrameworks[0].Dependencies[0].LibraryRange.Name);
-            Assert.Equal(
-                identity.Version,
-                spec.TargetFrameworks[0].Dependencies[0].LibraryRange.VersionRange.MinVersion);
-
-            Assert.Equal(1, spec.TargetFrameworks[1].Dependencies.Count);
-            Assert.Equal("NUGET.VERSIONING", spec.TargetFrameworks[1].Dependencies[0].LibraryRange.Name);
-            Assert.Equal(
-                identity.Version,
-                spec.TargetFrameworks[1].Dependencies[0].LibraryRange.VersionRange.MinVersion);
-        }
-
-        [Fact]
-        public void AddOrUpdateDependency_AddsNewDependencyToAllFrameworks()
-        {
             // Arrange
             var spec = new PackageSpec(new[]
             {
                 new TargetFrameworkInformation
                 {
-                    FrameworkName = FrameworkConstants.CommonFrameworks.Net45
+                    FrameworkName = FrameworkConstants.CommonFrameworks.Net45,
+                    TargetAlias = "net45",
+                    Dependencies = [dependency]
+
+                },
+                new TargetFrameworkInformation
+                {
+                    FrameworkName = FrameworkConstants.CommonFrameworks.Net46,
+                    TargetAlias = "net46"
                 }
             });
-            var identity = new PackageIdentity("NuGet.Versioning", new NuGetVersion("1.0.0"));
+            var identity = new PackageIdentity("NuGet.Versioning", new NuGetVersion("2.0.0"));
+            var packageDependency = new PackageDependency(identity.Id, new VersionRange(identity.Version));
 
             // Act
-            PackageSpecOperations.AddOrUpdateDependency(spec, identity);
+            if (usePackageDependency)
+            {
+                PackageSpecOperations.AddOrUpdateDependency(spec, packageDependency);
+            }
+            else
+            {
+                PackageSpecOperations.AddOrUpdateDependency(spec, identity);
+            }
 
             // Assert
-            Assert.Equal(1, spec.Dependencies.Count);
-            Assert.Empty(spec.TargetFrameworks[0].Dependencies);
-            Assert.Equal(identity.Id, spec.Dependencies[0].LibraryRange.Name);
-            Assert.Equal(identity.Version, spec.Dependencies[0].LibraryRange.VersionRange.MinVersion);
+            Assert.Equal(1, spec.TargetFrameworks[0].Dependencies.Length);
+            Assert.Equal(identity.Id, spec.TargetFrameworks[0].Dependencies[0].LibraryRange.Name);
+            Assert.Equal(identity.Version, spec.TargetFrameworks[0].Dependencies[0].LibraryRange.VersionRange.MinVersion);
         }
 
-        [Fact]
-        public void AddOrUpdateDependency_UpdatesExistingDependencies()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void AddOrUpdateDependency_WithExistingPackages_UpdatesAllPackageDependency(bool usePackageDependency)
         {
             // Arrange
             var frameworkA = new TargetFrameworkInformation
             {
-                FrameworkName = FrameworkConstants.CommonFrameworks.Net45
-            };
-            frameworkA.Dependencies.Add(new LibraryDependency
-            {
-                LibraryRange = new LibraryRange
+                Dependencies = [new LibraryDependency
                 {
-                    Name = "nuget.versioning",
-                    VersionRange = new VersionRange(new NuGetVersion("0.9.0"))
-                }
-            });
+                    LibraryRange = new LibraryRange
+                    {
+                        Name = "nuget.versioning",
+                        VersionRange = new VersionRange(new NuGetVersion("0.9.0"))
+                    }
+                }],
+                FrameworkName = FrameworkConstants.CommonFrameworks.Net45,
+                TargetAlias = "net45"
+            };
             var frameworkB = new TargetFrameworkInformation
             {
-                FrameworkName = FrameworkConstants.CommonFrameworks.NetStandard16
-            };
-            frameworkB.Dependencies.Add(new LibraryDependency
-            {
-                LibraryRange = new LibraryRange
+                Dependencies = [new LibraryDependency
                 {
-                    Name = "NUGET.VERSIONING",
-                    VersionRange = new VersionRange(new NuGetVersion("0.8.0"))
-                }
-            });
+                    LibraryRange = new LibraryRange
+                    {
+                        Name = "NUGET.VERSIONING",
+                        VersionRange = new VersionRange(new NuGetVersion("0.8.0"))
+                    }
+                }],
+                FrameworkName = FrameworkConstants.CommonFrameworks.NetStandard16,
+                TargetAlias = "netstandard1.6"
+            };
             var spec = new PackageSpec(new[] { frameworkA, frameworkB });
             var identity = new PackageIdentity("NuGet.Versioning", new NuGetVersion("1.0.0"));
+            var packageDependency = new PackageDependency(identity.Id, new VersionRange(identity.Version));
 
             // Act
-            PackageSpecOperations.AddOrUpdateDependency(spec, identity);
+            if (usePackageDependency)
+            {
+                PackageSpecOperations.AddOrUpdateDependency(spec, packageDependency);
+            }
+            else
+            {
+                PackageSpecOperations.AddOrUpdateDependency(spec, identity);
+            }
 
             // Assert
-            Assert.Empty(spec.Dependencies);
-
-            Assert.Equal(1, spec.TargetFrameworks[0].Dependencies.Count);
+            Assert.Equal(1, spec.TargetFrameworks[0].Dependencies.Length);
             Assert.Equal("nuget.versioning", spec.TargetFrameworks[0].Dependencies[0].LibraryRange.Name);
             Assert.Equal(
                 identity.Version,
                 spec.TargetFrameworks[0].Dependencies[0].LibraryRange.VersionRange.MinVersion);
 
-            Assert.Equal(1, spec.TargetFrameworks[1].Dependencies.Count);
+            Assert.Equal(1, spec.TargetFrameworks[1].Dependencies.Length);
             Assert.Equal("NUGET.VERSIONING", spec.TargetFrameworks[1].Dependencies[0].LibraryRange.Name);
             Assert.Equal(
                 identity.Version,
                 spec.TargetFrameworks[1].Dependencies[0].LibraryRange.VersionRange.MinVersion);
         }
 
-        [Fact]
-        public void AddOrUpdateDependency_ToSpecificFrameworks_UpdatesExistingDependencies()
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(false, false)]
+        [InlineData(true, true)]
+        [InlineData(false, true)]
+        public void AddOrUpdateDependency_ToSpecificFrameworks_UpdatesExistingDependencies(bool usePackageDependency, bool useAlias)
         {
             // Arrange
             var packageId = "NuGet.Versioning";
@@ -171,14 +173,18 @@ namespace NuGet.ProjectModel.Test
 
             var frameworkA = new TargetFrameworkInformation
             {
-                FrameworkName = FrameworkConstants.CommonFrameworks.Net45
+                FrameworkName = FrameworkConstants.CommonFrameworks.Net45,
+                TargetAlias = "net45"
             };
-            var ld = new LibraryDependency();
-            ld.LibraryRange = new LibraryRange(packageId, new VersionRange(oldVersion), LibraryDependencyTarget.Package);
+            var ld = new LibraryDependency()
+            {
+                LibraryRange = new LibraryRange(packageId, new VersionRange(oldVersion), LibraryDependencyTarget.Package)
+            };
             var frameworkB = new TargetFrameworkInformation
             {
                 FrameworkName = FrameworkConstants.CommonFrameworks.NetStandard16,
-                Dependencies = new List<LibraryDependency>() { ld }
+                TargetAlias = "netstandard1.6",
+                Dependencies = [ld]
 
             };
             var spec = new PackageSpec(new[] { frameworkA, frameworkB });
@@ -190,25 +196,59 @@ namespace NuGet.ProjectModel.Test
                 spec.TargetFrameworks[1].Dependencies[0].LibraryRange.VersionRange.MinVersion);
 
             // Act
-            PackageSpecOperations.AddOrUpdateDependency(
-                spec,
-                identity,
-                new[] { frameworkB.FrameworkName });
+            if (usePackageDependency)
+            {
+                var packageDependency = new PackageDependency(identity.Id, new VersionRange(identity.Version));
+                if (useAlias)
+                {
+                    PackageSpecOperations.AddOrUpdateDependency(
+                          spec,
+                          packageDependency,
+                          new[] { frameworkB.TargetAlias });
+                }
+                else
+                {
+                    PackageSpecOperations.AddOrUpdateDependency(
+                          spec,
+                          packageDependency,
+                          new[] { frameworkB.FrameworkName });
+                }
+            }
+            else
+            {
+                if (useAlias)
+                {
+                    PackageSpecOperations.AddOrUpdateDependency(
+                        spec,
+                        identity,
+                        new[] { frameworkB.TargetAlias });
+                }
+                else
+                {
+                    PackageSpecOperations.AddOrUpdateDependency(
+                        spec,
+                        identity,
+                        new[] { frameworkB.FrameworkName });
+                }
+            }
+
 
             // Assert
-            Assert.Empty(spec.Dependencies);
-
             Assert.Empty(spec.TargetFrameworks[0].Dependencies);
 
-            Assert.Equal(1, spec.TargetFrameworks[1].Dependencies.Count);
+            Assert.Equal(1, spec.TargetFrameworks[1].Dependencies.Length);
             Assert.Equal(identity.Id, spec.TargetFrameworks[1].Dependencies[0].LibraryRange.Name);
             Assert.Equal(
                 identity.Version,
                 spec.TargetFrameworks[1].Dependencies[0].LibraryRange.VersionRange.MinVersion);
         }
 
-        [Fact]
-        public void AddOrUpdateDependency_ToSpecificFrameworks_AddsNewDependency()
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(false, false)]
+        [InlineData(true, true)]
+        [InlineData(false, true)]
+        public void AddOrUpdateDependency_ToSpecificFrameworks_AddsNewDependency(bool usePackageDependency, bool useAlias)
         {
             // Arrange
             var packageId = "NuGet.Versioning";
@@ -217,14 +257,18 @@ namespace NuGet.ProjectModel.Test
 
             var frameworkA = new TargetFrameworkInformation
             {
-                FrameworkName = FrameworkConstants.CommonFrameworks.Net45
+                FrameworkName = FrameworkConstants.CommonFrameworks.Net45,
+                TargetAlias = "net45"
             };
-            var ld = new LibraryDependency();
-            ld.LibraryRange = new LibraryRange(packageId, new VersionRange(oldVersion), LibraryDependencyTarget.Package);
+            var ld = new LibraryDependency()
+            {
+                LibraryRange = new LibraryRange(packageId, new VersionRange(oldVersion), LibraryDependencyTarget.Package)
+            };
             var frameworkB = new TargetFrameworkInformation
             {
                 FrameworkName = FrameworkConstants.CommonFrameworks.NetStandard16,
-                Dependencies = new List<LibraryDependency>() { ld }
+                TargetAlias = "netstandard1.6",
+                Dependencies = [ld]
 
             };
             var spec = new PackageSpec(new[] { frameworkA, frameworkB });
@@ -236,25 +280,56 @@ namespace NuGet.ProjectModel.Test
                 spec.TargetFrameworks[1].Dependencies[0].LibraryRange.VersionRange.MinVersion);
 
             // Act
-            PackageSpecOperations.AddOrUpdateDependency(
-                spec,
-                identity,
-                new[] { frameworkB.FrameworkName });
+            if (usePackageDependency)
+            {
+                var packageDependency = new PackageDependency(identity.Id, new VersionRange(identity.Version));
+                if (useAlias)
+                {
+                    PackageSpecOperations.AddOrUpdateDependency(
+                          spec,
+                          packageDependency,
+                          new[] { frameworkB.TargetAlias });
+                }
+                else
+                {
+                    PackageSpecOperations.AddOrUpdateDependency(
+                          spec,
+                          packageDependency,
+                          new[] { frameworkB.FrameworkName });
+                }
+            }
+            else
+            {
+                if (useAlias)
+                {
+                    PackageSpecOperations.AddOrUpdateDependency(
+                        spec,
+                        identity,
+                        new[] { frameworkB.TargetAlias });
+                }
+                else
+                {
+                    PackageSpecOperations.AddOrUpdateDependency(
+                        spec,
+                        identity,
+                        new[] { frameworkB.FrameworkName });
+                }
+            }
 
             // Assert
-            Assert.Empty(spec.Dependencies);
-
             Assert.Empty(spec.TargetFrameworks[0].Dependencies);
 
-            Assert.Equal(1, spec.TargetFrameworks[1].Dependencies.Count);
+            Assert.Equal(1, spec.TargetFrameworks[1].Dependencies.Length);
             Assert.Equal(identity.Id, spec.TargetFrameworks[1].Dependencies[0].LibraryRange.Name);
             Assert.Equal(
                 identity.Version,
                 spec.TargetFrameworks[1].Dependencies[0].LibraryRange.VersionRange.MinVersion);
         }
 
-        [Fact]
-        public void AddOrUpdateDependency_WithCentralPackageManagementEnabled_AddsDependency()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void AddOrUpdateDependency_WithCentralPackageManagementEnabled_AddsDependency(bool usePackageDependency)
         {
             // Arrange
             var packageIdentity = new PackageIdentity("NuGet.Versioning", new NuGetVersion("1.0.0"));
@@ -273,13 +348,24 @@ namespace NuGet.ProjectModel.Test
             };
 
             // Act
-            PackageSpecOperations.AddOrUpdateDependency(
-                spec,
-                packageIdentity,
-                new[] { targetFrameworkInformation.FrameworkName });
+            if (usePackageDependency)
+            {
+                var packageDependency = new PackageDependency(packageIdentity.Id, new VersionRange(packageIdentity.Version));
+                PackageSpecOperations.AddOrUpdateDependency(
+                      spec,
+                      packageDependency,
+                      new[] { targetFrameworkInformation.FrameworkName });
+            }
+            else
+            {
+                PackageSpecOperations.AddOrUpdateDependency(
+                    spec,
+                    packageIdentity,
+                    new[] { targetFrameworkInformation.FrameworkName });
+            }
 
             // Assert
-            Assert.Equal(1, spec.TargetFrameworks[0].Dependencies.Count);
+            Assert.Equal(1, spec.TargetFrameworks[0].Dependencies.Length);
             Assert.Equal(packageIdentity.Id, spec.TargetFrameworks[0].Dependencies[0].LibraryRange.Name);
             Assert.Equal(packageIdentity.Version, spec.TargetFrameworks[0].Dependencies[0].LibraryRange.VersionRange.MinVersion);
             Assert.True(spec.TargetFrameworks[0].Dependencies[0].VersionCentrallyManaged);
@@ -288,8 +374,12 @@ namespace NuGet.ProjectModel.Test
             Assert.Equal(packageIdentity.Version, spec.TargetFrameworks[0].CentralPackageVersions[packageIdentity.Id].VersionRange.MinVersion);
         }
 
-        [Fact]
-        public void AddOrUpdateDependency_WithCentralPackageManagementEnabled_UpdatesDependency()
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(false, false)]
+        [InlineData(true, true)]
+        [InlineData(false, true)]
+        public void AddOrUpdateDependency_WithCentralPackageManagementEnabled_UpdatesDependency(bool usePackageDependency, bool useAlias)
         {
             // Arrange
             var packageId = "NuGet.Versioning";
@@ -298,7 +388,8 @@ namespace NuGet.ProjectModel.Test
 
             var frameworkA = new TargetFrameworkInformation
             {
-                FrameworkName = FrameworkConstants.CommonFrameworks.Net45
+                FrameworkName = FrameworkConstants.CommonFrameworks.Net45,
+                TargetAlias = "net45"
             };
 
             var ld = new LibraryDependency
@@ -309,11 +400,14 @@ namespace NuGet.ProjectModel.Test
 
             var frameworkB = new TargetFrameworkInformation
             {
+                CentralPackageVersions = new Dictionary<string, CentralPackageVersion>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { ld.Name, new CentralPackageVersion(ld.Name, ld.LibraryRange.VersionRange) },
+                },
                 FrameworkName = FrameworkConstants.CommonFrameworks.NetStandard16,
-                Dependencies = new List<LibraryDependency>() { ld },
+                TargetAlias = "netstandard1.6",
+                Dependencies = [ld],
             };
-
-            frameworkB.CentralPackageVersions[ld.Name] = new CentralPackageVersion(ld.Name, ld.LibraryRange.VersionRange);
 
             var spec = new PackageSpec(new[] { frameworkA, frameworkB })
             {
@@ -330,17 +424,46 @@ namespace NuGet.ProjectModel.Test
                 spec.TargetFrameworks[1].Dependencies[0].LibraryRange.VersionRange.MinVersion);
 
             // Act
-            PackageSpecOperations.AddOrUpdateDependency(
-                spec,
-                identity,
-                new[] { frameworkB.FrameworkName });
+            if (usePackageDependency)
+            {
+                var packageDependency = new PackageDependency(identity.Id, new VersionRange(identity.Version));
+                if (useAlias)
+                {
+                    PackageSpecOperations.AddOrUpdateDependency(
+                          spec,
+                          packageDependency,
+                          new[] { frameworkB.TargetAlias });
+                }
+                else
+                {
+                    PackageSpecOperations.AddOrUpdateDependency(
+                          spec,
+                          packageDependency,
+                          new[] { frameworkB.FrameworkName });
+                }
+            }
+            else
+            {
+                if (useAlias)
+                {
+                    PackageSpecOperations.AddOrUpdateDependency(
+                        spec,
+                        identity,
+                        new[] { frameworkB.TargetAlias });
+                }
+                else
+                {
+                    PackageSpecOperations.AddOrUpdateDependency(
+                        spec,
+                        identity,
+                        new[] { frameworkB.FrameworkName });
+                }
+            }
 
             // Assert
-            Assert.Empty(spec.Dependencies);
-
             Assert.Empty(spec.TargetFrameworks[0].Dependencies);
 
-            Assert.Equal(1, spec.TargetFrameworks[1].Dependencies.Count);
+            Assert.Equal(1, spec.TargetFrameworks[1].Dependencies.Length);
             Assert.Equal(identity.Id, spec.TargetFrameworks[1].Dependencies[0].LibraryRange.Name);
             Assert.Equal(identity.Version, spec.TargetFrameworks[1].Dependencies[0].LibraryRange.VersionRange.MinVersion);
             Assert.True(spec.TargetFrameworks[1].Dependencies[0].VersionCentrallyManaged);
@@ -355,44 +478,37 @@ namespace NuGet.ProjectModel.Test
             // Arrange
             var frameworkA = new TargetFrameworkInformation
             {
-                FrameworkName = FrameworkConstants.CommonFrameworks.Net45
-            };
-            frameworkA.Dependencies.Add(new LibraryDependency
-            {
-                LibraryRange = new LibraryRange
+                Dependencies = [new LibraryDependency
                 {
-                    Name = "nuget.versioning",
-                    VersionRange = new VersionRange(new NuGetVersion("0.9.0"))
-                }
-            });
+                    LibraryRange = new LibraryRange
+                    {
+                        Name = "nuget.versioning",
+                        VersionRange = new VersionRange(new NuGetVersion("0.9.0"))
+                    }
+                }],
+                FrameworkName = FrameworkConstants.CommonFrameworks.Net45,
+                TargetAlias = "net45"
+            };
             var frameworkB = new TargetFrameworkInformation
             {
-                FrameworkName = FrameworkConstants.CommonFrameworks.NetStandard16
+                Dependencies = [new LibraryDependency
+                {
+                    LibraryRange = new LibraryRange
+                    {
+                        Name = "NUGET.VERSIONING",
+                        VersionRange = new VersionRange(new NuGetVersion("0.8.0"))
+                    }
+                }],
+                FrameworkName = FrameworkConstants.CommonFrameworks.NetStandard16,
+                TargetAlias = "netstandard1.6"
             };
-            frameworkB.Dependencies.Add(new LibraryDependency
-            {
-                LibraryRange = new LibraryRange
-                {
-                    Name = "NUGET.VERSIONING",
-                    VersionRange = new VersionRange(new NuGetVersion("0.8.0"))
-                }
-            });
             var spec = new PackageSpec(new[] { frameworkA, frameworkB });
-            spec.Dependencies.Add(new LibraryDependency
-            {
-                LibraryRange = new LibraryRange
-                {
-                    Name = "NuGet.VERSIONING",
-                    VersionRange = new VersionRange(new NuGetVersion("0.7.0"))
-                }
-            });
             var id = "NuGet.Versioning";
 
             // Act
             PackageSpecOperations.RemoveDependency(spec, id);
 
             // Assert
-            Assert.Empty(spec.Dependencies);
             Assert.Empty(spec.TargetFrameworks[0].Dependencies);
             Assert.Empty(spec.TargetFrameworks[1].Dependencies);
         }
@@ -403,43 +519,17 @@ namespace NuGet.ProjectModel.Test
             // Arrange
             var framework = new TargetFrameworkInformation
             {
-                FrameworkName = FrameworkConstants.CommonFrameworks.Net45
-            };
-            framework.Dependencies.Add(new LibraryDependency
-            {
-                LibraryRange = new LibraryRange
+                Dependencies = [new LibraryDependency
                 {
-                    Name = "nuget.versioning",
-                    VersionRange = new VersionRange(new NuGetVersion("0.9.0"))
-                }
-            });
-            var spec = new PackageSpec(new[] { framework });
-            var id = "NuGet.Versioning";
-
-            // Act
-            var actual = PackageSpecOperations.HasPackage(spec, id);
-
-            // Assert
-            Assert.True(actual);
-        }
-
-        [Fact]
-        public void HasPackage_ReturnsTrueWhenIdIsForAllFrameworks()
-        {
-            // Arrange
-            var framework = new TargetFrameworkInformation
-            {
+                    LibraryRange = new LibraryRange
+                    {
+                        Name = "nuget.versioning",
+                        VersionRange = new VersionRange(new NuGetVersion("0.9.0"))
+                    }
+                }],
                 FrameworkName = FrameworkConstants.CommonFrameworks.Net45
             };
             var spec = new PackageSpec(new[] { framework });
-            spec.Dependencies.Add(new LibraryDependency
-            {
-                LibraryRange = new LibraryRange
-                {
-                    Name = "nuget.versioning",
-                    VersionRange = new VersionRange(new NuGetVersion("0.9.0"))
-                }
-            });
             var id = "NuGet.Versioning";
 
             // Act

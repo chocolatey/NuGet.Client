@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -11,7 +13,6 @@ using Microsoft;
 using Microsoft.ServiceHub.Framework;
 using NuGet.Common;
 using NuGet.PackageManagement.Telemetry;
-using NuGet.PackageManagement.VisualStudio;
 using NuGet.Packaging.Core;
 using NuGet.ProjectManagement;
 using NuGet.VisualStudio.Internal.Contracts;

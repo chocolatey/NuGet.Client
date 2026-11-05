@@ -28,7 +28,7 @@ namespace NuGet.DependencyResolver
         /// </summary>
         /// <param name="dependencyProvider"></param>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="dependencyProvider" />
-        /// is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
         public LocalDependencyProvider(IDependencyProvider dependencyProvider)
         {
             if (dependencyProvider == null)
@@ -47,8 +47,10 @@ namespace NuGet.DependencyResolver
         /// <summary>
         /// Gets the package source.
         /// </summary>
-        /// <remarks>Optional. This will be <c>null</c> for project providers.</remarks>
-        public PackageSource Source { get; private set; }
+        /// <remarks>Optional. This will be <see langword="null" /> for project providers.</remarks>
+        public PackageSource? Source { get; private set; }
+
+        public SourceRepository? SourceRepository { get; private set; }
 
         /// <summary>
         /// Asynchronously discovers all versions of a package from a source and selects the best match.
@@ -63,10 +65,10 @@ namespace NuGet.DependencyResolver
         /// The task result (<see cref="Task{TResult}.Result" />) returns a <see cref="LibraryIdentity" />
         /// instance.</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="libraryRange" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="targetFramework" />
-        /// is either <c>null</c> or empty.</exception>
-        public Task<LibraryIdentity> FindLibraryAsync(
+        /// is either <see langword="null" /> or empty.</exception>
+        public Task<LibraryIdentity?> FindLibraryAsync(
             LibraryRange libraryRange,
             NuGetFramework targetFramework,
             SourceCacheContext cacheContext,
@@ -83,14 +85,14 @@ namespace NuGet.DependencyResolver
                 throw new ArgumentNullException(nameof(targetFramework));
             }
 
-            var library = _dependencyProvider.GetLibrary(libraryRange, targetFramework);
+            var library = _dependencyProvider.GetLibrary(libraryRange, targetFramework, alias: null);
 
             if (library == null)
             {
-                return Task.FromResult<LibraryIdentity>(null);
+                return TaskResult.Null<LibraryIdentity>();
             }
 
-            return Task.FromResult(library.Identity);
+            return Task.FromResult<LibraryIdentity?>(library.Identity);
         }
 
         /// <summary>
@@ -105,9 +107,9 @@ namespace NuGet.DependencyResolver
         /// The task result (<see cref="Task{TResult}.Result" />) returns a <see cref="LibraryDependencyInfo" />
         /// instance.</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="libraryIdentity" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="targetFramework" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         public Task<LibraryDependencyInfo> GetDependenciesAsync(
             LibraryIdentity libraryIdentity,
             NuGetFramework targetFramework,
@@ -125,7 +127,8 @@ namespace NuGet.DependencyResolver
                 throw new ArgumentNullException(nameof(targetFramework));
             }
 
-            var library = _dependencyProvider.GetLibrary(libraryIdentity, targetFramework);
+            var library = _dependencyProvider.GetLibrary(libraryIdentity, targetFramework, alias: null)
+                ?? throw new InvalidOperationException($"Library '{libraryIdentity}' was not found.");
 
             var dependencyInfo = LibraryDependencyInfo.Create(
                 library.Identity,
@@ -155,7 +158,7 @@ namespace NuGet.DependencyResolver
             throw new NotSupportedException();
         }
 
-        public Task<IEnumerable<NuGetVersion>> GetAllVersionsAsync(
+        public Task<IEnumerable<NuGetVersion>?> GetAllVersionsAsync(
             string id,
             SourceCacheContext cacheContext,
             ILogger logger,

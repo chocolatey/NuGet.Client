@@ -2,11 +2,12 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using NuGet.Versioning;
 using Xunit;
 
 namespace NuGet.Protocol.Plugins.Tests
 {
+    using SemanticVersion = Versioning.SemanticVersion;
+
     public class HandshakeResponseTests
     {
         private static readonly SemanticVersion _version = new SemanticVersion(major: 1, minor: 0, patch: 0);
@@ -76,7 +77,7 @@ namespace NuGet.Protocol.Plugins.Tests
         {
             var version = versionString == null ? null : SemanticVersion.Parse(versionString);
 
-            var response = JsonSerializationUtilities.Deserialize<HandshakeResponse>(json);
+            var response = JsonSerializationUtilities.Deserialize<HandshakeResponse>(json)!;
 
             Assert.Equal(responseCode, response.ResponseCode);
             Assert.Equal(version, response.ProtocolVersion);

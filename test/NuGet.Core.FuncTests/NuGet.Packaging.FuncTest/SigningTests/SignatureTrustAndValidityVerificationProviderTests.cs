@@ -1,7 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if IS_SIGNING_SUPPORTED
+#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -11,21 +11,19 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
 using NuGet.Common;
 using NuGet.Packaging.Signing;
 using NuGet.Test.Utility;
-using Org.BouncyCastle.Asn1.X509;
-using Org.BouncyCastle.Crypto;
 using Test.Utility;
 using Test.Utility.Signing;
 using Xunit;
 using Xunit.Abstractions;
-using BcX509Certificate = Org.BouncyCastle.X509.X509Certificate;
 using HashAlgorithmName = NuGet.Common.HashAlgorithmName;
 
 namespace NuGet.Packaging.FuncTest
 {
-    using X509StorePurpose = global::Test.Utility.Signing.X509StorePurpose;
+    using X509StorePurpose = Microsoft.Internal.NuGet.Testing.SignedPackages.X509StorePurpose;
 
     [Collection(SigningTestCollection.Name)]
     public class SignatureTrustAndValidityVerificationProviderTests
@@ -44,7 +42,7 @@ namespace NuGet.Packaging.FuncTest
             _trustedTestCert = _testFixture.TrustedTestCertificate;
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_WithInvalidSignature_ThrowsAsync()
         {
             var package = new SimpleTestPackageContext();
@@ -79,7 +77,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_SettingsRequireExactlyOneTimestamp_MultipleTimestamps_FailsAsync()
         {
             // Arrange
@@ -134,7 +132,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_PrimarySignatureWithUntrustedRoot_EmptyAllowedUntrustedRootList_AllowUntrustedFalse_ErrorAsync()
         {
             var settings = new SignedPackageVerifierSettings(
@@ -169,7 +167,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryCountersignatureWithUntrustedRoot_EmptyAllowedUntrustedRootList_AllowUntrustedFalse_ErrorAsync()
         {
             var settings = new SignedPackageVerifierSettings(
@@ -206,7 +204,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_PrimarySignatureWithUntrustedRoot_NotInAllowedUntrustedRootList_AllowUntrustedFalse_ErrorAsync()
         {
             var settings = new SignedPackageVerifierSettings(
@@ -242,7 +240,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryCountersignatureWithUntrustedRoot_NotInAllowedUntrustedRootList_AllowUntrustedFalse_ErrorAsync()
         {
             var settings = new SignedPackageVerifierSettings(
@@ -280,7 +278,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_PrimarySignatureWithUntrustedRoot_InAllowedUntrustedRootList_AllowUntrustedFalse_SucceedsAsync()
         {
             var settings = new SignedPackageVerifierSettings(
@@ -313,12 +311,12 @@ namespace NuGet.Packaging.FuncTest
                 PackageVerificationResult status = await provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
 
                 Assert.Equal(SignatureVerificationStatus.Valid, status.Trust);
-                Assert.False(status.Issues.Where(i => i.Level >= LogLevel.Warning)
-                    .Any(i => i.Message.Contains(UntrustedChainCertError)));
+                Assert.DoesNotContain(status.Issues.Where(i => i.Level >= LogLevel.Warning)
+, i => i.Message.Contains(UntrustedChainCertError));
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_RepositoryCountersignatureWithUntrustedRoot_InAllowedUntrustedRootList_AllowUntrustedFalse_SucceedsAsync()
         {
             var settings = new SignedPackageVerifierSettings(
@@ -353,12 +351,12 @@ namespace NuGet.Packaging.FuncTest
                 PackageVerificationResult status = await provider.GetTrustResultAsync(packageReader, primarySignature, settings, CancellationToken.None);
 
                 Assert.Equal(SignatureVerificationStatus.Valid, status.Trust);
-                Assert.False(status.Issues.Where(i => i.Level >= LogLevel.Warning)
-                    .Any(i => i.Message.Contains(UntrustedChainCertError)));
+                Assert.DoesNotContain(status.Issues.Where(i => i.Level >= LogLevel.Warning)
+, i => i.Message.Contains(UntrustedChainCertError));
             }
         }
 
-        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Home/issues/12186")] // https://github.com/NuGet/Home/issues/11178
+        [PlatformFact(Platform.Windows, Platform.Linux, NetFxCIOnly = true)]
         public async Task GetTrustResultAsync_WithUnavailableRevocationInformationInAcceptMode_DoesNotWarnAsync()
         {
             // Arrange
@@ -374,7 +372,7 @@ namespace NuGet.Packaging.FuncTest
             Assert.Empty(matchingIssues);
         }
 
-        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Home/issues/12186")] // https://github.com/NuGet/Home/issues/11178
+        [PlatformFact(Platform.Windows, Platform.Linux, NetFxCIOnly = true)]
         public async Task GetTrustResultAsync_WithUnavailableRevocationInformationInRequireMode_WarnsAsync()
         {
             // Arrange
@@ -400,7 +398,7 @@ namespace NuGet.Packaging.FuncTest
             SigningTestUtility.AssertRevocationStatusUnknown(matchingIssues, LogLevel.Warning, NuGetLogCode.NU3018);
         }
 
-        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Home/issues/12186")] // https://github.com/NuGet/Home/issues/11178
+        [PlatformFact(Platform.Windows, Platform.Linux, NetFxCIOnly = true)]
         public async Task GetTrustResultAsync_WithUnavailableRevocationInformationInVerify_WarnsAsync()
         {
             // Act & Assert
@@ -423,7 +421,7 @@ namespace NuGet.Packaging.FuncTest
             SigningTestUtility.AssertRevocationStatusUnknown(matchingIssues, LogLevel.Warning, NuGetLogCode.NU3018);
         }
 
-        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Home/issues/12186")] // https://github.com/NuGet/Home/issues/11178
+        [PlatformFact(Platform.Windows, Platform.Linux, NetFxCIOnly = true)]
         public async Task GetTrustResultAsync_WithUnavailableRevocationInformationAndAllowIllegal_WarnsAsync()
         {
             // Arrange
@@ -451,7 +449,7 @@ namespace NuGet.Packaging.FuncTest
             Assert.Empty(matchingIssues);
         }
 
-        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Home/issues/12186")] // https://github.com/NuGet/Home/issues/11178
+        [PlatformFact(Platform.Windows, Platform.Linux, NetFxCIOnly = true)]
         public async Task GetTrustResultAsync_WithUnavailableRevocationInformationAndAllowUnknownRevocation_WithOnlineRevocationMode_WarnsAsync()
         {
             // Arrange
@@ -489,7 +487,7 @@ namespace NuGet.Packaging.FuncTest
             SigningTestUtility.AssertRevocationStatusUnknown(matchingIssues, LogLevel.Warning, NuGetLogCode.NU3018);
         }
 
-        [PlatformFact(Platform.Windows, Platform.Linux, Skip = "https://github.com/NuGet/Home/issues/12186")] // https://github.com/NuGet/Home/issues/11178
+        [PlatformFact(Platform.Windows, Platform.Linux, NetFxCIOnly = true)]
         public async Task GetTrustResultAsync_WithUnavailableRevocationInformationAndAllowUnknownRevocation_WithOfflineRevocationMode_WarnsAsync()
         {
             // Arrange
@@ -522,7 +520,7 @@ namespace NuGet.Packaging.FuncTest
             SigningTestUtility.AssertRevocationStatusUnknown(matchingIssues, LogLevel.Information, NuGetLogCode.Undefined);
         }
 
-        [CIOnlyFact(Skip = "https://github.com/NuGet/Home/issues/12186")]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_WithTrustedButExpiredPrimaryAndTimestampCertificates_WithUnavailableRevocationInformationAndAllowUnknownRevocation_WarnsAsync()
         {
             List<SignatureLog> matchingIssues = await VerifyUnavailableRevocationInfoAsync(
@@ -545,7 +543,7 @@ namespace NuGet.Packaging.FuncTest
             SigningTestUtility.AssertRevocationStatusUnknown(matchingIssues, LogLevel.Warning, NuGetLogCode.NU3018);
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task GetTrustResultAsync_WithNoIgnoringTimestamp_TimestampWithGeneralizedTimeOutsideCertificateValidity_FailAsync()
         {
             var verificationProvider = new SignatureTrustAndValidityVerificationProvider();
@@ -590,7 +588,7 @@ namespace NuGet.Packaging.FuncTest
                 _provider = new SignatureTrustAndValidityVerificationProvider();
             }
 
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithRepositorySignedPackage_ReturnsUnknownAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
@@ -618,7 +616,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithValidSignature_ReturnsValidAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
@@ -648,7 +646,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyTheory]
+            [NetFxCIOnlyTheory]
             [InlineData(true, SignatureVerificationStatus.Valid)]
             [InlineData(false, SignatureVerificationStatus.Disallowed)]
             public async Task GetTrustResultAsync_WithValidSignatureButNoTimestamp_ReturnsStatusAsync(
@@ -679,7 +677,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyTheory]
+            [NetFxCIOnlyTheory]
             [InlineData(true, SignatureVerificationStatus.Valid)]
             [InlineData(false, SignatureVerificationStatus.Disallowed)]
             public async Task GetTrustResultAsync_WithUntrustedSignature_ReturnsStatusAsync(
@@ -713,7 +711,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [PlatformTheory(Platform.Windows, Platform.Linux)] // https://github.com/NuGet/Home/issues/9501
+            [PlatformTheory(Platform.Windows, Platform.Linux, NetFxCIOnly = true)] // https://github.com/NuGet/Home/issues/9501
             [InlineData(true)]
             [InlineData(false)]
             public async Task GetTrustResultAsync_WithRevokedPrimaryCertificate_ReturnsSuspectAsync(bool allowEverything)
@@ -733,20 +731,19 @@ namespace NuGet.Packaging.FuncTest
                     revocationMode: RevocationMode.Online);
                 CertificateAuthority certificateAuthority = await _fixture.GetDefaultTrustedCertificateAuthorityAsync();
                 IssueCertificateOptions issueCertificateOptions = IssueCertificateOptions.CreateDefaultForEndCertificate();
-                BcX509Certificate bcCertificate = certificateAuthority.IssueCertificate(issueCertificateOptions);
                 TimestampService timestampService = await _fixture.GetDefaultTrustedTimestampServiceAsync();
 
-                using (X509Certificate2 certificate = CertificateUtilities.GetCertificateWithPrivateKey(bcCertificate, issueCertificateOptions.KeyPair))
+                using (X509Certificate2 certificate = certificateAuthority.IssueCertificate(issueCertificateOptions))
                 using (Test test = await Test.CreateAuthorSignedPackageAsync(
                     certificate,
                     timestampService.Url))
                 using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
                 {
-                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(bcCertificate);
+                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(certificate);
 
                     certificateAuthority.Revoke(
-                        bcCertificate,
-                        RevocationReason.KeyCompromise,
+                        certificate,
+                        X509RevocationReason.KeyCompromise,
                         DateTimeOffset.UtcNow.AddHours(-1));
 
                     PrimarySignature primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
@@ -756,7 +753,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [PlatformTheory(Platform.Windows, Platform.Linux)] // https://github.com/NuGet/Home/issues/9501
+            [PlatformTheory(Platform.Windows, Platform.Linux, NetFxCIOnly = true)] // https://github.com/NuGet/Home/issues/9501
             [InlineData(true, SignatureVerificationStatus.Valid)]
             [InlineData(false, SignatureVerificationStatus.Disallowed)]
             public async Task GetTrustResultAsync_WithRevokedTimestampCertificate_ReturnsStatusAsync(
@@ -790,7 +787,7 @@ namespace NuGet.Packaging.FuncTest
 
                     certificateAuthority.Revoke(
                         timestampService.Certificate,
-                        RevocationReason.KeyCompromise,
+                        X509RevocationReason.KeyCompromise,
                         DateTimeOffset.UtcNow.AddHours(-1));
 
                     PrimarySignature primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
@@ -800,7 +797,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithTamperedRepositoryPrimarySignedPackage_ReturnsValidAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
@@ -858,7 +855,7 @@ namespace NuGet.Packaging.FuncTest
                 _provider = new SignatureTrustAndValidityVerificationProvider();
             }
 
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithAuthorSignedPackage_ReturnsUnknownAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
@@ -886,7 +883,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithValidSignature_ReturnsValidAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
@@ -916,7 +913,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyTheory]
+            [NetFxCIOnlyTheory]
             [InlineData(true, SignatureVerificationStatus.Valid)]
             [InlineData(false, SignatureVerificationStatus.Disallowed)]
             public async Task GetTrustResultAsync_WithValidSignatureButNoTimestamp_ReturnsStatusAsync(
@@ -948,7 +945,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyTheory]
+            [NetFxCIOnlyTheory]
             [InlineData(true, SignatureVerificationStatus.Valid)]
             [InlineData(false, SignatureVerificationStatus.Disallowed)]
             public async Task GetTrustResultAsync_WithUntrustedSignature_ReturnsStatusAsync(
@@ -982,7 +979,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [PlatformTheory(Platform.Windows, Platform.Linux)] // https://github.com/NuGet/Home/issues/9501
+            [PlatformTheory(Platform.Windows, Platform.Linux, NetFxCIOnly = true)] // https://github.com/NuGet/Home/issues/9501
             [InlineData(true)]
             [InlineData(false)]
             public async Task GetTrustResultAsync_WithRevokedPrimaryCertificate_ReturnsSuspectAsync(bool allowEverything)
@@ -1002,20 +999,19 @@ namespace NuGet.Packaging.FuncTest
                     revocationMode: RevocationMode.Online);
                 CertificateAuthority certificateAuthority = await _fixture.GetDefaultTrustedCertificateAuthorityAsync();
                 IssueCertificateOptions issueCertificateOptions = IssueCertificateOptions.CreateDefaultForEndCertificate();
-                BcX509Certificate bcCertificate = certificateAuthority.IssueCertificate(issueCertificateOptions);
                 TimestampService timestampService = await _fixture.GetDefaultTrustedTimestampServiceAsync();
 
-                using (X509Certificate2 certificate = CertificateUtilities.GetCertificateWithPrivateKey(bcCertificate, issueCertificateOptions.KeyPair))
+                using (X509Certificate2 certificate = certificateAuthority.IssueCertificate(issueCertificateOptions))
                 using (Test test = await Test.CreateRepositoryPrimarySignedPackageAsync(
                     certificate,
                     timestampService.Url))
                 using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
                 {
-                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(bcCertificate);
+                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(certificate);
 
                     certificateAuthority.Revoke(
-                        bcCertificate,
-                        RevocationReason.KeyCompromise,
+                        certificate,
+                        X509RevocationReason.KeyCompromise,
                         DateTimeOffset.UtcNow.AddHours(-1));
 
                     PrimarySignature primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
@@ -1025,7 +1021,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [PlatformTheory(Platform.Windows, Platform.Linux)] // https://github.com/NuGet/Home/issues/9501
+            [PlatformTheory(Platform.Windows, Platform.Linux, NetFxCIOnly = true)] // https://github.com/NuGet/Home/issues/9501
             [InlineData(true, SignatureVerificationStatus.Valid)]
             [InlineData(false, SignatureVerificationStatus.Disallowed)]
             public async Task GetTrustResultAsync_WithRevokedTimestampCertificate_ReturnsStatusAsync(
@@ -1059,7 +1055,7 @@ namespace NuGet.Packaging.FuncTest
 
                     certificateAuthority.Revoke(
                         timestampService.Certificate,
-                        RevocationReason.KeyCompromise,
+                        X509RevocationReason.KeyCompromise,
                         DateTimeOffset.UtcNow.AddHours(-1));
 
                     PrimarySignature primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
@@ -1069,7 +1065,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithTamperedRepositoryPrimarySignedPackage_ReturnsValidAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
@@ -1108,7 +1104,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithAlwaysVerifyCountersignatureBehavior_ReturnsDisallowedAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
@@ -1147,7 +1143,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithExpiredSignature_ReturnsValidAsync()
             {
                 using (X509Certificate2 certificate = await GetExpiringCertificateAsync(_fixture))
@@ -1187,7 +1183,7 @@ namespace NuGet.Packaging.FuncTest
                 _provider = new SignatureTrustAndValidityVerificationProvider();
             }
 
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithAuthorSignedPackage_ReturnsUnknownAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
@@ -1215,7 +1211,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithValidCountersignature_ReturnsValidAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
@@ -1247,7 +1243,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithValidCountersignatureAndUntrustedPrimarySignature_ReturnsValidAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
@@ -1279,7 +1275,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyTheory]
+            [NetFxCIOnlyTheory]
             [InlineData(true, SignatureVerificationStatus.Valid)]
             [InlineData(false, SignatureVerificationStatus.Disallowed)]
             public async Task GetTrustResultAsync_WithValidCountersignatureButNoTimestamp_ReturnsStatusAsync(
@@ -1314,7 +1310,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyTheory]
+            [NetFxCIOnlyTheory]
             [InlineData(true, SignatureVerificationStatus.Valid)]
             [InlineData(false, SignatureVerificationStatus.Disallowed)]
             public async Task GetTrustResultAsync_WithUntrustedCountersignature_ReturnsStatusAsync(
@@ -1350,7 +1346,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [PlatformTheory(Platform.Windows, Platform.Linux)] // https://github.com/NuGet/Home/issues/9501
+            [PlatformTheory(Platform.Windows, Platform.Linux, NetFxCIOnly = true)] // https://github.com/NuGet/Home/issues/9501
             [InlineData(true)]
             [InlineData(false)]
             public async Task GetTrustResultAsync_WithRevokedCountersignatureCertificate_ReturnsSuspectAsync(bool allowEverything)
@@ -1370,10 +1366,9 @@ namespace NuGet.Packaging.FuncTest
                     revocationMode: RevocationMode.Online);
                 CertificateAuthority certificateAuthority = await _fixture.GetDefaultTrustedCertificateAuthorityAsync();
                 IssueCertificateOptions issueCertificateOptions = IssueCertificateOptions.CreateDefaultForEndCertificate();
-                BcX509Certificate bcCertificate = certificateAuthority.IssueCertificate(issueCertificateOptions);
                 TimestampService timestampService = await _fixture.GetDefaultTrustedTimestampServiceAsync();
 
-                using (X509Certificate2 certificate = CertificateUtilities.GetCertificateWithPrivateKey(bcCertificate, issueCertificateOptions.KeyPair))
+                using (X509Certificate2 certificate = certificateAuthority.IssueCertificate(issueCertificateOptions))
                 using (Test test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
                     _fixture.TrustedTestCertificate.Source.Cert,
                     certificate,
@@ -1381,11 +1376,11 @@ namespace NuGet.Packaging.FuncTest
                     timestampService.Url))
                 using (var packageReader = new PackageArchiveReader(test.PackageFile.FullName))
                 {
-                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(bcCertificate);
+                    await certificateAuthority.OcspResponder.WaitForResponseExpirationAsync(certificate);
 
                     certificateAuthority.Revoke(
-                        bcCertificate,
-                        RevocationReason.KeyCompromise,
+                        certificate,
+                        X509RevocationReason.KeyCompromise,
                         DateTimeOffset.UtcNow.AddHours(-1));
 
                     PrimarySignature primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
@@ -1395,7 +1390,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [PlatformTheory(Platform.Windows, Platform.Linux)] // https://github.com/NuGet/Home/issues/9501
+            [PlatformTheory(Platform.Windows, Platform.Linux, NetFxCIOnly = true)] // https://github.com/NuGet/Home/issues/9501
             [InlineData(true, SignatureVerificationStatus.Valid)]
             [InlineData(false, SignatureVerificationStatus.Disallowed)]
             public async Task GetTrustResultAsync_WithRevokedTimestampCertificate_ReturnsStatusAsync(
@@ -1432,7 +1427,7 @@ namespace NuGet.Packaging.FuncTest
 
                     certificateAuthority.Revoke(
                         revokedTimestampService.Certificate,
-                        RevocationReason.KeyCompromise,
+                        X509RevocationReason.KeyCompromise,
                         DateTimeOffset.UtcNow.AddHours(-1));
 
                     PrimarySignature primarySignature = await packageReader.GetPrimarySignatureAsync(CancellationToken.None);
@@ -1442,7 +1437,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithTamperedRepositoryCountersignedPackage_ReturnsValidAsync()
             {
                 var settings = new SignedPackageVerifierSettings(
@@ -1483,7 +1478,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithExpiredPrimaryCertificateAndExpiredRepositoryCertificateAndValidTimestamps_ReturnsValidAsync()
             {
                 TimestampService timestampService = await _fixture.GetDefaultTrustedTimestampServiceAsync();
@@ -1509,7 +1504,7 @@ namespace NuGet.Packaging.FuncTest
                 }
             }
 
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithExpiredRepositoryCertificateAndNoTimestamp_ReturnsValidAsync()
             {
                 TimestampService timestampService = await _fixture.GetDefaultTrustedTimestampServiceAsync();
@@ -1566,7 +1561,7 @@ namespace NuGet.Packaging.FuncTest
 
             // Case1: primary signature (trusted + non-expired) doesn't fall back to countersignature (trusted + non-expired).
             // The verification result is the primary signature status(valid).
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithGoodPrimarySignatureAndGoodCountersignature_NoFallbackAndReturnsValidAsync()
             {
                 using (Test test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
@@ -1587,7 +1582,7 @@ namespace NuGet.Packaging.FuncTest
 
             // Case2: primary signature (trusted + non-expired) doesn't fall back to countersignature untrusted + non-expired).
             // The verification result is the primary signature status(valid).
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithGoodPrimarySignatureAndUntrustedCountersignature_NoFallbackAndReturnsValidAsync()
             {
                 using (Test test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
@@ -1608,7 +1603,7 @@ namespace NuGet.Packaging.FuncTest
 
             // Case3: primary signature (untrusted + non-expired) falls back to countersignature (trusted + non-expired).
             // The verification result is the severe one of fallback status(valid) and the countersignature status(valid), so it's valid.
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithUntrustedPrimarySignatureAndGoodCountersignature_FallbackAndReturnsValidAsync()
             {
                 using (Test test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
@@ -1629,7 +1624,7 @@ namespace NuGet.Packaging.FuncTest
 
             // Case4: primary signature (untrusted + non-expired) falls back to countersignature (untrusted + non-expired).
             // The verification result is the severe one of fallback status(disallowed) and the countersignature status(disallowed), so it's disallowed.
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithUntrustedPrimarySignatureAndUntrustedCountersignature_FallbackAndReturnsDisallowedAsync()
             {
                 using (Test test = await Test.CreateAuthorSignedRepositoryCountersignedPackageAsync(
@@ -1651,7 +1646,7 @@ namespace NuGet.Packaging.FuncTest
             // Case5: primary signature (trusted + expired) falls back to countersignature (trusted + non-expired).
             // And the timestamp on countersignature could fullfill the role of a trust anchor for primary signature.
             // The verification result is the severe one of fallback status(valid) and the countersignature status(valid), so it's valid.
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithExpiredPrimarySignatureAndGoodCountersignatureWithTimestamp_FallbackAndReturnsValidAsync()
             {
                 TimestampService timestampService = await _fixture.GetDefaultTrustedTimestampServiceAsync();
@@ -1678,7 +1673,7 @@ namespace NuGet.Packaging.FuncTest
 
             // Case6: primary signature (trusted + expired) falls back to countersignature (untrusted + non-expired).
             // The verification result is the severe one of fallback status(disallowed) and the countersignature status(disallowed), so it's disallowed.
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithExpiredPrimarySignatureAndUntrustedCountersignatureWithTimestamp_FallbackAndReturnsDisallowedAsync()
             {
                 TimestampService timestampService = await _fixture.GetDefaultTrustedTimestampServiceAsync();
@@ -1706,7 +1701,7 @@ namespace NuGet.Packaging.FuncTest
             // Case7: primary signature (trusted + expired) falls back to countersignature (trusted + non-expired).
             // But the timestamp on countersignature could NOT fullfill the role of a trust anchor for primary signature.
             // The verification result is the severe one of fallback status(disallowed) and the countersignature status(valid), so it's disallowed.
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithExpiredPrimarySignatureAndGoodCountersignatureWithNoTimestamp_FallbackAndReturnsDisallowedAsync()
             {
                 using (X509Certificate2 authorSigningCertificate = await GetExpiringCertificateAsync(_fixture))
@@ -1730,7 +1725,7 @@ namespace NuGet.Packaging.FuncTest
             // Case8: primary signature (trusted + expired) falls back to countersignature (trusted + expired but protected by a timestamp).
             // And the timestamp on countersignature could fullfill the role of a trust anchor for primary signature.
             // The verification result is the severe one of fallback status(valid) and the countersignature status(valid), so it's valid.
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithExpiredPrimarySignatureAndExpiredCountersignatureWithTimestamp_FallbackAndReturnsValidAsync()
             {
                 TimestampService timestampService = await _fixture.GetDefaultTrustedTimestampServiceAsync();
@@ -1760,7 +1755,7 @@ namespace NuGet.Packaging.FuncTest
             // Case9: primary signature (untrusted + expired) falls back to countersignature (trusted + non-expired).
             // But the timestamp on countersignature could NOT fullfill the role of a trust anchor for primary signature.
             // The verification result is the severe one of fallback status(disallowed) and the countersignature status(valid), so it's disallowed.
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithUntrustedExpiredPrimarySignatureAndGoodCountersignatureWithNoTimestamp_FallbackAndReturnsDisallowedAsync()
             {
                 using (X509Certificate2 authorSigningCertificate = _fixture.CreateUntrustedTestCertificateThatWillExpireSoon().Cert)
@@ -1784,7 +1779,7 @@ namespace NuGet.Packaging.FuncTest
             // Case10: primary signature (untrusted + expired) falls back to countersignature (trusted + non-expired).
             // And the timestamp on countersignature could fullfill the role of a trust anchor for primary signature.
             // The verification result is the severe one of fallback status(valid) and the countersignature status(valid), so it's valid.
-            [CIOnlyFact]
+            [NetFxCIOnlyFact]
             public async Task GetTrustResultAsync_WithUntrustedExpiredPrimarySignatureAndGoodCountersignatureWithTimestamp_FallbackAndReturnsValidAsync()
             {
                 TimestampService timestampService = await _fixture.GetDefaultTrustedTimestampServiceAsync();
@@ -1930,18 +1925,19 @@ namespace NuGet.Packaging.FuncTest
         {
             CertificateAuthority ca = await fixture.GetDefaultTrustedCertificateAuthorityAsync();
 
-            AsymmetricCipherKeyPair keyPair = SigningTestUtility.GenerateKeyPair(publicKeyLength: 2048);
-            DateTimeOffset now = DateTimeOffset.UtcNow;
-            var issueOptions = new IssueCertificateOptions()
+            using (System.Security.Cryptography.RSA keyPair = SigningTestUtility.GenerateKeyPair(publicKeyLength: 2048))
             {
-                KeyPair = keyPair,
-                NotAfter = now.AddSeconds(10),
-                NotBefore = now.AddSeconds(-2),
-                SubjectName = new X509Name("CN=NuGet Test Expired Certificate")
-            };
-            BcX509Certificate bcCertificate = ca.IssueCertificate(issueOptions);
+                DateTimeOffset now = DateTimeOffset.UtcNow;
+                var issueOptions = new IssueCertificateOptions()
+                {
+                    KeyPair = keyPair,
+                    NotAfter = now.AddSeconds(10),
+                    NotBefore = now.AddSeconds(-2),
+                    SubjectName = new X500DistinguishedName("CN=NuGet Test Expired Certificate")
+                };
 
-            return CertificateUtilities.GetCertificateWithPrivateKey(bcCertificate, keyPair);
+                return ca.IssueCertificate(issueOptions);
+            }
         }
 
         private static byte[] GetResource(string name)
@@ -1988,4 +1984,3 @@ namespace NuGet.Packaging.FuncTest
         }
     }
 }
-#endif

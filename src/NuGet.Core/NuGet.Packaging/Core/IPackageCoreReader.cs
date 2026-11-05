@@ -26,7 +26,7 @@ namespace NuGet.Packaging.Core
         /// Gets the minimum client version needed to consume the package.
         /// </summary>
         /// <returns>A NuGet version.</returns>
-        NuGetVersion GetMinClientVersion();
+        NuGetVersion? GetMinClientVersion();
 
         /// <summary>
         /// Gets zero or more package types from the .nuspec.

@@ -3,12 +3,10 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using NuGet.Commands;
 using NuGet.Configuration;
 using NuGet.ProjectModel;
 using NuGet.Test.Utility;
 using Xunit;
-using Xunit.Extensions;
 
 namespace NuGet.PackageManagement.VisualStudio.Test
 {
@@ -135,7 +133,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         [InlineData(@"C:\packagePath", @"C:\packagePath")]
         [InlineData(null, @"C:\defaultPackagesPath")]
         [InlineData("globalPackages", @"C:\project\globalPackages")]
-        public void VSRestoreSettingsUtilities_PackagePath(string packagesPath, string expectedPackagesPath)
+        public void VSRestoreSettingsUtilities_PackagePath(string? packagesPath, string expectedPackagesPath)
         {
             using (var mockBaseDirectory = TestDirectory.Create())
             {

@@ -104,6 +104,30 @@ namespace NuGet.Common.Test.Logging
             // exception is thrown.
         }
 
+        [Fact]
+        public void ExceptionLogger_ResetInstance_ReReadsShowStackFromEnvironment()
+        {
+            // ShowStack is cached for the lifetime of an ExceptionLogger instance; in a process reused across
+            // builds, ResetInstance must rebuild Instance so it observes the current NUGET_SHOW_STACK value.
+            string? original = Environment.GetEnvironmentVariable("NUGET_SHOW_STACK");
+            try
+            {
+                Environment.SetEnvironmentVariable("NUGET_SHOW_STACK", "true");
+                ExceptionLogger.ResetInstance();
+                Assert.True(ExceptionLogger.Instance.ShowStack);
+
+                // Simulate a subsequent build whose environment no longer sets the flag.
+                Environment.SetEnvironmentVariable("NUGET_SHOW_STACK", null);
+                ExceptionLogger.ResetInstance();
+                Assert.False(ExceptionLogger.Instance.ShowStack);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("NUGET_SHOW_STACK", original);
+                ExceptionLogger.ResetInstance();
+            }
+        }
+
         private class TestContext
         {
             public TestContext()
@@ -114,7 +138,7 @@ namespace NuGet.Common.Test.Logging
 
             public Mock<IEnvironmentVariableReader> EnvironmentVariableReader { get; }
             public Exception Exception { get; }
-            public ExceptionLogger Target { get; set; }
+            public ExceptionLogger? Target { get; set; }
 
             public void VerifyShouldShowStack(bool expected)
             {

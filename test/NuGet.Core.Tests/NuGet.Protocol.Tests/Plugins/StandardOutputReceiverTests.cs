@@ -1,15 +1,27 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using Moq;
+using NuGet.Common;
+using NuGet.Shared;
+using Test.Utility;
 using Xunit;
 
 namespace NuGet.Protocol.Plugins.Tests
 {
     public class StandardOutputReceiverTests
     {
+        private static IEnvironmentVariableReader CreateEnvReader(bool useStj) =>
+            useStj
+                ? new TestEnvironmentVariableReader(
+                    new Dictionary<string, string> { [NuGetFeatureFlags.UseSystemTextJsonDeserializationEnvVar] = "true" })
+                : TestEnvironmentVariableReader.EmptyInstance;
+
         [Fact]
         public void Constructor_ThrowsForNullProcess()
         {
@@ -78,8 +90,10 @@ namespace NuGet.Protocol.Plugins.Tests
             }
         }
 
-        [Fact]
-        public void MessageReceived_RaisedForSingleMessage()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void MessageReceived_RaisedForSingleMessage(bool useStj)
         {
             var json = "{\"RequestId\":\"a\",\"Type\":\"Response\",\"Method\":\"None\"}";
             var requestId = "a";
@@ -91,7 +105,7 @@ namespace NuGet.Protocol.Plugins.Tests
                 .Callback(() => process.Raise(x => x.LineRead += null, new LineReadEventArgs(json)));
 
             using (var receivedEvent = new ManualResetEventSlim(initialState: false))
-            using (var receiver = new StandardOutputReceiver(process.Object))
+            using (var receiver = new StandardOutputReceiver(process.Object, CreateEnvReader(useStj)))
             {
                 MessageEventArgs args = null;
 
@@ -111,12 +125,14 @@ namespace NuGet.Protocol.Plugins.Tests
                 Assert.Equal(requestId, args.Message.RequestId);
                 Assert.Equal(type, args.Message.Type);
                 Assert.Equal(method, args.Message.Method);
-                Assert.Null(args.Message.Payload);
+                Assert.Null(MessageUtilities.SerializePayload(args.Message));
             }
         }
 
-        [Fact]
-        public void MessageReceived_HandlesNullAndEmptyString()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void MessageReceived_HandlesNullAndEmptyString(bool useStj)
         {
             var json = "{\"RequestId\":\"a\",\"Type\":\"Response\",\"Method\":\"None\"}";
             var requestId = "a";
@@ -135,7 +151,7 @@ namespace NuGet.Protocol.Plugins.Tests
                 });
 
             using (var receivedEvent = new ManualResetEventSlim(initialState: false))
-            using (var receiver = new StandardOutputReceiver(process.Object))
+            using (var receiver = new StandardOutputReceiver(process.Object, CreateEnvReader(useStj)))
             {
                 MessageEventArgs args = null;
 
@@ -155,12 +171,14 @@ namespace NuGet.Protocol.Plugins.Tests
                 Assert.Equal(requestId, args.Message.RequestId);
                 Assert.Equal(type, args.Message.Type);
                 Assert.Equal(method, args.Message.Method);
-                Assert.Null(args.Message.Payload);
+                Assert.Null(MessageUtilities.SerializePayload(args.Message));
             }
         }
 
-        [Fact]
-        public void Faulted_RaisedForParseError()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void Faulted_RaisedForParseError(bool useStj)
         {
             var invalidJson = "text";
             var process = new Mock<IPluginProcess>();
@@ -169,7 +187,7 @@ namespace NuGet.Protocol.Plugins.Tests
                 .Callback(() => process.Raise(x => x.LineRead += null, new LineReadEventArgs(invalidJson)));
 
             using (var faultedEvent = new ManualResetEventSlim(initialState: false))
-            using (var receiver = new StandardOutputReceiver(process.Object))
+            using (var receiver = new StandardOutputReceiver(process.Object, CreateEnvReader(useStj)))
             {
                 ProtocolErrorEventArgs args = null;
 
@@ -192,9 +210,11 @@ namespace NuGet.Protocol.Plugins.Tests
         }
 
         [Theory]
-        [InlineData("1")]
-        [InlineData("[]")]
-        public void Faulted_RaisedForDeserializationOfInvalidJson(string invalidJson)
+        [InlineData("1", false)]
+        [InlineData("1", true)]
+        [InlineData("[]", false)]
+        [InlineData("[]", true)]
+        public void Faulted_RaisedForDeserializationOfInvalidJson(string invalidJson, bool useStj)
         {
             var process = new Mock<IPluginProcess>();
 
@@ -202,7 +222,7 @@ namespace NuGet.Protocol.Plugins.Tests
                 .Callback(() => process.Raise(x => x.LineRead += null, new LineReadEventArgs(invalidJson)));
 
             using (var faultedEvent = new ManualResetEventSlim(initialState: false))
-            using (var receiver = new StandardOutputReceiver(process.Object))
+            using (var receiver = new StandardOutputReceiver(process.Object, CreateEnvReader(useStj)))
             {
                 ProtocolErrorEventArgs args = null;
 
@@ -224,8 +244,10 @@ namespace NuGet.Protocol.Plugins.Tests
             }
         }
 
-        [Fact]
-        public void Faulted_RaisedForDeserializationError()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void Faulted_RaisedForDeserializationError(bool useStj)
         {
             var json = "{\"RequestId\":\"a\",\"Type\":\"Response\",\"Method\":\"None\",\"Payload\":\"{\\\"d\\\":\\\"e\\\"}\"}\r\n";
 
@@ -235,7 +257,7 @@ namespace NuGet.Protocol.Plugins.Tests
                 .Callback(() => process.Raise(x => x.LineRead += null, new LineReadEventArgs(json)));
 
             using (var faultedEvent = new ManualResetEventSlim(initialState: false))
-            using (var receiver = new StandardOutputReceiver(process.Object))
+            using (var receiver = new StandardOutputReceiver(process.Object, CreateEnvReader(useStj)))
             {
                 ProtocolErrorEventArgs args = null;
 
@@ -258,19 +280,31 @@ namespace NuGet.Protocol.Plugins.Tests
         }
 
         [Theory]
-        [InlineData("{\"Type\":\"Response\",\"Method\":\"None\"}\r\n")]
-        [InlineData("{\"RequestId\":null,\"Type\":\"Response\",\"Method\":\"None\"}\r\n")]
-        [InlineData("{\"RequestId\":\"\",\"Type\":\"Response\",\"Method\":\"None\"}\r\n")]
-        [InlineData("{\"RequestId\":\"a\",\"Method\":\"None\"}\r\n")]
-        [InlineData("{\"RequestId\":\"a\",\"Type\":null,\"Method\":\"None\"}\r\n")]
-        [InlineData("{\"RequestId\":\"a\",\"Type\":\"\",\"Method\":\"None\"}\r\n")]
-        [InlineData("{\"RequestId\":\"a\",\"Type\":\" \",\"Method\":\"None\"}\r\n")]
-        [InlineData("{\"RequestId\":\"a\",\"Type\":\"abc\",\"Method\":\"None\"}\r\n")]
-        [InlineData("{\"RequestId\":\"a\",\"Type\":\"Response\"}\r\n")]
-        [InlineData("{\"RequestId\":\"a\",\"Type\":\"Response\",\"Method\":null}\r\n")]
-        [InlineData("{\"RequestId\":\"a\",\"Type\":\"Response\",\"Method\":\"\"}\r\n")]
-        [InlineData("{\"RequestId\":\"a\",\"Type\":\"Response\",\"Method\":\"abc\"}\r\n")]
-        public void Faulted_RaisedForInvalidMessage(string json)
+        [InlineData("{\"Type\":\"Response\",\"Method\":\"None\"}\r\n", false)]
+        [InlineData("{\"Type\":\"Response\",\"Method\":\"None\"}\r\n", true)]
+        [InlineData("{\"RequestId\":null,\"Type\":\"Response\",\"Method\":\"None\"}\r\n", false)]
+        [InlineData("{\"RequestId\":null,\"Type\":\"Response\",\"Method\":\"None\"}\r\n", true)]
+        [InlineData("{\"RequestId\":\"\",\"Type\":\"Response\",\"Method\":\"None\"}\r\n", false)]
+        [InlineData("{\"RequestId\":\"\",\"Type\":\"Response\",\"Method\":\"None\"}\r\n", true)]
+        [InlineData("{\"RequestId\":\"a\",\"Method\":\"None\"}\r\n", false)]
+        [InlineData("{\"RequestId\":\"a\",\"Method\":\"None\"}\r\n", true)]
+        [InlineData("{\"RequestId\":\"a\",\"Type\":null,\"Method\":\"None\"}\r\n", false)]
+        [InlineData("{\"RequestId\":\"a\",\"Type\":null,\"Method\":\"None\"}\r\n", true)]
+        [InlineData("{\"RequestId\":\"a\",\"Type\":\"\",\"Method\":\"None\"}\r\n", false)]
+        [InlineData("{\"RequestId\":\"a\",\"Type\":\"\",\"Method\":\"None\"}\r\n", true)]
+        [InlineData("{\"RequestId\":\"a\",\"Type\":\" \",\"Method\":\"None\"}\r\n", false)]
+        [InlineData("{\"RequestId\":\"a\",\"Type\":\" \",\"Method\":\"None\"}\r\n", true)]
+        [InlineData("{\"RequestId\":\"a\",\"Type\":\"abc\",\"Method\":\"None\"}\r\n", false)]
+        [InlineData("{\"RequestId\":\"a\",\"Type\":\"abc\",\"Method\":\"None\"}\r\n", true)]
+        [InlineData("{\"RequestId\":\"a\",\"Type\":\"Response\"}\r\n", false)]
+        [InlineData("{\"RequestId\":\"a\",\"Type\":\"Response\"}\r\n", true)]
+        [InlineData("{\"RequestId\":\"a\",\"Type\":\"Response\",\"Method\":null}\r\n", false)]
+        [InlineData("{\"RequestId\":\"a\",\"Type\":\"Response\",\"Method\":null}\r\n", true)]
+        [InlineData("{\"RequestId\":\"a\",\"Type\":\"Response\",\"Method\":\"\"}\r\n", false)]
+        [InlineData("{\"RequestId\":\"a\",\"Type\":\"Response\",\"Method\":\"\"}\r\n", true)]
+        [InlineData("{\"RequestId\":\"a\",\"Type\":\"Response\",\"Method\":\"abc\"}\r\n", false)]
+        [InlineData("{\"RequestId\":\"a\",\"Type\":\"Response\",\"Method\":\"abc\"}\r\n", true)]
+        public void Faulted_RaisedForInvalidMessage(string json, bool useStj)
         {
             var process = new Mock<IPluginProcess>();
 
@@ -278,7 +312,7 @@ namespace NuGet.Protocol.Plugins.Tests
                 .Callback(() => process.Raise(x => x.LineRead += null, new LineReadEventArgs(json)));
 
             using (var faultedEvent = new ManualResetEventSlim(initialState: false))
-            using (var receiver = new StandardOutputReceiver(process.Object))
+            using (var receiver = new StandardOutputReceiver(process.Object, CreateEnvReader(useStj)))
             {
                 ProtocolErrorEventArgs args = null;
 

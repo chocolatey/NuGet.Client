@@ -1,14 +1,17 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System.Collections.Generic;
 using System.Linq;
+using NuGet.Client;
 using NuGet.ContentModel;
 using NuGet.Frameworks;
 using NuGet.RuntimeModel;
 using Xunit;
 
-namespace NuGet.Client.Test
+namespace NuGet.Packaging.Test.ContentModelTests
 {
     public class ContentModelContentFilesTests
     {
@@ -88,7 +91,7 @@ namespace NuGet.Client.Test
             collection.PopulateItemGroups(conventions.Patterns.ContentFiles, contentFileGroups);
 
             // Assert
-            Assert.Equal(6, contentFileGroups.Count());
+            Assert.Equal(6, contentFileGroups.Count);
 
             Assert.Equal("any|cs|vb", string.Join("|",
                 contentFileGroups.Select(group =>
@@ -130,7 +133,7 @@ namespace NuGet.Client.Test
             collection.PopulateItemGroups(conventions.Patterns.ContentFiles, contentFileGroups);
 
             // Assert
-            Assert.Equal(2, contentFileGroups.Count());
+            Assert.Equal(2, contentFileGroups.Count);
 
             Assert.Equal("net45|uap10.0", string.Join("|",
                 contentFileGroups.Select(group =>
@@ -166,7 +169,7 @@ namespace NuGet.Client.Test
             collection.PopulateItemGroups(conventions.Patterns.ContentFiles, contentFileGroups);
 
             // Assert
-            Assert.Equal(0, contentFileGroups.Count());
+            Assert.Equal(0, contentFileGroups.Count);
         }
 
         [Fact]
@@ -191,7 +194,7 @@ namespace NuGet.Client.Test
             collection.PopulateItemGroups(conventions.Patterns.ContentFiles, contentFileGroups);
 
             // Assert
-            Assert.Equal(1, contentFileGroups.Count());
+            Assert.Equal(1, contentFileGroups.Count);
             Assert.Equal(2, contentFileGroups.Single().Items.Count);
 
             Assert.Equal("any", contentFileGroups.Select(group =>
@@ -226,7 +229,7 @@ namespace NuGet.Client.Test
             collection.PopulateItemGroups(conventions.Patterns.ContentFiles, contentFileGroups);
 
             // Assert
-            Assert.Equal(0, contentFileGroups.Count());
+            Assert.Equal(0, contentFileGroups.Count);
         }
     }
 }

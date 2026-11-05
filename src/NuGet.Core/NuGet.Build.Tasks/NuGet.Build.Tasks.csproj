@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>$(TargetFrameworksLibraryForSigning)</TargetFrameworks>
-    <TargetFramework />
+    <TargetFrameworks Condition="'$(IsVsixBuild)' != 'true'">$(TargetFrameworksExe)</TargetFrameworks>
+    <TargetFramework Condition="'$(IsVsixBuild)' == 'true'">$(NETFXTargetFramework)</TargetFramework>
     <Shipping>true</Shipping>
     <IncludeInVSIX>true</IncludeInVSIX>
     <PackProject>true</PackProject>
@@ -9,11 +9,7 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <XPLATProject>true</XPLATProject>
     <UsePublicApiAnalyzer>false</UsePublicApiAnalyzer>
-  </PropertyGroup>
-
-  <PropertyGroup Condition=" '$(IsVsixBuild)' == 'true' ">
-    <TargetFrameworks />
-    <TargetFramework>$(NETFXTargetFramework)</TargetFramework>
+    <IsAotCompatible>false</IsAotCompatible>
   </PropertyGroup>
 
   <ItemGroup>
@@ -32,10 +28,16 @@
       <PackagePath>runtimes\any\native</PackagePath>
       <Pack>true</Pack>
     </Content>
+    <Content Include="NuGet.Build.Tasks.Pack.targets">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <PackagePath>runtimes\any\native</PackagePath>
+      <Pack>true</Pack>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\NuGet.Commands\NuGet.Commands.csproj" />
+    <ProjectReference Include="..\NuGet.Build.Tasks.Pack\NuGet.Build.Tasks.Pack.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition=" '$(TargetFramework)' == '$(NETFXTargetFramework)' ">
@@ -45,8 +47,7 @@
     <PackageReference Include="System.Threading.Tasks.Dataflow" />
   </ItemGroup>
 
-  <ItemGroup Condition=" '$(IsCore)' == 'true' ">
-    <PackageReference Include="Microsoft.Build.Tasks.Core" ExcludeAssets="runtime" />
+  <ItemGroup Condition=" '$(TargetFramework)' != '$(NETFXTargetFramework)' ">
     <PackageReference Include="Microsoft.Build.Utilities.Core" ExcludeAssets="runtime" />
   </ItemGroup>
 
@@ -58,10 +59,20 @@
     </Compile>
   </ItemGroup>
 
+  <ItemGroup Label="NuGet Shared">
+    <Compile Include="$(SharedDirectory)\SharedExtensions.cs" />
+    <Compile Include="$(SharedDirectory)\XmlUtility.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <EmbeddedResource Update="Strings.resx">
       <Generator>PublicResXFileCodeGenerator</Generator>
       <LastGenOutput>Strings.Designer.cs</LastGenOutput>
     </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="NuGet.Build.Tasks.Console.Test" />
+    <InternalsVisibleTo Include="NuGet.Build.Tasks.Test" />
   </ItemGroup>
 </Project>

@@ -12,12 +12,12 @@ namespace NuGet.Frameworks
     {
         private readonly IFrameworkNameProvider _mappings;
         private readonly FrameworkExpander _expander;
-        private static readonly NuGetFrameworkFullComparer FullComparer = new NuGetFrameworkFullComparer();
+        private static readonly NuGetFrameworkFullComparer FullComparer = NuGetFrameworkFullComparer.Instance;
         private readonly ConcurrentDictionary<CompatibilityCacheKey, bool> _cache;
 
         public CompatibilityProvider(IFrameworkNameProvider mappings)
         {
-            _mappings = mappings;
+            _mappings = mappings ?? throw new ArgumentNullException(nameof(mappings));
             _expander = new FrameworkExpander(mappings);
             _cache = new ConcurrentDictionary<CompatibilityCacheKey, bool>();
         }
@@ -30,15 +30,8 @@ namespace NuGet.Frameworks
         /// <returns>True if framework supports other</returns>
         public bool IsCompatible(NuGetFramework target, NuGetFramework candidate)
         {
-            if (target == null)
-            {
-                throw new ArgumentNullException(nameof(target));
-            }
-
-            if (candidate == null)
-            {
-                throw new ArgumentNullException(nameof(candidate));
-            }
+            if (target == null) throw new ArgumentNullException(nameof(target));
+            if (candidate == null) throw new ArgumentNullException(nameof(candidate));
 
             // check the cache for a solution
             var cacheKey = new CompatibilityCacheKey(target, candidate);
@@ -123,13 +116,16 @@ namespace NuGet.Frameworks
                 return IsCompatibleWithTarget(target, candidate);
             }
 
-            IEnumerable<NuGetFramework> targetFrameworks;
-            IEnumerable<NuGetFramework> candidateFrameworks;
+            IEnumerable<NuGetFramework>? targetFrameworks;
+            IEnumerable<NuGetFramework>? candidateFrameworks;
 
             if (target.IsPCL)
             {
                 // do not include optional frameworks here since we might be unable to tell what is optional on the other framework
-                _mappings.TryGetPortableFrameworks(target.Profile, false, out targetFrameworks);
+                if (!_mappings.TryGetPortableFrameworks(target.Profile, includeOptional: false, out targetFrameworks))
+                {
+                    targetFrameworks = Array.Empty<NuGetFramework>();
+                }
             }
             else
             {
@@ -139,7 +135,10 @@ namespace NuGet.Frameworks
             if (candidate.IsPCL)
             {
                 // include optional frameworks here, the larger the list the more compatible it is
-                _mappings.TryGetPortableFrameworks(candidate.Profile, true, out candidateFrameworks);
+                if (!_mappings.TryGetPortableFrameworks(candidate.Profile, includeOptional: true, out candidateFrameworks))
+                {
+                    candidateFrameworks = Array.Empty<NuGetFramework>();
+                }
             }
             else
             {
@@ -204,6 +203,25 @@ namespace NuGet.Frameworks
 
                 if (target.IsNet5Era && candidate.HasPlatform)
                 {
+                    // net*.0-windows, where the windows version is 10 or higher, will make WinRT APIs available.
+                    // Under the covers it uses CsWinRT to convert WinRT ABIs to .NET API/ABIs.
+                    // Different major versions of CsWinRT are incompatible with each other, so we're special
+                    // casing windows to encode CsWinRT as the platform revision.
+                    // Therefore, net10.0-windows10.0.2610.0 should not be compatible with
+                    // net10.0-windows10.0.22000.1, even though the platform version is higher
+                    // because the revision number is different, signaling an incompatible CsWinRT version.
+                    if (result
+                         // Scope to .NET 10 and later for the Windows 10 TFM
+                         && target.Version.Major >= 10
+                         && StringComparer.OrdinalIgnoreCase.Equals(target.Platform, "windows")
+                         && target.PlatformVersion.Major >= 10
+                         && candidate.PlatformVersion.Major >= 10
+                         // Check if both are targeting the same version of CsWinRT support
+                         && target.PlatformVersion.Revision != candidate.PlatformVersion.Revision)
+                    {
+                        result = false;
+                    }
+
                     result = result
                         && StringComparer.OrdinalIgnoreCase.Equals(target.Platform, candidate.Platform)
                         && IsVersionCompatible(target.PlatformVersion, candidate.PlatformVersion);
@@ -241,9 +259,7 @@ namespace NuGet.Frameworks
             {
                 var frameworkToExpand = toExpand.Pop();
 
-                IEnumerable<NuGetFramework> compatibleFrameworks = null;
-
-                if (_mappings.TryGetEquivalentFrameworks(frameworkToExpand, out compatibleFrameworks))
+                if (_mappings.TryGetEquivalentFrameworks(frameworkToExpand, out IEnumerable<NuGetFramework>? compatibleFrameworks))
                 {
                     foreach (var curFramework in compatibleFrameworks)
                     {

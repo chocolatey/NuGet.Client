@@ -20,18 +20,18 @@ namespace NuGet.VisualStudio.Internal.Contracts.Test
             Assert.Equal(expectedResult.IncludeDelisted, actualResult.IncludeDelisted);
             Assert.Equal(expectedResult.IncludePrerelease, actualResult.IncludePrerelease);
             Assert.Equal(expectedResult.OrderBy, actualResult.OrderBy);
-            Assert.Equal(expectedResult.PackageTypes, actualResult.PackageTypes);
+            Assert.Equal(expectedResult.PackageType, actualResult.PackageType);
             Assert.Equal(expectedResult.SupportedFrameworks, actualResult.SupportedFrameworks);
         }
 
-        public static TheoryData TestData => new TheoryData<SearchFilter>
+        public static TheoryData<SearchFilter> TestData => new()
             {
                 {
                     new SearchFilter(includePrerelease: true, SearchFilterType.IsAbsoluteLatestVersion)
                     {
                         IncludeDelisted = true,
                         OrderBy = SearchOrderBy.Id,
-                        PackageTypes = new List<string>() { "packageType1", "packageType2" },
+                        PackageType = "Dependency",
                         SupportedFrameworks = new List<string>() { ".Net451", ".Net452" }
                     }
                 },

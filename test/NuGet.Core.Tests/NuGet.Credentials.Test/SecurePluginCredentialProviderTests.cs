@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.IO;
 using System.Net;
@@ -78,6 +80,37 @@ namespace NuGet.Credentials.Test
         }
 
         [PlatformFact(Platform.Windows)]
+        public async Task GetAsync_WhenConnectionIsClosed_ThrowsPluginExceptionNamingThePlugin()
+        {
+            var expectation = new TestExpectation(
+                operationClaims: new[] { OperationClaim.Authentication },
+                connectionOptions: ConnectionOptions.CreateDefault(),
+                pluginVersion: ProtocolConstants.CurrentVersion,
+                uri: _uri,
+                authenticationUsername: _username,
+                authenticationPassword: _password,
+                success: false,
+                connectionClosed: true);
+
+            using (var test = new PluginManagerMock(
+                pluginFilePath: "pluginA.exe",
+                pluginFileState: PluginFileState.Valid,
+                expectations: expectation))
+            {
+                var discoveryResult = new PluginDiscoveryResult(new PluginFile("pluginA.exe", new Lazy<PluginFileState>(() => PluginFileState.Valid)));
+                var provider = new SecurePluginCredentialProvider(test.PluginManager, discoveryResult, canShowDialog: true, logger: NullLogger.Instance);
+
+                // A connection that is closing or closed - because the plugin process was torn down while the request
+                // was in flight - answers with null. Reporting that must name the plugin instead of surfacing as a
+                // NullReferenceException that mentions neither the plugin nor authentication.
+                var exception = await Assert.ThrowsAsync<PluginException>(
+                    () => provider.GetAsync(_uri, proxy: null, CredentialRequestType.Unauthorized, message: "nothing", isRetry: false, nonInteractive: false, cancellationToken: CancellationToken.None));
+
+                Assert.Contains("pluginA.exe", exception.Message);
+            }
+        }
+
+        [PlatformFact(Platform.Windows)]
         public async Task GetAsync_WithValidArguments_ReturnsValidCredentials()
         {
             var expectation = new TestExpectation(
@@ -105,7 +138,7 @@ namespace NuGet.Credentials.Test
                 var token = CancellationToken.None;
                 var credentialResponse = await provider.GetAsync(_uri, proxy, credType, message, isRetry, isInteractive, token);
 
-                Assert.True(credentialResponse.Status == CredentialStatus.Success);
+                Assert.Equal(credentialResponse.Status, CredentialStatus.Success);
                 Assert.NotNull(credentialResponse.Credentials);
                 Assert.Equal(_username, credentialResponse.Credentials.GetCredential(_uri, authType: null).UserName);
                 Assert.Equal(_password, credentialResponse.Credentials.GetCredential(_uri, authType: null).Password);
@@ -140,11 +173,11 @@ namespace NuGet.Credentials.Test
                 var token = CancellationToken.None;
                 var credentialResponse = await provider.GetAsync(_uri, proxy, credType, message, isRetry, isInteractive, token);
 
-                Assert.True(credentialResponse.Status == CredentialStatus.ProviderNotApplicable);
+                Assert.Equal(credentialResponse.Status, CredentialStatus.ProviderNotApplicable);
                 Assert.Null(credentialResponse.Credentials);
 
                 var credentialResponse2 = await provider.GetAsync(_uri, proxy, credType, message, isRetry, isInteractive, token);
-                Assert.True(credentialResponse2.Status == CredentialStatus.ProviderNotApplicable);
+                Assert.Equal(credentialResponse2.Status, CredentialStatus.ProviderNotApplicable);
                 Assert.Null(credentialResponse2.Credentials);
             }
         }
@@ -177,7 +210,7 @@ namespace NuGet.Credentials.Test
                 var token = CancellationToken.None;
                 var credentialResponse = await provider.GetAsync(_uri, proxy, credType, message, isRetry, isInteractive, token);
 
-                Assert.True(credentialResponse.Status == CredentialStatus.Success);
+                Assert.Equal(credentialResponse.Status, CredentialStatus.Success);
                 Assert.NotNull(credentialResponse.Credentials);
                 Assert.Equal(_username, credentialResponse.Credentials.GetCredential(_uri, authType: null).UserName);
                 Assert.Equal(_password, credentialResponse.Credentials.GetCredential(_uri, authType: null).Password);
@@ -219,7 +252,7 @@ namespace NuGet.Credentials.Test
                 var token = CancellationToken.None;
                 var credentialResponse = await provider.GetAsync(_uri, proxy, credType, message, isRetry, isInteractive, token);
 
-                Assert.True(credentialResponse.Status == CredentialStatus.Success);
+                Assert.Equal(credentialResponse.Status, CredentialStatus.Success);
                 Assert.NotNull(credentialResponse.Credentials);
                 Assert.Equal(_username, credentialResponse.Credentials.GetCredential(_uri, authType: null).UserName);
                 Assert.Equal(_password, credentialResponse.Credentials.GetCredential(_uri, authType: null).Password);
@@ -254,7 +287,7 @@ namespace NuGet.Credentials.Test
                 var token = CancellationToken.None;
                 var credentialResponse = await provider.GetAsync(_uri, proxy, credType, message, isRetry, isInteractive, token);
 
-                Assert.True(credentialResponse.Status == CredentialStatus.ProviderNotApplicable);
+                Assert.Equal(credentialResponse.Status, CredentialStatus.ProviderNotApplicable);
                 Assert.Null(credentialResponse.Credentials);
             }
 
@@ -284,7 +317,7 @@ namespace NuGet.Credentials.Test
                 var token = CancellationToken.None;
                 var credentialResponse = await provider.GetAsync(_uri, proxy, credType, message, isRetry, isInteractive, token);
 
-                Assert.True(credentialResponse.Status == CredentialStatus.ProviderNotApplicable);
+                Assert.Equal(credentialResponse.Status, CredentialStatus.ProviderNotApplicable);
                 Assert.Null(credentialResponse.Credentials);
             }
         }
@@ -322,7 +355,7 @@ namespace NuGet.Credentials.Test
                 var token = CancellationToken.None;
                 var credentialResponse = await provider.GetAsync(_uri, proxy, credType, message, isRetry, isInteractive, token);
 
-                Assert.True(credentialResponse.Status == CredentialStatus.Success);
+                Assert.Equal(credentialResponse.Status, CredentialStatus.Success);
                 Assert.NotNull(credentialResponse.Credentials);
                 Assert.Equal(_username, credentialResponse.Credentials.GetCredential(_uri, authType: null).UserName);
                 Assert.Equal(_password, credentialResponse.Credentials.GetCredential(_uri, authType: null).Password);
@@ -361,6 +394,40 @@ namespace NuGet.Credentials.Test
             logger.Verify();
         }
 
+        [Fact]
+        public async Task GetAsync_WhenCredentialPluginIsUnableToAcquireCredentials_ReturnsNotFoundAsync()
+        {
+            var expectation = new TestExpectation(
+                operationClaims: new[] { OperationClaim.Authentication },
+                connectionOptions: ConnectionOptions.CreateDefault(),
+                pluginVersion: ProtocolConstants.CurrentVersion,
+                uri: _uri,
+                authenticationUsername: null,
+                authenticationPassword: null,
+                success: true,
+                messageCodeNotFound: true);
+
+            using (var test = new PluginManagerMock(
+                pluginFilePath: "a",
+                pluginFileState: PluginFileState.Valid,
+                expectations: expectation))
+            {
+                var discoveryResult = new PluginDiscoveryResult(new PluginFile("a", new Lazy<PluginFileState>(() => PluginFileState.Valid)));
+                var provider = new SecurePluginCredentialProvider(test.PluginManager, discoveryResult, canShowDialog: true, logger: NullLogger.Instance);
+
+                IWebProxy proxy = null;
+                var credType = CredentialRequestType.Unauthorized;
+                var message = "nothing";
+                var isRetry = false;
+                var isInteractive = false;
+                var token = CancellationToken.None;
+                var credentialResponse = await provider.GetAsync(_uri, proxy, credType, message, isRetry, isInteractive, token);
+
+                Assert.Equal(credentialResponse.Status, CredentialStatus.UserCanceled);
+                Assert.Null(credentialResponse.Credentials);
+            }
+        }
+
         private PluginDiscoveryResult CreatePluginDiscoveryResult(PluginFileState pluginState = PluginFileState.Valid)
         {
             return new PluginDiscoveryResult(new PluginFile(Path.Combine(_testDirectory.Path, "plugin.exe"), new Lazy<PluginFileState>(() => pluginState)));
@@ -371,7 +438,7 @@ namespace NuGet.Credentials.Test
             return new PluginManager(
                 Mock.Of<IEnvironmentVariableReader>(),
                 new Lazy<IPluginDiscoverer>(),
-                (TimeSpan idleTimeout) => Mock.Of<IPluginFactory>(),
+                (TimeSpan idleTimeout) => Mock.Of<PluginFactory>(),
                 new Lazy<string>(() => _testDirectory.Path));
         }
 

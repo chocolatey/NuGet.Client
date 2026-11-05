@@ -2,9 +2,12 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Globalization;
 using System.IO;
 using NuGet.Common;
+
+#if NET5_0_OR_GREATER
+using System.Globalization;
+#endif
 
 namespace NuGet.Packaging.Signing
 {
@@ -13,8 +16,8 @@ namespace NuGet.Packaging.Signing
     /// </summary>
     public static class X509TrustStore
     {
-        private static IX509ChainFactory CodeSigningX509ChainFactory;
-        private static IX509ChainFactory TimestampingX509ChainFactory;
+        private static IX509ChainFactory? CodeSigningX509ChainFactory;
+        private static IX509ChainFactory? TimestampingX509ChainFactory;
         private static readonly object LockObject = new();
 
         /// <summary>
@@ -22,7 +25,7 @@ namespace NuGet.Packaging.Signing
         /// If initialization has already happened, a call to this method will have no effect.
         /// </summary>
         /// <param name="logger">A logger.</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> is <c>null</c>.</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" /> is <see langword="null" />.</exception>
         public static void InitializeForDotNetSdk(ILogger logger)
         {
             _ = GetX509ChainFactory(X509StorePurpose.CodeSigning, logger, CreateX509ChainFactoryForDotNetSdk);
@@ -96,7 +99,7 @@ namespace NuGet.Packaging.Signing
         internal static IX509ChainFactory CreateX509ChainFactoryForDotNetSdk(
             X509StorePurpose storePurpose,
             ILogger logger,
-            FileInfo fallbackCertificateBundleFile)
+            FileInfo? fallbackCertificateBundleFile)
         {
 #if NET5_0_OR_GREATER
             if (RuntimeEnvironmentHelper.IsLinux)
@@ -104,7 +107,7 @@ namespace NuGet.Packaging.Signing
                 // System certificate bundle probe paths only support code signing not timestamping.
                 if (storePurpose == X509StorePurpose.CodeSigning &&
                     SystemCertificateBundleX509ChainFactory.TryCreate(
-                    out SystemCertificateBundleX509ChainFactory systemBundleFactory))
+                    out SystemCertificateBundleX509ChainFactory? systemBundleFactory))
                 {
                     logger.LogInformation(
                         string.Format(
@@ -118,7 +121,7 @@ namespace NuGet.Packaging.Signing
                 if (FallbackCertificateBundleX509ChainFactory.TryCreate(
                     storePurpose,
                     fallbackCertificateBundleFile?.FullName,
-                    out FallbackCertificateBundleX509ChainFactory fallbackBundleFactory))
+                    out FallbackCertificateBundleX509ChainFactory? fallbackBundleFactory))
                 {
                     logger.LogInformation(
                         string.Format(
@@ -139,7 +142,7 @@ namespace NuGet.Packaging.Signing
                 if (FallbackCertificateBundleX509ChainFactory.TryCreate(
                     storePurpose,
                     fallbackCertificateBundleFile?.FullName,
-                    out FallbackCertificateBundleX509ChainFactory fallbackBundleFactory))
+                    out FallbackCertificateBundleX509ChainFactory? fallbackBundleFactory))
                 {
                     logger.LogInformation(
                         string.Format(
@@ -162,7 +165,16 @@ namespace NuGet.Packaging.Signing
         // Non-private for testing purposes only
         internal static IX509ChainFactory CreateX509ChainFactory(X509StorePurpose storePurpose, ILogger logger)
         {
-            logger.LogInformation(Strings.ChainBuilding_UsingDefaultTrustStore);
+            switch (storePurpose)
+            {
+                case X509StorePurpose.CodeSigning:
+                    logger.LogInformation(Strings.ChainBuilding_UsingDefaultTrustStoreForCodeSigning);
+                    break;
+
+                case X509StorePurpose.Timestamping:
+                    logger.LogInformation(Strings.ChainBuilding_UsingDefaultTrustStoreForTimestamping);
+                    break;
+            }
 
             return new DotNetDefaultTrustStoreX509ChainFactory();
         }

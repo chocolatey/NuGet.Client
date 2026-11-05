@@ -17,12 +17,14 @@ namespace NuGet.Protocol.Plugins
         /// Gets the requestor's plugin protocol version.
         /// </summary>
         [JsonRequired]
+        [System.Text.Json.Serialization.JsonConverter(typeof(StjSemanticVersionConverter))]
         public SemanticVersion ProtocolVersion { get; }
 
         /// <summary>
         /// Gets the requestor's minimum plugin protocol version.
         /// </summary>
         [JsonRequired]
+        [System.Text.Json.Serialization.JsonConverter(typeof(StjSemanticVersionConverter))]
         public SemanticVersion MinimumProtocolVersion { get; }
 
         /// <summary>
@@ -31,9 +33,9 @@ namespace NuGet.Protocol.Plugins
         /// <param name="protocolVersion">The requestor's plugin protocol version.</param>
         /// <param name="minimumProtocolVersion">The requestor's minimum plugin protocol version.</param>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="protocolVersion" />
-        /// is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="minimumProtocolVersion" />
-        /// is <c>null</c>.</exception>
+        /// is <see langword="null" />.</exception>
         /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="protocolVersion" />
         /// is less than <paramref name="minimumProtocolVersion" />.</exception>
         [JsonConstructor]

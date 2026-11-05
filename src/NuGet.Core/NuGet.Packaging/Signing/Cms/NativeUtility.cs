@@ -3,11 +3,8 @@
 
 using System;
 using System.Runtime.InteropServices;
-#if IS_SIGNING_SUPPORTED
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
-using NuGet.Packaging.Signing.Utility;
-#endif
 
 namespace NuGet.Packaging.Signing
 {
@@ -29,7 +26,6 @@ namespace NuGet.Packaging.Signing
             }
         }
 
-#if IS_SIGNING_SUPPORTED
         internal static SignedCms NativeSign(CmsSigner cmsSigner, byte[] data, CngKey privateKey)
         {
             using (var hb = new HeapBlockRetainer())
@@ -39,7 +35,7 @@ namespace NuGet.Packaging.Signing
                 for (var i = 0; i < cmsSigner.Certificates.Count; ++i)
                 {
                     var cert = cmsSigner.Certificates[i];
-                    var context = MarshalUtility.PtrToStructure<CERT_CONTEXT>(cert.Handle);
+                    var context = Marshal.PtrToStructure<CERT_CONTEXT>(cert.Handle);
 
                     certificateBlobs[i] = new BLOB() { cbData = context.cbCertEncoded, pbData = context.pbCertEncoded };
                 }
@@ -72,7 +68,7 @@ namespace NuGet.Packaging.Signing
                             dwFlags: 0,
                             dwMsgType: NativeMethods.CMSG_SIGNED,
                             pvMsgEncodeInfo: ref signedInfo,
-                            pszInnerContentObjID: null,
+                            pszInnerContentObjID: null!,
                             pStreamInfo: IntPtr.Zero);
 
                         ThrowIfFailed(!hMsg.IsInvalid);
@@ -89,7 +85,7 @@ namespace NuGet.Packaging.Signing
                             hMsg,
                             CMSG_GETPARAM_TYPE.CMSG_CONTENT_PARAM,
                             dwIndex: 0,
-                            pvData: null,
+                            pvData: null!,
                             pcbData: ref valueLength));
 
                         encodedData = new byte[(int)valueLength];
@@ -119,9 +115,9 @@ namespace NuGet.Packaging.Signing
             var signerInfo = new CMSG_SIGNER_ENCODE_INFO();
 
             signerInfo.cbSize = (uint)Marshal.SizeOf(signerInfo);
-            signerInfo.pCertInfo = MarshalUtility.PtrToStructure<CERT_CONTEXT>(cmsSigner.Certificate.Handle).pCertInfo;
+            signerInfo.pCertInfo = Marshal.PtrToStructure<CERT_CONTEXT>(cmsSigner.Certificate!.Handle).pCertInfo;
             signerInfo.hCryptProvOrhNCryptKey = privateKey.Handle.DangerousGetHandle();
-            signerInfo.HashAlgorithm.pszObjId = cmsSigner.DigestAlgorithm.Value;
+            signerInfo.HashAlgorithm.pszObjId = cmsSigner.DigestAlgorithm.Value!;
 
             if (cmsSigner.SignerIdentifierType == SubjectIdentifierType.SubjectKeyIdentifier)
             {
@@ -170,14 +166,14 @@ namespace NuGet.Packaging.Signing
 
                 checked
                 {
-                    int sizeOfCryptAttribute = MarshalUtility.SizeOf<CRYPT_ATTRIBUTE>();
-                    int sizeOfCryptIntegerBlob = MarshalUtility.SizeOf<CRYPT_INTEGER_BLOB>();
+                    int sizeOfCryptAttribute = Marshal.SizeOf<CRYPT_ATTRIBUTE>();
+                    int sizeOfCryptIntegerBlob = Marshal.SizeOf<CRYPT_INTEGER_BLOB>();
                     var attributesArray = (CRYPT_ATTRIBUTE*)hb.Alloc(sizeOfCryptAttribute * cmsSigner.SignedAttributes.Count);
                     var currentAttribute = attributesArray;
 
                     foreach (var attribute in cmsSigner.SignedAttributes)
                     {
-                        currentAttribute->pszObjId = hb.AllocAsciiString(attribute.Oid.Value);
+                        currentAttribute->pszObjId = hb.AllocAsciiString(attribute.Oid.Value!);
                         currentAttribute->cValue = (uint)attribute.Values.Count;
                         currentAttribute->rgValue = hb.Alloc(sizeOfCryptIntegerBlob);
 
@@ -205,6 +201,5 @@ namespace NuGet.Packaging.Signing
 
             return signerInfo;
         }
-#endif
     }
 }

@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -225,7 +227,9 @@ namespace NuGet.PackageManagement.PowerShellCmdlets
 
             foreach (var task in installedPackages.Zip(metadataTasks, (p, t) => Tuple.Create(t, p)))
             {
+#pragma warning disable VSTHRD003 // Avoid awaiting foreign Tasks
                 var metadata = await task.Item1;
+#pragma warning restore VSTHRD003 // Avoid awaiting foreign Tasks
 
                 if (metadata != null)
                 {

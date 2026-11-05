@@ -4,7 +4,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Globalization;
+using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using NuGet.Common;
@@ -37,22 +37,28 @@ namespace NuGet.Protocol
             = new ConcurrentDictionary<string, bool>(PathUtility.GetStringComparerBasedOnOS());
 
         // Cache runtime.json files
-        private readonly ConcurrentDictionary<string, Lazy<RuntimeGraph>> _runtimeCache
-            = new ConcurrentDictionary<string, Lazy<RuntimeGraph>>(PathUtility.GetStringComparerBasedOnOS());
+        private readonly ConcurrentDictionary<string, Lazy<RuntimeGraph?>> _runtimeCache
+            = new ConcurrentDictionary<string, Lazy<RuntimeGraph?>>(PathUtility.GetStringComparerBasedOnOS());
 
         // Metadata file
         private readonly ConcurrentDictionary<string, bool> _metadataFileCache
             = new ConcurrentDictionary<string, bool>(PathUtility.GetStringComparerBasedOnOS());
-
-        public LocalPackageFileCache()
-        {
-        }
 
         /// <summary>
         /// Read a nuspec file from disk. The nuspec is expected to exist.
         /// </summary>
         public virtual Lazy<NuspecReader> GetOrAddNuspec(string manifestPath, string expandedPath)
         {
+            if (manifestPath == null)
+            {
+                throw new ArgumentNullException(nameof(manifestPath));
+            }
+
+            if (expandedPath == null)
+            {
+                throw new ArgumentNullException(nameof(expandedPath));
+            }
+
             return _nuspecCache.GetOrAdd(expandedPath,
                 e => new Lazy<NuspecReader>(() => GetNuspec(manifestPath, e)));
         }
@@ -62,6 +68,11 @@ namespace NuGet.Protocol
         /// </summary>
         public virtual Lazy<IReadOnlyList<string>> GetOrAddFiles(string expandedPath)
         {
+            if (expandedPath == null)
+            {
+                throw new ArgumentNullException(nameof(expandedPath));
+            }
+
             return _filesCache.GetOrAdd(expandedPath,
                 e => new Lazy<IReadOnlyList<string>>(() => GetFiles(e)));
         }
@@ -72,11 +83,17 @@ namespace NuGet.Protocol
         /// <remarks>Throws if the file is not found or corrupted.</remarks>
         public virtual Lazy<string> GetOrAddSha512(string sha512Path)
         {
+            if (sha512Path == null)
+            {
+                throw new ArgumentNullException(nameof(sha512Path));
+            }
+
             return _sha512Cache.GetOrAdd(sha512Path,
                 e => new Lazy<string>(() =>
                 {
                     var metadataFile = NupkgMetadataFileFormat.Read(e);
-                    return metadataFile.ContentHash;
+                    return metadataFile.ContentHash
+                        ?? throw new InvalidDataException("The nupkg metadata file does not contain a content hash.");
                 }));
         }
 
@@ -86,6 +103,11 @@ namespace NuGet.Protocol
         /// </summary>
         public virtual bool Sha512Exists(string sha512Path)
         {
+            if (sha512Path == null)
+            {
+                throw new ArgumentNullException(nameof(sha512Path));
+            }
+
             // Avoid checking the desk if we have already read the file.
             var exists = _fileExistsCache.ContainsKey(sha512Path);
 
@@ -107,6 +129,11 @@ namespace NuGet.Protocol
         /// <param name="nupkgMetadataPath">metadata file path to update</param>
         public void UpdateLastAccessTime(string nupkgMetadataPath)
         {
+            if (nupkgMetadataPath == null)
+            {
+                throw new ArgumentNullException(nameof(nupkgMetadataPath));
+            }
+
             var exists = _metadataFileCache.ContainsKey(nupkgMetadataPath);
             if (exists)
             {
@@ -127,9 +154,14 @@ namespace NuGet.Protocol
         /// Read runtime.json from a package.
         /// Returns null if runtime.json does not exist.
         /// </summary>
-        public virtual Lazy<RuntimeGraph> GetOrAddRuntimeGraph(string expandedPath)
+        public virtual Lazy<RuntimeGraph?> GetOrAddRuntimeGraph(string expandedPath)
         {
-            return _runtimeCache.GetOrAdd(expandedPath, p => new Lazy<RuntimeGraph>(() => GetRuntimeGraph(p)));
+            if (expandedPath == null)
+            {
+                throw new ArgumentNullException(nameof(expandedPath));
+            }
+
+            return _runtimeCache.GetOrAdd(expandedPath, p => new Lazy<RuntimeGraph?>(() => GetRuntimeGraph(p)));
         }
 
         /// <summary>
@@ -143,8 +175,7 @@ namespace NuGet.Protocol
                 // This is sorted before it is written out
                 return packageReader.GetFiles()
                     .Where(file => IsAllowedLibraryFile(file))
-                    .ToList()
-                    .AsReadOnly();
+                    .ToImmutableArray();
             }
         }
 
@@ -178,30 +209,24 @@ namespace NuGet.Protocol
         /// </summary>
         private static NuspecReader GetNuspec(string manifestPath, string expandedPath)
         {
-            NuspecReader nuspec = null;
-
             // Verify that the nuspec has the correct name before opening it
             if (File.Exists(manifestPath))
             {
-                nuspec = new NuspecReader(File.OpenRead(manifestPath));
-            }
-            else
-            {
-                // Scan the folder for the nuspec
-                using (var folderReader = new PackageFolderReader(expandedPath))
-                {
-                    // This will throw if the nuspec is not found
-                    nuspec = new NuspecReader(folderReader.GetNuspec());
-                }
+                return new NuspecReader(File.OpenRead(manifestPath));
             }
 
-            return nuspec;
+            // Scan the folder for the nuspec
+            using (var folderReader = new PackageFolderReader(expandedPath))
+            {
+                // This will throw if the nuspec is not found
+                return new NuspecReader(folderReader.GetNuspec());
+            }
         }
 
         /// <summary>
         /// Return runtime.json from a package.
         /// </summary>
-        private RuntimeGraph GetRuntimeGraph(string expandedPath)
+        private RuntimeGraph? GetRuntimeGraph(string expandedPath)
         {
             var runtimeGraphFile = Path.Combine(expandedPath, RuntimeGraph.RuntimeGraphFileName);
             if (File.Exists(runtimeGraphFile))

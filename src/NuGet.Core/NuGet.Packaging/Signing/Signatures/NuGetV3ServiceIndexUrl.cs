@@ -51,7 +51,7 @@ namespace NuGet.Packaging.Signing
                 throw new SignatureException(Strings.NuGetV3ServiceIndexUrlInvalid);
             }
 
-            Uri url;
+            Uri? url;
 
             if (!Uri.TryCreate(urlString, UriKind.Absolute, out url))
             {

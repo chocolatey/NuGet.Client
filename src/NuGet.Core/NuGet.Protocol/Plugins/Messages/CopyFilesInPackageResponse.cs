@@ -17,7 +17,7 @@ namespace NuGet.Protocol.Plugins
         /// <summary>
         /// Gets the paths of files copies.
         /// </summary>
-        public IEnumerable<string> CopiedFiles { get; }
+        public IEnumerable<string>? CopiedFiles { get; }
 
         /// <summary>
         /// Gets the response code.
@@ -34,9 +34,9 @@ namespace NuGet.Protocol.Plugins
         /// is an undefined <see cref="MessageResponseCode" /> value.</exception>
         /// <exception cref="ArgumentException">Thrown if <paramref name="responseCode" /> 
         /// is <see cref="MessageResponseCode.Success" /> and <paramref name="copiedFiles" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         [JsonConstructor]
-        public CopyFilesInPackageResponse(MessageResponseCode responseCode, IEnumerable<string> copiedFiles)
+        public CopyFilesInPackageResponse(MessageResponseCode responseCode, IEnumerable<string>? copiedFiles)
         {
             if (!Enum.IsDefined(typeof(MessageResponseCode), responseCode))
             {

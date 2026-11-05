@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#nullable enable
-
 using System;
 using System.IO;
 using System.Threading;
@@ -15,5 +13,6 @@ namespace NuGet.VisualStudio.Internal.Contracts
     {
         ValueTask<Stream?> GetPackageIconAsync(PackageIdentity packageIdentity, CancellationToken cancellationToken);
         ValueTask<Stream?> GetEmbeddedLicenseAsync(PackageIdentity packageIdentity, CancellationToken cancellationToken);
+        ValueTask<Stream?> GetReadmeAsync(Uri readmeUri, CancellationToken cancellationToken);
     }
 }

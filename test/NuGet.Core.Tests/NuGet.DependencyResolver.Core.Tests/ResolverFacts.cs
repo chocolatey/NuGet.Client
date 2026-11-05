@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,14 +31,16 @@ namespace NuGet.DependencyResolver.Core.Tests
             slowProvider.AddLibrary(new LibraryIdentity
             {
                 Name = "A",
-                Version = new NuGetVersion("1.0.0")
+                Version = new NuGetVersion("1.0.0"),
+                Type = LibraryType.Package
             });
 
             var fastProvider = new TestProvider(TimeSpan.Zero);
             fastProvider.AddLibrary(new LibraryIdentity
             {
                 Name = "A",
-                Version = new NuGetVersion("1.0.0")
+                Version = new NuGetVersion("1.0.0"),
+                Type = LibraryType.Package
             });
 
             var context = new TestRemoteWalkContext();
@@ -69,14 +73,16 @@ namespace NuGet.DependencyResolver.Core.Tests
             slowProvider.AddLibrary(new LibraryIdentity
             {
                 Name = "A",
-                Version = new NuGetVersion("1.0.0")
+                Version = new NuGetVersion("1.0.0"),
+                Type = LibraryType.Package
             });
 
             var fastProvider = new TestProvider(TimeSpan.Zero);
             fastProvider.AddLibrary(new LibraryIdentity
             {
                 Name = "A",
-                Version = new NuGetVersion("1.1.0")
+                Version = new NuGetVersion("1.1.0"),
+                Type = LibraryType.Package
             });
 
             var context = new TestRemoteWalkContext();
@@ -119,6 +125,8 @@ namespace NuGet.DependencyResolver.Core.Tests
             public bool IsHttp => true;
 
             public PackageSource Source => new PackageSource("Test");
+
+            public SourceRepository SourceRepository => throw new NotImplementedException();
 
             public async Task<LibraryIdentity> FindLibraryAsync(
                 LibraryRange libraryRange,

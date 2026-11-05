@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System.Collections.Generic;
 using NuGet.Versioning;
 using NuGet.VisualStudio.Internal.Contracts;
@@ -29,7 +31,7 @@ namespace NuGet.PackageManagement.UI.Test.Converters
 
             object value = converter.Convert(input, targetType: null, parameter: null, culture: null);
 
-            Assert.IsType(typeof(PackageItemDeprecationLabelState), value);
+            Assert.IsType<PackageItemDeprecationLabelState>(value);
             Assert.Equal(expected, value);
         }
     }

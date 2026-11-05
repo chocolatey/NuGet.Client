@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -12,8 +14,8 @@ using Microsoft.VisualStudio.Shell.Interop;
 using Moq;
 using NuGet.Frameworks;
 using NuGet.ProjectManagement;
-using NuGet.RuntimeModel;
 using NuGet.VisualStudio;
+using VSLangProj150;
 
 namespace NuGet.PackageManagement.VisualStudio.Test
 {
@@ -26,7 +28,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         private readonly bool _isCPVMEnabled;
         private readonly IEnumerable<(string PackageId, string Version)> _projectPackageVersions;
         private readonly string _isCentralPackageVersionOverrideEnabled;
-        private readonly string _CentralPackageTransitivePinningEnabled;
+        private readonly string _isCentralPackageTransitivePinningEnabled;
 
         public TestVSProjectAdapter(
             string fullProjectPath,
@@ -49,39 +51,57 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             _isCPVMEnabled = projectPackageVersions?.Any() == true;
             _projectPackageVersions = projectPackageVersions;
             _isCentralPackageVersionOverrideEnabled = isCentralPackageVersionOverrideEnabled;
-            _CentralPackageTransitivePinningEnabled = CentralPackageTransitivePinningEnabled;
+            _isCentralPackageTransitivePinningEnabled = CentralPackageTransitivePinningEnabled;
 
             Mock.Get(BuildProperties)
-                .Setup(x => x.GetPropertyValue(It.Is<string>(x => x.Equals(ProjectBuildProperties.ManagePackageVersionsCentrally))))
+                .Setup(x => x.GetPropertyValue("MSBuildProjectName"))
+                .Returns(projectNames.ShortName);
+
+            Mock.Get(BuildProperties)
+                .Setup(x => x.GetPropertyValue("BuildingInsideVisualStudio"))
+                .Returns(bool.TrueString);
+
+#pragma warning disable CS0618 // Type or member is obsolete
+            Mock.Get(BuildProperties)
+                .Setup(x => x.GetPropertyValueWithDteFallback(It.Is<string>(x => x.Equals(ProjectBuildProperties.TargetFrameworkMoniker))))
+                .Returns(NuGetFramework.Parse(targetFrameworkString).DotNetFrameworkName);
+
+            Mock.Get(BuildProperties)
+                .Setup(x => x.GetPropertyValueWithDteFallback(It.Is<string>(x => x.Equals(ProjectBuildProperties.MSBuildProjectExtensionsPath))))
+                .Returns(GetMSBuildProjectExtensionsPath());
+
+            Mock.Get(BuildProperties)
+                .Setup(x => x.GetPropertyValueWithDteFallback(It.Is<string>(x => x.Equals(ProjectBuildProperties.ManagePackageVersionsCentrally))))
                 .Returns(_isCPVMEnabled.ToString());
 
             Mock.Get(BuildProperties)
-                .Setup(x => x.GetPropertyValue(It.Is<string>(x => x.Equals(ProjectBuildProperties.CentralPackageVersionOverrideEnabled))))
+                .Setup(x => x.GetPropertyValueWithDteFallback(It.Is<string>(x => x.Equals(ProjectBuildProperties.CentralPackageVersionOverrideEnabled))))
                 .Returns(_isCentralPackageVersionOverrideEnabled ?? string.Empty);
 
             Mock.Get(BuildProperties)
-                .Setup(x => x.GetPropertyValue(It.Is<string>(x => x.Equals(ProjectBuildProperties.CentralPackageTransitivePinningEnabled))))
-                .Returns(_CentralPackageTransitivePinningEnabled ?? string.Empty);
+                .Setup(x => x.GetPropertyValueWithDteFallback(It.Is<string>(x => x.Equals(ProjectBuildProperties.CentralPackageTransitivePinningEnabled))))
+                .Returns(_isCentralPackageTransitivePinningEnabled ?? string.Empty);
 
             Mock.Get(BuildProperties)
-                .Setup(x => x.GetPropertyValue(It.Is<string>(x => x.Equals(ProjectBuildProperties.NuGetLockFilePath))))
+                .Setup(x => x.GetPropertyValueWithDteFallback(It.Is<string>(x => x.Equals(ProjectBuildProperties.NuGetLockFilePath))))
                 .Returns(_nuGetLockFilePath);
 
             Mock.Get(BuildProperties)
-                .Setup(x => x.GetPropertyValue(It.Is<string>(x => x.Equals(ProjectBuildProperties.RestorePackagesWithLockFile))))
+                .Setup(x => x.GetPropertyValueWithDteFallback(It.Is<string>(x => x.Equals(ProjectBuildProperties.RestorePackagesWithLockFile))))
                 .Returns(_restorePackagesWithLockFile);
 
             Mock.Get(BuildProperties)
-                .Setup(x => x.GetPropertyValue(It.Is<string>(x => x.Equals(ProjectBuildProperties.RestoreLockedMode))))
+                .Setup(x => x.GetPropertyValueWithDteFallback(It.Is<string>(x => x.Equals(ProjectBuildProperties.RestoreLockedMode))))
                 .Returns(_restoreLockedMode.ToString());
+#pragma warning restore CS0618 // Type or member is obsolete
         }
 
-        public Task<string> GetMSBuildProjectExtensionsPathAsync()
+        public string GetMSBuildProjectExtensionsPath()
         {
-            return Task.FromResult(Path.Combine(ProjectDirectory, "obj"));
+            return Path.Combine(ProjectDirectory, "obj");
         }
 
-        public IProjectBuildProperties BuildProperties { get; } = Mock.Of<IProjectBuildProperties>();
+        public IVsProjectBuildProperties BuildProperties { get; } = Mock.Of<IVsProjectBuildProperties>();
 
         public string CustomUniqueName => ProjectNames.CustomUniqueName;
 
@@ -126,9 +146,9 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             return Task.FromResult(new FrameworkName(_targetFrameworkString));
         }
 
-        public Task<string[]> GetProjectTypeGuidsAsync()
+        public string[] GetProjectTypeGuids()
         {
-            return Task.FromResult(Array.Empty<string>());
+            return Array.Empty<string>();
         }
 
         public Task<IEnumerable<string>> GetReferencedProjectsAsync()
@@ -136,19 +156,9 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             return Task.FromResult(Enumerable.Empty<string>());
         }
 
-        public Task<IEnumerable<RuntimeDescription>> GetRuntimeIdentifiersAsync()
+        public NuGetFramework GetTargetFramework()
         {
-            return Task.FromResult(Enumerable.Empty<RuntimeDescription>());
-        }
-
-        public Task<IEnumerable<CompatibilityProfile>> GetRuntimeSupportsAsync()
-        {
-            return Task.FromResult(Enumerable.Empty<CompatibilityProfile>());
-        }
-
-        public Task<NuGetFramework> GetTargetFrameworkAsync()
-        {
-            return Task.FromResult(NuGetFramework.Parse(_targetFrameworkString));
+            return NuGetFramework.Parse(_targetFrameworkString);
         }
 
         public Task<IEnumerable<(string PackageId, string Version)>> GetPackageVersionInformationAsync()
@@ -156,19 +166,24 @@ namespace NuGet.PackageManagement.VisualStudio.Test
             return Task.FromResult(_projectPackageVersions);
         }
 
-        public async Task<IEnumerable<(string ItemId, string[] ItemMetadata)>> GetBuildItemInformationAsync(string itemName, params string[] metadataNames)
+        public IEnumerable<(string ItemId, string[] ItemMetadata)> GetBuildItemInformation(string itemName, params string[] metadataNames)
         {
             if (itemName == "PackageVersion")
             {
-                return await Task.FromResult(_projectPackageVersions.Select(x => (ItemId: x.PackageId, ItemMetadata: new string[] { x.Version })));
+                return _projectPackageVersions.Select(x => (ItemId: x.PackageId, ItemMetadata: new string[] { x.Version }));
             }
 
             return Enumerable.Empty<(string ItemId, string[] ItemMetadata)>();
         }
 
-        public Task<bool> IsCapabilityMatchAsync(string capabilityExpression)
+        public bool IsCapabilityMatch(string capabilityExpression)
         {
             throw new NotImplementedException();
+        }
+
+        public bool IsSupported(Reference6 projectReference)
+        {
+            return true;
         }
     }
 }

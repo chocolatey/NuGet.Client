@@ -26,7 +26,10 @@ Param (
     [switch]$CleanCache,
     [Alias('f')]
     [switch]$Force,
-    [switch]$RunTest
+    [switch]$SkipDotnetInfo,
+    [switch]$ProcDump,
+    [switch]$SkipDotnetForBuildInstallation,
+    [switch]$SkipDotnetForTestInstallation
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,18 +40,21 @@ Trace-Log "Configuring NuGet.Client build environment"
 
 $BuildErrors = @()
 
-Invoke-BuildStep 'Configuring git repo' {
-    Update-SubModules -Force:$Force
-} -ev +BuildErrors
+if ($ProcDump -eq $true -Or $env:CI -eq "true")
+{
+    Invoke-BuildStep 'Configuring Process Dump Collection' {
+
+        Install-ProcDump
+    } -ev +BuildErrors
+}
 
 Invoke-BuildStep 'Installing .NET CLI' {
-    Install-DotnetCLI -Force:$Force
-} -ev +BuildErrors
+    Install-DotnetCLI -Force:$Force -SkipDotnetInfo:$SkipDotnetInfo
+} -skip:($SkipDotnetForBuildInstallation) -ev +BuildErrors
 
-# Restoring tools required for build
-Invoke-BuildStep 'Restoring solution packages' {
-    Restore-SolutionPackages
-} -ev +BuildErrors
+Invoke-BuildStep 'Installing .NET SDKs for functional tests' {
+    Install-DotNetSdksForTesting -Force:$Force
+} -skip:($SkipDotnetForTestInstallation) -ev +BuildErrors
 
 Invoke-BuildStep 'Cleaning package cache' {
     Clear-PackageCache

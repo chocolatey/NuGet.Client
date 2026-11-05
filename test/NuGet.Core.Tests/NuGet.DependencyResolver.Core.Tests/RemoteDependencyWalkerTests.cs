@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -383,11 +385,12 @@ namespace NuGet.DependencyResolver.Tests
 
             // Restore doesn't actually support null versions so fake a resolved dependency
             var cNode = node.Path("A", "C");
-            cNode.Key.TypeConstraint = LibraryDependencyTarget.Package;
+            cNode.Key = new LibraryRange(cNode.Key) { TypeConstraint = LibraryDependencyTarget.Package };
             cNode.Item = new GraphItem<RemoteResolveResult>(new LibraryIdentity
             {
                 Name = "C",
-                Version = new NuGetVersion("2.0")
+                Version = new NuGetVersion("2.0"),
+                Type = LibraryType.Package
             });
 
             var result = node.Analyze();
@@ -751,8 +754,6 @@ namespace NuGet.DependencyResolver.Tests
         }
 
         [Theory]
-        [InlineData("3.0", "3.0")]
-        [InlineData("3.0", "3.0.0")]
         [InlineData("3.1", "3.0.0")]
         [InlineData("3.1.2", "3.1.1")]
         [InlineData("3.1.2-beta", "3.1.2-alpha")]
@@ -762,21 +763,26 @@ namespace NuGet.DependencyResolver.Tests
         [InlineData("3.1.2-beta-*", "3.1.2-alpha-*")]
         [InlineData("3.1.*", "3.1.2-alpha-*")]
         [InlineData("*", "3.1.2-alpha-*")]
-        [InlineData("*", "*")]
         [InlineData("1.*", "1.1.*")]
         [InlineData("1.*", "1.3.*")]
         [InlineData("1.8.*", "1.8.3.*")]
         [InlineData("1.8.3.5*", "1.8.3.4-*")]
         [InlineData("1.8.3.*", "1.8.3.4-*")]
-        [InlineData("1.8.3.4-alphabeta-*", "1.8.3.4-alpha*")]
         [InlineData("1.8.5.4-alpha-*", "1.8.3.4-gamma*")]
         [InlineData("1.8.3.6-alpha-*", "1.8.3.4-gamma*")]
         [InlineData("1.8.3-*", "1.8.3-alpha*")]
-        [InlineData("1.8.3-*", "1.8.3-*")]
         [InlineData("1.8.4-*", "1.8.3-*")]
         [InlineData("2.8.1-*", "1.8.3-*")]
         [InlineData("3.2.0-*", "3.1.0-beta-234")]
         [InlineData("3.*", "3.1.*")]
+        [InlineData("*", "*-*")]
+        [InlineData("3.0.0-preview.*", "3.0.0-preview.1")]
+        [InlineData("3.0.*", "3.0.1")]
+        [InlineData("*-preview.*", "3.0.1")]
+        [InlineData("3.*-preview.*", "3.0.1")]
+        [InlineData("3.0.*-preview.*", "3.0.1")]
+        [InlineData("3.0.1.*-preview.*", "3.0.1")]
+        [InlineData("1.8.3.4-alpha3", "1.8.3.4-alpha.*")]
         public void IsGreaterThanEqualTo_ReturnsTrue_IfRightVersionIsSmallerThanLeft(string leftVersionString, string rightVersionString)
         {
             // Arrange
@@ -785,9 +791,11 @@ namespace NuGet.DependencyResolver.Tests
 
             // Act
             var isGreater = RemoteDependencyWalker.IsGreaterThanOrEqualTo(leftVersion, rightVersion);
+            var isSmaller = RemoteDependencyWalker.IsGreaterThanOrEqualTo(rightVersion, leftVersion);
 
             // Assert
             Assert.True(isGreater);
+            Assert.False(isSmaller);
         }
 
         [Theory]
@@ -806,6 +814,16 @@ namespace NuGet.DependencyResolver.Tests
         [InlineData("3.4.6-beta*", "3.4.6-betb*")]
         [InlineData("3.1.0-beta-234", "3.2.0-*")]
         [InlineData("3.0.0-*", "3.1.0-beta-234")]
+        [InlineData("6.8.0", "*-*")]
+        [InlineData("3.0.0-preview.1", "3.0.0-preview.*")]
+        [InlineData("3.0.1", "3.0.*")]
+        [InlineData("3.0.1", "*-preview.*")]
+        [InlineData("3.0.1", "3.*-preview.*")]
+        [InlineData("3.0.1", "3.0.*-preview.*")]
+        [InlineData("3.0.1", "3.0.1.*-preview.*")]
+        [InlineData("99.*", "*-*")]
+        [InlineData("*-preview.*", "*-*")]
+        [InlineData("1.8.3.4-alphabeta-*", "1.8.3.4-alpha*")]
         public void IsGreaterThanEqualTo_ReturnsFalse_IfRightVersionIsLargerThanLeft(string leftVersionString, string rightVersionString)
         {
             // Arrange
@@ -814,9 +832,31 @@ namespace NuGet.DependencyResolver.Tests
 
             // Act
             var isGreater = RemoteDependencyWalker.IsGreaterThanOrEqualTo(leftVersion, rightVersion);
+            var isSmaller = RemoteDependencyWalker.IsGreaterThanOrEqualTo(rightVersion, leftVersion);
 
             // Assert
             Assert.False(isGreater);
+            Assert.True(isSmaller);
+        }
+
+        [Theory]
+        [InlineData("*", "*")]
+        [InlineData("3.0", "3.0")]
+        [InlineData("3.0", "3.0.0")]
+        [InlineData("1.8.3-*", "1.8.3-*")]
+        public void IsGreaterThanEqualTo_ReturnsTrue_IfRightVersionAndLeftVersionAreEquivalent(string leftVersionString, string rightVersionString)
+        {
+            // Arrange
+            var leftVersion = VersionRange.Parse(leftVersionString);
+            var rightVersion = VersionRange.Parse(rightVersionString);
+
+            // Act
+            var left = RemoteDependencyWalker.IsGreaterThanOrEqualTo(leftVersion, rightVersion);
+            var right = RemoteDependencyWalker.IsGreaterThanOrEqualTo(rightVersion, leftVersion);
+
+            // Assert
+            Assert.True(left);
+            Assert.True(right);
         }
 
         [Fact]
@@ -929,18 +969,18 @@ namespace NuGet.DependencyResolver.Tests
 
             // Assert
             Assert.Equal(2, rootNode.InnerNodes.Count);
-            var centralVersionInGraphNode = rootNode.InnerNodes.Where(n => n.Item.Key.Name == centralPackageName).FirstOrDefault();
+            var centralVersionInGraphNode = rootNode.InnerNodes.FirstOrDefault(n => n.Item.Key.Name == centralPackageName);
             Assert.NotNull(centralVersionInGraphNode);
             Assert.Equal(centralPackageVersion, centralVersionInGraphNode.Item.Key.Version.ToNormalizedString());
             Assert.True(centralVersionInGraphNode.Item.IsCentralTransitive);
 
-            var BNode = rootNode.InnerNodes.Where(n => n.Item.Key.Name == "B").FirstOrDefault();
+            var BNode = rootNode.InnerNodes.FirstOrDefault(n => n.Item.Key.Name == "B");
             Assert.NotNull(BNode);
             Assert.Equal(1, BNode.InnerNodes.Count);
             Assert.Equal(otherVersion, BNode.Item.Key.Version.ToNormalizedString());
             Assert.False(BNode.Item.IsCentralTransitive);
 
-            var CNode = BNode.InnerNodes.Where(n => n.Item.Key.Name == "C").FirstOrDefault();
+            var CNode = BNode.InnerNodes.FirstOrDefault(n => n.Item.Key.Name == "C");
             Assert.NotNull(CNode);
             Assert.Equal(otherVersion, CNode.Item.Key.Version.ToNormalizedString());
             Assert.Equal(0, CNode.InnerNodes.Count);
@@ -1288,6 +1328,103 @@ namespace NuGet.DependencyResolver.Tests
         }
 
         /// <summary>
+        /// A -> D 1.0.0 -> E 1.0.0(this will be rejected) -> B 1.0.0
+        ///   -> F 1.0.0 -> G 1.0.0(this will be rejected) -> C 1.0.0
+        ///   -> H 2.0.0 -> E 2.0.0
+        ///   -> I 2.0.0 -> G 2.0.0
+        ///
+        ///  B and C has version 2.0.0 defined centrally
+        ///   C 2.0.0 -> J 2.0.0 (Extra dependency not defined centrally) -> B 2.0.0
+        ///   B 2.0.0
+        /// </summary>
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task CentralTransitiveDependency_IsRejected_If_CentralTransitiveParentsAreRejected(bool extraDependency)
+        {
+            var framework = NuGetFramework.Parse("net45");
+
+            var context = new TestRemoteWalkContext();
+            var provider = new DependencyProvider();
+            var v1 = "1.0.0";
+            var v2 = "2.0.0";
+
+            provider.Package("A", v1).DependsOn("D", v1);
+            provider.Package("A", v1).DependsOn("F", v1);
+            provider.Package("A", v1).DependsOn("H", v2);
+            provider.Package("A", v1).DependsOn("I", v2);
+            provider.Package("D", v1).DependsOn("E", v1);
+            provider.Package("E", v1).DependsOn("B", v1);
+            provider.Package("F", v1).DependsOn("G", v1);
+            provider.Package("G", v1).DependsOn("C", v1);
+            provider.Package("H", v2).DependsOn("E", v2);
+            provider.Package("I", v2).DependsOn("G", v2);
+            provider.Package("C", v1);
+            provider.Package("B", v1);
+            provider.Package("E", v2);
+            provider.Package("G", v2);
+
+            if (extraDependency)
+            {
+                provider.Package("C", v2).DependsOn("J", v2);
+                provider.Package("J", v2).DependsOn("B", v2);
+            }
+            else
+            {
+                provider.Package("C", v2).DependsOn("B", v2);
+            }
+
+            provider.Package("B", v2);
+
+
+            provider.Package("A", v1)
+                .DependsOn("C", v2, LibraryDependencyTarget.Package, versionCentrallyManaged: true, libraryDependencyReferenceType: LibraryDependencyReferenceType.None);
+
+            provider.Package("A", v1)
+                .DependsOn("B", v2, LibraryDependencyTarget.Package, versionCentrallyManaged: true, libraryDependencyReferenceType: LibraryDependencyReferenceType.None);
+
+            context.LocalLibraryProviders.Add(provider);
+            var walker = new RemoteDependencyWalker(context);
+
+            // Act
+            var rootNode = await DoWalkAsync(walker, "A", framework);
+
+            // Assert
+            AnalyzeResult<RemoteResolveResult> result = rootNode.Analyze();
+
+            var centralTransitiveNodes = rootNode.InnerNodes.Where(n => n.Item.IsCentralTransitive).ToList();
+            Assert.Equal(2, centralTransitiveNodes.Count);
+            Assert.Equal(Disposition.Rejected, centralTransitiveNodes.First().Disposition);
+            Assert.Equal(Disposition.Rejected, centralTransitiveNodes.Last().Disposition);
+
+            rootNode.ForEach((n) =>
+            {
+                if (n.Key.Name == "A" ||
+                    n.Key.Name == "D" && n.Key.VersionRange.OriginalString == v1 ||
+                    n.Key.Name == "F" && n.Key.VersionRange.OriginalString == v1 ||
+                    n.Key.Name == "E" && n.Key.VersionRange.OriginalString == v2 ||
+                    n.Key.Name == "G" && n.Key.VersionRange.OriginalString == v2 ||
+                    n.Key.Name == "H" && n.Key.VersionRange.OriginalString == v2 ||
+                    n.Key.Name == "I" && n.Key.VersionRange.OriginalString == v2)
+                {
+                    Assert.Equal(Disposition.Accepted, n.Disposition);
+                }
+                else if (n.Key.Name == "C" && n.Key.VersionRange.OriginalString == v2 ||
+                    n.Key.Name == "J" && n.Key.VersionRange.OriginalString == v2 ||
+                    n.Key.Name == "B" && n.Key.VersionRange.OriginalString == v2 ||
+                    n.Key.Name == "E" && n.Key.VersionRange.OriginalString == v1 ||
+                    n.Key.Name == "G" && n.Key.VersionRange.OriginalString == v1)
+                {
+                    Assert.Equal(Disposition.Rejected, n.Disposition);
+                }
+                else
+                {
+                    Assert.Fail(n.Key.ToString());
+                }
+            });
+        }
+
+        /// <summary>
         /// A -> B 1.0.0 -> C 1.0.0(this will be rejected) -> D 1.0.0 -> E 1.0.0
         ///   -> F 1.0.0 -> C 2.0.0 -> H 2.0.0
         ///   -> G 1.0.0 -> H 2.0.0(this will not be rejected) -> D 1.0.0
@@ -1457,7 +1594,7 @@ namespace NuGet.DependencyResolver.Tests
                 {
                     // No D node expected in the graph
                     // all downgrades shoudl have been removed
-                    Assert.True(n.Key.Name != "D");
+                    Assert.NotEqual("D", n.Key.Name);
 
                     if ((n.Key.Name == "C" && n.Key.VersionRange.OriginalString == "1.0.0") ||
                         (n.Key.Name == "H" && n.Key.VersionRange.OriginalString == "1.0.0"))
@@ -1553,7 +1690,7 @@ namespace NuGet.DependencyResolver.Tests
                 {
                     // No D node expected in the graph
                     // all downgrades should have been removed
-                    Assert.True(n.Key.Name != "D");
+                    Assert.NotEqual("D", n.Key.Name);
 
                     if ((n.Key.Name == "C" && n.Key.VersionRange.OriginalString == "1.0.0") ||
                         (n.Key.Name == "H" && n.Key.VersionRange.OriginalString == "1.0.0"))
@@ -1646,7 +1783,7 @@ namespace NuGet.DependencyResolver.Tests
                 {
                     // No D node expected in the graph
                     // all downgrades should have been removed
-                    Assert.True(n.Key.Name != "D");
+                    Assert.NotEqual("D", n.Key.Name);
 
                     if ((n.Key.Name == "C" && n.Key.VersionRange.OriginalString == "1.0.0"))
                     {
@@ -1887,7 +2024,7 @@ namespace NuGet.DependencyResolver.Tests
         ///  D has version defined centrally 2.0.0
         ///  D 2.0.0 -> I 2.0.0 (this will be downgraded due to central I 1.0.0)
         ///  (D 2.0.0 should have parentNode C 1.0.0)
-        ///  
+        ///
         ///  I has version defined centrally 1.0.0
         ///  I 1.0.0 -> G 1.0.0
         ///  (I 1.0.0 should have parentNode D 2.0.0)
@@ -1945,8 +2082,8 @@ namespace NuGet.DependencyResolver.Tests
             //check if ParentNodes of centralTranstiveNodes are added correctly
             List<GraphNode<RemoteResolveResult>> centralTransitiveNodes = allNodes.Where(n => n.Item.IsCentralTransitive).ToList();
             Assert.Equal(2, centralTransitiveNodes.Count);
-            Assert.True(centralTransitiveNodes.Any(n => n.Item.Key.Name == "D"));
-            Assert.True(centralTransitiveNodes.Any(n => n.Item.Key.Name == "I"));
+            Assert.Contains(centralTransitiveNodes, n => n.Item.Key.Name == "D");
+            Assert.Contains(centralTransitiveNodes, n => n.Item.Key.Name == "I");
 
             foreach (var node in centralTransitiveNodes)
             {
@@ -1970,10 +2107,10 @@ namespace NuGet.DependencyResolver.Tests
 
             var nonCentralTransitiveNodes = allNodes.Where(n => !n.Item.IsCentralTransitive).ToList();
             Assert.Equal(4, nonCentralTransitiveNodes.Count);
-            Assert.True(nonCentralTransitiveNodes.Any(n => n.Item.Key.Name == "A"));
-            Assert.True(nonCentralTransitiveNodes.Any(n => n.Item.Key.Name == "B"));
-            Assert.True(nonCentralTransitiveNodes.Any(n => n.Item.Key.Name == "C"));
-            Assert.True(nonCentralTransitiveNodes.Any(n => n.Item.Key.Name == "G"));
+            Assert.Contains(nonCentralTransitiveNodes, n => n.Item.Key.Name == "A");
+            Assert.Contains(nonCentralTransitiveNodes, n => n.Item.Key.Name == "B");
+            Assert.Contains(nonCentralTransitiveNodes, n => n.Item.Key.Name == "C");
+            Assert.Contains(nonCentralTransitiveNodes, n => n.Item.Key.Name == "G");
             foreach (var node in nonCentralTransitiveNodes)
             {
                 Assert.Equal(0, node.ParentNodes.Count);
@@ -1983,10 +2120,10 @@ namespace NuGet.DependencyResolver.Tests
             //check if InnerNodes of nodesWithEmptyInnerNodes are pointing to the static empty list correctly
             var nodesWithEmptyInnerNodes = allNodes.Where(n => n.InnerNodes.Count == 0).ToList();
             Assert.Equal(3, nodesWithEmptyInnerNodes.Count);
-            Assert.True(nodesWithEmptyInnerNodes.Any(n => n.Item.Key.Name == "C"));
-            Assert.True(nodesWithEmptyInnerNodes.Any(n => n.Item.Key.Name == "D"));
-            Assert.True(nodesWithEmptyInnerNodes.Any(n => n.Item.Key.Name == "G"));
-            Assert.True(nodesWithEmptyInnerNodes.Where(n => n.Item.Key.Name == "G").Single().InnerNodes == staticEmptyList);
+            Assert.Contains(nodesWithEmptyInnerNodes, n => n.Item.Key.Name == "C");
+            Assert.Contains(nodesWithEmptyInnerNodes, n => n.Item.Key.Name == "D");
+            Assert.Contains(nodesWithEmptyInnerNodes, n => n.Item.Key.Name == "G");
+            Assert.True(nodesWithEmptyInnerNodes.Single(n => n.Item.Key.Name == "G").InnerNodes == staticEmptyList);
 
             Assert.Equal(1, result.Downgrades.Count);
         }
@@ -2045,12 +2182,12 @@ namespace NuGet.DependencyResolver.Tests
             //check if InnerNodes of  are pointing to the static empty list correctly
             var nodesWithEmptyInnerNodes = allNodes.Where(n => n.InnerNodes.Count == 0).ToList();
             Assert.Equal(3, nodesWithEmptyInnerNodes.Count);
-            Assert.True(nodesWithEmptyInnerNodes.Any(n => n.Item.Key.Name == "B"));
-            Assert.True(nodesWithEmptyInnerNodes.Where(n => n.Item.Key.Name == "B").Single().InnerNodes != staticEmptyList);
-            Assert.True(nodesWithEmptyInnerNodes.Any(n => n.Item.Key.Name == "C"));
-            Assert.True(nodesWithEmptyInnerNodes.Where(n => n.Item.Key.Name == "C").Single().InnerNodes == staticEmptyList);
-            Assert.True(nodesWithEmptyInnerNodes.Any(n => n.Item.Key.Name == "E"));
-            Assert.True(nodesWithEmptyInnerNodes.Where(n => n.Item.Key.Name == "E").Single().InnerNodes == staticEmptyList);
+            Assert.Contains(nodesWithEmptyInnerNodes, n => n.Item.Key.Name == "B");
+            Assert.True(nodesWithEmptyInnerNodes.Single(n => n.Item.Key.Name == "B").InnerNodes != staticEmptyList);
+            Assert.Contains(nodesWithEmptyInnerNodes, n => n.Item.Key.Name == "C");
+            Assert.True(nodesWithEmptyInnerNodes.Single(n => n.Item.Key.Name == "C").InnerNodes == staticEmptyList);
+            Assert.Contains(nodesWithEmptyInnerNodes, n => n.Item.Key.Name == "E");
+            Assert.True(nodesWithEmptyInnerNodes.Single(n => n.Item.Key.Name == "E").InnerNodes == staticEmptyList);
         }
 
         private void AssertPath<TItem>(GraphNode<TItem> node, params string[] items)

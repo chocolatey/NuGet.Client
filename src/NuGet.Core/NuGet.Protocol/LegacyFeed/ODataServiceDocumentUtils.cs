@@ -33,7 +33,7 @@ static internal class ODataServiceDocumentUtils
                         return Task.FromResult(url);
                     }
 
-                    return Task.FromResult(response.RequestMessage.RequestUri.ToString());
+                    return Task.FromResult(response.RequestMessage.RequestUri!.ToString());
                 },
                 log,
                 token);

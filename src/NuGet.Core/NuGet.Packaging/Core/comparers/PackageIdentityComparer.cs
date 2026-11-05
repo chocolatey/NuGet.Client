@@ -18,7 +18,7 @@ namespace NuGet.Packaging.Core
         /// Default version range comparer.
         /// </summary>
         public PackageIdentityComparer()
-            : this(new VersionComparer(VersionComparison.Default))
+            : this(VersionComparer.Default)
         {
         }
 
@@ -26,7 +26,7 @@ namespace NuGet.Packaging.Core
         /// Compare versions with a specific VersionComparison
         /// </summary>
         public PackageIdentityComparer(VersionComparison versionComparison)
-            : this(new VersionComparer(versionComparison))
+            : this(VersionComparer.Get(versionComparison))
         {
         }
 
@@ -48,10 +48,26 @@ namespace NuGet.Packaging.Core
         /// </summary>
         public static PackageIdentityComparer Default { get; } = new PackageIdentityComparer();
 
+        internal static PackageIdentityComparer Version { get; } = new PackageIdentityComparer(VersionComparison.Version);
+        internal static PackageIdentityComparer VersionRelease { get; } = new PackageIdentityComparer(VersionComparison.VersionRelease);
+        internal static PackageIdentityComparer VersionReleaseMetadata { get; } = new PackageIdentityComparer(VersionComparison.VersionReleaseMetadata);
+
+        internal static PackageIdentityComparer Get(VersionComparison versionComparison)
+        {
+            return versionComparison switch
+            {
+                VersionComparison.Default => Default,
+                VersionComparison.Version => Version,
+                VersionComparison.VersionRelease => VersionRelease,
+                VersionComparison.VersionReleaseMetadata => VersionReleaseMetadata,
+                _ => new PackageIdentityComparer(versionComparison),
+            };
+        }
+
         /// <summary>
         /// True if the package identities are the same when ignoring build metadata.
         /// </summary>
-        public bool Equals(PackageIdentity x, PackageIdentity y)
+        public bool Equals(PackageIdentity? x, PackageIdentity? y)
         {
             if (ReferenceEquals(x, y))
             {
@@ -64,7 +80,7 @@ namespace NuGet.Packaging.Core
                 return false;
             }
 
-            return _versionComparer.Equals(x.Version, y.Version)
+            return _versionComparer.Equals(x.Version!, y.Version!)
                 && StringComparer.OrdinalIgnoreCase.Equals(x.Id, y.Id);
         }
 
@@ -81,7 +97,7 @@ namespace NuGet.Packaging.Core
             var combiner = new HashCodeCombiner();
 
             combiner.AddObject(obj.Id, StringComparer.OrdinalIgnoreCase);
-            combiner.AddObject(_versionComparer.GetHashCode(obj.Version));
+            combiner.AddObject(obj.Version, _versionComparer);
 
             return combiner.CombinedHash;
         }
@@ -89,7 +105,7 @@ namespace NuGet.Packaging.Core
         /// <summary>
         /// Compares on the Id first, then version
         /// </summary>
-        public int Compare(PackageIdentity x, PackageIdentity y)
+        public int Compare(PackageIdentity? x, PackageIdentity? y)
         {
             if (ReferenceEquals(x, y))
             {
@@ -110,7 +126,7 @@ namespace NuGet.Packaging.Core
 
             if (result == 0)
             {
-                result = _versionComparer.Compare(x.Version, y.Version);
+                result = _versionComparer.Compare(x.Version!, y.Version!);
             }
 
             return result;

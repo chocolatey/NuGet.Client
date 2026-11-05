@@ -1,18 +1,24 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using NuGet.Common;
 using NuGet.Frameworks;
+#if NETFRAMEWORK
+using System.Linq;
+#endif
+using NuGet.ProjectModel;
 
 namespace NuGet.Build.Tasks
 {
-    public class GetReferenceNearestTargetFrameworkTask : Microsoft.Build.Utilities.Task
+    [MSBuildMultiThreadableTask]
+    public class GetReferenceNearestTargetFrameworkTask : Task
     {
         private const string NEAREST_TARGET_FRAMEWORK = "NearestTargetFramework";
         private const string TARGET_FRAMEWORKS = "TargetFrameworks";
@@ -36,6 +42,12 @@ namespace NuGet.Build.Tasks
         /// </summary>
         public string CurrentProjectTargetPlatform { get; set; }
 
+
+        /// <summary>
+        /// The value of the current project's TargetFramework property.
+        /// </summary>
+        public string CurrentProjectTargetFrameworkProperty { get; set; }
+
         /// <summary>
         /// Optional list of target frameworks to be used as Fallback target frameworks.
         /// </summary>
@@ -54,22 +66,7 @@ namespace NuGet.Build.Tasks
 
         public override bool Execute()
         {
-
             var logger = new MSBuildLogger(Log);
-
-            BuildTasksUtility.LogInputParam(logger, nameof(CurrentProjectTargetFramework), CurrentProjectTargetFramework);
-
-            BuildTasksUtility.LogInputParam(logger, nameof(CurrentProjectTargetPlatform), CurrentProjectTargetPlatform);
-
-            BuildTasksUtility.LogInputParam(logger, nameof(FallbackTargetFrameworks),
-                FallbackTargetFrameworks == null
-                    ? ""
-                    : string.Join(";", FallbackTargetFrameworks.Select(p => p)));
-
-            BuildTasksUtility.LogInputParam(logger, nameof(AnnotatedProjectReferences),
-                AnnotatedProjectReferences == null
-                    ? ""
-                    : string.Join(";", AnnotatedProjectReferences.Select(p => p.ItemSpec)));
 
             if (AnnotatedProjectReferences == null)
             {
@@ -108,8 +105,6 @@ namespace NuGet.Build.Tasks
             {
                 AssignedProjects[index] = AssignNearestFrameworkForSingleReference(AnnotatedProjectReferences[index], projectNuGetFramework, fallbackNuGetFrameworks, logger);
             }
-
-            BuildTasksUtility.LogOutputParam(logger, nameof(AssignedProjects), string.Join(";", AssignedProjects.Select(p => p.ItemSpec)));
 
             return !Log.HasLoggedErrors;
         }
@@ -152,27 +147,32 @@ namespace NuGet.Build.Tasks
             var useTargetMonikers = referencedProjectTargetFrameworkMonikers.Length > 0;
             for (int i = 0; i < referencedProjectFrameworks.Length; i++)
             {
-
-                targetFrameworkInformations.Add(new TargetFrameworkInformation(
-                    referencedProjectFrameworks[i],
-                    useTargetMonikers ? referencedProjectTargetFrameworkMonikers[i] : null,
-                    useTargetMonikers ? referencedProjectTargetPlatformMonikers[i] : null));
+                targetFrameworkInformations.Add(new TargetFrameworkInformation()
+                {
+                    TargetAlias = referencedProjectFrameworks[i],
+                    FrameworkName = GetNuGetFramework(
+                                        referencedProjectFrameworks[i],
+                                        useTargetMonikers ? referencedProjectTargetFrameworkMonikers[i] : null,
+                                        useTargetMonikers ? referencedProjectTargetPlatformMonikers[i] : null)
+                });
             }
 
-            // try project framework
-            var nearestNuGetFramework = NuGetFrameworkUtility.GetNearest(targetFrameworkInformations, projectNuGetFramework, GetNuGetFramework);
-            if (nearestNuGetFramework != null)
+            var packageSpec = new PackageSpec(targetFrameworkInformations);
+
+            var nearestNuGetFramework = packageSpec.GetNearestTargetFramework(projectNuGetFramework, CurrentProjectTargetFrameworkProperty);
+
+            if (nearestNuGetFramework.FrameworkName != null)
             {
-                itemWithProperties.SetMetadata(NEAREST_TARGET_FRAMEWORK, nearestNuGetFramework._targetFrameworkAlias);
+                itemWithProperties.SetMetadata(NEAREST_TARGET_FRAMEWORK, nearestNuGetFramework.TargetAlias);
                 return itemWithProperties;
             }
 
             // try project fallback frameworks
             foreach (var currentProjectTargetFramework in fallbackNuGetFrameworks)
             {
-                nearestNuGetFramework = NuGetFrameworkUtility.GetNearest(targetFrameworkInformations, currentProjectTargetFramework, GetNuGetFramework);
+                nearestNuGetFramework = packageSpec.GetNearestTargetFramework(currentProjectTargetFramework, targetAlias: CurrentProjectTargetFrameworkProperty);
 
-                if (nearestNuGetFramework != null)
+                if (nearestNuGetFramework.FrameworkName != null)
                 {
                     var message = string.Format(CultureInfo.CurrentCulture,
                         Strings.ImportsFallbackWarning,
@@ -187,7 +187,7 @@ namespace NuGet.Build.Tasks
                     // log NU1702 for ATF on project reference
                     logger.Log(warning);
 
-                    itemWithProperties.SetMetadata(NEAREST_TARGET_FRAMEWORK, nearestNuGetFramework._targetFrameworkAlias);
+                    itemWithProperties.SetMetadata(NEAREST_TARGET_FRAMEWORK, nearestNuGetFramework.TargetAlias);
                     return itemWithProperties;
                 }
             }
@@ -234,33 +234,19 @@ namespace NuGet.Build.Tasks
             return true;
         }
 
-        private static NuGetFramework GetNuGetFramework(TargetFrameworkInformation targetFrameworkInformation)
+        private static NuGetFramework GetNuGetFramework(string targetAlias, string targetFrameworkMoniker, string targetPlatformMoniker)
         {
             // Legacy path, process targetFrameworks if empty
-            if (string.IsNullOrEmpty(targetFrameworkInformation._targetFrameworkMoniker))
+            if (string.IsNullOrEmpty(targetFrameworkMoniker))
             {
-                return NuGetFramework.Parse(targetFrameworkInformation._targetFrameworkAlias);
+                return NuGetFramework.Parse(targetAlias);
             }
 
             // TargetFrameworkMoniker is always expected to be set. TargetPlatformMoniker will have a `None` value when empty, for frameworks like net5.0.
-            return NuGetFramework.ParseComponents(targetFrameworkInformation._targetFrameworkMoniker,
-                targetFrameworkInformation._targetPlatformMoniker.Equals("None", StringComparison.OrdinalIgnoreCase) ?
+            return NuGetFramework.ParseComponents(targetFrameworkMoniker,
+                targetPlatformMoniker.Equals("None", StringComparison.OrdinalIgnoreCase) ?
                     string.Empty :
-                    targetFrameworkInformation._targetPlatformMoniker);
-        }
-
-        internal class TargetFrameworkInformation
-        {
-            internal readonly string _targetFrameworkAlias;
-            internal readonly string _targetFrameworkMoniker;
-            internal readonly string _targetPlatformMoniker;
-
-            public TargetFrameworkInformation(string targetFrameworkAlias, string targetFrameworkMoniker, string targetPlatformMoniker)
-            {
-                _targetFrameworkAlias = targetFrameworkAlias;
-                _targetFrameworkMoniker = targetFrameworkMoniker;
-                _targetPlatformMoniker = targetPlatformMoniker;
-            }
+                    targetPlatformMoniker);
         }
     }
 }

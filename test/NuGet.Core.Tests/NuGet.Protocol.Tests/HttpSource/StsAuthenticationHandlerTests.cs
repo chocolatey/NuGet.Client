@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 #if !IS_CORECLR
 using System;
 using System.Collections.Generic;
@@ -207,13 +209,6 @@ namespace NuGet.Protocol.Tests
         {
             return new LambdaMessageHandler(
                 _ => new HttpResponseMessage(statusCode));
-        }
-
-        private static LambdaMessageHandler GetLambdaMessageHandler(params HttpStatusCode[] statusCodes)
-        {
-            var responses = new Queue<HttpStatusCode>(statusCodes);
-            return new LambdaMessageHandler(
-                _ => new HttpResponseMessage(responses.Dequeue()));
         }
 
         private static async Task<HttpResponseMessage> SendAsync(HttpMessageHandler handler, HttpRequestMessage request = null)

@@ -28,6 +28,16 @@ namespace NuGet.Protocol.Core.Types
         /// </summary>
         public SourceRepositoryProvider(IPackageSourceProvider packageSourceProvider, IEnumerable<Lazy<INuGetResourceProvider>> resourceProviders)
         {
+            if (packageSourceProvider == null)
+            {
+                throw new ArgumentNullException(nameof(packageSourceProvider));
+            }
+
+            if (resourceProviders == null)
+            {
+                throw new ArgumentNullException(nameof(resourceProviders));
+            }
+
             _packageSourceProvider = packageSourceProvider;
             _resourceProviders = resourceProviders;
             _repositories = new List<SourceRepository>();

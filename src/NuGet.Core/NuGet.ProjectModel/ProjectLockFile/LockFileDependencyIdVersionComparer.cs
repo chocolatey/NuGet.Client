@@ -11,7 +11,7 @@ namespace NuGet.ProjectModel
     {
         public static LockFileDependencyIdVersionComparer Default { get; } = new LockFileDependencyIdVersionComparer();
 
-        public bool Equals(LockFileDependency x, LockFileDependency y)
+        public bool Equals(LockFileDependency? x, LockFileDependency? y)
         {
             if (ReferenceEquals(x, y))
             {
@@ -29,6 +29,11 @@ namespace NuGet.ProjectModel
 
         public int GetHashCode(LockFileDependency obj)
         {
+            if (obj == null)
+            {
+                throw new ArgumentNullException(nameof(obj));
+            }
+
             var combiner = new HashCodeCombiner();
             combiner.AddObject(obj.Id);
             combiner.AddObject(obj.ResolvedVersion);

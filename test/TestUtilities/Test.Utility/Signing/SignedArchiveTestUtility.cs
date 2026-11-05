@@ -1,14 +1,12 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-#if IS_SIGNING_SUPPORTED
-using System.Security.Cryptography.Pkcs;
-#endif
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,15 +15,16 @@ using NuGet.Packaging;
 using NuGet.Packaging.Signing;
 using NuGet.Test.Utility;
 using Xunit;
+using System.Collections.Generic;
+using System.Security.Cryptography.Pkcs;
 
 namespace Test.Utility.Signing
 {
     public static class SignedArchiveTestUtility
     {
-#if IS_SIGNING_SUPPORTED
         /// <summary>
         /// Generates an author signed copy of a package and returns the path to that package
-        /// This method can timestamp a package and should only be used with tests marked with [CIOnlyFact]
+        /// This method can timestamp a package and should only be used with tests marked with [Fact]
         /// </summary>
         /// <param name="certificate">Certificate to be used while signing the package</param>
         /// <param name="nupkg">Package to be signed</param>
@@ -53,11 +52,9 @@ namespace Test.Utility.Signing
 
             return await AuthorSignPackageAsync(certificate, timestampService, signatureHashAlgorithm, timestampHashAlgorithm, signedPackagePath, tempPath);
         }
-#endif
-#if IS_SIGNING_SUPPORTED
         /// <summary>
         /// Generates an author signed copy of a package and returns the path to that package
-        /// This method can timestamp a package and should only be used with tests marked with [CIOnlyFact]
+        /// This method can timestamp a package and should only be used with tests marked with [Fact]
         /// </summary>
         /// <param name="certificate">Certificate to be used while signing the package</param>
         /// <param name="packageStream">Stream of package to be signed</param>
@@ -90,8 +87,7 @@ namespace Test.Utility.Signing
 
             return await AuthorSignPackageAsync(certificate, timestampService, signatureHashAlgorithm, timestampHashAlgorithm, signedPackagePath, tempPath);
         }
-#endif
-#if IS_SIGNING_SUPPORTED
+
         private static async Task<string> AuthorSignPackageAsync(
             X509Certificate2 certificate,
             Uri timestampService,
@@ -117,7 +113,7 @@ namespace Test.Utility.Signing
 
         /// <summary>
         /// Generates an repository signed copy of a package and returns the path to that package
-        /// This method can timestamp a package and should only be used with tests marked with [CIOnlyFact]
+        /// This method can timestamp a package and should only be used with tests marked with [Fact]
         /// </summary>
         /// <param name="certificate">Certificate to be used while signing the package</param>
         /// <param name="nupkg">Package to be signed</param>
@@ -166,7 +162,7 @@ namespace Test.Utility.Signing
 
         /// <summary>
         /// Generates an repository signed copy of a package and returns the path to that package
-        /// This method can timestamp a package and should only be used with tests marked with [CIOnlyFact]
+        /// This method can timestamp a package and should only be used with tests marked with [Fact]
         /// </summary>
         /// <remarks>If the package is already author signed this method will repository countersign it</remarks>
         /// <param name="certificate">Certificate to be used while signing the package</param>
@@ -204,7 +200,6 @@ namespace Test.Utility.Signing
 
             return outputPackagePath;
         }
-#endif
 
         public static async Task CreateSignedPackageAsync(
             SignPackageRequest request,
@@ -288,7 +283,6 @@ namespace Test.Utility.Signing
             return await signatureProvider.CreateRepositoryCountersignatureAsync(request, signature, testLogger, CancellationToken.None);
         }
 
-#if IS_SIGNING_SUPPORTED
         // This generates a package with a basic signed CMS.
         // The signature MUST NOT have any signed or unsigned attributes.
         public static async Task<FileInfo> SignPackageFileWithBasicSignedCmsAsync(
@@ -350,7 +344,6 @@ namespace Test.Utility.Signing
 
             return timestampProvider.TimestampSignatureAsync(primarySignature, timestampRequest, logger, CancellationToken.None);
         }
-#endif
 
         public static async Task<bool> IsSignedAsync(Stream package)
         {
@@ -373,9 +366,7 @@ namespace Test.Utility.Signing
                 var primarySignature = await reader.GetPrimarySignatureAsync(CancellationToken.None);
                 if (primarySignature != null)
                 {
-#if IS_SIGNING_SUPPORTED
                     return SignatureUtility.HasRepositoryCountersignature(primarySignature);
-#endif
                 }
 
                 return false;

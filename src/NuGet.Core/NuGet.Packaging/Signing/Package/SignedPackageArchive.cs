@@ -74,6 +74,7 @@ namespace NuGet.Packaging.Signing
             {
                 throw new SignatureException(Strings.SignedPackageNotSignedOnRemove);
             }
+            ThrowIfZipReadStreamIsNull();
 
             using (var reader = new BinaryReader(ZipReadStream, SigningSpecifications.Encoding, leaveOpen: true))
             using (var writer = new BinaryWriter(_zipWriteStream, SigningSpecifications.Encoding, leaveOpen: true))

@@ -2,30 +2,36 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Runtime.Serialization;
 
 namespace NuGet.Credentials
 {
-    [Serializable]
+    /// <summary>
+    /// The exception thrown when a credential provider returns an invalid response.
+    /// </summary>
     public class ProviderException : Exception
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ProviderException"/> class.
+        /// </summary>
         public ProviderException()
         {
         }
 
-        public ProviderException(string message) : base(message)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ProviderException"/> class with an error message.
+        /// </summary>
+        /// <param name="message">The message that describes the error.</param>
+        public ProviderException(string? message) : base(message)
         {
         }
 
-        public ProviderException(string message, Exception inner) : base(message, inner)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ProviderException"/> class with an error message and inner exception.
+        /// </summary>
+        /// <param name="message">The message that describes the error.</param>
+        /// <param name="inner">The exception that caused the current exception.</param>
+        public ProviderException(string? message, Exception? inner) : base(message, inner)
         {
         }
-#if IS_DESKTOP
-        protected ProviderException(
-            SerializationInfo info,
-            StreamingContext context) : base(info, context)
-        {
-        }
-#endif
     }
 }

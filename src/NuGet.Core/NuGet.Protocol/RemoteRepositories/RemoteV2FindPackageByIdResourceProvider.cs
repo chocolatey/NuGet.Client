@@ -18,22 +18,23 @@ namespace NuGet.Protocol
         {
         }
 
-        public override async Task<Tuple<bool, INuGetResource>> TryCreate(SourceRepository sourceRepository, CancellationToken token)
+        public override async Task<Tuple<bool, INuGetResource?>> TryCreate(SourceRepository sourceRepository, CancellationToken token)
         {
-            INuGetResource resource = null;
+            INuGetResource? resource = null;
 
             if (sourceRepository.PackageSource.IsHttp
                 &&
                 !sourceRepository.PackageSource.Source.EndsWith("json", StringComparison.OrdinalIgnoreCase))
             {
-                var httpSourceResource = await sourceRepository.GetResourceAsync<HttpSourceResource>(token);
+                var httpSourceResource = await sourceRepository.GetResourceAsync<HttpSourceResource>(token)
+                    ?? throw new InvalidOperationException($"The source '{sourceRepository.PackageSource.Source}' does not provide {nameof(HttpSourceResource)}.");
 
                 resource = new RemoteV2FindPackageByIdResource(
                     sourceRepository.PackageSource,
                     httpSourceResource.HttpSource);
             }
 
-            return Tuple.Create(resource != null, resource);
+            return new Tuple<bool, INuGetResource?>(resource != null, resource);
         }
     }
 }

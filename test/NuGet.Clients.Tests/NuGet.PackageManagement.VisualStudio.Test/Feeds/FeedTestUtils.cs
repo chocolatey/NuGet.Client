@@ -1,10 +1,9 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
@@ -14,15 +13,15 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 {
     public static class FeedTestUtils
     {
-        internal static INuGetResourceProvider CreateTestResourceProvider(PackageMetadataResource _metadataResource)
+        internal static INuGetResourceProvider CreateTestResourceProvider<T>(T resource)
         {
             var provider = Mock.Of<INuGetResourceProvider>();
             Mock.Get(provider)
                 .Setup(x => x.TryCreate(It.IsAny<SourceRepository>(), It.IsAny<CancellationToken>()))
-                .Returns(() => Task.FromResult(Tuple.Create(true, (INuGetResource)_metadataResource)));
+                .Returns(() => Task.FromResult(Tuple.Create(true, (INuGetResource)resource)));
             Mock.Get(provider)
                 .Setup(x => x.ResourceType)
-                .Returns(typeof(PackageMetadataResource));
+                .Returns(typeof(T));
 
             return provider;
         }

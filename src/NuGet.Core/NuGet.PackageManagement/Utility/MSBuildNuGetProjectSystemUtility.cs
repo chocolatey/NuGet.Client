@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -143,7 +145,7 @@ namespace NuGet.ProjectManagement
             var packageTargetFramework = frameworkSpecificGroup.TargetFramework;
 
             var packageItemListAsArchiveEntryNames = frameworkSpecificGroup.Items.ToList();
-            packageItemListAsArchiveEntryNames.Sort(new PackageItemComparer());
+            packageItemListAsArchiveEntryNames.Sort(PackageItemComparer.Instance);
 
             try
             {
@@ -556,7 +558,7 @@ namespace NuGet.ProjectManagement
             string effectivePath,
             out string truncatedPath)
         {
-            foreach (var transformExtensions in fileTransformers.Keys)
+            foreach ((var transformExtensions, var fileTransformer) in fileTransformers)
             {
                 var extension = extensionSelector(transformExtensions);
                 if (effectivePath.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
@@ -568,7 +570,7 @@ namespace NuGet.ProjectManagement
                     var fileName = Path.GetFileName(truncatedPath);
                     if (!Constants.PackageReferenceFile.Equals(fileName, StringComparison.OrdinalIgnoreCase))
                     {
-                        return fileTransformers[transformExtensions];
+                        return fileTransformer;
                     }
                 }
             }
@@ -629,6 +631,8 @@ namespace NuGet.ProjectManagement
 
         private class PackageItemComparer : IComparer<string>
         {
+            public static PackageItemComparer Instance { get; } = new();
+
             public int Compare(string x, string y)
             {
                 // BUG 636: We sort files so that they are added in the correct order

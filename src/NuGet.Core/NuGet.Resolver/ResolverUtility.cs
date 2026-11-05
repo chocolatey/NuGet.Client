@@ -114,7 +114,7 @@ namespace NuGet.Resolver
             IEnumerable<PackageSource> packageSources)
         {
             var message = new StringBuilder();
-            var problemPackage = solution.Where(package => StringComparer.OrdinalIgnoreCase.Equals(package.Id, problemPackageId)).FirstOrDefault();
+            var problemPackage = solution.FirstOrDefault(package => StringComparer.OrdinalIgnoreCase.Equals(package.Id, problemPackageId));
 
             // List the package that has an issue, and all packages dependant on the package.
             var dependantPackages = solution.Where(package => package.FindDependencyRange(problemPackageId) != null &&
@@ -254,13 +254,13 @@ namespace NuGet.Resolver
             yield break;
         }
 
-        private static bool IsDependencySatisfied(PackageDependency dependency, ResolverPackage package)
+        private static bool IsDependencySatisfied(PackageDependency? dependency, ResolverPackage? package)
         {
-            return package != null && !package.Absent
+            return dependency != null && package != null && !package.Absent
                 && (dependency.VersionRange == null || dependency.VersionRange.Satisfies(package.Version));
         }
 
-        public static bool IsDependencySatisfied(PackageDependency dependency, PackageIdentity package)
+        public static bool IsDependencySatisfied(PackageDependency dependency, PackageIdentity? package)
         {
             return package != null && (dependency.VersionRange == null || dependency.VersionRange.Satisfies(package.Version));
         }
@@ -412,7 +412,7 @@ namespace NuGet.Resolver
         private static List<ResolverPackage> FindCircularDependency(ResolverPackage package, Dictionary<string, ResolverPackage> packageLookUp, HashSet<ResolverPackage> visitedPackages)
         {
             // avoid checking depths beyond 20 packages deep
-            if (package != null && !package.Absent && package.Dependencies.Any())
+            if (!package.Absent && package.Dependencies.Any())
             {
                 var queue = new Queue<QueueNode>();
 

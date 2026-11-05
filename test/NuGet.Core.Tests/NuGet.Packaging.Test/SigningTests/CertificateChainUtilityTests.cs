@@ -4,10 +4,11 @@
 using System;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
+using Moq;
 using NuGet.Common;
 using NuGet.Packaging.Signing;
 using NuGet.Test.Utility;
-using Test.Utility.Signing;
 using Xunit;
 
 namespace NuGet.Packaging.Test
@@ -27,7 +28,7 @@ namespace NuGet.Packaging.Test
         {
             var exception = Assert.Throws<ArgumentNullException>(
                 () => CertificateChainUtility.GetCertificateChain(
-                    certificate: null,
+                    certificate: null!,
                     extraStore: new X509Certificate2Collection(),
                     logger: NullLogger.Instance,
                     certificateType: CertificateType.Signature));
@@ -41,7 +42,7 @@ namespace NuGet.Packaging.Test
             var exception = Assert.Throws<ArgumentNullException>(
                 () => CertificateChainUtility.GetCertificateChain(
                     new X509Certificate2(),
-                    extraStore: null,
+                    extraStore: null!,
                     logger: NullLogger.Instance,
                     certificateType: CertificateType.Signature));
 
@@ -55,7 +56,7 @@ namespace NuGet.Packaging.Test
                 () => CertificateChainUtility.GetCertificateChain(
                     new X509Certificate2(),
                     new X509Certificate2Collection(),
-                    logger: null,
+                    logger: null!,
                     certificateType: CertificateType.Signature));
 
             Assert.Equal("logger", exception.ParamName);
@@ -82,7 +83,7 @@ namespace NuGet.Packaging.Test
             using (var intermediateCertificate = SigningTestUtility.GetCertificate("intermediate.crt"))
             using (var leafCertificate = SigningTestUtility.GetCertificate("leaf.crt"))
             {
-                var chain = chainHolder.Chain;
+                var chain = chainHolder.Chain2;
                 var extraStore = new X509Certificate2Collection() { rootCertificate, intermediateCertificate };
                 var logger = new TestLogger();
 
@@ -102,22 +103,14 @@ namespace NuGet.Packaging.Test
                 SigningTestUtility.AssertRevocationStatusUnknown(logger.LogMessages, LogLevel.Warning);
                 if (RuntimeEnvironmentHelper.IsWindows)
                 {
-                    Assert.Equal(2, logger.Warnings);
                     SigningTestUtility.AssertOfflineRevocation(logger.LogMessages, LogLevel.Warning);
                 }
+#if NET8_0_OR_GREATER
                 else if (RuntimeEnvironmentHelper.IsLinux)
                 {
-#if NETCORE5_0
-                    Assert.Equal(2, logger.Warnings);
                     SigningTestUtility.AssertOfflineRevocation(logger.LogMessages, LogLevel.Warning);
-#else
-                    Assert.Equal(1, logger.Warnings);
+                }
 #endif
-                }
-                else
-                {
-                    Assert.Equal(1, logger.Warnings);
-                }
             }
         }
 
@@ -140,14 +133,9 @@ namespace NuGet.Packaging.Test
                 }
 
                 Assert.Equal(0, logger.Errors);
-#if (IS_DESKTOP || NETCORE5_0)
-                Assert.Equal(1, logger.Warnings);
-#else
-                Assert.Equal(RuntimeEnvironmentHelper.IsLinux ? 2 : 1, logger.Warnings);
-#endif
                 SigningTestUtility.AssertUntrustedRoot(logger.LogMessages, LogLevel.Warning);
 
-#if !NETCORE5_0
+#if NETCOREAPP3_1
                 if (RuntimeEnvironmentHelper.IsLinux)
                 {
                     SigningTestUtility.AssertRevocationStatusUnknown(logger.LogMessages, LogLevel.Warning);
@@ -157,10 +145,37 @@ namespace NuGet.Packaging.Test
         }
 
         [Fact]
+        public void GetCertificateChain_WithUntrustedRoot_AllowUntrustedRoot_ReturnsChain()
+        {
+            using (X509ChainHolder chainHolder = X509ChainHolder.CreateForCodeSigning())
+            using (X509Certificate2 rootCertificate = SigningTestUtility.GetCertificate("root.crt"))
+            using (X509Certificate2 intermediateCertificate = SigningTestUtility.GetCertificate("intermediate.crt"))
+            using (X509Certificate2 leafCertificate = SigningTestUtility.GetCertificate("leaf.crt"))
+            {
+                IX509Chain chain = chainHolder.Chain2;
+                var extraStore = new X509Certificate2Collection() { rootCertificate, intermediateCertificate };
+                var logger = new TestLogger();
+
+                using (IX509CertificateChain certificateChain = CertificateChainUtility.GetCertificateChain(
+                    leafCertificate,
+                    extraStore,
+                    logger,
+                    CertificateType.Signature,
+                    allowUntrustedRoot: true))
+                {
+                    Assert.True(certificateChain.Count > 0);
+                }
+
+                Assert.Equal(0, logger.Errors);
+                SigningTestUtility.AssertUntrustedRoot(logger.LogMessages, LogLevel.Warning);
+            }
+        }
+
+        [Fact]
         public void GetCertificateChain_WhenCertChainNull_Throws()
         {
             var exception = Assert.Throws<ArgumentNullException>(
-                () => CertificateChainUtility.GetCertificateChain(x509Chain: null));
+                () => CertificateChainUtility.GetCertificateChain(x509Chain: null!));
 
             Assert.Equal("x509Chain", exception.ParamName);
         }
@@ -173,14 +188,14 @@ namespace NuGet.Packaging.Test
             using (var intermediateCertificate = SigningTestUtility.GetCertificate("intermediate.crt"))
             using (var leafCertificate = SigningTestUtility.GetCertificate("leaf.crt"))
             {
-                var chain = chainHolder.Chain;
+                IX509Chain chain = chainHolder.Chain2;
 
                 chain.ChainPolicy.ExtraStore.Add(rootCertificate);
                 chain.ChainPolicy.ExtraStore.Add(intermediateCertificate);
 
                 chain.Build(leafCertificate);
 
-                using (var certificateChain = CertificateChainUtility.GetCertificateChain(chain))
+                using (IX509CertificateChain certificateChain = CertificateChainUtility.GetCertificateChain(chain.PrivateReference))
                 {
                     Assert.Equal(3, certificateChain.Count);
                     Assert.Equal(leafCertificate.Thumbprint, certificateChain[0].Thumbprint);
@@ -190,13 +205,75 @@ namespace NuGet.Packaging.Test
             }
         }
 
+        [Theory]
+        [InlineData(X509RevocationMode.Online)]
+        [InlineData(X509RevocationMode.Offline)]
+        public void GetChainEvaluationStatus_WithUntrustedExcludedRoot_ReturnsNotApplicable(
+            X509RevocationMode revocationMode)
+        {
+            using X509Certificate2 certificate = _fixture.GetDefaultCertificate();
+            using X509ChainHolder chainHolder = X509ChainHolder.CreateForCodeSigning();
+            IX509Chain chain = chainHolder.Chain2;
+            chain.ChainPolicy.RevocationMode = revocationMode;
+            chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
+            bool buildSucceeded = chain.Build(certificate);
+            X509ChainStatus[] statuses = chain.ChainStatus;
+
+            Assert.False(buildSucceeded);
+            Assert.Single(chain.ChainElements.Cast<X509ChainElement>());
+            Assert.Equal(X509ChainStatusFlags.UntrustedRoot, CertificateChainUtility.GetChainStatusFlags(statuses));
+            Assert.Equal(SignatureChainEvaluationStatus.NotApplicable,
+                CertificateChainUtility.GetChainEvaluationStatus(buildSucceeded, statuses, chain, certificate));
+            Assert.Equal(X509ChainStatusFlags.UntrustedRoot, CertificateChainUtility.GetChainStatusFlags(chain.ChainStatus));
+        }
+
+        [Theory]
+        [InlineData(X509ChainStatusFlags.PartialChain)]
+        [InlineData(X509ChainStatusFlags.NotSignatureValid)]
+        public void GetChainEvaluationStatus_WithInvalidRootOnlyChain_ReturnsIndeterminate(
+            X509ChainStatusFlags structuralFailure)
+        {
+            using X509Certificate2 certificate = _fixture.GetDefaultCertificate();
+            using X509ChainHolder chainHolder = X509ChainHolder.CreateForCodeSigning();
+            IX509Chain chain = chainHolder.Chain2;
+            chain.ChainPolicy.RevocationMode = X509RevocationMode.Online;
+            chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
+            Assert.False(chain.Build(certificate));
+            Assert.Single(chain.ChainElements.Cast<X509ChainElement>());
+            X509ChainStatus[] statuses = new[]
+            {
+                new X509ChainStatus { Status = X509ChainStatusFlags.UntrustedRoot },
+                new X509ChainStatus { Status = structuralFailure }
+            };
+
+            Assert.Equal(SignatureChainEvaluationStatus.Indeterminate,
+                CertificateChainUtility.GetChainEvaluationStatus(false, statuses, chain, certificate));
+        }
+
+        [Fact]
+        public void GetChainEvaluationStatus_WithIncompleteChain_ReturnsIndeterminate()
+        {
+            using X509Certificate2 certificate = SigningTestUtility.GenerateCertificate(
+                $"Missing issuer {Guid.NewGuid()}", "Incomplete chain certificate", _fixture.Key, _fixture.Key);
+            using X509ChainHolder chainHolder = X509ChainHolder.CreateForCodeSigning();
+            IX509Chain chain = chainHolder.Chain2;
+            chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
+            bool buildSucceeded = chain.Build(certificate);
+
+            Assert.False(buildSucceeded);
+            Assert.True(CertificateChainUtility.GetChainStatusFlags(chain.ChainStatus).HasFlag(X509ChainStatusFlags.PartialChain));
+            Assert.Equal(SignatureChainEvaluationStatus.Indeterminate,
+                CertificateChainUtility.GetChainEvaluationStatus(buildSucceeded, chain.ChainStatus, chain, certificate));
+        }
+
         [Fact]
         public void BuildWithPolicy_WhenChainIsNull_Throws()
         {
             using (X509Certificate2 certificate = _fixture.GetDefaultCertificate())
             {
                 ArgumentNullException exception = Assert.Throws<ArgumentNullException>(
-                    () => CertificateChainUtility.BuildWithPolicy(chain: null, certificate));
+                    () => CertificateChainUtility.BuildWithPolicy(chain: null!, certificate));
 
                 Assert.Equal("chain", exception.ParamName);
             }
@@ -205,13 +282,10 @@ namespace NuGet.Packaging.Test
         [Fact]
         public void BuildWithPolicy_WhenCertificateIsNull_Throws()
         {
-            using (var chain = new X509Chain())
-            {
-                ArgumentNullException exception = Assert.Throws<ArgumentNullException>(
-                    () => CertificateChainUtility.BuildWithPolicy(chain, certificate: null));
+            ArgumentNullException exception = Assert.Throws<ArgumentNullException>(
+                () => CertificateChainUtility.BuildWithPolicy(Mock.Of<IX509Chain>(), certificate: null!));
 
-                Assert.Equal("certificate", exception.ParamName);
-            }
+            Assert.Equal("certificate", exception.ParamName);
         }
     }
 }

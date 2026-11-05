@@ -1,12 +1,15 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.ComponentModel.Composition;
-using System.Threading.Tasks;
 using Microsoft;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Utilities;
+using NuGet.Commands.Restore.Utility;
+using NuGet.Common;
 using NuGet.Frameworks;
 using NuGet.ProjectManagement;
 using NuGet.ProjectModel;
@@ -26,6 +29,7 @@ namespace NuGet.PackageManagement.VisualStudio
 
         private readonly IVsProjectThreadingService _threadingService;
         private readonly Lazy<IScriptExecutor> _scriptExecutor;
+        private readonly bool _usePackageSpecFactory;
 
         public RuntimeTypeHandle ProjectType => typeof(LegacyPackageReferenceProject).TypeHandle;
 
@@ -35,30 +39,34 @@ namespace NuGet.PackageManagement.VisualStudio
             Lazy<IScriptExecutor> scriptExecutor)
             : this(AsyncServiceProvider.GlobalProvider,
                    threadingService,
-                   scriptExecutor)
+                   scriptExecutor,
+                   EnvironmentVariableWrapper.Instance)
         { }
 
         public LegacyPackageReferenceProjectProvider(
             IAsyncServiceProvider vsServiceProvider,
             IVsProjectThreadingService threadingService,
-            Lazy<IScriptExecutor> scriptExecutor)
+            Lazy<IScriptExecutor> scriptExecutor,
+            IEnvironmentVariableReader environmentVariableReader)
         {
             Assumes.Present(vsServiceProvider);
             Assumes.Present(threadingService);
             Assumes.Present(scriptExecutor);
+            Assumes.Present(environmentVariableReader);
 
             _threadingService = threadingService;
             _scriptExecutor = scriptExecutor;
+            _usePackageSpecFactory = !bool.FalseString.Equals(PackageSpecFactory.EnvironmentVariableName, StringComparison.OrdinalIgnoreCase);
         }
 
-        public async Task<NuGetProject> TryCreateNuGetProjectAsync(
+        public NuGetProject TryCreateNuGetProject(
             IVsProjectAdapter vsProjectAdapter,
-            ProjectProviderContext context,
+            ProjectProviderContext _,
             bool forceProjectType)
         {
             Assumes.Present(vsProjectAdapter);
-
-            var projectServices = await TryCreateProjectServicesAsync(
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var projectServices = TryCreateProjectServices(
                 vsProjectAdapter,
                 forceCreate: forceProjectType);
 
@@ -67,24 +75,24 @@ namespace NuGet.PackageManagement.VisualStudio
                 return null;
             }
 
-            NuGetFramework targetFramework = await vsProjectAdapter.GetTargetFrameworkAsync();
+            NuGetFramework targetFramework = vsProjectAdapter.GetTargetFramework();
 
             return new LegacyPackageReferenceProject(
                 vsProjectAdapter,
                 vsProjectAdapter.ProjectId,
                 projectServices,
                 _threadingService,
-                targetFramework);
+                targetFramework,
+                _usePackageSpecFactory);
         }
 
         /// <summary>
         /// Is this project a non-CPS package reference based csproj?
         /// </summary>
-        private async Task<INuGetProjectServices> TryCreateProjectServicesAsync(
+        private VsManagedLanguagesProjectSystemServices TryCreateProjectServices(
             IVsProjectAdapter vsProjectAdapter, bool forceCreate)
         {
-            await _threadingService.JoinableTaskFactory.SwitchToMainThreadAsync();
-
+            ThreadHelper.ThrowIfNotOnUIThread();
             var vsProject4 = vsProjectAdapter.Project.Object as VSProject4;
 
             // A legacy CSProj must cast to VSProject4 to manipulate package references
@@ -94,8 +102,11 @@ namespace NuGet.PackageManagement.VisualStudio
             }
 
             // Check for RestoreProjectStyle property
-            var restoreProjectStyle = vsProjectAdapter.BuildProperties.GetPropertyValue(
+#pragma warning disable CS0618 // Type or member is obsolete
+            // Need to validate no project systems get this property via DTE, and if so, switch to GetPropertyValue
+            var restoreProjectStyle = vsProjectAdapter.BuildProperties.GetPropertyValueWithDteFallback(
                 ProjectBuildProperties.RestoreProjectStyle);
+#pragma warning restore CS0618 // Type or member is obsolete
 
             // For legacy csproj, either the RestoreProjectStyle must be set to PackageReference or
             // project has atleast one package dependency defined as PackageReference
@@ -103,7 +114,7 @@ namespace NuGet.PackageManagement.VisualStudio
                 || PackageReference.Equals(restoreProjectStyle, StringComparison.OrdinalIgnoreCase)
                 || (vsProject4.PackageReferences?.InstalledPackages?.Length ?? 0) > 0)
             {
-                var nominatesOnSolutionLoad = await vsProjectAdapter.IsCapabilityMatchAsync(NuGet.VisualStudio.IDE.ProjectCapabilities.PackageReferences);
+                var nominatesOnSolutionLoad = vsProjectAdapter.IsCapabilityMatch(NuGet.VisualStudio.IDE.ProjectCapabilities.PackageReferences);
                 return new VsManagedLanguagesProjectSystemServices(vsProjectAdapter, _threadingService, vsProject4, nominatesOnSolutionLoad, _scriptExecutor);
             }
 

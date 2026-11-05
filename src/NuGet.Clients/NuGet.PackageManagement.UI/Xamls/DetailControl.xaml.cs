@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -76,7 +78,7 @@ namespace NuGet.PackageManagement.UI
 
                 if (e.Parameter is not null and HyperlinkType hyperlinkType)
                 {
-                    var evt = new HyperlinkClickedTelemetryEvent(hyperlinkType, UIUtility.ToContractsItemFilter(Control.ActiveFilter), Control.Model.IsSolution);
+                    var evt = NavigatedTelemetryEvent.CreateWithExternalLink(hyperlinkType, UIUtility.ToContractsItemFilter(Control.ActiveFilter), Control.Model.IsSolution);
                     TelemetryActivity.EmitTelemetryEvent(evt);
                 }
             }
@@ -104,18 +106,26 @@ namespace NuGet.PackageManagement.UI
             }).PostOnFailure(nameof(DetailControl));
         }
 
+        public void Cleanup()
+        {
+            _packageDetailsTabControl.Dispose();
+        }
+
         private void ProjectInstallButtonClicked(object sender, EventArgs e)
         {
             var model = (PackageDetailControlModel)DataContext;
 
             if (model != null && model.SelectedVersion != null)
             {
+                var sourceMappingSourceName = PackageSourceMappingUtility.GetNewSourceMappingSourceName(Control.Model.UIController.UIContext.PackageSourceMapping, Control.Model.UIController.ActivePackageSourceMoniker);
+
                 var userAction = UserAction.CreateInstallAction(
-                    model.Id,
+                    packageId: model.Id,
                     model.SelectedVersion.Version,
                     Control.Model.IsSolution,
                     UIUtility.ToContractsItemFilter(Control._topPanel.Filter),
-                    model.SelectedVersion.Range);
+                    model.SelectedVersion.Range,
+                    sourceMappingSourceName);
 
                 ExecuteUserAction(userAction, NuGetActionType.Install);
             }
@@ -138,11 +148,14 @@ namespace NuGet.PackageManagement.UI
 
             if (model != null && model.SelectedVersion != null)
             {
+                var sourceMappingSourceName = PackageSourceMappingUtility.GetNewSourceMappingSourceName(Control.Model.UIController.UIContext.PackageSourceMapping, Control.Model.UIController.ActivePackageSourceMoniker);
+
                 var userAction = UserAction.CreateInstallAction(
-                    model.Id,
+                    packageId: model.Id,
                     model.SelectedVersion.Version,
                     Control.Model.IsSolution,
-                    UIUtility.ToContractsItemFilter(Control._topPanel.Filter));
+                    UIUtility.ToContractsItemFilter(Control._topPanel.Filter),
+                    sourceMappingSourceName);
 
                 ExecuteUserAction(userAction, NuGetActionType.Install);
             }
@@ -186,9 +199,25 @@ namespace NuGet.PackageManagement.UI
                     nugetUi.RecommendedCount = model.RecommendedCount;
                     nugetUi.RecommendPackages = model.RecommendPackages;
                     nugetUi.RecommenderVersion = model.RecommenderVersion;
-                    nugetUi.TopLevelVulnerablePackagesCount = model.IsPackageVulnerable ? 1 : 0;
-                    nugetUi.TopLevelVulnerablePackagesMaxSeverities = new List<int>() { model.PackageVulnerabilityMaxSeverity };
+                    if (model is PackageDetailControlModel packageModel && packageModel.PackageLevel == PackageLevel.Transitive)
+                    {
+                        nugetUi.TransitiveVulnerablePackagesCount = model.IsPackageVulnerable ? 1 : 0;
+                        nugetUi.TransitiveVulnerablePackagesMaxSeverities = new List<int>() { model.PackageVulnerabilityMaxSeverity };
+                    }
+                    else
+                    {
+                        nugetUi.TopLevelVulnerablePackagesCount = model.IsPackageVulnerable ? 1 : 0;
+                        nugetUi.TopLevelVulnerablePackagesMaxSeverities = new List<int>() { model.PackageVulnerabilityMaxSeverity };
+                    }
                 });
+        }
+
+        private void OnContextMenuResetFontSize(object sender, ContextMenuEventArgs e)
+        {
+            if (sender is System.Windows.Controls.TextBox textBox && textBox.ContextMenu != null)
+            {
+                textBox.ContextMenu.FontSize = FontSize;
+            }
         }
     }
 }

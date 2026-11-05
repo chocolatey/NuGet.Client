@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
+
 namespace NuGet.Common
 {
     /// <summary>
@@ -41,7 +43,7 @@ namespace NuGet.Common
     /// </para>
     ///
     /// <para>
-    /// All new codes need a corresponding MarkDown file under https://github.com/NuGet/docs.microsoft.com-nuget/tree/master/docs/reference/errors-and-warnings.
+    /// All new codes need a corresponding MarkDown file under https://github.com/NuGet/docs.microsoft.com-nuget/tree/main/docs/reference/errors-and-warnings.
     /// </para>
     /// </remarks>
     public enum NuGetLogCode
@@ -122,6 +124,41 @@ namespace NuGet.Common
         NU1013 = 1013,
 
         /// <summary>
+        /// NuGetAudit* MSBuild property input errors
+        /// </summary>
+        NU1014 = 1014,
+
+        /// <summary>
+        /// PackageReference without a version.
+        /// </summary>
+        NU1015 = 1015,
+
+        /// <summary>
+        /// The project.json project type is not supported.
+        /// </summary>
+        NU1016 = 1016,
+
+        /// <summary>
+        /// Invalid package Id.
+        /// </summary>
+        NU1017 = 1017,
+
+        /// <summary>
+        /// Aliasing is only supported in the new resolver and when the .NET SDK version is 10.0.300 or newer.
+        /// </summary>
+        NU1018 = 1018,
+
+        /// <summary>
+        /// TargetFramework alias contains a path separator character ('/' or '\'), which is not allowed.
+        /// </summary>
+        NU1019 = 1019,
+
+        /// <summary>
+        /// Floating package versions are not allowed when package source cooldown is enabled.
+        /// </summary>
+        NU1020 = 1020,
+
+        /// <summary>
         /// Unable to resolve package, generic message for unknown type constraints.
         /// </summary>
         NU1100 = 1100,
@@ -173,6 +210,11 @@ namespace NuGet.Common
         NU1109 = 1109,
 
         /// <summary>
+        /// The package `packageId` is available in the Global packages folder, but the source it came from `package source URI` is not one of the configured sources.
+        /// </summary>
+        NU1110 = 1110,
+
+        /// <summary>
         /// Dependency project has an incompatible framework.
         /// </summary>
         NU1201 = 1201,
@@ -190,11 +232,13 @@ namespace NuGet.Common
         /// <summary>
         /// Invalid package types
         /// </summary>
+        [Obsolete]
         NU1204 = 1204,
 
         /// <summary>
         /// Project has an invalid dependency count
         /// </summary>
+        [Obsolete]
         NU1211 = 1211,
 
         /// <summary>
@@ -211,6 +255,11 @@ namespace NuGet.Common
         /// Package Source is unreachable.
         /// </summary>
         NU1301 = 1301,
+
+        /// <summary>
+        /// Insecure Source specified.
+        /// </summary>
+        NU1302 = 1302,
 
         /// <summary>
         /// Package MinClientVersion did not match.
@@ -230,6 +279,7 @@ namespace NuGet.Common
         /// <summary>
         /// Package Signature is invalid
         /// </summary>
+        [Obsolete]
         NU1410 = 1410,
 
         /// <summary>
@@ -271,6 +321,31 @@ namespace NuGet.Common
         /// Central package management is in use but there are multiple feeds configured without using package source mapping.
         /// </summary>
         NU1507 = 1507,
+
+        /// <summary>
+        /// Duplicate NuGetAuditSuppress found
+        /// </summary>
+        NU1508 = 1508,
+
+        /// <summary>
+        /// Duplicate PrunedPackageReference found
+        /// </summary>
+        NU1509 = 1509,
+
+        /// <summary>
+        /// Direct reference to a package that will not be pruned.
+        /// </summary>
+        NU1510 = 1510,
+
+        /// <summary>
+        /// Project references cannot be pruned
+        /// </summary>
+        NU1511 = 1511,
+
+        /// <summary>
+        /// RestoreLockedMode and RestoreForceEvaluate are both set to true; RestoreForceEvaluate takes precedence and locked mode is ignored.
+        /// </summary>
+        NU1512 = 1512,
 
         /// <summary>
         /// Dependency bumped up
@@ -317,7 +392,8 @@ namespace NuGet.Common
         NU1702 = 1702,
 
         /// <summary>
-        /// MacCatalyst platform fell back to xamarin.ios - Added in 6.0, removed in 6.1.
+        /// Package uses a deprecated legacy Xamarin framework (e.g. MonoAndroid) instead of a modern .NET TFM.
+        /// Originally added in 6.0 for MacCatalyst/Xamarin.iOS (removed in 6.1), reused for MonoAndroid in 11.0.
         /// </summary>
         NU1703 = 1703,
 
@@ -335,6 +411,36 @@ namespace NuGet.Common
         /// HTTP Source specified, but HTTP sources will be deprecated.
         /// </summary>
         NU1803 = 1803,
+
+        /// <summary>
+        /// Server/package source vulnerability issue
+        /// </summary>
+        NU1900 = 1900,
+
+        /// <summary>
+        /// Package with known low severity vulnerability
+        /// </summary>
+        NU1901 = 1901,
+
+        /// <summary>
+        /// Package with known moderate severity vulnerability
+        /// </summary>
+        NU1902 = 1902,
+
+        /// <summary>
+        /// Package with known high severity vulnerability
+        /// </summary>
+        NU1903 = 1903,
+
+        /// <summary>
+        /// Package with known critical severity vulnerability
+        /// </summary>
+        NU1904 = 1904,
+
+        /// <summary>
+        /// Audit source did not provide vulnerability data
+        /// </summary>
+        NU1905 = 1905,
 
         /// <summary>
         /// Undefined signature error
@@ -553,6 +659,16 @@ namespace NuGet.Common
         NU3041 = 3041,
 
         /// <summary>
+        /// An X.509 trust store does not contain a root certificate observed in a package signature.
+        /// </summary>
+        NU3042 = 3042,
+
+        /// <summary>
+        /// The certificate fingerprint is invalid.
+        /// </summary>
+        NU3043 = 3043,
+
+        /// <summary>
         /// Undefined Package Error.
         /// </summary>
         NU5000 = 5000,
@@ -585,6 +701,7 @@ namespace NuGet.Common
         /// <summary>
         /// Error_UnableToLocateBuildOutput
         /// </summary>
+        [Obsolete]
         NU5007 = 5007,
 
         /// <summary>
@@ -625,6 +742,7 @@ namespace NuGet.Common
         /// <summary>
         /// Error_MultipleTargetFrameworks
         /// </summary>
+        [Obsolete]
         NU5015 = 5015,
 
         /// <summary>
@@ -730,6 +848,7 @@ namespace NuGet.Common
         /// <summary>
         /// https://aka.ms/malformedNuGetLicenseUrl
         /// </summary>
+        [Obsolete]
         NU5036 = 5036,
 
         /// <summary>
@@ -760,6 +879,7 @@ namespace NuGet.Common
         /// <summary>
         /// Error_ProjectJsonPack_Deprecated_And_Disabled
         /// </summary>
+        [Obsolete]
         NU5042 = 5042,
 
         /// <summary>
@@ -793,6 +913,16 @@ namespace NuGet.Common
         NU5050 = 5050,
 
         /// <summary>
+        /// Attempted to write files from multiple sources into the same location
+        /// </summary>
+        NU5051 = 5051,
+
+        /// <summary>
+        /// Package ID does not adhere to the restricted set of characters
+        /// </summary>
+        NU5052 = 5052,
+
+        /// <summary>
         /// AssemblyOutsideLibWarning
         /// </summary>
         NU5100 = 5100,
@@ -820,6 +950,7 @@ namespace NuGet.Common
         /// <summary>
         /// LegacyVersionWarning
         /// </summary>
+        [Obsolete]
         NU5105 = 5105,
 
         /// <summary>
@@ -920,10 +1051,11 @@ namespace NuGet.Common
         ///<summary>
         /// ProjectJsonPack_Deprecated
         /// </summary>
+        [Obsolete]
         NU5126 = 5126,
 
         /// <summary>
-        /// No ref or lib folder in the package
+        /// TFM specific build files, but no ref or lib folder in the package
         /// </summary>
         NU5127 = 5127,
 
@@ -966,5 +1098,10 @@ namespace NuGet.Common
         /// InvalidUndottedFrameworkWarning
         /// </summary>
         NU5501 = 5501,
+
+        /// <summary>
+        /// Invalid deterministic timestamp
+        /// </summary>
+        NU5502 = 5502,
     }
 }

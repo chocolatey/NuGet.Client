@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
@@ -22,7 +24,7 @@ namespace NuGet.PackageManagement.VisualStudio
         // 0 - Cache is clean
         // 1 - Cache is dirty
         private int _isCacheDirty = 0;
-        private readonly Dictionary<string, CacheEntry> _primaryCache = new Dictionary<string, CacheEntry>();
+        private readonly Dictionary<string, CacheEntry> _primaryCache = new Dictionary<string, CacheEntry>(StringComparer.OrdinalIgnoreCase);
         private readonly ReaderWriterLockSlim _readerWriterLock = new ReaderWriterLockSlim();
 
         // Secondary index. Mapping from all names to a project name structure
@@ -180,9 +182,13 @@ namespace NuGet.PackageManagement.VisualStudio
 
             try
             {
-                return _primaryCache
-                    .Select(kv => kv.Value.NuGetProject)
-                    .ToList();
+                List<NuGetProject> result = new List<NuGetProject>(_primaryCache.Count);
+                foreach (var kv in _primaryCache)
+                {
+                    result.Add(kv.Value.NuGetProject);
+                }
+
+                return result;
             }
             finally
             {

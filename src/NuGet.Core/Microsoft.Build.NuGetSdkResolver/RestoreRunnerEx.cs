@@ -3,11 +3,9 @@
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Frameworks;
 using NuGet.LibraryModel;
@@ -46,7 +44,9 @@ namespace NuGet.Commands
                 IgnoreFailedSources = true,
             })
             {
-                var projectDirectory = Path.Combine(NuGetEnvironment.GetFolderPath(NuGetFolderPath.Temp), Guid.NewGuid().ToString("N", null));
+#pragma warning disable RS0030 // This is only a synthetic project path; no directory is created or files written here.
+                var projectDirectory = Path.Combine(Path.GetTempPath(), $"NuGet-{Guid.NewGuid():N}");
+#pragma warning restore RS0030
 
                 var projectName = Guid.NewGuid().ToString("N", null);
 
@@ -59,32 +59,29 @@ namespace NuGet.Commands
                 {
                     frameworks.Add(new TargetFrameworkInformation
                     {
-                        FrameworkName = tf
+                        FrameworkName = tf,
+                        Dependencies = [new LibraryDependency()
+                            {
+                                LibraryRange = new LibraryRange(
+                                    libraryIdentity.Name,
+                                    new VersionRange(
+                                        minVersion: libraryIdentity.Version,
+                                        includeMinVersion: true,
+                                        maxVersion: libraryIdentity.Version,
+                                        includeMaxVersion: true),
+                                    LibraryDependencyTarget.Package),
+                                SuppressParent = LibraryIncludeFlags.All,
+                                AutoReferenced = true,
+                                IncludeType = LibraryIncludeFlags.None,
+                            }
+                        ]
                     });
-
                     originalTargetFrameworks.Add(tf.ToString());
                 }
 
                 // The package spec details what packages to restore
                 var packageSpec = new PackageSpec(frameworks)
                 {
-                    Dependencies = new List<LibraryDependency>
-                    {
-                        new LibraryDependency
-                        {
-                            LibraryRange = new LibraryRange(
-                                libraryIdentity.Name,
-                                new VersionRange(
-                                    minVersion: libraryIdentity.Version,
-                                    includeMinVersion: true,
-                                    maxVersion: libraryIdentity.Version,
-                                    includeMaxVersion: true),
-                                LibraryDependencyTarget.Package),
-                            SuppressParent = LibraryIncludeFlags.All,
-                            AutoReferenced = true,
-                            IncludeType = LibraryIncludeFlags.None,
-                        }
-                    },
                     RestoreMetadata = new ProjectRestoreMetadata
                     {
                         ProjectPath = projectFullPath,

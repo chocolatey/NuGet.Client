@@ -1,13 +1,12 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-#if IS_SIGNING_SUPPORTED
-using System.Security.Cryptography.Pkcs;
-#endif
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -15,14 +14,15 @@ using Moq;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Configuration.Test;
-using NuGet.Packaging;
 using NuGet.Packaging.Signing;
-using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
-using NuGet.Test.Utility;
 using Test.Utility;
-using Test.Utility.Signing;
 using Xunit;
+using System.Security.Cryptography.Pkcs;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
+using NuGet.Packaging;
+using NuGet.Test.Utility;
+using Test.Utility.Signing;
 
 namespace NuGet.Commands.Test
 {
@@ -196,7 +196,6 @@ namespace NuGet.Commands.Test
                     SettingsTestUtils.DeepEquals(i.Certificates.First(), expectedCert))));
         }
 
-#if IS_SIGNING_SUPPORTED
         [Fact]
         public async Task AddTrustedSignerAsync_WithNullPackage_ThrowsAsync()
         {
@@ -332,7 +331,7 @@ namespace NuGet.Commands.Test
             ex.Message.Should().Be(Strings.Error_PackageNotSigned);
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task AddTrustedSignerAsync_TargetRepository_NonRepositorySignedPackage_ThrowsAsync()
         {
             // Arrange
@@ -364,7 +363,7 @@ namespace NuGet.Commands.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task AddTrustedSignerAsync_NameAlreadyExists_ThrowsAsync()
         {
             // Arrange
@@ -403,7 +402,7 @@ namespace NuGet.Commands.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task AddTrustedSignerAsync_ServiceIndexAlreadyExists_ThrowsAsync()
         {
             // Arrange
@@ -443,7 +442,7 @@ namespace NuGet.Commands.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task AddTrustedSignerAsync_WithUnknownPrimarySignature_ThrowsAsync()
         {
             // Arrange
@@ -491,7 +490,7 @@ namespace NuGet.Commands.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task AddTrustedSignerAsync_RepositorySignedPackage_AddsRepositoryCorrectlyAsync()
         {
             // Arrange
@@ -536,7 +535,7 @@ namespace NuGet.Commands.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task AddTrustedSignerAsync_RepositorySignedPackage_WithOwners_AddsRepositoryCorrectlyAsync()
         {
             // Arrange
@@ -582,7 +581,7 @@ namespace NuGet.Commands.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task AddTrustedSignerAsync_RepositorySignedPackage_WithAllowUntrustedRoot_AddsRepositoryCorrectlyAsync()
         {
             // Arrange
@@ -628,7 +627,7 @@ namespace NuGet.Commands.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task AddTrustedSignerAsync_RepositoryCountersignedPackage_AddsRepositoryCorrectlyAsync()
         {
             // Arrange
@@ -675,7 +674,7 @@ namespace NuGet.Commands.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task AddTrustedSignerAsync_RepositoryCountersignedPackage_WithOwners_AddsRepositoryCorrectlyAsync()
         {
             // Arrange
@@ -723,7 +722,7 @@ namespace NuGet.Commands.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task AddTrustedSignerAsync_RepositoryCountersignedPackage_WithAllowUntrustedRoot_AddsRepositoryCorrectlyAsync()
         {
             // Arrange
@@ -771,7 +770,7 @@ namespace NuGet.Commands.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task AddTrustedSignerAsync_AuthorSignedPackage_AddsAuthorCorrectlyAsync()
         {
             // Arrange
@@ -813,7 +812,7 @@ namespace NuGet.Commands.Test
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task AddTrustedSignerAsync_AuthorSignedPackage_WithAllowUntrustedRoot_AddsAuthorCorrectlyAsync()
         {
             // Arrange
@@ -854,7 +853,6 @@ namespace NuGet.Commands.Test
                 }
             }
         }
-#endif
 
         [Theory]
         [InlineData(null)]

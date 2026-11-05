@@ -1,13 +1,14 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using NuGet.Frameworks;
 using NuGet.Packaging.Core;
-using NuGet.ProjectManagement;
 using NuGet.Protocol.Core.Types;
 using NuGet.Shared;
 
@@ -83,8 +84,7 @@ namespace NuGet.PackageManagement
                     // Find the exact package version in the list. The result may be null
                     // if that version does not exist.
                     result = allPackagesResult.Packages
-                        .Where(p => package.Equals(p))
-                        .FirstOrDefault();
+                        .FirstOrDefault(p => package.Equals(p));
                 }
             }
 

@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -43,8 +45,10 @@ namespace NuGet.PackageManagement.Utility
             }
             else if (enableLockFile == true || lockFileExists)
             {
-                var lockFile = GetLockFile(lockFileExists, lockFileName);
-                lockFile.Targets[0].TargetFramework = msbuildProject.ProjectSystem.TargetFramework;
+                var lockFile = GetLockFile(
+                    lockFileExists,
+                    lockFileName,
+                    msbuildProject.ProjectSystem.TargetFramework);
                 var contentHashUtil = new PackagesConfigContentHashProvider(msbuildProject.FolderNuGetProject);
                 ApplyChanges(lockFile, actionsList, contentHashUtil, token);
                 PackagesLockFileFormat.Write(lockFileName, lockFile);
@@ -63,7 +67,7 @@ namespace NuGet.PackageManagement.Utility
         internal static string GetPackagesLockFilePath(MSBuildNuGetProject msbuildProject)
         {
             var directory = (string)msbuildProject.Metadata["FullPath"];
-            var msbuildProperty = msbuildProject.ProjectSystem?.GetPropertyValue("NuGetLockFilePath");
+            var msbuildProperty = (string)msbuildProject.ProjectSystem?.GetPropertyValue("NuGetLockFilePath");
             var projectName = (string)msbuildProject.Metadata["UniqueName"];
 
             return GetPackagesLockFilePath(directory, msbuildProperty, projectName);
@@ -99,7 +103,7 @@ namespace NuGet.PackageManagement.Utility
             {
                 var message = string.Format(CultureInfo.CurrentCulture, Strings.Error_InvalidLockFileInput, lockFilePath);
                 var errors = new List<IRestoreLogMessage>();
-                var log = RestoreLogMessage.CreateError(NuGetLogCode.NU1005, message, packagesConfigFile);
+                var log = RestoreLogMessage.CreateError(NuGetLogCode.NU1005, message);
                 log.ProjectPath = projectFile ?? packagesConfigFile;
                 errors.Add(log);
                 return errors;
@@ -135,7 +139,7 @@ namespace NuGet.PackageManagement.Utility
                             foreach (var difference in comparisonResult.MatchedDependencies.Where(kvp => kvp.Key.ContentHash != kvp.Value.ContentHash))
                             {
                                 var message = string.Format(CultureInfo.CurrentCulture, Strings.Error_PackageValidationFailed, difference.Key.Id + "." + difference.Key.ResolvedVersion);
-                                var log = RestoreLogMessage.CreateError(NuGetLogCode.NU1403, message, packagesConfigFile);
+                                var log = RestoreLogMessage.CreateError(NuGetLogCode.NU1403, message);
                                 log.ProjectPath = projectFile ?? packagesConfigFile;
                                 errors.Add(log);
                             }
@@ -147,7 +151,7 @@ namespace NuGet.PackageManagement.Utility
                         if (restoreLockedMode)
                         {
                             var errors = new List<IRestoreLogMessage>();
-                            var log = RestoreLogMessage.CreateError(NuGetLogCode.NU1004, Strings.Error_RestoreInLockedModePackagesConfig, packagesConfigFile);
+                            var log = RestoreLogMessage.CreateError(NuGetLogCode.NU1004, Strings.Error_RestoreInLockedModePackagesConfig);
                             log.ProjectPath = projectFile ?? packagesConfigFile;
                             errors.Add(log);
                             return errors;
@@ -181,7 +185,10 @@ namespace NuGet.PackageManagement.Utility
             return null;
         }
 
-        internal static PackagesLockFile GetLockFile(bool lockFileExists, string lockFileName)
+        internal static PackagesLockFile GetLockFile(
+            bool lockFileExists,
+            string lockFileName,
+            NuGetFramework targetFramework)
         {
             PackagesLockFile lockFile;
 
@@ -191,7 +198,10 @@ namespace NuGet.PackageManagement.Utility
                 lockFile.Version = PackagesLockFileFormat.Version;
                 if (lockFile.Targets.Count == 0)
                 {
-                    lockFile.Targets.Add(new PackagesLockFileTarget());
+                    lockFile.Targets.Add(new PackagesLockFileTarget
+                    {
+                        TargetFramework = targetFramework
+                    });
                 }
                 else if (lockFile.Targets.Count > 1)
                 {
@@ -212,7 +222,10 @@ namespace NuGet.PackageManagement.Utility
             else
             {
                 lockFile = new PackagesLockFile();
-                lockFile.Targets.Add(new PackagesLockFileTarget());
+                lockFile.Targets.Add(new PackagesLockFileTarget
+                {
+                    TargetFramework = targetFramework
+                });
             }
 
             return lockFile;
@@ -304,9 +317,11 @@ namespace NuGet.PackageManagement.Utility
             }
 
             var lockFile = new PackagesLockFile();
-            var target = new PackagesLockFileTarget();
+            var target = new PackagesLockFileTarget
+            {
+                TargetFramework = projectTfm
+            };
             lockFile.Targets.Add(target);
-            target.TargetFramework = projectTfm;
 
             using (var stream = File.OpenRead(pcFile))
             {

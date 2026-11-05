@@ -1,15 +1,18 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
-using NuGet.Versioning;
 using Xunit;
 
 namespace NuGet.Protocol.Plugins.Tests
 {
+    using SemanticVersion = Versioning.SemanticVersion;
+
     public class SymmetricHandshakeTests
     {
         private static readonly SemanticVersion _version1_0_0 = new SemanticVersion(major: 1, minor: 0, patch: 0);
@@ -161,7 +164,7 @@ namespace NuGet.Protocol.Plugins.Tests
                 var exception = await Assert.ThrowsAsync<ArgumentNullException>(
                     () => handshake.HandleResponseAsync(
                         connection: null,
-                        request: new Message(
+                        request: MessageUtilities.Create(
                             requestId: "a",
                             type: MessageType.Request,
                             method: MessageMethod.Handshake),
@@ -196,7 +199,7 @@ namespace NuGet.Protocol.Plugins.Tests
                 var exception = await Assert.ThrowsAsync<ArgumentNullException>(
                     () => handshake.HandleResponseAsync(
                         Mock.Of<IConnection>(),
-                        new Message(requestId: "a", type: MessageType.Request, method: MessageMethod.Handshake),
+                        MessageUtilities.Create(requestId: "a", type: MessageType.Request, method: MessageMethod.Handshake),
                         responseHandler: null,
                         cancellationToken: CancellationToken.None));
 
@@ -212,7 +215,7 @@ namespace NuGet.Protocol.Plugins.Tests
                 await Assert.ThrowsAsync<OperationCanceledException>(
                     () => handshake.HandleResponseAsync(
                         Mock.Of<IConnection>(),
-                        new Message(requestId: "a", type: MessageType.Request, method: MessageMethod.Initialize),
+                        MessageUtilities.Create(requestId: "a", type: MessageType.Request, method: MessageMethod.Initialize),
                         Mock.Of<IResponseHandler>(),
                         new CancellationToken(canceled: true)));
             }
@@ -252,11 +255,11 @@ namespace NuGet.Protocol.Plugins.Tests
                     .Returns(Task.FromResult(0));
 
                 var request = new HandshakeRequest(requestedProtocolVersion, requestedMinimumProtocolVersion);
-                var inboundMessage = new Message(
+                var inboundMessage = MessageUtilities.Create(
                     requestId: "a",
                     type: MessageType.Request,
                     method: MessageMethod.Handshake,
-                    payload: JsonSerializationUtilities.FromObject(request));
+                    payload: request);
 
                 await handshake.HandleResponseAsync(
                     Mock.Of<IConnection>(),

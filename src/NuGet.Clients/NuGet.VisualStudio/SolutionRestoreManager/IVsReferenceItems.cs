@@ -12,6 +12,7 @@ namespace NuGet.SolutionRestoreManager
     /// </summary>
     [ComImport]
     [Guid("d012bd06-67b0-47ce-bdfd-bcfca90741eb")]
+    [Obsolete]
     public interface IVsReferenceItems : IEnumerable
     {
         /// <summary>
@@ -24,6 +25,6 @@ namespace NuGet.SolutionRestoreManager
         /// </summary>
         /// <param name="index">Reference name or index.</param>
         /// <returns>Reference item matching index.</returns>
-        IVsReferenceItem Item(object index);
+        IVsReferenceItem? Item(object index);
     }
 }

@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#nullable enable
-
 using System;
 using Microsoft.Internal.VisualStudio.PlatformUI;
 using Microsoft.VisualStudio.Imaging;
@@ -67,7 +65,9 @@ namespace NuGet.VisualStudio.SolutionExplorer
             {
                 get
                 {
-                    return _item.Target.TryResolvePackagePath(_item.Library.Name, _item.Library.Version, out string? fullPath)
+                    return
+                        _item.Library.Version is not null &&
+                        _item.Target.TryResolvePackagePath(_item.Library.Name, _item.Library.Version, out string? fullPath)
                         ? System.IO.Path.GetFullPath(System.IO.Path.Combine(fullPath, _item.Path))
                         : null;
                 }

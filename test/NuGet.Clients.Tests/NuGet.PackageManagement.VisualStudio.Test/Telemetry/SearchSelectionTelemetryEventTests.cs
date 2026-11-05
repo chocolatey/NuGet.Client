@@ -1,12 +1,14 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using Moq;
 using NuGet.Common;
 using NuGet.PackageManagement.Telemetry;
 using NuGet.Versioning;
-using NuGet.VisualStudio;
+using NuGet.VisualStudio.Telemetry;
 using Xunit;
 
 namespace NuGet.PackageManagement.VisualStudio.Test

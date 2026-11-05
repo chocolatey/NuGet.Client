@@ -13,16 +13,21 @@ namespace NuGet.Resolver
     public class ResolverComparer : IComparer<ResolverPackage>
     {
         private readonly DependencyBehavior _dependencyBehavior;
-        private readonly HashSet<PackageIdentity> _preferredVersions;
+        private readonly HashSet<PackageIdentity>? _preferredVersions;
         private readonly HashSet<string> _targetIds;
         private readonly IVersionComparer _versionComparer;
         private readonly PackageIdentityComparer _identityComparer;
         private readonly Dictionary<string, NuGetVersion> _installedVersions;
 
         public ResolverComparer(DependencyBehavior dependencyBehavior,
-            HashSet<PackageIdentity> preferredVersions,
+            HashSet<PackageIdentity>? preferredVersions,
             HashSet<string> targetIds)
         {
+            if (targetIds == null)
+            {
+                throw new ArgumentNullException(nameof(targetIds));
+            }
+
             _dependencyBehavior = dependencyBehavior;
             _preferredVersions = preferredVersions;
             _targetIds = targetIds;
@@ -31,7 +36,7 @@ namespace NuGet.Resolver
 
             _installedVersions = new Dictionary<string, NuGetVersion>();
 
-            if (_installedVersions != null)
+            if (_preferredVersions != null)
             {
                 foreach (var package in _preferredVersions)
                 {
@@ -43,11 +48,21 @@ namespace NuGet.Resolver
             }
         }
 
-        public int Compare(ResolverPackage x, ResolverPackage y)
+        public int Compare(ResolverPackage? x, ResolverPackage? y)
         {
             if (Object.ReferenceEquals(x, y))
             {
                 return 0;
+            }
+
+            if (x == null)
+            {
+                return -1;
+            }
+
+            if (y == null)
+            {
+                return 1;
             }
 
             Debug.Assert(string.Equals(x.Id, y.Id, StringComparison.OrdinalIgnoreCase));
@@ -120,8 +135,7 @@ namespace NuGet.Resolver
             if (packageBehavior != DependencyBehavior.Highest
                 && packageBehavior != DependencyBehavior.Ignore)
             {
-                NuGetVersion installedVersion = null;
-                if (_installedVersions.TryGetValue(x.Id, out installedVersion))
+                if (_installedVersions.TryGetValue(x.Id, out NuGetVersion? installedVersion))
                 {
                     var xvDowngrade = _versionComparer.Compare(xv, installedVersion) < 0;
                     var yvDowngrade = _versionComparer.Compare(yv, installedVersion) < 0;

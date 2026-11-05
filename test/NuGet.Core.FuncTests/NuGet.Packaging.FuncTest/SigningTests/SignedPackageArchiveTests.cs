@@ -1,7 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if IS_SIGNING_SUPPORTED
+#nullable disable
+
 using System;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
@@ -30,7 +31,7 @@ namespace NuGet.Packaging.FuncTest
             _fixture = fixture;
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task RemoveSignatureAsync_RemovesPackageSignatureAsync()
         {
             using (var test = await Test.CreateAsync(_fixture))
@@ -43,7 +44,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task RemoveSignatureAsync_WithCancelledToken_ThrowsAsync()
         {
             using (var test = await Test.CreateAsync(_fixture))
@@ -53,7 +54,7 @@ namespace NuGet.Packaging.FuncTest
             }
         }
 
-        [CIOnlyFact]
+        [NetFxCIOnlyFact]
         public async Task RemoveSignatureAsync_WithUnsignedPackage_ThrowsAsync()
         {
             using (var test = await Test.CreateUnsignedAsync())
@@ -152,4 +153,3 @@ namespace NuGet.Packaging.FuncTest
         }
     }
 }
-#endif

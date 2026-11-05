@@ -12,6 +12,7 @@ namespace NuGet.SolutionRestoreManager
     /// </summary>
     [ComImport]
     [Guid("65f2e8c0-4e5d-4d50-945a-334987decc75")]
+    [Obsolete]
     public interface IVsTargetFrameworks : IEnumerable
     {
         /// <summary>
@@ -24,6 +25,6 @@ namespace NuGet.SolutionRestoreManager
         /// </summary>
         /// <param name="index">Reference name or index.</param>
         /// <returns>Reference item matching index.</returns>
-        IVsTargetFrameworkInfo Item(object index);
+        IVsTargetFrameworkInfo? Item(object index);
     }
 }

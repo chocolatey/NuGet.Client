@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#nullable enable
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,6 +10,8 @@ using Microsoft;
 using Microsoft.ServiceHub.Framework;
 using Microsoft.ServiceHub.Framework.Services;
 using NuGet.Configuration;
+using NuGet.Protocol;
+using NuGet.Protocol.Core.Types;
 using NuGet.VisualStudio.Internal.Contracts;
 
 namespace NuGet.PackageManagement.VisualStudio
@@ -21,95 +21,88 @@ namespace NuGet.PackageManagement.VisualStudio
         private readonly ServiceActivationOptions _options;
         private readonly IServiceBroker _serviceBroker;
         private readonly AuthorizationServiceClient _authorizationServiceClient;
-        private readonly ISharedServiceState _sharedServiceState;
-
-        public event EventHandler<IReadOnlyList<PackageSourceContextInfo>>? PackageSourcesChanged;
+        private readonly IPackageSourceProvider _packageSourceProvider;
 
         public NuGetSourcesService(
             ServiceActivationOptions options,
             IServiceBroker serviceBroker,
             AuthorizationServiceClient authorizationServiceClient,
-            ISharedServiceState state)
+            IPackageSourceProvider packageSourceProvider)
         {
             Assumes.NotNull(serviceBroker);
             Assumes.NotNull(authorizationServiceClient);
-            Assumes.NotNull(state);
+            Assumes.NotNull(packageSourceProvider);
 
             _options = options;
             _serviceBroker = serviceBroker;
             _authorizationServiceClient = authorizationServiceClient;
-            _sharedServiceState = state;
-            _sharedServiceState.SourceRepositoryProvider.PackageSourceProvider.PackageSourcesChanged += PackageSourceProvider_PackageSourcesChanged;
+            _packageSourceProvider = packageSourceProvider;
         }
 
         public ValueTask<IReadOnlyList<PackageSourceContextInfo>> GetPackageSourcesAsync(CancellationToken cancellationToken)
         {
             return new ValueTask<IReadOnlyList<PackageSourceContextInfo>>(
-                _sharedServiceState.SourceRepositoryProvider.PackageSourceProvider
+                _packageSourceProvider
                 .LoadPackageSources()
-                .Select(packageSource => PackageSourceContextInfo.Create(packageSource))
+                .Select(PackageSourceContextInfo.Create)
                 .ToList());
         }
 
-#pragma warning disable CS0618 // Type or member is obsolete
-        public ValueTask SavePackageSourcesAsync(IReadOnlyList<PackageSource> sources, PackageSourceUpdateOptions packageSourceUpdateOptions, CancellationToken cancellationToken)
+        public IReadOnlyList<SourceRepository> GetEnabledAuditSources()
         {
-            var packageSources2 = _sharedServiceState.SourceRepositoryProvider.PackageSourceProvider as IPackageSourceProvider2;
-#pragma warning restore CS0618 // Type or member is obsolete
+            IReadOnlyList<PackageSource> auditSources = _packageSourceProvider.LoadAuditSources();
 
-            if (packageSources2 != null)
+            List<SourceRepository> auditRepositories = new List<SourceRepository>(auditSources.Count);
+            for (int i = 0; i < auditSources.Count; i++)
             {
-                packageSources2.SavePackageSources(sources, packageSourceUpdateOptions);
-            }
-            else
-            {
-                _sharedServiceState.SourceRepositoryProvider.PackageSourceProvider.SavePackageSources(sources);
+                PackageSource auditSource = auditSources[i];
+                if (auditSource.IsEnabled)
+                {
+                    SourceRepository repository = Repository.Factory.GetCoreV3(auditSource);
+                    auditRepositories.Add(repository);
+                }
             }
 
-            return new ValueTask();
+            return auditRepositories;
         }
 
         public ValueTask SavePackageSourceContextInfosAsync(IReadOnlyList<PackageSourceContextInfo> sources, CancellationToken cancellationToken)
         {
             IEnumerable<PackageSource> packageSources = GetPackageSourcesToUpdate(sources);
-            _sharedServiceState.SourceRepositoryProvider.PackageSourceProvider.SavePackageSources(packageSources);
+            _packageSourceProvider.SavePackageSources(packageSources);
 
             return new ValueTask();
         }
 
         public ValueTask<string?> GetActivePackageSourceNameAsync(CancellationToken cancellationToken)
         {
-            return new ValueTask<string?>(_sharedServiceState.SourceRepositoryProvider.PackageSourceProvider.ActivePackageSourceName);
+            return new ValueTask<string?>(_packageSourceProvider.ActivePackageSourceName);
         }
 
         public void Dispose()
         {
-            _sharedServiceState.SourceRepositoryProvider.PackageSourceProvider.PackageSourcesChanged -= PackageSourceProvider_PackageSourcesChanged;
             _authorizationServiceClient.Dispose();
             GC.SuppressFinalize(this);
         }
 
-        private void PackageSourceProvider_PackageSourcesChanged(object sender, EventArgs e)
-        {
-            List<PackageSourceContextInfo> packageSources = _sharedServiceState.SourceRepositoryProvider.PackageSourceProvider.LoadPackageSources().Select(packageSource => PackageSourceContextInfo.Create(packageSource)).ToList();
-            PackageSourcesChanged?.Invoke(this, packageSources);
-        }
-
         private IReadOnlyList<PackageSource> GetPackageSourcesToUpdate(IReadOnlyList<PackageSourceContextInfo> packageSourceContextInfos)
         {
-            Dictionary<int, PackageSource>? packageSources = _sharedServiceState.SourceRepositoryProvider.PackageSourceProvider.LoadPackageSources()
-                 .ToDictionary(packageSource => packageSource.GetHashCode(), _ => _);
+            Dictionary<string, PackageSource>? packageSources = _packageSourceProvider.LoadPackageSources()
+                 .ToDictionary(packageSource => packageSource.Name, StringComparer.OrdinalIgnoreCase);
 
             var newPackageSources = new List<PackageSource>(capacity: packageSourceContextInfos.Count);
 
             foreach (PackageSourceContextInfo packageSourceContextInfo in packageSourceContextInfos)
             {
                 // If package source is pre-existing, retrieve it so that we can keep pre-existing values
-                if (packageSources.TryGetValue(packageSourceContextInfo.OriginalHashCode, out PackageSource packageSource))
+                if (packageSources.TryGetValue(packageSourceContextInfo.Name, out PackageSource packageSource))
                 {
-                    // If Name/Source/IsEnabled has not changed, we don't need to do anything
+                    // If Name/Source/IsEnabled/ProtocolVersion has not changed, we don't need to do anything
                     if (packageSource.Name.Equals(packageSourceContextInfo.Name, StringComparison.InvariantCulture)
                         && packageSource.Source.Equals(packageSourceContextInfo.Source, StringComparison.InvariantCulture)
+                        && packageSource.ProtocolVersion == packageSourceContextInfo.ProtocolVersion
+                        && packageSource.AllowInsecureConnections == packageSourceContextInfo.AllowInsecureConnections
+                        && packageSource.DisableTLSCertificateValidation == packageSourceContextInfo.DisableTLSCertificateValidation
                         && packageSource.IsEnabled == packageSourceContextInfo.IsEnabled)
                     {
                         newPackageSources.Add(packageSource);
@@ -127,7 +120,9 @@ namespace NuGet.PackageManagement.VisualStudio
                             Credentials = packageSource.Credentials,
                             ClientCertificates = packageSource.ClientCertificates,
                             Description = packageSource.Description,
-                            ProtocolVersion = packageSource.ProtocolVersion,
+                            ProtocolVersion = packageSourceContextInfo.ProtocolVersion,
+                            AllowInsecureConnections = packageSourceContextInfo.AllowInsecureConnections,
+                            DisableTLSCertificateValidation = packageSourceContextInfo.DisableTLSCertificateValidation,
                             MaxHttpRequestsPerSource = packageSource.MaxHttpRequestsPerSource,
                         };
 
@@ -143,6 +138,8 @@ namespace NuGet.PackageManagement.VisualStudio
                            packageSourceContextInfo.IsEnabled)
                     {
                         IsMachineWide = packageSourceContextInfo.IsMachineWide,
+                        ProtocolVersion = packageSourceContextInfo.ProtocolVersion,
+                        AllowInsecureConnections = packageSourceContextInfo.AllowInsecureConnections
                     };
 
                     newPackageSources.Add(newSource);

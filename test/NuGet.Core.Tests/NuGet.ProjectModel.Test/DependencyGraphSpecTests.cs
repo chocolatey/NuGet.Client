@@ -1,13 +1,20 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
+using NuGet.Commands.Test;
+using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Frameworks;
 using NuGet.LibraryModel;
+using NuGet.Packaging;
 using NuGet.Test.Utility;
 using NuGet.Versioning;
 using Xunit;
@@ -436,123 +443,327 @@ namespace NuGet.ProjectModel.Test
             string expectedJson = GetResourceAsJson(DgSpecWithCentralDependencies);
 
             // Act
-            DependencyGraphSpec dependencyGraphSpec = CreateDependencyGraphSpecWithCentralDependencies();
+            DependencyGraphSpec dependencyGraphSpec = CreateDependencyGraphSpecWithCentralDependencies(CreateTargetFrameworkInformation());
             string actualJson = GetJson(dependencyGraphSpec);
 
             // Assert
             Assert.Equal(expectedJson, actualJson);
         }
 
-        [Fact]
-        public void AddProject_WhenDependencyVersionIsNull_CentralPackageVersionAppliesOnlyWhenAutoReferencedIsFalse()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void GetHash_WithDifferentProjectPathCasings_UsesFileSystemCaseSensitivity(bool useLegacyHashFunction)
         {
-            // Arrange
-            var dependencyFoo = new LibraryDependency(
-                new LibraryRange("foo", versionRange: null, LibraryDependencyTarget.Package),
-                LibraryIncludeFlags.All,
-                LibraryIncludeFlags.All,
-                new List<Common.NuGetLogCode>(),
-                autoReferenced: false,
-                generatePathProperty: true,
-                versionCentrallyManaged: false,
-                LibraryDependencyReferenceType.Direct,
-                aliases: null,
-                versionOverride: null);
-            var dependencyBar = new LibraryDependency(
-                new LibraryRange("bar", VersionRange.Parse("3.0.0"), LibraryDependencyTarget.Package),
-                LibraryIncludeFlags.All,
-                LibraryIncludeFlags.All,
-                new List<Common.NuGetLogCode>(),
-                autoReferenced: true,
-                generatePathProperty: true,
-                versionCentrallyManaged: false,
-                LibraryDependencyReferenceType.Direct,
-                aliases: null,
-                versionOverride: null);
-            var dependencyBoom = new LibraryDependency(
-                new LibraryRange("boom", versionRange: null, LibraryDependencyTarget.Package),
-                LibraryIncludeFlags.All,
-                LibraryIncludeFlags.All,
-                new List<Common.NuGetLogCode>(),
-                autoReferenced: true,
-                generatePathProperty: true,
-                versionCentrallyManaged: false,
-                LibraryDependencyReferenceType.Direct,
-                aliases: null,
-                versionOverride: null);
-            var centralVersionFoo = new CentralPackageVersion("foo", VersionRange.Parse("1.0.0"));
-            var centralVersionBar = new CentralPackageVersion("bar", VersionRange.Parse("2.0.0"));
-            var centralVersionBoom = new CentralPackageVersion("boom", VersionRange.Parse("4.0.0"));
+            PackageSpec firstProject = CreatePackageSpecWithPaths(Path.Combine(Path.GetTempPath(), "Projects"));
+            PackageSpec secondProject = CreatePackageSpecWithPaths(Path.Combine(Path.GetTempPath(), "projects"));
+            DependencyGraphSpec first = ProjectTestHelpers.GetDGSpecForFirstProject(firstProject);
+            DependencyGraphSpec second = ProjectTestHelpers.GetDGSpecForFirstProject(secondProject);
+            string firstJson = GetJson(first);
+            string secondJson = GetJson(second);
 
-            var tfi = CreateTargetFrameworkInformation(
-                new List<LibraryDependency>() { dependencyFoo, dependencyBar, dependencyBoom },
-                new List<CentralPackageVersion>() { centralVersionFoo, centralVersionBar, centralVersionBoom });
+            string firstHash = GetHash(first, useLegacyHashFunction);
+            string secondHash = GetHash(second, useLegacyHashFunction);
 
-            // Act
-            DependencyGraphSpec dependencyGraphSpec = CreateDependencyGraphSpecWithCentralDependencies(tfi);
-
-            // Assert
-            Assert.Equal(1, dependencyGraphSpec.Projects.Count);
-            PackageSpec packSpec = dependencyGraphSpec.Projects[0];
-            IList<TargetFrameworkInformation> tfms = packSpec.TargetFrameworks;
-            IList<LibraryDependency> dependencies = tfms[0].Dependencies;
-
-            Assert.Equal(1, tfms.Count);
-            Assert.Equal(3, dependencies.Count);
-            Assert.Equal("[1.0.0, )", dependencies.Where(d => d.Name == "foo").First().LibraryRange.VersionRange.ToNormalizedString());
-            Assert.True(dependencies.Where(d => d.Name == "foo").First().VersionCentrallyManaged);
-            Assert.Equal("[3.0.0, )", dependencies.Where(d => d.Name == "bar").First().LibraryRange.VersionRange.ToNormalizedString());
-            Assert.False(dependencies.Where(d => d.Name == "bar").First().VersionCentrallyManaged);
-            Assert.Null(dependencies.Where(d => d.Name == "boom").First().LibraryRange.VersionRange);
+            Assert.Equal(PathUtility.IsFileSystemCaseInsensitive, StringComparer.Ordinal.Equals(firstHash, secondHash));
+            Assert.Equal(firstJson, GetJson(first));
+            Assert.Equal(secondJson, GetJson(second));
         }
 
-        [Fact]
-        public void AddProject_WhenDependencyIsNotInCentralPackageVersions_DependencyVersionIsAllVersions()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void GetHash_WithDifferentReferencedProjectPathCasings_UsesFileSystemCaseSensitivity(bool useLegacyHashFunction)
+        {
+            PackageSpec firstRoot = CreatePackageSpecWithPaths(Path.Combine(Path.GetTempPath(), "Root"));
+            PackageSpec secondRoot = firstRoot.Clone();
+            PackageSpec firstChild = CreatePackageSpecWithPaths(Path.Combine(Path.GetTempPath(), "Referenced"), "Child");
+            PackageSpec secondChild = CreatePackageSpecWithPaths(Path.Combine(Path.GetTempPath(), "referenced"), "Child");
+            firstRoot = firstRoot.WithTestProjectReference(firstChild);
+            secondRoot = secondRoot.WithTestProjectReference(secondChild);
+            DependencyGraphSpec first = ProjectTestHelpers.GetDGSpecForFirstProject(firstRoot, firstChild);
+            DependencyGraphSpec second = ProjectTestHelpers.GetDGSpecForFirstProject(secondRoot, secondChild);
+
+            DependencyGraphSpec firstClosure = first.WithProjectClosure(firstRoot.RestoreMetadata.ProjectUniqueName);
+            DependencyGraphSpec secondClosure = second.WithProjectClosure(secondRoot.RestoreMetadata.ProjectUniqueName);
+            Assert.Equal(2, firstClosure.Projects.Count);
+            Assert.Equal(2, secondClosure.Projects.Count);
+            string firstJson = GetJson(firstClosure);
+            string secondJson = GetJson(secondClosure);
+
+            string firstHash = GetHash(firstClosure, useLegacyHashFunction);
+            string secondHash = GetHash(secondClosure, useLegacyHashFunction);
+
+            Assert.Equal(PathUtility.IsFileSystemCaseInsensitive, StringComparer.Ordinal.Equals(firstHash, secondHash));
+            Assert.Equal(firstJson, GetJson(firstClosure));
+            Assert.Equal(secondJson, GetJson(secondClosure));
+        }
+
+        [Theory]
+        [InlineData(false, "ProjectName")]
+        [InlineData(true, "ProjectName")]
+        [InlineData(false, "Source")]
+        [InlineData(true, "Source")]
+        [InlineData(false, "PackagePath")]
+        [InlineData(true, "PackagePath")]
+        [InlineData(false, "OutputPath")]
+        [InlineData(true, "OutputPath")]
+        [InlineData(false, "DependencyVersion")]
+        [InlineData(true, "DependencyVersion")]
+        [InlineData(false, "ProjectJsonPath")]
+        [InlineData(true, "ProjectJsonPath")]
+        [InlineData(false, "PackagesPath")]
+        [InlineData(true, "PackagesPath")]
+        [InlineData(false, "ConfigFilePath")]
+        [InlineData(true, "ConfigFilePath")]
+        [InlineData(false, "FallbackFolder")]
+        [InlineData(true, "FallbackFolder")]
+        [InlineData(false, "LockFilePath")]
+        [InlineData(true, "LockFilePath")]
+        [InlineData(false, "RuntimeIdentifierGraphPath")]
+        [InlineData(true, "RuntimeIdentifierGraphPath")]
+        [InlineData(false, "AbsolutePath")]
+        [InlineData(true, "AbsolutePath")]
+        public void GetHash_WithOtherRestoreInputChanges_ReturnsDifferentHashes(bool useLegacyHashFunction, string changedValue)
+        {
+            PackageSpec first = CreatePackageSpecWithPaths(Path.Combine(Path.GetTempPath(), "Projects"));
+            PackageSpec second = first.Clone();
+
+            switch (changedValue)
+            {
+                case "ProjectName":
+                    second.RestoreMetadata.ProjectName = "project";
+                    break;
+                case "Source":
+                    second.RestoreMetadata.Sources = [new PackageSource("https://example.test/feed/index.json")];
+                    break;
+                case "PackagePath":
+                    second.RestoreMetadata.Files = [new ProjectRestoreMetadataFile("lib/net10.0/project.dll", first.RestoreMetadata.Files[0].AbsolutePath)];
+                    break;
+                case "OutputPath":
+                    second.RestoreMetadata.OutputPath = Path.Combine(Path.GetTempPath(), "OtherOutput");
+                    break;
+                case "DependencyVersion":
+                    second.TargetFrameworks[0] = new TargetFrameworkInformation(second.TargetFrameworks[0])
+                    {
+                        Dependencies = [new LibraryDependency
+                        {
+                            LibraryRange = new LibraryRange("Package", VersionRange.Parse("2.0.0"), LibraryDependencyTarget.Package)
+                        }]
+                    };
+                    break;
+                case "ProjectJsonPath":
+                    second.RestoreMetadata.ProjectJsonPath = second.RestoreMetadata.ProjectJsonPath.ToUpperInvariant();
+                    break;
+                case "PackagesPath":
+                    second.RestoreMetadata.PackagesPath = second.RestoreMetadata.PackagesPath.ToUpperInvariant();
+                    break;
+                case "ConfigFilePath":
+                    second.RestoreMetadata.ConfigFilePaths[0] = second.RestoreMetadata.ConfigFilePaths[0].ToUpperInvariant();
+                    break;
+                case "FallbackFolder":
+                    second.RestoreMetadata.FallbackFolders[0] = second.RestoreMetadata.FallbackFolders[0].ToUpperInvariant();
+                    break;
+                case "LockFilePath":
+                    second.RestoreMetadata.RestoreLockProperties = new RestoreLockProperties(
+                        "true", second.RestoreMetadata.RestoreLockProperties.NuGetLockFilePath.ToUpperInvariant(), false);
+                    break;
+                case "RuntimeIdentifierGraphPath":
+                    second.TargetFrameworks[0] = new TargetFrameworkInformation(second.TargetFrameworks[0])
+                    {
+                        RuntimeIdentifierGraphPath = second.TargetFrameworks[0].RuntimeIdentifierGraphPath.ToUpperInvariant()
+                    };
+                    break;
+                case "AbsolutePath":
+                    second.RestoreMetadata.Files = [new ProjectRestoreMetadataFile(
+                        first.RestoreMetadata.Files[0].PackagePath, first.RestoreMetadata.Files[0].AbsolutePath.ToUpperInvariant())];
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(changedValue));
+            }
+
+            string firstHash = GetHash(ProjectTestHelpers.GetDGSpecForFirstProject(first), useLegacyHashFunction);
+            string secondHash = GetHash(ProjectTestHelpers.GetDGSpecForFirstProject(second), useLegacyHashFunction);
+
+            Assert.NotEqual(firstHash, secondHash);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void GetHash_WithCentralPackageVersionsAndPackagesToPrune_IgnoresDictionaryCreationOrder(bool useLegacyHashFunction)
         {
             // Arrange
-            var dependencyFoo = new LibraryDependency(
-                new LibraryRange("foo", versionRange: null, LibraryDependencyTarget.Package),
-                LibraryIncludeFlags.All,
-                LibraryIncludeFlags.All,
-                new List<Common.NuGetLogCode>(),
-                autoReferenced: false,
-                generatePathProperty: true,
-                versionCentrallyManaged: false,
-                LibraryDependencyReferenceType.Direct,
-                aliases: null,
-                versionOverride: null);
-            var dependencyBar = new LibraryDependency(
-                new LibraryRange("bar", VersionRange.Parse("3.0.0"), LibraryDependencyTarget.Package),
-                LibraryIncludeFlags.All,
-                LibraryIncludeFlags.All,
-                new List<Common.NuGetLogCode>(),
-                autoReferenced: false,
-                generatePathProperty: true,
-                versionCentrallyManaged: false,
-                LibraryDependencyReferenceType.Direct,
-                aliases: null,
-                versionOverride: null);
+            DependencyGraphSpec first = CreateDependencyGraphSpecWithCentralDependenciesAndPruning(
+                centralPackageVersionNames: ["PackageB", "PackageA"],
+                packagesToPruneNames: ["TransitiveB", "TransitiveA"]);
 
-            // only a central dependency for bar not for foo
-            // foo will have null VersionRange
-            var centralVersionBar = new CentralPackageVersion("bar", VersionRange.Parse("2.0.0"));
-
-            TargetFrameworkInformation tfi = CreateTargetFrameworkInformation(
-                new List<LibraryDependency>() { dependencyFoo, dependencyBar },
-                new List<CentralPackageVersion>() { centralVersionBar });
+            DependencyGraphSpec second = CreateDependencyGraphSpecWithCentralDependenciesAndPruning(
+                centralPackageVersionNames: ["PackageA", "PackageB"],
+                packagesToPruneNames: ["TransitiveA", "TransitiveB"]);
 
             // Act
-            DependencyGraphSpec dependencyGraphSpec = CreateDependencyGraphSpecWithCentralDependencies(tfi);
+            string firstHash = GetHash(first, useLegacyHashFunction);
+            string secondHash = GetHash(second, useLegacyHashFunction);
 
             // Assert
-            PackageSpec packSpec = dependencyGraphSpec.Projects[0];
-            IList<TargetFrameworkInformation> tfms = packSpec.TargetFrameworks;
-            IList<LibraryDependency> dependencies = tfms[0].Dependencies;
+            Assert.Equal(firstHash, secondHash);
+        }
 
-            Assert.Equal(1, tfms.Count);
-            Assert.Equal(2, dependencies.Count);
-            Assert.Null(dependencies.Where(d => d.Name == "foo").First().LibraryRange.VersionRange);
-            Assert.True(dependencies.Where(d => d.Name == "foo").First().VersionCentrallyManaged);
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void GetHash_WithPackagesToPruneInDifferentJsonOrder_IgnoresInputOrder(bool useLegacyHashFunction)
+        {
+            // Arrange
+            DependencyGraphSpec first = CreateDependencyGraphSpecFromJson(@"
+            {
+              ""restore"": {
+                ""projectUniqueName"": ""Project1"",
+                ""centralPackageVersionsManagementEnabled"": true
+              },
+              ""frameworks"": {
+                ""net8.0"": {
+                  ""dependencies"": {
+                    ""PackageA"": {
+                      ""target"": ""Package"",
+                      ""version"": ""[1.0.0,)"",
+                      ""versionCentrallyManaged"": true
+                    }
+                  },
+                  ""centralPackageVersions"": {
+                    ""PackageA"": ""[1.0.0]"",
+                    ""PackageB"": ""[2.0.0]""
+                  },
+                  ""packagesToPrune"": {
+                    ""TransitiveB"": ""(,2.0.0]"",
+                    ""TransitiveA"": ""(,1.0.0]""
+                  }
+                }
+              }
+            }");
+
+            DependencyGraphSpec second = CreateDependencyGraphSpecFromJson(@"
+            {
+              ""restore"": {
+                ""projectUniqueName"": ""Project1"",
+                ""centralPackageVersionsManagementEnabled"": true
+              },
+              ""frameworks"": {
+                ""net8.0"": {
+                  ""dependencies"": {
+                    ""PackageA"": {
+                      ""target"": ""Package"",
+                      ""version"": ""[1.0.0,)"",
+                      ""versionCentrallyManaged"": true
+                    }
+                  },
+                  ""centralPackageVersions"": {
+                    ""PackageA"": ""[1.0.0]"",
+                    ""PackageB"": ""[2.0.0]""
+                  },
+                  ""packagesToPrune"": {
+                    ""TransitiveA"": ""(,1.0.0]"",
+                    ""TransitiveB"": ""(,2.0.0]""
+                  }
+                }
+              }
+            }");
+
+            // Act
+            string firstHash = GetHash(first, useLegacyHashFunction);
+            string secondHash = GetHash(second, useLegacyHashFunction);
+
+            // Assert
+            Assert.Equal(firstHash, secondHash);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void GetHash_WithCentralPackageVersionsInDifferentJsonOrder_IgnoresInputOrder(bool useLegacyHashFunction)
+        {
+            // Arrange
+            DependencyGraphSpec first = CreateDependencyGraphSpecFromJson(@"
+            {
+              ""restore"": {
+                ""projectUniqueName"": ""Project1"",
+                ""centralPackageVersionsManagementEnabled"": true
+              },
+              ""frameworks"": {
+                ""net8.0"": {
+                  ""dependencies"": {
+                    ""PackageA"": {
+                      ""target"": ""Package"",
+                      ""version"": ""[1.0.0,)"",
+                      ""versionCentrallyManaged"": true
+                    }
+                  },
+                  ""centralPackageVersions"": {
+                    ""PackageB"": ""[2.0.0]"",
+                    ""PackageA"": ""[1.0.0]""
+                  },
+                  ""packagesToPrune"": {
+                    ""TransitiveA"": ""(,1.0.0]"",
+                    ""TransitiveB"": ""(,2.0.0]""
+                  }
+                }
+              }
+            }");
+
+            DependencyGraphSpec second = CreateDependencyGraphSpecFromJson(@"
+            {
+              ""restore"": {
+                ""projectUniqueName"": ""Project1"",
+                ""centralPackageVersionsManagementEnabled"": true
+              },
+              ""frameworks"": {
+                ""net8.0"": {
+                  ""dependencies"": {
+                    ""PackageA"": {
+                      ""target"": ""Package"",
+                      ""version"": ""[1.0.0,)"",
+                      ""versionCentrallyManaged"": true
+                    }
+                  },
+                  ""centralPackageVersions"": {
+                    ""PackageA"": ""[1.0.0]"",
+                    ""PackageB"": ""[2.0.0]""
+                  },
+                  ""packagesToPrune"": {
+                    ""TransitiveA"": ""(,1.0.0]"",
+                    ""TransitiveB"": ""(,2.0.0]""
+                  }
+                }
+              }
+            }");
+
+            // Act
+            string firstHash = GetHash(first, useLegacyHashFunction);
+            string secondHash = GetHash(second, useLegacyHashFunction);
+
+            // Assert
+            Assert.Equal(firstHash, secondHash);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void GetHash_WithDifferentRestoreEnableAnalyzerAssetsValues_ReturnsDifferentHashes(bool useLegacyHashFunction)
+        {
+            // Arrange
+            DependencyGraphSpec first = CreateDependencyGraphSpec();
+            DependencyGraphSpec second = CreateDependencyGraphSpec();
+            first.GetProjectSpec("a").TargetFrameworks.Add(new TargetFrameworkInformation { FrameworkName = NuGetFramework.Parse("net5.0") });
+            second.GetProjectSpec("a").TargetFrameworks.Add(new TargetFrameworkInformation { FrameworkName = NuGetFramework.Parse("net5.0") });
+            second.GetProjectSpec("a").RestoreMetadata.RestoreEnableAnalyzerAssets = true;
+
+            // Act
+            string firstHash = GetHash(first, useLegacyHashFunction);
+            string secondHash = GetHash(second, useLegacyHashFunction);
+
+            // Assert
+            Assert.NotEqual(firstHash, secondHash);
         }
 
         [Fact]
@@ -577,6 +788,7 @@ namespace NuGet.ProjectModel.Test
             var dependencyFoo = new LibraryDependency()
             {
                 LibraryRange = new LibraryRange("foo", versionRange: cpvmEnabled ? null : VersionRange.Parse("1.0.0"), LibraryDependencyTarget.Package),
+                VersionCentrallyManaged = cpvmEnabled
             };
 
             var centralVersions = cpvmEnabled
@@ -584,7 +796,7 @@ namespace NuGet.ProjectModel.Test
                 : new List<CentralPackageVersion>();
 
             var tfi = CreateTargetFrameworkInformation(
-                new List<LibraryDependency>() { dependencyFoo },
+                [dependencyFoo],
                 centralVersions);
 
             var packageSpec = new PackageSpec(new List<TargetFrameworkInformation>() { tfi });
@@ -598,7 +810,7 @@ namespace NuGet.ProjectModel.Test
             dgSpec.AddRestore("a");
             dgSpec.AddProject(packageSpec);
 
-            // Act 
+            // Act
             var packageSpecFromDGSpec = dgSpec.GetProjectSpec("a");
 
             // Assert
@@ -676,6 +888,43 @@ namespace NuGet.ProjectModel.Test
                 });
         }
 
+        private static PackageSpec CreatePackageSpecWithPaths(string directory, string projectName = "Project")
+        {
+            string projectPath = Path.Combine(directory, projectName + ".csproj");
+            string restoreSettingsDirectory = Path.Combine(Path.GetTempPath(), "RestoreSettings");
+            var framework = new TargetFrameworkInformation
+            {
+                FrameworkName = NuGetFramework.Parse("net10.0"),
+                RuntimeIdentifierGraphPath = Path.Combine(restoreSettingsDirectory, "RuntimeIdentifierGraph.json"),
+                Dependencies = [new LibraryDependency
+                {
+                    LibraryRange = new LibraryRange("Package", VersionRange.Parse("1.0.0"), LibraryDependencyTarget.Package)
+                }]
+            };
+
+            return new PackageSpec([framework])
+            {
+                Name = projectName,
+                FilePath = projectPath,
+                RestoreMetadata = new ProjectRestoreMetadata
+                {
+                    ProjectStyle = ProjectStyle.PackageReference,
+                    ProjectUniqueName = projectPath,
+                    ProjectName = projectName,
+                    ProjectPath = projectPath,
+                    ProjectJsonPath = Path.Combine(restoreSettingsDirectory, "project.json"),
+                    OutputPath = Path.Combine(directory, "obj"),
+                    PackagesPath = Path.Combine(restoreSettingsDirectory, "Packages"),
+                    ConfigFilePaths = [Path.Combine(restoreSettingsDirectory, "NuGet.Config")],
+                    FallbackFolders = [Path.Combine(restoreSettingsDirectory, "Fallback")],
+                    Sources = [new PackageSource("https://example.test/Feed/index.json")],
+                    TargetFrameworks = [new ProjectRestoreMetadataFrameworkInfo(framework.FrameworkName)],
+                    Files = [new ProjectRestoreMetadataFile("lib/net10.0/Project.dll", Path.Combine(restoreSettingsDirectory, "bin", "Project.dll"))],
+                    RestoreLockProperties = new RestoreLockProperties("true", Path.Combine(restoreSettingsDirectory, "packages.lock.json"), false)
+                }
+            };
+        }
+
         private static DependencyGraphSpec CreateDependencyGraphSpec()
         {
             var dgSpec = new DependencyGraphSpec();
@@ -691,11 +940,6 @@ namespace NuGet.ProjectModel.Test
             return dgSpec;
         }
 
-        private static DependencyGraphSpec CreateDependencyGraphSpecWithCentralDependencies(int centralVersionsDummyLoadCount = 0)
-        {
-            return CreateDependencyGraphSpecWithCentralDependencies(CreateTargetFrameworkInformation(centralVersionsDummyLoadCount));
-        }
-
         private static DependencyGraphSpec CreateDependencyGraphSpecWithCentralDependencies(params TargetFrameworkInformation[] tfis)
         {
             var packageSpec = new PackageSpec(tfis);
@@ -707,68 +951,115 @@ namespace NuGet.ProjectModel.Test
             return dgSpec;
         }
 
-        private static TargetFrameworkInformation CreateTargetFrameworkInformation(int centralVersionsDummyLoadCount = 0)
+        private static DependencyGraphSpec CreateDependencyGraphSpecWithCentralDependenciesAndPruning(
+            IReadOnlyList<string> centralPackageVersionNames,
+            IReadOnlyList<string> packagesToPruneNames)
+        {
+            string centralPackageVersions = string.Join(
+                $",{Environment.NewLine}",
+                centralPackageVersionNames.Select(packageId => $@"                    ""{packageId}"": ""[1.0.0]"""));
+            string packagesToPrune = string.Join(
+                $",{Environment.NewLine}",
+                packagesToPruneNames.Select(packageId => $@"                    ""{packageId}"": ""(,1.0.0]"""));
+
+            string rootProject = $@"
+            {{
+              ""restore"": {{
+                ""projectUniqueName"": ""Project1"",
+                ""centralPackageVersionsManagementEnabled"": true
+              }},
+              ""frameworks"": {{
+                ""net8.0"": {{
+                  ""dependencies"": {{
+                    ""PackageA"": {{
+                      ""version"": ""[1.0.0,)"",
+                      ""target"": ""Package"",
+                      ""versionCentrallyManaged"": true
+                    }}
+                  }},
+                  ""centralPackageVersions"": {{
+{centralPackageVersions}
+                  }},
+                  ""packagesToPrune"": {{
+{packagesToPrune}
+                  }}
+                }}
+              }}
+            }}";
+
+            return CreateDependencyGraphSpecFromJson(rootProject);
+        }
+
+        private static TargetFrameworkInformation CreateTargetFrameworkInformation()
         {
             var nugetFramework = new NuGetFramework("net40");
-            var dependencyFoo = new LibraryDependency(
-                new LibraryRange("foo", versionRange: null, LibraryDependencyTarget.Package),
-                LibraryIncludeFlags.All,
-                LibraryIncludeFlags.All,
-                new List<Common.NuGetLogCode>(),
-                autoReferenced: false,
-                generatePathProperty: true,
-                versionCentrallyManaged: false,
-                LibraryDependencyReferenceType.Direct,
-                aliases: null,
-                versionOverride: null);
 
             var centralVersionFoo = new CentralPackageVersion("foo", VersionRange.Parse("1.0.0"));
             var centralVersionBar = new CentralPackageVersion("bar", VersionRange.Parse("2.0.0"));
 
-            var dependencies = new List<LibraryDependency>() { dependencyFoo };
+            var dependencyFoo = new LibraryDependency(
+                new LibraryRange("foo", versionRange: centralVersionFoo.VersionRange, LibraryDependencyTarget.Package),
+                LibraryIncludeFlags.All,
+                LibraryIncludeFlags.All,
+                noWarn: [],
+                autoReferenced: false,
+                generatePathProperty: true,
+                versionCentrallyManaged: true,
+                LibraryDependencyReferenceType.Direct,
+                aliases: null,
+                versionOverride: null);
+
             var assetTargetFallback = true;
             var warn = false;
+
+            var centralPackageVersions = new Dictionary<string, CentralPackageVersion>(StringComparer.OrdinalIgnoreCase)
+            {
+                {centralVersionFoo.Name, centralVersionFoo },
+                { centralVersionBar.Name, centralVersionBar },
+            };
+
+            ImmutableArray<LibraryDependency> dependencies = [dependencyFoo];
 
             var tfi = new TargetFrameworkInformation()
             {
                 AssetTargetFallback = assetTargetFallback,
+                CentralPackageVersions = centralPackageVersions,
                 Dependencies = dependencies,
                 Warn = warn,
                 FrameworkName = nugetFramework,
             };
 
-            tfi.CentralPackageVersions.Add(centralVersionFoo.Name, centralVersionFoo);
-            tfi.CentralPackageVersions.Add(centralVersionBar.Name, centralVersionBar);
-            LibraryDependency.ApplyCentralVersionInformation(tfi.Dependencies, tfi.CentralPackageVersions);
-
-            for (int i = 0; i < centralVersionsDummyLoadCount; i++)
-            {
-                var dummy = new CentralPackageVersion($"Dummy{i}", VersionRange.Parse("1.0.0"));
-                tfi.CentralPackageVersions.Add(dummy.Name, dummy);
-            }
-
             return tfi;
         }
 
-        private static TargetFrameworkInformation CreateTargetFrameworkInformation(List<LibraryDependency> dependencies, List<CentralPackageVersion> centralVersionsDependencies)
+        private static TargetFrameworkInformation CreateTargetFrameworkInformation(ImmutableArray<LibraryDependency> dependencies, List<CentralPackageVersion> centralVersionsDependencies)
         {
             var nugetFramework = new NuGetFramework("net40");
+            var centralPackageVersions = centralVersionsDependencies.ToDictionary(cvd => cvd.Name, StringComparer.OrdinalIgnoreCase);
 
             var tfi = new TargetFrameworkInformation()
             {
                 AssetTargetFallback = true,
-                Warn = false,
-                FrameworkName = nugetFramework,
+                CentralPackageVersions = centralPackageVersions,
                 Dependencies = dependencies,
+                FrameworkName = nugetFramework,
+                Warn = false,
             };
 
-            foreach (CentralPackageVersion cvd in centralVersionsDependencies)
-            {
-                tfi.CentralPackageVersions.Add(cvd.Name, cvd);
-            }
-            LibraryDependency.ApplyCentralVersionInformation(tfi.Dependencies, tfi.CentralPackageVersions);
-
             return tfi;
+        }
+
+        private static DependencyGraphSpec CreateDependencyGraphSpecFromJson(string json)
+        {
+            PackageSpec packageSpec = ProjectTestHelpers.GetPackageSpecWithProjectNameAndSpec("Project1", @"c:\", json);
+            return ProjectTestHelpers.GetDGSpecForFirstProject(packageSpec);
+        }
+
+        private static string GetHash(DependencyGraphSpec dgSpec, bool useLegacyHashFunction)
+        {
+            return useLegacyHashFunction
+                ? dgSpec.GetHash(() => new Sha512HashFunction())
+                : dgSpec.GetHash(() => new FnvHash64Function());
         }
 
         private static string GetJson(DependencyGraphSpec dgSpec)

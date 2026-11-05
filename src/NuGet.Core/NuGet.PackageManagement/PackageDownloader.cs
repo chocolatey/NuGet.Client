@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -35,13 +37,13 @@ namespace NuGet.PackageManagement
         /// The task result (<see cref="Task{TResult}.Result" />) returns a <see cref="DownloadResourceResult" />
         /// instance.</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="sources" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="packageIdentity" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="downloadContext" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="token" />
         /// is cancelled.</exception>
         public static async Task<DownloadResourceResult> GetDownloadResourceResultAsync(
@@ -105,7 +107,7 @@ namespace NuGet.PackageManagement
                 {
                     configuredPackageSources = downloadContext.PackageSourceMapping.GetConfiguredPackageSources(packageIdentity.Id);
 
-                    if (configuredPackageSources != null)
+                    if (configuredPackageSources.Count > 0)
                     {
                         var packageSourcesAtPrefix = string.Join(", ", configuredPackageSources);
                         logger.LogDebug(StringFormatter.Log_PackageSourceMappingMatchFound(packageIdentity.Id, packageSourcesAtPrefix));
@@ -219,8 +221,11 @@ namespace NuGet.PackageManagement
                     {
                         message = ExceptionUtilities.DisplayMessage(task.Exception);
                     }
-
+#if IS_DESKTOP
                     errors.AppendLine($"  {tasksLookup[task].PackageSource.Source}: {message}");
+#else
+                    errors.AppendLine(CultureInfo.CurrentCulture, $"  {tasksLookup[task].PackageSource.Source}: {message}");
+#endif
                 }
 
                 throw new FatalProtocolException(errors.ToString());
@@ -246,13 +251,13 @@ namespace NuGet.PackageManagement
         /// The task result (<see cref="Task{TResult}.Result" />) returns a <see cref="DownloadResourceResult" />
         /// instance.</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="sourceRepository" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="packageIdentity" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="downloadContext" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="logger" />
-        /// is either <c>null</c> or empty.</exception>
+        /// is either <see langword="null" /> or empty.</exception>
         /// <exception cref="OperationCanceledException">Thrown if <paramref name="token" />
         /// is cancelled.</exception>
         public static async Task<DownloadResourceResult> GetDownloadResourceResultAsync(

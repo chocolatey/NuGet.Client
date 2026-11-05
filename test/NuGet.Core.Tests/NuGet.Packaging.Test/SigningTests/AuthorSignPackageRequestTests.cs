@@ -4,7 +4,6 @@
 using System;
 using NuGet.Common;
 using NuGet.Packaging.Signing;
-using NuGet.Test.Utility;
 using Xunit;
 
 namespace NuGet.Packaging.Test
@@ -28,7 +27,7 @@ namespace NuGet.Packaging.Test
         public void Constructor_CertificateHashAlgorithm_WhenCertificateNull_Throws()
         {
             var exception = Assert.Throws<ArgumentNullException>(
-                () => new AuthorSignPackageRequest(certificate: null, hashAlgorithm: HashAlgorithmName.SHA256));
+                () => new AuthorSignPackageRequest(certificate: null!, hashAlgorithm: HashAlgorithmName.SHA256));
 
             Assert.Equal("certificate", exception.ParamName);
         }
@@ -64,7 +63,7 @@ namespace NuGet.Packaging.Test
         {
             var exception = Assert.Throws<ArgumentNullException>(
                 () => new AuthorSignPackageRequest(
-                    certificate: null,
+                    certificate: null!,
                     signatureHashAlgorithm: HashAlgorithmName.SHA256,
                     timestampHashAlgorithm: HashAlgorithmName.SHA256));
 

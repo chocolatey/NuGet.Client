@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -35,8 +37,11 @@ namespace NuGet.CommandLine
         [Option(typeof(NuGetCommand), "CommandFallbackSourceDescription")]
         public ICollection<string> FallbackSource { get; } = new List<string>();
 
-        [Option(typeof(NuGetCommand), "CommandNoCache")]
+        [Option(typeof(NuGetCommand), "CommandNoCache", isHidden: true)]
         public bool NoCache { get; set; }
+
+        [Option(typeof(NuGetCommand), "CommandNoHttpCache")]
+        public bool NoHttpCache { get; set; }
 
         [Option(typeof(NuGetCommand), "CommandDirectDownload")]
         public bool DirectDownload { get; set; }
@@ -92,9 +97,7 @@ namespace NuGet.CommandLine
             }
         }
 
-        protected IEnumerable<Packaging.PackageReference> GetInstalledPackageReferences(
-            string projectConfigFilePath,
-            bool allowDuplicatePackageIds)
+        internal IEnumerable<PackageReference> GetInstalledPackageReferences(string projectConfigFilePath)
         {
             if (File.Exists(projectConfigFilePath))
             {
@@ -102,7 +105,7 @@ namespace NuGet.CommandLine
                 {
                     XDocument xDocument = XmlUtility.Load(projectConfigFilePath);
                     var reader = new PackagesConfigReader(xDocument);
-                    return reader.GetPackages(allowDuplicatePackageIds);
+                    return reader.GetPackages(allowDuplicatePackageIds: true);
                 }
                 catch (XmlException ex)
                 {
@@ -124,7 +127,7 @@ namespace NuGet.CommandLine
             var availableSources = SourceProvider.LoadPackageSources().Where(source => source.IsEnabled);
             var packageSources = new List<Configuration.PackageSource>();
 
-            if (!NoCache && !ExcludeCacheAsSource)
+            if (!(NoCache || NoHttpCache) && !ExcludeCacheAsSource)
             {
                 // Add the v3 global packages folder
                 var globalPackageFolder = SettingsUtility.GetGlobalPackagesFolder(settings);

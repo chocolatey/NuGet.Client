@@ -31,13 +31,13 @@ namespace NuGet.DependencyResolver
         {
         }
 
-        public bool Equals(GraphItem<T> x, GraphItem<T> y)
+        public bool Equals(GraphItem<T>? x, GraphItem<T>? y)
         {
             if (x == null)
             {
                 return y == null;
             }
-            return x.Key.Equals(y.Key);
+            return y != null && x.Key.Equals(y.Key);
         }
 
         public int GetHashCode(GraphItem<T> obj)

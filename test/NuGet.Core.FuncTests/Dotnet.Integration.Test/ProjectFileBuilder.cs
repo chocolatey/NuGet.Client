@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System.Collections.Generic;
 using System.IO;
 using System.Xml.Linq;
@@ -12,7 +14,7 @@ namespace NuGet.Test.Utility
     /// Represents a builder for dotnet core projects for integration tests.
     /// Relies on <c>MsbuildIntegrationTestFixture</c> to programmatically create the project
     /// </summary>
-    /// <seealso cref="MsbuildIntegrationTestFixture"/>
+    /// <seealso cref="DotnetIntegrationTestFixture"/>
     internal class ProjectFileBuilder
     {
         public string PackageIcon { get; private set; }
@@ -40,7 +42,7 @@ namespace NuGet.Test.Utility
             return new ProjectFileBuilder();
         }
 
-        public void Build(MsbuildIntegrationTestFixture fixture, string path)
+        public void Build(DotnetIntegrationTestFixture fixture, string path)
         {
             BaseDir = path;
 

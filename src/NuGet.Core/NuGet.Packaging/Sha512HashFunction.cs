@@ -13,7 +13,7 @@ namespace NuGet.Packaging
     /// </summary>
     public sealed class Sha512HashFunction : IHashFunction
     {
-        private byte[] _hash;
+        private byte[]? _hash;
 
 #if IS_DESKTOP
         private readonly SHA512 _hashFunc;

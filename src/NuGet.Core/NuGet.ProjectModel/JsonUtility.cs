@@ -1,18 +1,22 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NuGet.Packaging.Core;
+using NuGet.Shared;
 using NuGet.Versioning;
 
 namespace NuGet.ProjectModel
 {
     internal static class JsonUtility
     {
+        internal static bool? UseNewtonsoftJson = null;
         internal static readonly char[] PathSplitChars = new[] { LockFile.DirectorySeparatorChar };
 
         /// <summary>
@@ -41,6 +45,16 @@ namespace NuGet.ProjectModel
 
                 return JObject.Load(jsonReader, DefaultLoadSettings);
             }
+        }
+
+        internal static LockFile LoadJson(Stream stream, Utf8JsonStreamLockFileConverter converter, LockFileReadFlags flags)
+        {
+            var streamingJsonReader = new Utf8JsonStreamReader(stream);
+            var lockFile = Utf8JsonStreamLockFileConverter.Read(ref streamingJsonReader, flags);
+
+            streamingJsonReader.Dispose();
+
+            return lockFile;
         }
 
         internal static PackageDependency ReadPackageDependency(string property, JToken json)

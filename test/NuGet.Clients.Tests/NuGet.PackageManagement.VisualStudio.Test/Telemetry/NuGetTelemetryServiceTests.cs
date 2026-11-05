@@ -1,13 +1,15 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Linq;
 using Moq;
 using NuGet.Common;
 using NuGet.PackageManagement.Telemetry;
-using NuGet.VisualStudio;
 using NuGet.VisualStudio.Internal.Contracts;
+using NuGet.VisualStudio.Telemetry;
 using Xunit;
 
 namespace NuGet.PackageManagement.VisualStudio.Test
@@ -70,8 +72,7 @@ namespace NuGet.PackageManagement.VisualStudio.Test
 
             var projectFilePath = lastTelemetryEvent
                 .GetPiiData()
-                .Where(kv => kv.Key == ProjectTelemetryEvent.ProjectFilePath)
-                .First()
+                .First(kv => kv.Key == ProjectTelemetryEvent.ProjectFilePath)
                 .Value;
             Assert.IsType<string>(projectFilePath);
             Assert.True(!string.IsNullOrEmpty((string)projectFilePath));
@@ -92,6 +93,8 @@ namespace NuGet.PackageManagement.VisualStudio.Test
         [InlineData(RefreshOperationSource.ProjectsChanged, RefreshOperationStatus.Failed)]
         [InlineData(RefreshOperationSource.RestartSearchCommand, RefreshOperationStatus.Success)]
         [InlineData(RefreshOperationSource.SourceSelectionChanged, RefreshOperationStatus.Success)]
+        [InlineData(RefreshOperationSource.WindowActivated, RefreshOperationStatus.Success)]
+        [InlineData(RefreshOperationSource.WindowActivated, RefreshOperationStatus.NoOp)]
         public void NuGetTelemetryService_EmitsPMUIRefreshEvent(RefreshOperationSource expectedRefreshSource, RefreshOperationStatus expectedRefreshStatus, bool expectedUiFiltering = false)
         {
             // Arrange

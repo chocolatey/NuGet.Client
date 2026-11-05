@@ -1,8 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -12,8 +12,6 @@ using System.Threading.Tasks;
 using NuGet.Common;
 using NuGet.Packaging;
 using NuGet.Packaging.Core;
-using NuGet.Packaging.PackageExtraction;
-using NuGet.Packaging.Signing;
 
 namespace NuGet.Protocol.Core.Types
 {
@@ -69,7 +67,7 @@ namespace NuGet.Protocol.Core.Types
             return false;
         }
 
-        public static string GetPackageDirectory(PackageIdentity packageIdentity, string offlineFeed)
+        public static string? GetPackageDirectory(PackageIdentity packageIdentity, string offlineFeed)
         {
             var versionFolderPathResolver = new VersionFolderPathResolver(offlineFeed);
             return Path.GetDirectoryName(
@@ -200,7 +198,7 @@ namespace NuGet.Protocol.Core.Types
                     var versionFolderPathResolver = new VersionFolderPathResolver(source);
 
                     using var packageDownloader = new LocalPackageArchiveDownloader(
-                        source: null,
+                        source: source,
                         packageFilePath: packagePath,
                         packageIdentity: packageIdentity,
                         logger: logger);
@@ -228,7 +226,7 @@ namespace NuGet.Protocol.Core.Types
             // Reading Nuspec in invalid package on Mono will get PackagingException 
             catch (Exception ex) when (ex is InvalidDataException
                                     || (RuntimeEnvironmentHelper.IsMono
-                                    && (ex.GetType().FullName.Equals("SharpCompress.Common.ArchiveException", StringComparison.Ordinal)
+                                    && (ex.GetType().FullName?.Equals("SharpCompress.Common.ArchiveException", StringComparison.Ordinal) == true
                                     || ex is PackagingException)))
             {
                 var message = string.Format(

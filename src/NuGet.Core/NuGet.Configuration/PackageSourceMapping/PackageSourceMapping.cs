@@ -11,7 +11,8 @@ namespace NuGet.Configuration
     {
         /// <summary>
         /// Max allowed length for package Id.
-        /// In case update this value please update in src\NuGet.Core\NuGet.Packaging\PackageCreation\Utility\PackageIdValidator.cs too.
+        /// In case update this value please update in src\NuGet.Core\NuGet.Packaging\PackageCreation\Utility\PackageIdValidator.cs
+        /// and the registration.json for the Package Source Mapping Unified Settings page.
         /// </summary>
         internal static int PackageIdMaxLength { get; } = 100;
 
@@ -20,7 +21,7 @@ namespace NuGet.Configuration
         /// </summary>
         internal IReadOnlyDictionary<string, IReadOnlyList<string>> Patterns { get; }
 
-        private Lazy<SearchTree> SearchTree { get; }
+        private Lazy<SearchTree>? SearchTree { get; }
 
         /// <summary>
         /// Indicate if any packageSource exist in package source mapping section
@@ -28,21 +29,31 @@ namespace NuGet.Configuration
         public bool IsEnabled { get; }
 
         /// <summary>
-        /// Get package source names with matching prefix "packageId" from package source mapping section.
+        /// Get package source names with matching prefix "packageId" from package source mapping section, or an empty list if none are found.
         /// </summary>
         /// <param name="packageId">Search packageId. Cannot be null, empty, or whitespace only. </param>
-        /// <returns>Package source names with matching prefix "packageId" from package patterns.</returns>
+        /// <returns>Package source names with matching prefix "packageId" from package patterns, or an empty list if none are found.</returns>
         /// <exception cref="ArgumentException"> if <paramref name="packageId"/> is null, empty, or whitespace only.</exception>
         public IReadOnlyList<string> GetConfiguredPackageSources(string packageId)
         {
-            return SearchTree.Value?.GetConfiguredPackageSources(packageId);
+            if (SearchTree?.Value is null)
+            {
+                return Array.Empty<string>();
+            }
+
+            return SearchTree.Value.GetConfiguredPackageSources(packageId);
+        }
+
+        public string? SearchForPattern(string packageId)
+        {
+            return SearchTree?.Value.SearchForPattern(packageId);
         }
 
         public PackageSourceMapping(IReadOnlyDictionary<string, IReadOnlyList<string>> patterns)
         {
             Patterns = patterns ?? throw new ArgumentNullException(nameof(patterns));
             IsEnabled = Patterns.Count > 0;
-            SearchTree = new Lazy<SearchTree>(() => GetSearchTree());
+            SearchTree = IsEnabled ? new Lazy<SearchTree>(() => GetSearchTree()) : null;
         }
 
         /// <summary>
@@ -72,14 +83,7 @@ namespace NuGet.Configuration
 
         private SearchTree GetSearchTree()
         {
-            SearchTree patternsLookup = null;
-
-            if (IsEnabled)
-            {
-                patternsLookup = new SearchTree(this);
-            }
-
-            return patternsLookup;
+            return new SearchTree(this);
         }
     }
 }

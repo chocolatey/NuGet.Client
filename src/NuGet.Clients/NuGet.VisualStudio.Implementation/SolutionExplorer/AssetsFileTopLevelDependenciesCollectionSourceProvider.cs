@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#nullable enable
-
 using System;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
@@ -26,7 +24,7 @@ namespace NuGet.VisualStudio.SolutionExplorer
     /// <remarks>
     /// Templates out common code with a bunch of protected methods to override for specific item types.
     /// </remarks>
-    internal abstract class AssetsFileTopLevelDependenciesCollectionSourceProvider<TIdentity, TItem> : DependenciesAttachedCollectionSourceProviderBase
+    internal abstract class AssetsFileTopLevelDependenciesCollectionSourceProvider<TItem> : DependenciesAttachedCollectionSourceProviderBase
         where TItem : class, IRelatableItem
     {
         protected AssetsFileTopLevelDependenciesCollectionSourceProvider(ProjectTreeFlags flags)
@@ -34,9 +32,9 @@ namespace NuGet.VisualStudio.SolutionExplorer
         {
         }
 
-        protected abstract bool TryGetIdentity(Properties properties, out TIdentity identity);
+        protected abstract bool TryGetLibraryName(Properties properties, [NotNullWhen(returnValue: true)] out string? libraryName);
 
-        protected abstract bool TryGetLibrary(AssetsFileTarget target, TIdentity identity, [NotNullWhen(returnValue: true)] out AssetsFileTargetLibrary? library);
+        protected abstract bool TryGetLibrary(AssetsFileTarget target, string libraryName, [NotNullWhen(returnValue: true)] out AssetsFileTargetLibrary? library);
 
         protected abstract TItem CreateItem(AssetsFileTarget targetData, AssetsFileTargetLibrary library);
 
@@ -51,7 +49,7 @@ namespace NuGet.VisualStudio.SolutionExplorer
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
-            TIdentity identity;
+            string? libraryName;
 
             if (!ErrorHandler.Succeeded(hierarchyItem.HierarchyIdentity.Hierarchy.GetProperty(
                 hierarchyItem.HierarchyIdentity.ItemID, (int)__VSHPROPID.VSHPROPID_ExtObject, out object projectItemObject)))
@@ -63,7 +61,7 @@ namespace NuGet.VisualStudio.SolutionExplorer
             {
                 Properties? properties = (projectItemObject as ProjectItem)?.Properties;
 
-                if (properties == null || !TryGetIdentity(properties, out identity))
+                if (properties == null || !TryGetLibraryName(properties, out libraryName))
                 {
                     containsCollectionSource = null;
                     return false;
@@ -92,14 +90,24 @@ namespace NuGet.VisualStudio.SolutionExplorer
 
             var collectionSource = new AggregateRelationCollectionSource(hierarchyItem);
             AggregateContainsRelationCollection? collection = null;
+            AssetsFileDependenciesSnapshot? lastSnapshot = null;
 
             var actionBlock = new ActionBlock<IProjectVersionedValue<AssetsFileDependenciesSnapshot>>(
                 async versionedValue =>
                 {
                     AssetsFileDependenciesSnapshot snapshot = versionedValue.Value;
+
+                    if (ReferenceEquals(snapshot, lastSnapshot))
+                    {
+                        // Skip version-only updates.
+                        return;
+                    }
+
+                    lastSnapshot = snapshot;
+
                     if (snapshot.TryGetTarget(target, out AssetsFileTarget? targetData))
                     {
-                        if (TryGetLibrary(targetData, identity, out AssetsFileTargetLibrary? library))
+                        if (TryGetLibrary(targetData, libraryName, out AssetsFileTargetLibrary? library))
                         {
                             if (item == null)
                             {

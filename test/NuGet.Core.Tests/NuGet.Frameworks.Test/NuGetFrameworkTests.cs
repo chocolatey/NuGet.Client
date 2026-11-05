@@ -5,10 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using FluentAssertions;
-using NuGet.Frameworks;
 using Xunit;
 
-namespace NuGet.Test
+namespace NuGet.Frameworks.Test
 {
     public class NuGetFrameworkTests
     {
@@ -76,7 +75,7 @@ namespace NuGet.Test
             Assert.Equal(expectedTpm, framework.DotNetPlatformName);
         }
 
-        public static TheoryData EqualsFrameworkData
+        public static TheoryData<string, string> EqualsFrameworkData
         {
             get
             {
@@ -134,8 +133,8 @@ namespace NuGet.Test
         public void EqualityOperator_ReturnTrueIfBothFrameworksAreNull()
         {
             // Arrange
-            NuGetFramework framework1 = null;
-            NuGetFramework framework2 = null;
+            NuGetFramework? framework1 = null;
+            NuGetFramework? framework2 = null;
 
             // Act and Assert
             Assert.True(framework1 == framework2);
@@ -159,15 +158,15 @@ namespace NuGet.Test
         public void InequalityOperator_ReturnFalseIfBothFrameworksAreNull()
         {
             // Arrange
-            NuGetFramework framework1 = null;
-            NuGetFramework framework2 = null;
+            NuGetFramework? framework1 = null;
+            NuGetFramework? framework2 = null;
 
             // Act and Assert
             Assert.False(framework1 != framework2);
             Assert.False(framework2 != framework1);
         }
 
-        public static TheoryData InequalsFrameworkData
+        public static TheoryData<string, string> InequalsFrameworkData
         {
             get
             {
@@ -196,7 +195,7 @@ namespace NuGet.Test
             Assert.False(framework2 == framework1);
         }
 
-        public static TheoryData FrameworkEqualityWithNullData
+        public static TheoryData<string> FrameworkEqualityWithNullData
         {
             get
             {
@@ -217,7 +216,7 @@ namespace NuGet.Test
         {
             // Arrange
             var framework1 = NuGetFramework.Parse(frameworkName);
-            NuGetFramework framework2 = null;
+            NuGetFramework? framework2 = null;
 
             // Act and Assert
             Assert.False(framework1 == framework2);
@@ -243,7 +242,7 @@ namespace NuGet.Test
         {
             // Arrange
             var framework1 = NuGetFramework.Parse(frameworkName);
-            NuGetFramework framework2 = null;
+            NuGetFramework? framework2 = null;
 
             // Act and Assert
             Assert.True(framework1 != framework2);
@@ -406,7 +405,7 @@ namespace NuGet.Test
 
             var frameworks = new List<NuGetFramework> { leftSide, rightSide };
 
-            var distinctFrameworksWithComparer = frameworks.Distinct(new NuGetFrameworkFullComparer()).ToArray();
+            var distinctFrameworksWithComparer = frameworks.Distinct(NuGetFrameworkFullComparer.Instance).ToArray();
             var distinctFrameworksWithoutComparer = frameworks.Distinct().ToArray();
 
             distinctFrameworksWithComparer.Should().HaveCount(1);

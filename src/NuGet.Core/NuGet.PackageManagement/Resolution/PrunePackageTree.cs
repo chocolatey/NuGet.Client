@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -109,9 +111,15 @@ namespace NuGet.PackageManagement
             }
 
             return packages.Where(package =>
-                (package.HasVersion && installed.ContainsKey(package.Id))
-                    ?
-                installed[package.Id] <= package.Version : true);
+            {
+                if (package.HasVersion &&
+                    installed.TryGetValue(package.Id, out NuGetVersion version))
+                {
+                    return version <= package.Version;
+                }
+
+                return true;
+            });
         }
 
         public static IEnumerable<SourcePackageDependencyInfo> PruneDisallowedVersions(IEnumerable<SourcePackageDependencyInfo> packages, IEnumerable<Packaging.PackageReference> packageReferences)
@@ -168,7 +176,7 @@ namespace NuGet.PackageManagement
         }
 
         /// <summary>
-        /// This is used in update scenarios ro remove packages that are of the same Id but different version than the primartTargets 
+        /// This is used in update scenarios to remove packages that are of the same Id but different version than the primartTargets 
         /// </summary>
         public static IEnumerable<SourcePackageDependencyInfo> PruneByPrimaryTargets(IEnumerable<SourcePackageDependencyInfo> packages, IEnumerable<PackageIdentity> primaryTargets)
         {

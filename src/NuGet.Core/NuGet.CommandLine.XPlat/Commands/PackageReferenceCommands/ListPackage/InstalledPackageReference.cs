@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Diagnostics;
 using NuGet.Protocol.Core.Types;
@@ -22,6 +24,7 @@ namespace NuGet.CommandLine.XPlat
         internal IPackageSearchMetadata LatestPackageMetadata { get; set; }
         internal bool AutoReference { get; set; }
         internal UpdateLevel UpdateLevel { get; set; }
+        internal bool IsVersionOverride { get; set; }
 
         /// <summary>
         /// A constructor that takes a name of a package

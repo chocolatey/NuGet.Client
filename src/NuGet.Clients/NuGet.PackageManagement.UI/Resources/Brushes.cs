@@ -24,8 +24,6 @@ namespace NuGet.PackageManagement.UI
 
         public static object BorderBrush { get; private set; } = SystemColors.InactiveBorderBrushKey;
 
-        public static object ComboBoxBorderKey { get; private set; } = SystemColors.InactiveBorderBrushKey;
-
         public static object ContentInactiveSelectedBrushKey { get; private set; } = SystemColors.ControlTextBrushKey;
 
         public static object ContentInactiveSelectedTextBrushKey { get; private set; } = SystemColors.ControlTextBrushKey;
@@ -174,6 +172,9 @@ namespace NuGet.PackageManagement.UI
 
         public static object ListItemTextSelectedColorKey { get; private set; } = SystemColors.HighlightTextColorKey;
 
+        public static object Environment122PercentFontSizeKey { get; private set; } = SystemFonts.MessageFontSizeKey;
+        public static object Environment155PercentFontSizeKey { get; private set; } = SystemFonts.MessageFontSizeKey;
+
         public static void LoadVsBrushes(INuGetExperimentationService nuGetExperimentationService)
         {
             if (nuGetExperimentationService == null)
@@ -183,10 +184,13 @@ namespace NuGet.PackageManagement.UI
 
             bool isBgColorFlightEnabled = IsBackgroundColorFlightEnabled(nuGetExperimentationService);
 
+            // Maps to VS environment fonts. Used for larger headings.
+            Environment122PercentFontSizeKey = VsFonts.Environment122PercentFontSizeKey;
+            Environment155PercentFontSizeKey = VsFonts.Environment155PercentFontSizeKey;
+
             FocusVisualStyleBrushKey = VsBrushes.ToolWindowTextKey;
             ActiveBorderKey = VsBrushes.ActiveBorderKey;
             BorderBrush = VsBrushes.BrandedUIBorderKey;
-            ComboBoxBorderKey = VsBrushes.ComboBoxBorderKey;
             ControlLinkTextHoverKey = VsBrushes.ControlLinkTextHoverKey;
             ControlLinkTextKey = VsBrushes.ControlLinkTextKey;
             DetailPaneBackground = isBgColorFlightEnabled ? CommonDocumentColors.PageBrushKey : VsBrushes.BrandedUIBackgroundKey;

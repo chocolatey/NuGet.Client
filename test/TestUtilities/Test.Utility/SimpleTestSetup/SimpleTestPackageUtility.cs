@@ -1,13 +1,14 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Runtime.Versioning;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,13 +19,18 @@ using NuGet.Frameworks;
 using NuGet.Packaging;
 using NuGet.Packaging.Core;
 using NuGet.Packaging.PackageExtraction;
-using NuGet.Packaging.Signing;
 using NuGet.Versioning;
+using System.Security.Cryptography.X509Certificates;
+using NuGet.Packaging.Signing;
 
 namespace NuGet.Test.Utility
 {
+    using IPackageFile = NuGet.Packaging.IPackageFile;
+
     public static class SimpleTestPackageUtility
     {
+        private static NuGetVersion EmptyNuGetVersion = new NuGetVersion(0, 0, 0);
+
         public static async Task CreateFullPackagesAsync(string repositoryDir, IDictionary<string, IEnumerable<string>> packages)
         {
             if (packages == null)
@@ -151,8 +157,8 @@ namespace NuGet.Test.Utility
                 }
                 else
                 {
-                    zip.AddEntry("contentFiles/any/any/config.xml", new byte[] { 0 });
-                    zip.AddEntry("contentFiles/cs/net45/code.cs", new byte[] { 0 });
+                    zip.AddEntry("contentFiles/any/any/config.xml", @"", Encoding.UTF8);
+                    zip.AddEntry("contentFiles/cs/net45/code.cs", @"", Encoding.UTF8);
                     zip.AddEntry("lib/net45/a.dll", new byte[] { 0 });
                     zip.AddEntry("lib/netstandard1.0/a.dll", new byte[] { 0 });
                     zip.AddEntry($"build/net45/{id}.targets", @"<Project />", Encoding.UTF8);
@@ -218,7 +224,10 @@ namespace NuGet.Test.Utility
                             var node = new XElement(XName.Get("dependency"));
                             groupNode.Add(node);
                             node.Add(new XAttribute(XName.Get("id"), dependency.Id));
-                            node.Add(new XAttribute(XName.Get("version"), dependency.VersionRange.ToNormalizedString()));
+                            if (dependency.VersionRange.MinVersion != EmptyNuGetVersion)
+                            {
+                                node.Add(new XAttribute(XName.Get("version"), dependency.VersionRange.ToNormalizedString()));
+                            }
 
                             if (dependency.Include.Count > 0)
                             {
@@ -279,11 +288,8 @@ namespace NuGet.Test.Utility
             if (isUsingTempStream)
             {
                 using (tempStream)
-#if IS_SIGNING_SUPPORTED
                 using (var signPackage = new SignedPackageArchive(tempStream, stream))
-#endif
                 {
-#if IS_SIGNING_SUPPORTED
                     using (var request = GetPrimarySignRequest(packageContext))
                     {
                         await AddSignatureToPackageAsync(packageContext, signPackage, request, testLogger);
@@ -300,7 +306,6 @@ namespace NuGet.Test.Utility
                             await AddRepositoryCountersignatureToSignedPackageAsync(packageContext, signPackage, request, testLogger);
                         }
                     }
-#endif
                 }
             }
 
@@ -337,7 +342,7 @@ namespace NuGet.Test.Utility
             return packages.Select(e =>
                 new PackageDependency(
                     e.Id,
-                    VersionRange.Parse(e.Version),
+                    e.Version != null ? VersionRange.Parse(e.Version) : null,
                     string.IsNullOrEmpty(e.Include)
                         ? new List<string>()
                         : e.Include.Split(',').ToList(),
@@ -346,7 +351,6 @@ namespace NuGet.Test.Utility
                         : e.Exclude.Split(',').ToList())).ToList();
         }
 
-#if IS_SIGNING_SUPPORTED
         private static SignPackageRequest GetPrimarySignRequest(SimpleTestPackageContext packageContext)
         {
             if (packageContext.V3ServiceIndexUrl != null)
@@ -397,7 +401,6 @@ namespace NuGet.Test.Utility
                 }
             }
         }
-#endif
 
         /// <summary>
         /// Create packages.
@@ -410,7 +413,23 @@ namespace NuGet.Test.Utility
         /// <summary>
         /// Create all packages in the list, including dependencies.
         /// </summary>
-        public static async Task CreatePackagesAsync(List<SimpleTestPackageContext> packages, string repositoryPath)
+        public static Task CreatePackagesAsync(List<SimpleTestPackageContext> packages, string repositoryPath)
+        {
+            return CreatePackagesAsync(packages, repositoryPath, skipDependencies: false);
+        }
+
+        /// <summary>
+        /// Create packages, but skip creating the dependencies. This makes it easier to test missing versions/missing dependencies scenarios
+        /// </summary>
+        public static async Task CreatePackagesWithoutDependenciesAsync(string repositoryPath, params SimpleTestPackageContext[] package)
+        {
+            await CreatePackagesAsync([.. package], repositoryPath, skipDependencies: true);
+        }
+
+        /// <summary>
+        /// Create all packages in the list, including dependencies.
+        /// </summary>
+        internal static async Task CreatePackagesAsync(List<SimpleTestPackageContext> packages, string repositoryPath, bool skipDependencies = false)
         {
             var done = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var toCreate = new Stack<SimpleTestPackageContext>(packages);
@@ -424,10 +443,12 @@ namespace NuGet.Test.Utility
                     await CreateFullPackageAsync(
                         repositoryPath,
                         package);
-
-                    foreach (var dep in package.Dependencies)
+                    if (!skipDependencies)
                     {
-                        toCreate.Push(dep);
+                        foreach (var dep in package.Dependencies)
+                        {
+                            toCreate.Push(dep);
+                        }
                     }
                 }
             }
@@ -522,6 +543,16 @@ namespace NuGet.Test.Utility
             }
         }
 
+        public static async Task CreateFolderFeedV3WithNupkgMetadataAsync(string root, string nupkgMetadataSource, params SimpleTestPackageContext[] contexts)
+        {
+            using var tempRoot = TestDirectory.Create();
+            await CreatePackagesAsync(tempRoot, contexts);
+
+            var saveMode = PackageSaveMode.Nupkg | PackageSaveMode.Nuspec;
+
+            await CreateFolderFeedV3Async(root, nupkgMetadataSource, saveMode, Directory.GetFiles(tempRoot));
+        }
+
         /// <summary>
         /// Create a v3 folder of nupkgs
         /// </summary>
@@ -535,10 +566,15 @@ namespace NuGet.Test.Utility
             }
         }
 
+        public static async Task CreateFolderFeedV3Async(string root, PackageSaveMode saveMode, params string[] nupkgPaths)
+        {
+            await CreateFolderFeedV3Async(root, nupkgMetadataSource: null, saveMode, nupkgPaths);
+        }
+
         /// <summary>
         /// Create a v3 folder of nupkgs
         /// </summary>
-        public static async Task CreateFolderFeedV3Async(string root, PackageSaveMode saveMode, params string[] nupkgPaths)
+        public static async Task CreateFolderFeedV3Async(string root, string nupkgMetadataSource, PackageSaveMode saveMode, params string[] nupkgPaths)
         {
             var pathResolver = new VersionFolderPathResolver(root);
 
@@ -556,7 +592,7 @@ namespace NuGet.Test.Utility
                     using (var fileStream = File.OpenRead(file))
                     {
                         await PackageExtractor.InstallFromSourceAsync(
-                            null,
+                            source: nupkgMetadataSource,
                             identity,
                             (stream) => fileStream.CopyToAsync(stream, 4096, CancellationToken.None),
                             new VersionFolderPathResolver(root),
@@ -571,8 +607,13 @@ namespace NuGet.Test.Utility
             }
         }
 
+        public static async Task CreateFolderFeedV3WithNupkgMetadataAsync(string root, string nupkgMetadataSource, PackageSaveMode saveMode, params string[] nupkgPaths)
+        {
+            await CreateFolderFeedV3Async(root, nupkgMetadataSource, saveMode, nupkgPaths);
+        }
+
         /// <summary>
-        /// Create a packagets.config folder of nupkgs
+        /// Create a packages.config folder of nupkgs
         /// </summary>
         public static async Task CreateFolderFeedPackagesConfigAsync(string root, params PackageIdentity[] packages)
         {
@@ -582,7 +623,7 @@ namespace NuGet.Test.Utility
         }
 
         /// <summary>
-        /// Create a packagets.config folder of nupkgs
+        /// Create a packages.config folder of nupkgs
         /// </summary>
         public static async Task CreateFolderFeedPackagesConfigAsync(string root, params SimpleTestPackageContext[] contexts)
         {
@@ -595,7 +636,7 @@ namespace NuGet.Test.Utility
         }
 
         /// <summary>
-        /// Create a packagets.config folder of nupkgs
+        /// Create a packages.config folder of nupkgs
         /// </summary>
         public static async Task CreateFolderFeedPackagesConfigAsync(string root, params string[] nupkgPaths)
         {
@@ -664,7 +705,7 @@ namespace NuGet.Test.Utility
                 {
                     using (ZipArchive archive = new ZipArchive(zipToOpen, ZipArchiveMode.Update))
                     {
-                        var nuspec = archive.Entries.Where(entry => entry.Name.EndsWith(NuGetConstants.ManifestExtension)).SingleOrDefault();
+                        var nuspec = archive.Entries.SingleOrDefault(entry => entry.Name.EndsWith(NuGetConstants.ManifestExtension));
                         nuspec?.Delete();
                     }
                 }

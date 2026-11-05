@@ -21,11 +21,11 @@ namespace NuGet.Packaging.Signing
     public sealed class SigningCertificateV2
     {
         public IReadOnlyList<EssCertIdV2> Certificates { get; }
-        public IReadOnlyList<PolicyInformation> Policies { get; }
+        public IReadOnlyList<PolicyInformation>? Policies { get; }
 
         private SigningCertificateV2(
             IReadOnlyList<EssCertIdV2> certificates,
-            IReadOnlyList<PolicyInformation> policies)
+            IReadOnlyList<PolicyInformation>? policies)
         {
             Certificates = certificates;
             Policies = policies;
@@ -54,7 +54,7 @@ namespace NuGet.Packaging.Signing
         {
             var essCertIdV2Reader = reader.ReadSequence();
             var certificates = ReadCertificates(essCertIdV2Reader);
-            IReadOnlyList<PolicyInformation> policies = null;
+            IReadOnlyList<PolicyInformation>? policies = null;
 
             if (reader.HasData)
             {

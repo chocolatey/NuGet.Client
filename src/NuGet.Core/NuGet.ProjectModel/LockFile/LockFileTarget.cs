@@ -1,9 +1,10 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using NuGet.Frameworks;
 using NuGet.Shared;
 
@@ -15,7 +16,21 @@ namespace NuGet.ProjectModel
 
         public string RuntimeIdentifier { get; set; }
 
-        public string Name => TargetFramework + (string.IsNullOrEmpty(RuntimeIdentifier) ? "" : "/" + RuntimeIdentifier);
+        public string TargetAlias { get; set; }
+
+        private string _name;
+        public string Name
+        {
+            get
+            {
+                _name ??= TargetFramework + (string.IsNullOrEmpty(RuntimeIdentifier) ? "" : "/" + RuntimeIdentifier);
+                return _name;
+            }
+            init
+            {
+                _name = value;
+            }
+        }
 
         public IList<LockFileTargetLibrary> Libraries { get; set; } = new List<LockFileTargetLibrary>();
 
@@ -33,7 +48,8 @@ namespace NuGet.ProjectModel
 
             if (NuGetFramework.Comparer.Equals(TargetFramework, other.TargetFramework)
                 && string.Equals(RuntimeIdentifier, other.RuntimeIdentifier, StringComparison.Ordinal)
-                && string.Equals(Name, other.Name, StringComparison.Ordinal))
+                && string.Equals(Name, other.Name, StringComparison.Ordinal)
+                && string.Equals(TargetAlias, other.TargetAlias, StringComparison.Ordinal))
             {
                 return Libraries.OrderedEquals(other.Libraries, library => library.Name, StringComparer.OrdinalIgnoreCase);
             }
@@ -53,11 +69,8 @@ namespace NuGet.ProjectModel
             combiner.AddObject(TargetFramework);
             combiner.AddObject(RuntimeIdentifier);
             combiner.AddObject(Name);
-
-            foreach (var library in Libraries.OrderBy(library => library.Name, StringComparer.OrdinalIgnoreCase))
-            {
-                combiner.AddObject(library);
-            }
+            combiner.AddObject(TargetAlias);
+            combiner.AddUnorderedSequence(Libraries);
 
             return combiner.CombinedHash;
         }

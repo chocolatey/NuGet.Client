@@ -24,6 +24,7 @@ namespace NuGet.VisualStudio.Internal.Contracts.Test
         {
             var formatters = new IMessagePackFormatter[]
             {
+                PackageDependencyGroupFormatter.Instance,
                 PackageSearchMetadataContextInfoFormatter.Instance,
                 PackageVulnerabilityMetadataContextInfoFormatter.Instance,
             };
@@ -46,12 +47,12 @@ namespace NuGet.VisualStudio.Internal.Contracts.Test
                 Identity = new PackageIdentity("NuGet.Versioning", NuGetVersion.Parse("4.3.0")),
                 PackageDetailsUrl = new Uri("http://nuget.org"),
                 Authors = "Microsoft",
-                Vulnerabilities = new List<PackageVulnerabilityMetadata> { JsonExtensions.FromJson<PackageVulnerabilityMetadata>("{ 'AdvisoryUrl': 'http://www.nuget.org', 'Severity': '2' }") }
+                Vulnerabilities = new List<PackageVulnerabilityMetadata> { JsonExtensions.FromJson<PackageVulnerabilityMetadata>("{ 'AdvisoryUrl': 'http://www.nuget.org', 'Severity': '2' }")! }
              }
         };
 
 
-        public static TheoryData TestData => new TheoryData<SearchResultContextInfo>
+        public static TheoryData<SearchResultContextInfo> TestData => new()
             {
                 { new SearchResultContextInfo() },
                 { new SearchResultContextInfo(Guid.NewGuid()) },

@@ -1,16 +1,18 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
-using System.Reflection;
 using EnvDTE;
 using EnvDTE80;
 using Microsoft.PowerShell;
+using NuGet.Common;
 using NuGet.PackageManagement;
 using NuGet.Protocol.Core.Types;
 using NuGet.VisualStudio;
@@ -21,23 +23,28 @@ namespace NuGetConsole.Host.PowerShell.Implementation
     {
         // Cache Runspace by name. There should be only one Runspace instance created though.
         private readonly ConcurrentDictionary<string, Tuple<RunspaceDispatcher, NuGetPSHost>> _runspaceCache = new ConcurrentDictionary<string, Tuple<RunspaceDispatcher, NuGetPSHost>>();
-
+        private readonly IEnvironmentVariableReader _environmentVariableReader;
         public const string ProfilePrefix = "NuGet";
+
+        internal RunspaceManager(IEnvironmentVariableReader environmentVariableReader)
+        {
+            _environmentVariableReader = environmentVariableReader ?? throw new ArgumentNullException(nameof(environmentVariableReader));
+        }
 
         public Tuple<RunspaceDispatcher, NuGetPSHost> GetRunspace(IConsole console, string hostName)
         {
-            return _runspaceCache.GetOrAdd(hostName, name => CreateAndSetupRunspace(console, name));
+            return _runspaceCache.GetOrAdd(hostName, name => CreateAndSetupRunspace(console, name, _environmentVariableReader));
         }
 
         [SuppressMessage(
             "Microsoft.Reliability",
             "CA2000:Dispose objects before losing scope",
             Justification = "We can't dispose it if we want to return it.")]
-        private static Tuple<RunspaceDispatcher, NuGetPSHost> CreateAndSetupRunspace(IConsole console, string hostName)
+        private static Tuple<RunspaceDispatcher, NuGetPSHost> CreateAndSetupRunspace(IConsole console, string hostName, IEnvironmentVariableReader environmentVariableReader)
         {
             Tuple<RunspaceDispatcher, NuGetPSHost> runspace = CreateRunspace(console, hostName);
             SetupExecutionPolicy(runspace.Item1);
-            LoadModules(runspace.Item1);
+            LoadModules(runspace.Item1, environmentVariableReader);
             LoadProfilesIntoRunspace(runspace.Item1);
 
             return Tuple.Create(runspace.Item1, runspace.Item2);
@@ -106,15 +113,15 @@ namespace NuGetConsole.Host.PowerShell.Implementation
             }
         }
 
-        private static void LoadModules(RunspaceDispatcher runspace)
+        private static void LoadModules(RunspaceDispatcher runspace, IEnvironmentVariableReader environmentVariableReader)
         {
             // We store our PS module file at <extension root>\Modules\NuGet\NuGet.psd1
-            string extensionRoot = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            string extensionRoot = Path.GetDirectoryName(typeof(RunspaceManager).Assembly.Location);
             string modulePath = Path.Combine(extensionRoot, "Modules", "NuGet", "NuGet.psd1");
             runspace.ImportModule(modulePath);
 
             // provide backdoor to enable function test
-            string functionalTestPath = Environment.GetEnvironmentVariable("NuGetFunctionalTestPath");
+            string functionalTestPath = environmentVariableReader.GetEnvironmentVariable("NuGetFunctionalTestPath");
             if (functionalTestPath != null
                 && File.Exists(functionalTestPath))
             {

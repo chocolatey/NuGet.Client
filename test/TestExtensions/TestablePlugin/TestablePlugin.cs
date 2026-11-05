@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Concurrent;
 using System.Threading;
@@ -88,7 +90,7 @@ namespace NuGet.Test.TestExtensions.TestablePlugin
                 {
                     case MessageMethod.Initialize:
                         {
-                            var initializeRequest = JsonSerializationUtilities.ToObject<InitializeRequest>(message.Payload);
+                            var initializeRequest = MessageUtilities.DeserializePayload<InitializeRequest>(message);
 
                             _plugin.Connection.Options.SetRequestTimeout(initializeRequest.RequestTimeout);
                         }

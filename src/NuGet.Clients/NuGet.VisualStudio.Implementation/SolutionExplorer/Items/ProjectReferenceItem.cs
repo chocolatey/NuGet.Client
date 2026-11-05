@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#nullable enable
-
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Internal.VisualStudio.PlatformUI;
 using Microsoft.VisualStudio.Imaging;
@@ -46,7 +44,12 @@ namespace NuGet.VisualStudio.SolutionExplorer
 
         public override int Priority => AttachedItemPriority.Project;
 
-        public override ImageMoniker IconMoniker => KnownMonikers.Application;
+        public override ImageMoniker IconMoniker => Library.LogLevel switch
+        {
+            NuGet.Common.LogLevel.Warning => KnownMonikers.ApplicationWarning,
+            NuGet.Common.LogLevel.Error => KnownMonikers.ApplicationError,
+            _ => KnownMonikers.Application
+        };
 
         protected override IContextMenuController? ContextMenuController => MenuController.TransitiveProject;
 

@@ -3,7 +3,6 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Configuration;
 using Moq;
 using NuGet.Configuration;
 using Xunit;
@@ -49,11 +48,6 @@ namespace NuGet.Credentials.Test
             }
         }
 
-        public PluginCredentialProviderBuilderTests()
-        {
-        }
-
-
         [Fact]
         public void WhenNoPlugins_ThenEmptyList()
         {
@@ -81,7 +75,7 @@ namespace NuGet.Credentials.Test
 
             var result = builder.BuildAll(NormalVerbosity).ToList();
 
-            Assert.Equal(6, result.Count());
+            Assert.Equal(6, result.Count);
             var actual = result.Select(x => (PluginCredentialProvider)x).Select(x => x.Path);
             var expected = new[]
             {
@@ -110,7 +104,7 @@ namespace NuGet.Credentials.Test
 
             var result = builder.BuildAll(NormalVerbosity).ToList();
 
-            Assert.Equal(4, result.Count());
+            Assert.Equal(4, result.Count);
             var actual = result.Select(x => (PluginCredentialProvider)x).Select(x => x.Path);
             var expected = new[]
             {
@@ -131,7 +125,7 @@ namespace NuGet.Credentials.Test
 
             var result = builder.BuildAll(NormalVerbosity).ToList();
 
-            Assert.Equal(1, result.Count());
+            Assert.Equal(1, result.Count);
             var pluginProvider = result[0] as PluginCredentialProvider;
             Assert.Equal(300, pluginProvider?.TimeoutSeconds);
         }
@@ -148,7 +142,7 @@ namespace NuGet.Credentials.Test
 
             var result = builder.BuildAll(NormalVerbosity).ToList();
 
-            Assert.Equal(1, result.Count());
+            Assert.Equal(1, result.Count);
             var pluginProvider = result[0] as PluginCredentialProvider;
             Assert.Equal(10, pluginProvider?.TimeoutSeconds);
         }
@@ -168,7 +162,7 @@ namespace NuGet.Credentials.Test
 
             var result = builder.BuildAll(NormalVerbosity).ToList();
 
-            Assert.Equal(1, result.Count());
+            Assert.Equal(1, result.Count);
             var pluginProvider = result[0] as PluginCredentialProvider;
             Assert.Equal(20, pluginProvider?.TimeoutSeconds);
         }

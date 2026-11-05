@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
@@ -30,7 +32,7 @@ namespace NuGet.VisualStudio
         /// </summary>
         /// <param name="project">The project to check for NuGet package.</param>
         /// <param name="id">The id of the package to check.</param>
-        /// <returns><c>true</c> if the package is install. <c>false</c> otherwise.</returns>
+        /// <returns><see langword="true" /> if the package is install. <see langword="false" /> otherwise.</returns>
         /// <exception cref="InvalidOperationException">A "project not nominated" exception will be thrown if the project system has not yet told NuGet about the project.
         /// You can use <see cref="IVsNuGetProjectUpdateEvents"/> or Microsoft.VisualStudio.OperationProgress to be notified when the project is ready.</exception>
         [Obsolete("This method can cause UI delays if called on the UI thread. Use INuGetProjectService.GetInstalledPackagesAsync in the NuGet.VisualStudio.Contracts package instead, and check the specific package you're interested in")]
@@ -42,7 +44,7 @@ namespace NuGet.VisualStudio
         /// <param name="project">The project to check for NuGet package.</param>
         /// <param name="id">The id of the package to check.</param>
         /// <param name="version">The version of the package to check.</param>
-        /// <returns><c>true</c> if the package is install. <c>false</c> otherwise.</returns>
+        /// <returns><see langword="true" /> if the package is install. <see langword="false" /> otherwise.</returns>
         /// <exception cref="InvalidOperationException">A "project not nominated" exception will be thrown if the project system has not yet told NuGet about the project.
         /// You can use <see cref="IVsNuGetProjectUpdateEvents"/> or Microsoft.VisualStudio.OperationProgress to be notified when the project is ready.</exception>
         [Obsolete("This method can cause UI delays if called on the UI thread. Use INuGetProjectService.GetInstalledPackagesAsync in the NuGet.VisualStudio.Contracts package instead, and check the specific package you're interested in")]
@@ -54,7 +56,7 @@ namespace NuGet.VisualStudio
         /// <param name="project">The project to check for NuGet package.</param>
         /// <param name="id">The id of the package to check.</param>
         /// <param name="versionString">The version of the package to check.</param>
-        /// <returns><c>true</c> if the package is install. <c>false</c> otherwise.</returns>
+        /// <returns><see langword="true" /> if the package is install. <see langword="false" /> otherwise.</returns>
         /// <remarks>
         /// The reason this method is named IsPackageInstalledEx, instead of IsPackageInstalled, is that
         /// when client project compiles against this assembly, the compiler would attempt to bind against

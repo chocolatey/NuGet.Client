@@ -1,7 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if IS_SIGNING_SUPPORTED && IS_CORECLR
+#if IS_CORECLR
 using System;
 using System.Globalization;
 using System.Net.Http;
@@ -20,10 +20,10 @@ namespace NuGet.Packaging.Signing
         public Rfc3161TimestampRequestNetstandard21Wrapper(
             byte[] messageHash,
             HashAlgorithmName hashAlgorithm,
-            Oid requestedPolicyId,
-            byte[] nonce,
+            Oid? requestedPolicyId,
+            byte[]? nonce,
             bool requestSignerCertificates,
-            X509ExtensionCollection extensions)
+            X509ExtensionCollection? extensions)
         {
             _rfc3161TimestampRequest = System.Security.Cryptography.Pkcs.Rfc3161TimestampRequest.CreateFromHash(
                 new ReadOnlyMemory<byte>(messageHash),
@@ -79,7 +79,7 @@ namespace NuGet.Packaging.Signing
             }
         }
 
-        public byte[] GetNonce()
+        public byte[]? GetNonce()
         {
             ReadOnlyMemory<byte>? normalizedNonce = _rfc3161TimestampRequest.GetNonce();
             return normalizedNonce.HasValue ? normalizedNonce.Value.ToArray() : null;

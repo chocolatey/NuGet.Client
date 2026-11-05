@@ -1,19 +1,14 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
+#nullable disable
+
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NuGet.Common;
-using NuGet.Configuration;
-using NuGet.Packaging.Core;
 using NuGet.Protocol.Core.Types;
-using NuGet.Test.Utility;
-using NuGet.Versioning;
-using Test.Utility;
 using Xunit;
 
 namespace NuGet.Protocol.Tests
@@ -145,21 +140,21 @@ namespace NuGet.Protocol.Tests
         private void AssertAll(PackageSearchResourceMock mock)
         {
             Assert.Equal(mock._searchTerm, mock._actualSearchTerm);
-            Assert.True(0 == mock._actualSkip);
+            Assert.Equal(0, mock._actualSkip);
             Assert.True(int.MaxValue == mock._actualTake);
-            Assert.True(mock._searchFilter.OrderBy == SearchOrderBy.Id);
+            Assert.Equal(SearchOrderBy.Id, mock._searchFilter.OrderBy);
             if (mock._allVersions)
             {
-                Assert.True(mock._searchFilter.Filter == null);
+                Assert.Null(mock._searchFilter.Filter);
             }
             if (!mock._allVersions && mock._prerelease)
             {
-                Assert.True(mock._searchFilter.Filter == SearchFilterType.IsAbsoluteLatestVersion);
+                Assert.Equal(SearchFilterType.IsAbsoluteLatestVersion, mock._searchFilter.Filter);
             }
 
             if (!mock._allVersions && !mock._prerelease)
             {
-                Assert.True(mock._searchFilter.Filter == SearchFilterType.IsLatestVersion);
+                Assert.Equal(SearchFilterType.IsLatestVersion, mock._searchFilter.Filter);
             }
 
             Assert.True(mock._searchFilter.IncludeDelisted == mock._includeDelisted);
@@ -178,6 +173,8 @@ namespace NuGet.Protocol.Tests
             public SearchFilter _searchFilter { get; set; }
             public int _actualSkip { get; set; }
             public int _actualTake { get; set; }
+
+            public override bool SupportsPackageTypeFiltering => false;
 
             public override Task<IEnumerable<IPackageSearchMetadata>> SearchAsync(string searchTerm, SearchFilter filters, int skip, int take, ILogger log, CancellationToken cancellationToken)
             {

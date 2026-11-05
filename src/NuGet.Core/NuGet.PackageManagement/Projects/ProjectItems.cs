@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 
+#nullable disable
+
 namespace NuGet.ProjectManagement
 {
     /// <summary>
@@ -9,7 +11,12 @@ namespace NuGet.ProjectManagement
     /// </summary>
     public static class ProjectItems
     {
-        public const string PackageReference = "PackageReference";
-        public const string ProjectReference = "ProjectReference";
+        public const string FrameworkReference = nameof(FrameworkReference);
+        public const string PackageDownload = nameof(PackageDownload);
+        public const string PackageReference = nameof(PackageReference);
+        public const string PackageVersion = nameof(PackageVersion);
+        public const string ProjectReference = nameof(ProjectReference);
+        public const string NuGetAuditSuppress = nameof(NuGetAuditSuppress);
+        public const string PrunePackageReference = nameof(PrunePackageReference);
     }
 }

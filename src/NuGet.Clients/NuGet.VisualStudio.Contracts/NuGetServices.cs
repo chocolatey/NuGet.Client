@@ -1,8 +1,9 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using Microsoft.ServiceHub.Framework;
-using StreamJsonRpc;
 
 namespace NuGet.VisualStudio.Contracts
 {
@@ -19,6 +20,6 @@ namespace NuGet.VisualStudio.Contracts
         public static ServiceRpcDescriptor NuGetProjectServiceV1 { get; } = new ServiceJsonRpcDescriptor(
             new ServiceMoniker(NuGetProjectServiceName, new System.Version(Version1)),
             ServiceJsonRpcDescriptor.Formatters.MessagePack,
-            ServiceJsonRpcDescriptor.MessageDelimiters.HttpLikeHeaders);
+            ServiceJsonRpcDescriptor.MessageDelimiters.BigEndianInt32LengthHeader);
     }
 }

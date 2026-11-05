@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -8,14 +10,14 @@ using System.Linq;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
+using Microsoft.Internal.NuGet.Testing.SignedPackages;
 using NuGet.Packaging.Signing;
 using NuGet.Test.Utility;
 using Test.Utility;
-using Test.Utility.Signing;
 
 namespace Dotnet.Integration.Test
 {
-    using X509StorePurpose = global::Test.Utility.Signing.X509StorePurpose;
+    using X509StorePurpose = Microsoft.Internal.NuGet.Testing.SignedPackages.X509StorePurpose;
 
     /// <summary>
     /// Used to bootstrap functional tests for signing.
@@ -402,7 +404,7 @@ namespace Dotnet.Integration.Test
             var testServer = await _testServer.Value;
             var rootCa = CertificateAuthority.Create(testServer.Url);
             var intermediateCa = rootCa.CreateIntermediateCertificateAuthority();
-            var rootCertificate = new X509Certificate2(rootCa.Certificate.GetEncoded());
+            var rootCertificate = new X509Certificate2(rootCa.Certificate);
             StoreLocation storeLocation = CertificateStoreUtilities.GetTrustedCertificateStoreLocation();
 
             _trustedTimestampRoot = new X509StoreCertificate(

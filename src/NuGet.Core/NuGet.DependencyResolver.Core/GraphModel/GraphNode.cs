@@ -14,7 +14,7 @@ namespace NuGet.DependencyResolver
         {
         }
 
-        internal GraphNode(LibraryRange key, bool hasInnerNodes, bool hasParentNodes)
+        public GraphNode(LibraryRange key, bool hasInnerNodes, bool hasParentNodes)
         {
             Key = key;
             Disposition = Disposition.Acceptable;
@@ -26,8 +26,8 @@ namespace NuGet.DependencyResolver
         //All empty ParentNodes and InnerNodes point to this EmptyList, to reduce the memory allocation for empty ParentNodes and InnerNodes
         internal static readonly IList<GraphNode<TItem>> EmptyList = Array.Empty<GraphNode<TItem>>();
         public LibraryRange Key { get; set; }
-        public GraphItem<TItem> Item { get; set; }
-        public GraphNode<TItem> OuterNode { get; set; }
+        public GraphItem<TItem>? Item { get; set; }
+        public GraphNode<TItem>? OuterNode { get; set; }
         public IList<GraphNode<TItem>> InnerNodes { get; set; }
         public Disposition Disposition { get; set; }
 
@@ -53,6 +53,32 @@ namespace NuGet.DependencyResolver
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Ensures that <see cref="InnerNodes"/> has the capacity to add
+        /// <paramref name="additionalSpace"/> more items.
+        /// </summary>
+        /// <param name="additionalSpace">The count of additional items that will be added.</param>
+        internal void EnsureInnerNodeCapacity(int additionalSpace)
+        {
+            if (additionalSpace <= 0)
+            {
+                return;
+            }
+
+            if (InnerNodes is List<GraphNode<TItem>> innerList)
+            {
+                int requiredCapacity = innerList.Count + additionalSpace;
+                if (innerList.Capacity < requiredCapacity)
+                {
+                    innerList.Capacity = requiredCapacity;
+                }
+            }
+            else
+            {
+                InnerNodes = new List<GraphNode<TItem>>(additionalSpace);
+            }
         }
 
         public override string ToString()

@@ -1,6 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+#nullable disable
+
 using System;
 using System.Collections.Generic;
 using NuGet.Common;
@@ -20,7 +22,6 @@ namespace NuGet.VisualStudio
         public const string SolutionUpToDateCheck = nameof(SolutionUpToDateCheck);
         public const string ImplicitRestoreReason = nameof(ImplicitRestoreReason);
         public const string RequestCount = nameof(RequestCount);
-        public const string IsBulkFileRestoreCoordinationEnabled = nameof(IsBulkFileRestoreCoordinationEnabled);
         public const string ProjectsReadyCheckCount = nameof(ProjectsReadyCheckCount);
         public const string ProjectReadyCheckTimings = nameof(ProjectReadyCheckTimings);
         public const string ProjectsReadyCheckTotalTime = nameof(ProjectsReadyCheckTotalTime);

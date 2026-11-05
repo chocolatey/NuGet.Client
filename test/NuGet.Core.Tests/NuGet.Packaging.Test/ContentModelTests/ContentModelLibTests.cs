@@ -1,16 +1,17 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
+#nullable disable
+
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
+using NuGet.Client;
 using NuGet.ContentModel;
 using NuGet.Frameworks;
 using NuGet.RuntimeModel;
 using Xunit;
 
-namespace NuGet.Client.Test
+namespace NuGet.Packaging.Test.ContentModelTests
 {
     public class ContentModelLibTests
     {
@@ -159,7 +160,7 @@ namespace NuGet.Client.Test
             var group = collection.FindBestItemGroup(criteria, conventions.Patterns.RuntimeAssemblies);
 
             // Assert
-            Assert.Equal(1, group.Items.Count());
+            Assert.Equal(1, group.Items.Count);
         }
 
         [Fact]
